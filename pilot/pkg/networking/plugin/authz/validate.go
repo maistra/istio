@@ -35,7 +35,7 @@ func validateRuleForTCPFilter(rule *rbacproto.AccessRule) error {
 		return fmt.Errorf("methods(%v) not supported", rule.Methods)
 	}
 	for _, constraint := range rule.Constraints {
-		if strings.HasPrefix(constraint.Key, attrRequestHeader) {
+		if strings.HasPrefix(constraint.Key, attrRequestHeader) || strings.HasPrefix(constraint.Key, attrRequestRegexHeader){
 			return fmt.Errorf("constraint(%v) not supported", constraint)
 		}
 	}

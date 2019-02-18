@@ -58,6 +58,21 @@ func TestValidateRule(t *testing.T) {
 			},
 		},
 		{
+			name: "rule with unsupported regex constraint",
+			rule: &rbacproto.AccessRule{
+				Constraints: []*rbacproto.AccessRule_Constraint{
+					{
+						Key:    attrDestIP,
+						Values: []string{"1.2.3.4"},
+					},
+					{
+						Key:    attrRequestRegexHeader,
+						Values: []string{"REGEX"},
+					},
+				},
+			},
+		},
+		{
 			name: "good rule",
 			rule: &rbacproto.AccessRule{
 				Constraints: []*rbacproto.AccessRule_Constraint{
