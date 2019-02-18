@@ -24,6 +24,7 @@ package authz
 
 import (
 	"fmt"
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	"sort"
 	"strings"
 
@@ -58,7 +59,8 @@ const (
 	rbacTCPFilterStatPrefix = "tcp."
 
 	// attributes that could be used in both ServiceRoleBinding and ServiceRole.
-	attrRequestHeader = "request.headers" // header name is surrounded by brackets, e.g. "request.headers[User-Agent]".
+	attrRequestHeader      = "request.headers"       // header name is surrounded by brackets, e.g. "request.headers[User-Agent]".
+	attrRequestRegexHeader = "request.regex.headers" // header name is surrounded by brackets, e.g. "request.headers.regex[User-Agent]".
 
 	// attributes that could be used in a ServiceRoleBinding property.
 	attrSrcIP              = "source.ip"                   // supports both single ip and cidr, e.g. "10.1.2.3" or "10.1.0.0/16".
@@ -747,6 +749,24 @@ func permissionForKeyValues(key string, values []string) *policyproto.Permission
 				},
 			}, nil
 		}
+	case strings.HasPrefix(key, attrRequestRegexHeader):
+		header, err := extractNameInBrackets(strings.TrimPrefix(key, attrRequestRegexHeader))
+		if err != nil {
+			rbacLog.Errorf("ignored invalid %s: %v", attrRequestRegexHeader, err)
+			return nil
+		}
+		converter = func(v string) (*policyproto.Permission, error) {
+			return &policyproto.Permission{
+				Rule: &policyproto.Permission_Header{
+					Header: &route.HeaderMatcher{
+						Name: header,
+						HeaderMatchSpecifier: &route.HeaderMatcher_RegexMatch{
+							RegexMatch: v,
+						},
+					},
+				},
+			}, nil
+		}
 	case key == attrConnSNI:
 		converter = func(v string) (*policyproto.Permission, error) {
 			return &policyproto.Permission{
@@ -833,6 +853,23 @@ func principalForKeyValue(key, value string, forTCPFilter bool) *policyproto.Pri
 		return &policyproto.Principal{
 			Identifier: &policyproto.Principal_Header{
 				Header: convertToHeaderMatcher(header, value),
+			},
+		}
+	case strings.HasPrefix(key, attrRequestRegexHeader):
+		header, err := extractNameInBrackets(strings.TrimPrefix(key, attrRequestRegexHeader))
+		if err != nil {
+			rbacLog.Errorf("ignored invalid %s: %v", attrRequestRegexHeader, err)
+			return nil
+		}
+		return &policyproto.Principal{
+			Identifier: &policyproto.Principal_Header{
+
+				Header: &route.HeaderMatcher{
+					Name: header,
+					HeaderMatchSpecifier: &route.HeaderMatcher_RegexMatch {
+						RegexMatch: value,
+					},
+				},
 			},
 		}
 	default:
