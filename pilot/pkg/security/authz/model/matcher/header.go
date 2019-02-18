@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	route "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher"
 )
 
 // HeaderMatcher converts a key, value string pair to a corresponding HeaderMatcher.
@@ -50,6 +51,19 @@ func HeaderMatcher(k, v string) *route.HeaderMatcher {
 		Name: k,
 		HeaderMatchSpecifier: &route.HeaderMatcher_ExactMatch{
 			ExactMatch: v,
+		},
+	}
+}
+
+// HeaderMatcherRegex converts a key, value string pair to a corresponding SafeRegex HeaderMatcher.
+func HeaderMatcherRegex(k, v string) *route.HeaderMatcher {
+	return &route.HeaderMatcher{
+		Name: k,
+		HeaderMatchSpecifier: &route.HeaderMatcher_SafeRegexMatch{
+			SafeRegexMatch: &matcher.RegexMatcher{
+				EngineType: &matcher.RegexMatcher_GoogleRe2{GoogleRe2: &matcher.RegexMatcher_GoogleRE2{}},
+				Regex:      v,
+			},
 		},
 	}
 }

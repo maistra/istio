@@ -184,6 +184,7 @@ func isSupportedPrincipal(key string) bool {
 	case attrSrcPrincipal == key:
 	case found(key, []string{attrRequestPrincipal, attrRequestAudiences, attrRequestPresenter, attrSrcUser}):
 	case strings.HasPrefix(key, attrRequestHeader):
+	case strings.HasPrefix(key, attrRequestRegexHeader):
 	case strings.HasPrefix(key, attrRequestClaims):
 	default:
 		return false
@@ -254,6 +255,14 @@ func (principal *Principal) forKeyValue(key, value string, forTCPFilter bool) *e
 			return nil
 		}
 		m := matcher.HeaderMatcher(header, value)
+		return principalHeader(m)
+	case strings.HasPrefix(key, attrRequestRegexHeader):
+		header, err := extractNameInBrackets(strings.TrimPrefix(key, attrRequestRegexHeader))
+		if err != nil {
+			rbacLog.Errorf("ignored invalid %s: %v", attrRequestRegexHeader, err)
+			return nil
+		}
+		m := matcher.HeaderMatcherRegex(header, value)
 		return principalHeader(m)
 	case strings.HasPrefix(key, attrRequestClaims):
 		claim, err := extractNameInBrackets(strings.TrimPrefix(key, attrRequestClaims))

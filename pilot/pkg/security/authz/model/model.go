@@ -36,7 +36,8 @@ const (
 	RBACTCPFilterStatPrefix = "tcp."
 
 	// attributes that could be used in both ServiceRoleBinding and ServiceRole.
-	attrRequestHeader = "request.headers" // header name is surrounded by brackets, e.g. "request.headers[User-Agent]".
+	attrRequestHeader      = "request.headers"       // header name is surrounded by brackets, e.g. "request.headers[User-Agent]".
+	attrRequestRegexHeader = "request.regex.headers" // header name is surrounded by brackets, e.g. "request.headers.regex[User-Agent]".
 
 	// attributes that could be used in a ServiceRoleBinding property.
 	attrSrcIP        = "source.ip"        // supports both single ip and cidr, e.g. "10.1.2.3" or "10.1.0.0/16".
