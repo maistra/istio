@@ -500,6 +500,34 @@ func TestPermission_Generate(t *testing.T) {
                   name: X-tag`,
 		},
 		{
+			name: "permission with constraint attrRequestRegexHeader",
+			permission: &Permission{
+				Constraints: []KeyValues{
+					{
+						fmt.Sprintf("%s[%s]", attrRequestRegexHeader, "X-id"):  []string{"id-[0-9]"},
+						fmt.Sprintf("%s[%s]", attrRequestRegexHeader, "X-tag"): []string{"tag-[0-9]"},
+					},
+				},
+			},
+			wantYAML: `
+        andRules:
+          rules:
+          - orRules:
+              rules:
+              - header:
+                  name: X-id
+                  safeRegexMatch:
+                    googleRe2: {}
+                    regex: id-[0-9]
+          - orRules:
+              rules:
+              - header:
+                  name: X-tag
+                  safeRegexMatch:
+                    googleRe2: {}
+                    regex: tag-[0-9]`,
+		},
+		{
 			name: "permission with constraint attrConnSNI",
 			permission: &Permission{
 				Constraints: []KeyValues{

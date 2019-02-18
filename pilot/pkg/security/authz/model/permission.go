@@ -112,7 +112,7 @@ func (permission *Permission) ValidateForTCP(forTCP bool) error {
 	}
 	for _, constraint := range permission.Constraints {
 		for k := range constraint {
-			if strings.HasPrefix(k, attrRequestHeader) {
+			if strings.HasPrefix(k, attrRequestHeader) || strings.HasPrefix(k, attrRequestRegexHeader) {
 				return fmt.Errorf("constraint(%v)", constraint)
 			}
 		}
@@ -207,6 +207,7 @@ func isSupportedPermission(key string) bool {
 	case key == attrDestPort:
 	case key == pathHeader || key == methodHeader || key == hostHeader:
 	case strings.HasPrefix(key, attrRequestHeader):
+	case strings.HasPrefix(key, attrRequestRegexHeader):
 	case key == attrConnSNI:
 	case strings.HasPrefix(key, "experimental.envoy.filters.") && isKeyBinary(key):
 	default:
@@ -250,6 +251,16 @@ func (permission *Permission) forKeyValues(key string, values []string) *envoy_r
 		}
 		converter = func(v string) (*envoy_rbac.Permission, error) {
 			m := matcher.HeaderMatcher(header, v)
+			return permissionHeader(m), nil
+		}
+	case strings.HasPrefix(key, attrRequestRegexHeader):
+		header, err := extractNameInBrackets(strings.TrimPrefix(key, attrRequestRegexHeader))
+		if err != nil {
+			rbacLog.Errorf("ignored invalid %s: %v", attrRequestRegexHeader, err)
+			return nil
+		}
+		converter = func(v string) (*envoy_rbac.Permission, error) {
+			m := matcher.HeaderMatcherRegex(header, v)
 			return permissionHeader(m), nil
 		}
 	case key == attrConnSNI:

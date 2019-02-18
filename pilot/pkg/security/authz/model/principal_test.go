@@ -658,6 +658,30 @@ func TestPrincipal_Generate(t *testing.T) {
                   name: X-tag`,
 		},
 		{
+			name: "principal with property attrRequestHeader",
+			principal: &Principal{
+				Properties: []KeyValues{
+					{
+						fmt.Sprintf("%s[%s]", attrRequestRegexHeader, "X-id"):  []string{"id-[0-9]"},
+						fmt.Sprintf("%s[%s]", attrRequestRegexHeader, "X-tag"): []string{"tag-[0-9]"},
+					},
+				},
+			},
+			wantYAML: `
+        andIds:
+          ids:
+          - header:
+              name: X-id
+              safeRegexMatch:
+                googleRe2: {}
+                regex: id-[0-9]
+          - header:
+              name: X-tag
+              safeRegexMatch:
+                googleRe2: {}
+                regex: tag-[0-9]`,
+		},
+		{
 			name: "principal with property attrRequestClaims",
 			principal: &Principal{
 				Properties: []KeyValues{
