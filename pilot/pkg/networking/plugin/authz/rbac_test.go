@@ -353,6 +353,7 @@ func TestConvertRbacRulesToFilterConfig(t *testing.T) {
 							{Key: "destination.ip", Values: []string{"192.1.2.0/24", "2001:db8::/28"}},
 							{Key: "request.headers[key1]", Values: []string{"prefix*", "*suffix"}},
 							{Key: "request.headers[key2]", Values: []string{"simple", "*"}},
+							{Key: "request.regex.headers[key3]", Values: []string{".*value.*"}},
 							{Key: "destination.labels[version]", Values: []string{"v10"}},
 							{Key: "destination.name", Values: []string{"attr-name"}},
 							{Key: "connection.sni", Values: []string{"*.example.com"}},
@@ -460,6 +461,7 @@ func TestConvertRbacRulesToFilterConfig(t *testing.T) {
 							"request.auth.claims[groups]": "group*",
 							"request.auth.claims[iss]":    "test-iss",
 							"request.headers[key]":        "value",
+							"request.regex.headers[key2]": ".*value.*",
 							"source.ip":                   "192.1.2.0/24",
 							"source.namespace":            "test-ns",
 						},
@@ -637,6 +639,11 @@ func TestConvertRbacRulesToFilterConfig(t *testing.T) {
 							}),
 						},
 						{
+							Rule: generateHeaderRule([]*route.HeaderMatcher{
+								{Name: "key3", HeaderMatchSpecifier: &route.HeaderMatcher_RegexMatch{RegexMatch: ".*value.*"}},
+							}),
+						},
+						{
 							Rule: &policy.Permission_OrRules{
 								OrRules: &policy.Permission_Set{
 									Rules: []*policy.Permission{
@@ -679,6 +686,16 @@ func TestConvertRbacRulesToFilterConfig(t *testing.T) {
 									Name: "key",
 									HeaderMatchSpecifier: &route.HeaderMatcher_ExactMatch{
 										ExactMatch: "value",
+									},
+								},
+							},
+						},
+						{
+							Identifier: &policy.Principal_Header{
+								Header: &route.HeaderMatcher{
+									Name: "key2",
+									HeaderMatchSpecifier: &route.HeaderMatcher_RegexMatch{
+										RegexMatch: ".*value.*",
 									},
 								},
 							},
@@ -1418,6 +1435,7 @@ func TestServiceMetadataMatch(t *testing.T) {
 					{Key: "destination.user", Values: []string{"sa1", "sa2"}},
 					{Key: "destination.labels[token]", Values: []string{"t1", "t2"}},
 					{Key: "request.headers[user-agent]", Values: []string{"x1", "x2"}},
+					{Key: "request.regex.headers[user-agent]", Values: []string{".*x.*"}},
 				},
 			},
 			Expect: true,
