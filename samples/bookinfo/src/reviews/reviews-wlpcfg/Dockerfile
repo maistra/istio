@@ -27,4 +27,7 @@ ENV SERVICE_VERSION ${service_version:-v1}
 ENV ENABLE_RATINGS ${enable_ratings:-false}
 ENV STAR_COLOR ${star_color:-black}
 
+RUN chgrp -R 0 /opt/ibm/wlp/output && \
+    chmod -R og=rwx /opt/ibm/wlp/output
+
 CMD /opt/ibm/wlp/bin/server run defaultServer

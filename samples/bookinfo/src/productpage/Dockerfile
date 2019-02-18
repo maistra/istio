@@ -14,18 +14,30 @@
 
 FROM python:2.7-slim
 
+ENV APP_ROOT=/opt/microservices
+ENV PATH=$PATH:$APP_ROOT
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY test-requirements.txt ./
 RUN pip install --no-cache-dir -r test-requirements.txt
 
-COPY productpage.py /opt/microservices/
-COPY tests/unit/* /opt/microservices/
-COPY templates /opt/microservices/templates
-COPY requirements.txt /opt/microservices/
+RUN mkdir ${APP_ROOT} ${APP_ROOT}/templates
+COPY productpage.py ${APP_ROOT}
+COPY uid_entrypoint ${APP_ROOT}
+COPY tests/unit/* ${APP_ROOT}
+COPY templates ${APP_ROOT}/templates
+COPY requirements.txt ${APP_ROOT}
+
+RUN chgrp -R 0 ${APP_ROOT} && \
+    chmod -R og=rwx ${APP_ROOT} && \
+    chmod -R g=rw /etc/passwd
 
 EXPOSE 9080
-WORKDIR /opt/microservices
+USER 10001
+WORKDIR ${APP_ROOT}
+
 RUN python -m unittest discover
+ENTRYPOINT [ "uid_entrypoint" ]
 CMD python productpage.py 9080
