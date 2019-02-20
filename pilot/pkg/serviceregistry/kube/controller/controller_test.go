@@ -154,10 +154,10 @@ func newLocalController(t *testing.T) (*Controller, *FakeXdsUpdater) {
 	fx := NewFakeXDS()
 	ki := makeClient(t)
 	ctl := NewController(ki, Options{
-		WatchedNamespace: "",
-		ResyncPeriod:     resync,
-		DomainSuffix:     domainSuffix,
-		XDSUpdater:       fx,
+		WatchedNamespaces: "",
+		ResyncPeriod:      resync,
+		DomainSuffix:      domainSuffix,
+		XDSUpdater:        fx,
 	})
 	ctl.Env = &model.Environment{
 		Mesh: &meshconfig.MeshConfig{
@@ -172,10 +172,10 @@ func newFakeController(_ *testing.T) (*Controller, *FakeXdsUpdater) {
 	fx := NewFakeXDS()
 	clientSet := fake.NewSimpleClientset()
 	c := NewController(clientSet, Options{
-		WatchedNamespace: "", // tests create resources in multiple ns
-		ResyncPeriod:     resync,
-		DomainSuffix:     domainSuffix,
-		XDSUpdater:       fx,
+		WatchedNamespaces: "istio-system,ns-test,nsa,nsb,nsA,nsB,nsa1,nsfake", // tests create resources in multiple ns
+		ResyncPeriod:      resync,
+		DomainSuffix:      domainSuffix,
+		XDSUpdater:        fx,
 	})
 	_ = c.AppendInstanceHandler(func(instance *model.ServiceInstance, event model.Event) {})
 	_ = c.AppendServiceHandler(func(service *model.Service, event model.Event) {})

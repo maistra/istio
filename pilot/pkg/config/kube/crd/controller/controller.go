@@ -82,7 +82,11 @@ func init() {
 // NewController creates a new Kubernetes controller for CRDs
 // Use "" for namespace to listen for all namespace changes
 func NewController(client *Client, options controller2.Options) model.ConfigStoreCache {
-	log.Infof("CRD controller watching namespaces %q", options.WatchedNamespace)
+	crdNamespace := controller2.IstioNamespace
+	if len(options.WatchedNamespaces) > 1 {
+		crdNamespace = meta_v1.NamespaceAll
+	}
+	log.Infof("CRD controller watching namespaces %q", crdNamespace)
 
 	// Queue requires a time duration for a retry delay after a handler error
 	out := &controller{
@@ -93,7 +97,7 @@ func NewController(client *Client, options controller2.Options) model.ConfigStor
 
 	// add stores for CRD kinds
 	for _, s := range client.ConfigDescriptor() {
-		out.addInformer(s, options.WatchedNamespace, options.ResyncPeriod)
+		out.addInformer(s, crdNamespace, options.ResyncPeriod)
 	}
 
 	return out
