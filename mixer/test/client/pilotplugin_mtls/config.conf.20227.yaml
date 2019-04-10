@@ -1,0 +1,61 @@
+
+admin:
+  access_log_path: /tmp/envoy-access.log
+  address:
+    socket_address:
+      address: 127.0.0.1
+      port_value: 20227
+node:
+  id: id
+  cluster: unknown
+dynamic_resources:
+  lds_config: { ads: {} }
+  ads_config:
+    api_type: GRPC
+    grpc_services:
+      envoy_grpc:
+        cluster_name: xds
+static_resources:
+  clusters:
+  - name: xds
+    http2_protocol_options: {}
+    connect_timeout: 5s
+    type: STATIC
+    hosts:
+    - socket_address:
+        address: 127.0.0.1
+        port_value: 20230
+  - name: "outbound|||svc.ns3"
+    connect_timeout: 5s
+    type: STATIC
+    hosts:
+    - socket_address:
+        address: 127.0.0.1
+        port_value: 20225
+    tls_context:
+      common_tls_context:
+        tls_certificates:
+          certificate_chain:
+            filename: testdata/client.cert
+          private_key:
+            filename: testdata/client-key.cert
+        validation_context:
+          trusted_ca:
+            filename: testdata/root.cert
+          verify_subject_alt_name: ["spiffe://cluster.local/ns/default/sa/server"]
+      sni: istio.io
+  - name: "inbound|||backend"
+    connect_timeout: 5s
+    type: STATIC
+    hosts:
+    - socket_address:
+        address: 127.0.0.1
+        port_value: 20229
+  - name: "outbound|9091||mixer_server"
+    http2_protocol_options: {}
+    connect_timeout: 5s
+    type: STATIC
+    hosts:
+    - socket_address:
+        address: 127.0.0.1
+        port_value: 20228
