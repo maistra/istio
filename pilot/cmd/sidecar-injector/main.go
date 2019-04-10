@@ -15,32 +15,22 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"time"
 
-	multierror "github.com/hashicorp/go-multierror"
-	"github.com/howeyc/fsnotify"
+	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
-	"k8s.io/api/admissionregistration/v1beta1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/tools/cache"
-
 	"istio.io/istio/pilot/pkg/kube/inject"
 	"istio.io/istio/pkg/cmd"
 	"istio.io/istio/pkg/collateral"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/probe"
-	"istio.io/istio/pkg/util"
 	"istio.io/istio/pkg/version"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
 var (
@@ -53,6 +43,9 @@ var (
 		privateKeyFile      string
 		caCertFile          string
 		port                int
+		webhookConfigFile   string
+		namespace           string
+		deploymentName      string
 		healthCheckInterval time.Duration
 		healthCheckFile     string
 		probeOptions        probe.Options
@@ -76,14 +69,25 @@ var (
 
 			log.Infof("version %s", version.Info.String())
 
+			cs, err := kube.CreateClientset(flags.kubeconfigFile, "")
+			if err != nil {
+				return err
+			}
+
 			parameters := inject.WebhookParameters{
 				ConfigFile:          flags.injectConfigFile,
 				MeshFile:            flags.meshconfig,
 				CertFile:            flags.certFile,
+				CACertFile:          flags.caCertFile,
 				KeyFile:             flags.privateKeyFile,
 				Port:                flags.port,
+				WebhookConfigFile:   flags.webhookConfigFile,
+				Namespace:           flags.namespace,
+				WebhookName:         flags.webhookName,
+				DeploymentName:      flags.deploymentName,
 				HealthCheckInterval: flags.healthCheckInterval,
 				HealthCheckFile:     flags.healthCheckFile,
+				Clientset:           cs,
 			}
 			wh, err := inject.NewWebhook(parameters)
 			if err != nil {
@@ -91,9 +95,6 @@ var (
 			}
 
 			stop := make(chan struct{})
-			if err := patchCertLoop(stop); err != nil {
-				return multierror.Prefix(err, "failed to start patch cert loop")
-			}
 
 			go wh.Run(stop)
 			cmd.WaitSignal(stop)
@@ -118,86 +119,6 @@ var (
 	}
 )
 
-func patchCertLoop(stopCh <-chan struct{}) error {
-	client, err := kube.CreateClientset(flags.kubeconfigFile, "")
-	if err != nil {
-		return err
-	}
-
-	caCertPem, err := ioutil.ReadFile(flags.caCertFile)
-	if err != nil {
-		return err
-	}
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-	watchDir, _ := filepath.Split(flags.caCertFile)
-	if err = watcher.Watch(watchDir); err != nil {
-		return fmt.Errorf("could not watch %v: %v", flags.caCertFile, err)
-	}
-
-	if err = util.PatchMutatingWebhookConfig(client.AdmissionregistrationV1beta1().MutatingWebhookConfigurations(),
-		flags.webhookConfigName, flags.webhookName, caCertPem); err != nil {
-		return err
-	}
-
-	shouldPatch := make(chan struct{})
-
-	watchlist := cache.NewListWatchFromClient(
-		client.AdmissionregistrationV1beta1().RESTClient(),
-		"mutatingwebhookconfigurations",
-		"",
-		fields.ParseSelectorOrDie(fmt.Sprintf("metadata.name=%s", flags.webhookConfigName)))
-
-	_, controller := cache.NewInformer(
-		watchlist,
-		&v1beta1.MutatingWebhookConfiguration{},
-		0,
-		cache.ResourceEventHandlerFuncs{
-			UpdateFunc: func(oldObj, newObj interface{}) {
-				config := newObj.(*v1beta1.MutatingWebhookConfiguration)
-				for i, w := range config.Webhooks {
-					if w.Name == flags.webhookName && !bytes.Equal(config.Webhooks[i].ClientConfig.CABundle, caCertPem) {
-						log.Infof("Detected a change in CABundle, patching MutatingWebhookConfiguration again")
-						shouldPatch <- struct{}{}
-						break
-					}
-				}
-			},
-		},
-	)
-	go controller.Run(stopCh)
-
-	go func() {
-		for {
-			select {
-			case <-shouldPatch:
-				doPatch(client, caCertPem)
-
-			case <-watcher.Event:
-				if b, err := ioutil.ReadFile(flags.caCertFile); err == nil {
-					log.Infof("Detected a change in CABundle (via secret), patching MutatingWebhookConfiguration again")
-					caCertPem = b
-					doPatch(client, caCertPem)
-				} else {
-					log.Errorf("CA bundle file read error: %v", err)
-				}
-			}
-		}
-	}()
-
-	return nil
-}
-
-func doPatch(client *kubernetes.Clientset, caCertPem []byte) {
-	if err := util.PatchMutatingWebhookConfig(client.AdmissionregistrationV1beta1().MutatingWebhookConfigurations(),
-		flags.webhookConfigName, flags.webhookName, caCertPem); err != nil {
-		log.Errorf("Patch webhook failed: %v", err)
-	}
-}
-
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flags.meshconfig, "meshConfig", "/etc/istio/config/mesh",
 		"File containing the Istio mesh configuration")
@@ -210,6 +131,14 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flags.caCertFile, "caCertFile", "/etc/istio/certs/root-cert.pem",
 		"File containing the x509 Certificate for HTTPS.")
 	rootCmd.PersistentFlags().IntVar(&flags.port, "port", 443, "Webhook port")
+	rootCmd.PersistentFlags().StringVar(&flags.webhookConfigFile,
+		"mutating-webhook-config-file", "",
+		"File that contains k8s mutatingwebhookconfiguration yaml.")
+	rootCmd.PersistentFlags().StringVar(&flags.namespace, "namespace", "istio-system",
+		"Namespace of the deployment for the pod")
+	rootCmd.PersistentFlags().StringVar(&flags.deploymentName, "deployment-name", "istio-sidecar-injector",
+		"Name of the deployment for the pod")
+
 
 	rootCmd.PersistentFlags().DurationVar(&flags.healthCheckInterval, "healthCheckInterval", 0,
 		"Configure how frequently the health check file specified by --healthCheckFile should be updated")
