@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -29,10 +30,13 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/howeyc/fsnotify"
 	"k8s.io/api/admission/v1beta1"
+	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	clientset "k8s.io/client-go/kubernetes"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/cmd"
@@ -49,6 +53,7 @@ var (
 func init() {
 	_ = corev1.AddToScheme(runtimeScheme)
 	_ = v1beta1.AddToScheme(runtimeScheme)
+	_ = admissionregistrationv1beta1.AddToScheme(runtimeScheme)
 }
 
 const (
@@ -65,13 +70,22 @@ type Webhook struct {
 	healthCheckInterval time.Duration
 	healthCheckFile     string
 
-	server     *http.Server
-	meshFile   string
-	configFile string
-	watcher    *fsnotify.Watcher
-	certFile   string
-	keyFile    string
-	cert       *tls.Certificate
+	server               *http.Server
+	meshFile             string
+	configFile           string
+	keyCertWatcher       *fsnotify.Watcher
+	configWatcher        *fsnotify.Watcher
+	caFile               string
+	certFile             string
+	keyFile              string
+	webhookConfigFile    string
+	cert                 *tls.Certificate
+	namespace            string
+	deploymentName       string
+	webhookName          string
+	clientset            clientset.Interface
+	ownerRefs            []metav1.OwnerReference
+	webhookConfiguration *admissionregistrationv1beta1.MutatingWebhookConfiguration
 }
 
 func loadConfig(injectFile, meshFile string) (*Config, *meshconfig.MeshConfig, error) {
@@ -107,6 +121,9 @@ type WebhookParameters struct {
 	// MeshFile is the path to the mesh configuration file.
 	MeshFile string
 
+	// CACertFile is the path to the x509 CA bundle file.
+	CACertFile string
+
 	// CertFile is the path to the x509 certificate for https.
 	CertFile string
 
@@ -116,6 +133,18 @@ type WebhookParameters struct {
 	// Port is the webhook port, e.g. typically 443 for https.
 	Port int
 
+	// WebhookConfigFile is the path to the mutatingwebhookconfiguration
+	WebhookConfigFile string
+
+	// Namespace is the namespace in which the deployment and service resides.
+	Namespace string
+
+	// Name of the webhook
+	WebhookName string
+
+	// The webhook deployment name
+	DeploymentName string
+
 	// HealthCheckInterval configures how frequently the health check
 	// file is updated. Value of zero disables the health check
 	// update.
@@ -124,6 +153,8 @@ type WebhookParameters struct {
 	// HealthCheckFile specifies the path to the health check file
 	// that is periodically updated.
 	HealthCheckFile string
+
+	Clientset clientset.Interface
 }
 
 // NewWebhook creates a new instance of a mutating webhook for automatic sidecar injection.
@@ -137,7 +168,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		return nil, err
 	}
 
-	watcher, err := fsnotify.NewWatcher()
+	certKeyWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +176,22 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	// symlink updates of k8s ConfigMaps volumes.
 	for _, file := range []string{p.ConfigFile, p.MeshFile, p.CertFile, p.KeyFile} {
 		watchDir, _ := filepath.Split(file)
-		if err := watcher.Watch(watchDir); err != nil {
+		if err := certKeyWatcher.Watch(watchDir); err != nil {
+			return nil, fmt.Errorf("could not watch %v: %v", file, err)
+		}
+	}
+
+	// configuration must be updated whenever the caBundle changes.
+	// NOTE: Use a separate watcher to differentiate config/ca from cert/key updates. This is
+	// useful to avoid unnecessary updates and, more importantly, makes its easier to more
+	// accurately capture logs/metrics when files change.
+	configWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range []string{p.CACertFile, p.WebhookConfigFile} {
+		watchDir, _ := filepath.Split(file)
+		if err := configWatcher.Watch(watchDir); err != nil {
 			return nil, fmt.Errorf("could not watch %v: %v", file, err)
 		}
 	}
@@ -159,13 +205,33 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		meshConfig:             meshConfig,
 		configFile:             p.ConfigFile,
 		meshFile:               p.MeshFile,
-		watcher:                watcher,
+		keyCertWatcher:         certKeyWatcher,
+		configWatcher:          configWatcher,
 		healthCheckInterval:    p.HealthCheckInterval,
 		healthCheckFile:        p.HealthCheckFile,
 		certFile:               p.CertFile,
 		keyFile:                p.KeyFile,
 		cert:                   &pair,
+		caFile:                 p.CACertFile,
+		webhookConfigFile:      p.WebhookConfigFile,
+		deploymentName:         p.DeploymentName,
+		webhookName:            p.WebhookName,
+		namespace:              p.Namespace,
+		clientset:              p.Clientset,
 	}
+
+	if registryPullerDeployment, err := wh.clientset.ExtensionsV1beta1().Deployments(wh.namespace).Get(wh.deploymentName, metav1.GetOptions{}); err != nil {
+		log.Errorf("Could not find %s/%s deployment to set ownerRef. The mutatingwebhookconfiguration must be deleted manually",
+			wh.namespace, wh.deploymentName)
+	} else {
+		wh.ownerRefs = []metav1.OwnerReference{
+			*metav1.NewControllerRef(
+				registryPullerDeployment,
+				extensionsv1beta1.SchemeGroupVersion.WithKind("Deployment"),
+			),
+		}
+	}
+
 	// mtls disabled because apiserver webhook cert usage is still TBD.
 	wh.server.TLSConfig = &tls.Config{GetCertificate: wh.getCert}
 	h := http.NewServeMux()
@@ -175,6 +241,12 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	return wh, nil
 }
 
+func (wh *Webhook) stop() {
+	wh.keyCertWatcher.Close() // nolint: errcheck
+	wh.configWatcher.Close()  // nolint: errcheck
+	wh.server.Close()         // nolint: errcheck
+}
+
 // Run implements the webhook server
 func (wh *Webhook) Run(stop <-chan struct{}) {
 	go func() {
@@ -182,8 +254,16 @@ func (wh *Webhook) Run(stop <-chan struct{}) {
 			log.Fatalf("admission webhook ListenAndServeTLS failed: %v", err)
 		}
 	}()
-	defer wh.watcher.Close()
-	defer wh.server.Close()
+	defer wh.stop()
+
+	// Try to create the initial webhook configuration (if it doesn't
+	// already exist). Setup a persistent monitor to reconcile the
+	// configuration if the observed configuration doesn't match
+	// the desired configuration.
+	if err := wh.rebuildWebhookConfig(); err == nil {
+		wh.createOrUpdateWebhookConfig()
+	}
+	webhookChangedCh := wh.monitorWebhookChanges(stop)
 
 	var healthC <-chan time.Time
 	if wh.healthCheckInterval != 0 && wh.healthCheckFile != "" {
@@ -191,12 +271,13 @@ func (wh *Webhook) Run(stop <-chan struct{}) {
 		healthC = t.C
 		defer t.Stop()
 	}
-	var timerC <-chan time.Time
+	var keyCertTimerC <-chan time.Time
+	var configTimerC <-chan time.Time
 
 	for {
 		select {
-		case <-timerC:
-			timerC = nil
+		case <-keyCertTimerC:
+			keyCertTimerC = nil
 			sidecarConfig, meshConfig, err := loadConfig(wh.configFile, wh.meshFile)
 			if err != nil {
 				log.Errorf("update error: %v", err)
@@ -215,13 +296,31 @@ func (wh *Webhook) Run(stop <-chan struct{}) {
 			wh.meshConfig = meshConfig
 			wh.cert = &pair
 			wh.mu.Unlock()
-		case event := <-wh.watcher.Event:
-			// use a timer to debounce configuration updates
-			if (event.IsModify() || event.IsCreate()) && timerC == nil {
-				timerC = time.After(watchDebounceDelay)
+		case <-configTimerC:
+			configTimerC = nil
+
+			// rebuild the desired configuration and reconcile with the
+			// existing configuration.
+			if err := wh.rebuildWebhookConfig(); err == nil {
+				wh.createOrUpdateWebhookConfig()
 			}
-		case err := <-wh.watcher.Error:
-			log.Errorf("Watcher error: %v", err)
+		case <-webhookChangedCh:
+			// reconcile the desired configuration
+			wh.createOrUpdateWebhookConfig()
+		case event := <-wh.keyCertWatcher.Event:
+			// use a timer to debounce configuration updates
+			if (event.IsModify() || event.IsCreate()) && keyCertTimerC == nil {
+				keyCertTimerC = time.After(watchDebounceDelay)
+			}
+		case event := <-wh.configWatcher.Event:
+			// use a timer to debounce configuration updates
+			if (event.IsModify() || event.IsCreate()) && configTimerC == nil {
+				configTimerC = time.After(watchDebounceDelay)
+			}
+		case err := <-wh.keyCertWatcher.Error:
+			log.Errorf("keyCertWatcher error: %v", err)
+		case err := <-wh.configWatcher.Error:
+			log.Errorf("configWatcher error: %v", err)
 		case <-healthC:
 			content := []byte(`ok`)
 			if err := ioutil.WriteFile(wh.healthCheckFile, content, 0644); err != nil {

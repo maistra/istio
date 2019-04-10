@@ -1,3 +1,4 @@
+{{ define "mutatingwebhookconfiguration.yaml.tpl" }}
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingWebhookConfiguration
 metadata:
@@ -33,4 +34,4 @@ webhooks:
       matchLabels:
         istio-injection: enabled
 {{- end }}
-
+{{- end }}
