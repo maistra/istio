@@ -42,10 +42,16 @@ spec:
             - --injectConfig=/etc/istio/inject/config
             - --meshConfig=/etc/istio/config/mesh
             - --healthCheckInterval=2s
+            - --mutating-webhook-config-file
+            - /etc/istio/webhook/mutatingwebhookconfiguration.yaml
+            - --namespace={{ .Release.Namespace }}
             - --healthCheckFile=/health
           volumeMounts:
           - name: config-volume
             mountPath: /etc/istio/config
+            readOnly: true
+          - name: webhook
+            mountPath: /etc/istio/webhook
             readOnly: true
           - name: certs
             mountPath: /etc/istio/certs
@@ -81,6 +87,9 @@ spec:
       - name: config-volume
         configMap:
           name: istio
+      - name: webhook
+        configMap:
+          name: istio-sidecar-webhook-configuration
       - name: certs
         secret:
           secretName: istio.istio-sidecar-injector-service-account
