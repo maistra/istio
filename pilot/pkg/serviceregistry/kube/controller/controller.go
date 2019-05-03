@@ -106,10 +106,19 @@ func incrementEvent(kind, event string) {
 	k8sEvents.With(typeTag.Value(kind), eventTag.Value(event)).Increment()
 }
 
+const (
+	podLocalitySourceNode = "node"
+	podLocalitySourcePod  = "pod"
+)
+
 // Options stores the configurable attributes of a Controller.
 type Options struct {
 	// Namespace the controller watches. If set to meta_v1.NamespaceAll (""), controller watches all namespaces
 	WatchedNamespaces string
+	// PodLocalitySource specifies whether the controller should read the node's or the pod's labels to determine Pod's
+	// locality (reading it from nodes requires cluster-level privileges, while pods require a controller to copy the
+	// node's AZ labels to the pods)
+	PodLocalitySource string
 	ResyncPeriod      time.Duration
 	DomainSuffix      string
 
@@ -179,7 +188,8 @@ type Controller struct {
 	services       cache.SharedIndexInformer
 	endpoints      kubeEndpointsController
 
-	nodeMetadataInformer cache.SharedIndexInformer
+	podLocalitySource PodLocalitySource
+
 	// Used to watch node accessible from remote cluster.
 	// In multi-cluster(shared control plane multi-networks) scenario, ingress gateway service can be of nodePort type.
 	// With this, we can populate mesh's gateway address with the node ips.
@@ -215,6 +225,12 @@ type Controller struct {
 
 	// Network name for the registry as specified by the MeshNetworks configmap
 	networkForRegistry string
+}
+
+type PodLocalitySource interface {
+	GetPodLocality(pod *v1.Pod) string
+	HasSynced() bool
+	Run(stop <-chan struct{})
 }
 
 // NewController creates a new Kubernetes controller
@@ -263,10 +279,18 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 		c.endpoints = newEndpointSliceController(c, options)
 	}
 
-	// This is for getting the pod to node mapping, so that we can get the pod's locality.
-	metadataSharedInformer := metadatainformer.NewSharedInformerFactory(metadataClient, options.ResyncPeriod)
-	nodeResource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
-	c.nodeMetadataInformer = metadataSharedInformer.ForResource(nodeResource).Informer()
+	if options.PodLocalitySource == podLocalitySourcePod {
+		c.podLocalitySource = &podLocalitySource{}
+	} else {
+		// This is for getting the pod to node mapping, so that we can get the pod's locality.
+		metadataSharedInformer := metadatainformer.NewSharedInformerFactory(metadataClient, options.ResyncPeriod)
+		nodeResource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
+		c.podLocalitySource = &nodeLocalitySource{
+			metadataClient: metadataClient,
+			nodes:          metadataSharedInformer.ForResource(nodeResource).Informer(),
+		}
+	}
+
 	// This is for getting the node IPs of a selected set of nodes
 	c.filteredNodeInformer = coreinformers.NewFilteredNodeInformer(client, options.ResyncPeriod,
 		cache.Indexers{},
@@ -479,8 +503,8 @@ func (c *Controller) HasSynced() bool {
 	if !c.services.HasSynced() ||
 		!c.endpoints.HasSynced() ||
 		!c.pods.informer.HasSynced() ||
-		!c.nodeMetadataInformer.HasSynced() ||
-		!c.filteredNodeInformer.HasSynced() {
+		!c.filteredNodeInformer.HasSynced() ||
+		!c.podLocalitySource.HasSynced() {
 		return false
 	}
 	return true
@@ -500,12 +524,12 @@ func (c *Controller) Run(stop <-chan struct{}) {
 
 	go c.services.Run(stop)
 	go c.pods.informer.Run(stop)
-	go c.nodeMetadataInformer.Run(stop)
 	go c.filteredNodeInformer.Run(stop)
+	go c.podLocalitySource.Run(stop)
 
 	// To avoid endpoints without labels or ports, wait for sync.
-	cache.WaitForCacheSync(stop, c.nodeMetadataInformer.HasSynced, c.filteredNodeInformer.HasSynced,
-		c.pods.informer.HasSynced,
+	cache.WaitForCacheSync(stop, c.filteredNodeInformer.HasSynced,
+		c.podLocalitySource.HasSynced, c.pods.informer.HasSynced,
 		c.services.HasSynced)
 
 	go c.endpoints.Run(stop)
@@ -595,13 +619,22 @@ func (c *Controller) getPodLocality(pod *v1.Pod) string {
 		return model.GetLocalityLabelOrDefault(pod.Labels[model.LocalityLabel], "")
 	}
 
+	return c.podLocalitySource.GetPodLocality(pod)
+}
+
+type nodeLocalitySource struct {
+	metadataClient metadata.Interface
+	nodes          cache.SharedIndexInformer
+}
+
+func (n *nodeLocalitySource) GetPodLocality(pod *v1.Pod) string {
 	// NodeName is set by the scheduler after the pod is created
 	// https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#late-initialization
-	raw, exists, err := c.nodeMetadataInformer.GetStore().GetByKey(pod.Spec.NodeName)
+	raw, exists, err := n.nodes.GetStore().GetByKey(pod.Spec.NodeName)
 	if !exists || err != nil {
 		log.Warnf("unable to get node %q for pod %q from cache: %v", pod.Spec.NodeName, pod.Name, err)
 		nodeResource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
-		raw, err = c.metadataClient.Resource(nodeResource).Get(context.TODO(), pod.Spec.NodeName, metav1.GetOptions{})
+		raw, err = n.metadataClient.Resource(nodeResource).Get(context.TODO(), pod.Spec.NodeName, metav1.GetOptions{})
 		if err != nil {
 			log.Warnf("unable to get node %q for pod %q: %v", pod.Spec.NodeName, pod.Name, err)
 			return ""
@@ -623,6 +656,34 @@ func (c *Controller) getPodLocality(pod *v1.Pod) string {
 	}
 
 	return region + "/" + zone + "/" + subzone // Format: "%s/%s/%s"
+}
+
+func (n *nodeLocalitySource) HasSynced() bool {
+	return n.nodes.HasSynced()
+}
+
+func (n *nodeLocalitySource) Run(stop <-chan struct{}) {
+	n.nodes.Run(stop)
+}
+
+type podLocalitySource struct {
+}
+
+func (p *podLocalitySource) GetPodLocality(pod *v1.Pod) string {
+	region, _ := pod.Labels[NodeRegionLabel]
+	zone, _ := pod.Labels[NodeZoneLabel]
+	if region == "" && zone == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%v/%v", region, zone)
+}
+
+func (p *podLocalitySource) HasSynced() bool {
+	return true
+}
+
+func (p *podLocalitySource) Run(stop <-chan struct{}) {
 }
 
 // ManagementPorts implements a service catalog operation

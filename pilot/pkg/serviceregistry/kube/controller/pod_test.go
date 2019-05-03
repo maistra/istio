@@ -113,7 +113,7 @@ func TestIPReuse(t *testing.T) {
 	defer c.Stop()
 	initTestEnv(t, c.client, fx)
 
-	cache.WaitForCacheSync(c.stop, c.nodeMetadataInformer.HasSynced, c.pods.informer.HasSynced,
+	cache.WaitForCacheSync(c.stop, c.podLocalitySource.HasSynced, c.pods.informer.HasSynced,
 		c.services.HasSynced, c.endpoints.HasSynced)
 
 	createPod(t, c, "128.0.0.1", "pod")
@@ -192,8 +192,8 @@ func testPodCache(t *testing.T) {
 		// Pods in namespaces not watched by the controller.
 		generatePod("128.0.0.4", "cpod4", "nsc", "", "", map[string]string{"app": "prod-app-3"}, map[string]string{}),
 	}
-	cache.WaitForCacheSync(c.stop, c.nodeMetadataInformer.HasSynced, c.pods.informer.HasSynced,
-		c.services.HasSynced, c.endpoints.HasSynced)
+	cache.WaitForCacheSync(c.stop, c.podLocalitySource.HasSynced, c.pods.informer.HasSynced,
+		c.services.HasSynced, c.endpoints.HasSynced, c.podLocalitySource.HasSynced)
 
 	for _, pod := range pods {
 		pod := pod
