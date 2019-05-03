@@ -272,7 +272,8 @@ func (p *Processing) createSource(mesh meshconfig.Cache) (src runtime.Source, er
 			return
 		}
 		sourceSchema = schema.New(found...)
-		if src, err = newSource(k, p.args.ResyncPeriod, sourceSchema, converterCfg); err != nil {
+		watchedNamespaces := strings.Split(p.args.WatchedNamespaces, ",")
+		if src, err = newSource(k, watchedNamespaces, p.args.ResyncPeriod, sourceSchema, converterCfg); err != nil {
 			return
 		}
 	}
