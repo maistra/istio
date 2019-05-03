@@ -28,20 +28,18 @@ import (
 	"istio.io/istio/galley/pkg/source/kube/schema"
 
 	kubeDynamic "k8s.io/client-go/dynamic"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 )
 
 // New creates a new kube source for the given schema.
-func New(interfaces client.Interfaces, resyncPeriod time.Duration, schema *schema.Instance,
+func New(interfaces client.Interfaces, watchedNamespaces []string, resyncPeriod time.Duration, schema *schema.Instance,
 	cfg *kubeConverter.Config) (runtime.Source, error) {
 
 	var err error
 	var cl kubernetes.Interface
 	var dynClient kubeDynamic.Interface
-	var sharedInformers informers.SharedInformerFactory
 
-	log.Scope.Info("creating sources for kubernetes resources")
+	log.Scope.Infof("creating sources for kubernetes resources: %v", len(schema.All()))
 	sources := make([]runtime.Source, 0)
 	for i, spec := range schema.All() {
 		log.Scope.Infof("[%d]", i)
@@ -54,9 +52,7 @@ func New(interfaces client.Interfaces, resyncPeriod time.Duration, schema *schem
 			if cl, err = getKubeClient(cl, interfaces); err != nil {
 				return nil, err
 			}
-			sharedInformers = getSharedInformers(sharedInformers, cl, resyncPeriod)
-
-			source, err := builtin.New(sharedInformers, spec)
+			source, err := builtin.New(cl, watchedNamespaces, resyncPeriod, spec)
 			if err != nil {
 				return nil, err
 			}
@@ -67,7 +63,7 @@ func New(interfaces client.Interfaces, resyncPeriod time.Duration, schema *schem
 				return nil, err
 			}
 			// Unknown types use the dynamic source.
-			source, err := dynamic.New(dynClient, resyncPeriod, spec, cfg)
+			source, err := dynamic.New(dynClient, watchedNamespaces, resyncPeriod, spec, cfg)
 			if err != nil {
 				return nil, err
 			}
@@ -85,14 +81,6 @@ func getKubeClient(cl kubernetes.Interface, interfaces client.Interfaces) (kuber
 		return cl, nil
 	}
 	return interfaces.KubeClient()
-}
-
-func getSharedInformers(sharedInformers informers.SharedInformerFactory,
-	cl kubernetes.Interface, resyncPeriod time.Duration) informers.SharedInformerFactory {
-	if sharedInformers != nil {
-		return sharedInformers
-	}
-	return informers.NewSharedInformerFactory(cl, resyncPeriod)
 }
 
 func getDynamicClient(cl kubeDynamic.Interface, interfaces client.Interfaces) (kubeDynamic.Interface, error) {

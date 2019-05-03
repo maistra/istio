@@ -45,7 +45,7 @@ loop:
 		resetPatchTable()
 		mk := mock.NewKube()
 		newKubeFromConfigFile = func(string) (client.Interfaces, error) { return mk, nil }
-		newSource = func(client.Interfaces, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
+		newSource = func(client.Interfaces, []string, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
 			return runtime.NewInMemorySource(), nil
 		}
 		newMeshConfigCache = func(path string) (meshconfig.Cache, error) { return meshconfig.NewInMemory(), nil }
@@ -69,7 +69,7 @@ loop:
 		case 0:
 			newKubeFromConfigFile = func(string) (client.Interfaces, error) { return nil, e }
 		case 1:
-			newSource = func(client.Interfaces, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
+			newSource = func(client.Interfaces, []string, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
 				return nil, e
 			}
 		case 2:
@@ -109,7 +109,7 @@ func TestServer_Basic(t *testing.T) {
 
 	mk := mock.NewKube()
 	newKubeFromConfigFile = func(string) (client.Interfaces, error) { return mk, nil }
-	newSource = func(client.Interfaces, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
+	newSource = func(client.Interfaces, []string, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
 		return runtime.NewInMemorySource(), nil
 	}
 	mcpMetricReporter = func(s string) monitoring.Reporter {
