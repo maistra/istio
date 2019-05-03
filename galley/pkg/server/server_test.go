@@ -38,7 +38,7 @@ loop:
 		p := defaultPatchTable()
 		mk := mock.NewKube()
 		p.newKubeFromConfigFile = func(string) (client.Interfaces, error) { return mk, nil }
-		p.newSource = func(client.Interfaces, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
+		p.newSource = func(client.Interfaces, []string, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
 			return runtime.NewInMemorySource(), nil
 		}
 		p.newMeshConfigCache = func(path string) (meshconfig.Cache, error) { return meshconfig.NewInMemory(), nil }
@@ -59,7 +59,7 @@ loop:
 		case 0:
 			p.newKubeFromConfigFile = func(string) (client.Interfaces, error) { return nil, e }
 		case 1:
-			p.newSource = func(client.Interfaces, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
+			p.newSource = func(client.Interfaces, []string, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
 				return nil, e
 			}
 		case 2:
@@ -93,7 +93,7 @@ func TestNewServer(t *testing.T) {
 	p.newKubeFromConfigFile = func(string) (client.Interfaces, error) { return mk, nil }
 
 	var gotSourceSchemas []schema.ResourceSpec
-	p.newSource = func(_ client.Interfaces, _ time.Duration, si *schema.Instance, _ *converter.Config) (runtime.Source, error) {
+	p.newSource = func(_ client.Interfaces, _ []string, _ time.Duration, si *schema.Instance, _ *converter.Config) (runtime.Source, error) {
 		gotSourceSchemas = si.All()
 		return runtime.NewInMemorySource(), nil
 	}
@@ -155,7 +155,7 @@ func TestServer_Basic(t *testing.T) {
 	p := defaultPatchTable()
 	mk := mock.NewKube()
 	p.newKubeFromConfigFile = func(string) (client.Interfaces, error) { return mk, nil }
-	p.newSource = func(client.Interfaces, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
+	p.newSource = func(client.Interfaces, []string, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error) {
 		return runtime.NewInMemorySource(), nil
 	}
 	p.mcpMetricReporter = func(s string) monitoring.Reporter {
