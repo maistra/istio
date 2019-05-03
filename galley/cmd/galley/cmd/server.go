@@ -17,6 +17,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"k8s.io/api/core/v1"
 	"reflect"
 	"strings"
 
@@ -32,7 +33,9 @@ import (
 )
 
 var (
-	loggingOptions = log.DefaultOptions()
+	kubeConfig        string
+	watchedNamespaces string
+	loggingOptions    = log.DefaultOptions()
 )
 
 // GetRootCmd returns the root of the cobra command-tree.
@@ -101,6 +104,8 @@ func serverCmd() *cobra.Command {
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
 	svr.PersistentFlags().DurationVar(&serverArgs.ResyncPeriod, "resyncPeriod", serverArgs.ResyncPeriod,
 		"Resync period for rescanning Kubernetes resources")
+	svr.PersistentFlags().StringVarP(&watchedNamespaces, "appNamespace", "a",
+		v1.NamespaceAll, "Specify the applications namespace list the controller manages, separated by comma; if not set, controller watches all namespaces")
 	svr.PersistentFlags().StringVar(&serverArgs.CredentialOptions.CertificateFile, "tlsCertFile", constants.DefaultCertChain,
 		"File containing the x509 Certificate for HTTPS.")
 	svr.PersistentFlags().StringVar(&serverArgs.CredentialOptions.KeyFile, "tlsKeyFile", constants.DefaultKey,
@@ -223,6 +228,7 @@ func setupAliases() {
 	viper.RegisterAlias("processing.server.auth.mtls.caCertificates", "caCertFile")
 	viper.RegisterAlias("processing.server.auth.mtls.accessListFile", "accessListFile")
 	viper.RegisterAlias("processing.server.auth.insecure", "insecure")
+	viper.RegisterAlias("processing.source.watchedNamespaces", "watchedNamespaces")
 	viper.RegisterAlias("processing.source.kubernetes.resyncPeriod", "resyncPeriod")
 	viper.RegisterAlias("processing.source.filesystem.path", "configPath")
 	viper.RegisterAlias("validation.enable", "enable-validation")
