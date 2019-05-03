@@ -74,12 +74,21 @@ func init() {
 	prometheus.MustRegister(k8sEvents)
 }
 
+const (
+	podLocalitySourceNode = "node"
+	podLocalitySourcePod  = "pod"
+)
+
 // ControllerOptions stores the configurable attributes of a Controller.
 type ControllerOptions struct {
 	// Deprecated; Namespace the controller watches. If set to meta_v1.NamespaceAll (""), controller watches all namespaces
 	WatchedNamespace string
 	// Namespace list the controller watches, separated by comma; if not set, controller watches all namespaces"
 	WatchedNamespaces string
+	// PodLocalitySource specifies whether the controller should read the node's or the pod's labels to determine Pod's
+	// locality (reading it from nodes requires cluster-level privileges, while pods require a controller to copy the
+	// node's AZ labels to the pods)
+	PodLocalitySource string
 	ResyncPeriod      time.Duration
 	DomainSuffix      string
 
@@ -104,7 +113,8 @@ type Controller struct {
 	queue     Queue
 	services  cacheHandler
 	endpoints cacheHandler
-	nodes     cacheHandler
+
+	podLocalitySource PodLocalitySource
 
 	pods *PodCache
 
@@ -136,6 +146,12 @@ type Controller struct {
 type cacheHandler struct {
 	informer cache.SharedIndexInformer
 	handler  *ChainHandler
+}
+
+type PodLocalitySource interface {
+	GetPodLocality(pod *v1.Pod) string
+	HasSynced() bool
+	Run(stop <-chan struct{})
 }
 
 // NewController creates a new Kubernetes controller
@@ -181,15 +197,22 @@ func NewController(client kubernetes.Interface, options ControllerOptions) *Cont
 	}), &v1.Endpoints{}, options.ResyncPeriod, cache.Indexers{})
 	out.endpoints = out.createEDSCacheHandler(epInformer, "Endpoints")
 
-	nodeInformer := cache.NewSharedIndexInformer(&cache.ListWatch{
-		ListFunc: func(opts meta_v1.ListOptions) (runtime.Object, error) {
-			return client.CoreV1().Nodes().List(opts)
-		},
-		WatchFunc: func(opts meta_v1.ListOptions) (watch.Interface, error) {
-			return client.CoreV1().Nodes().Watch(opts)
-		},
-	}, &v1.Node{}, options.ResyncPeriod, cache.Indexers{})
-	out.nodes = out.createCacheHandler(nodeInformer, "Nodes")
+	if options.PodLocalitySource == podLocalitySourcePod {
+		out.podLocalitySource = &podLocalitySource{}
+	} else {
+		nodeInformer := cache.NewSharedIndexInformer(&cache.ListWatch{
+			ListFunc: func(opts meta_v1.ListOptions) (runtime.Object, error) {
+				return client.CoreV1().Nodes().List(opts)
+			},
+			WatchFunc: func(opts meta_v1.ListOptions) (watch.Interface, error) {
+				return client.CoreV1().Nodes().Watch(opts)
+			},
+		}, &v1.Node{}, options.ResyncPeriod, cache.Indexers{})
+
+		out.podLocalitySource = &nodeLocalitySource{
+			nodes: out.createCacheHandler(nodeInformer, "Nodes"),
+		}
+	}
 
 	podInformer := cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
 		return &cache.ListWatch{
@@ -289,7 +312,7 @@ func (c *Controller) HasSynced() bool {
 	if !c.services.informer.HasSynced() ||
 		!c.endpoints.informer.HasSynced() ||
 		!c.pods.informer.HasSynced() ||
-		!c.nodes.informer.HasSynced() {
+		!c.podLocalitySource.HasSynced() {
 		return false
 	}
 	return true
@@ -306,10 +329,10 @@ func (c *Controller) Run(stop <-chan struct{}) {
 
 	go c.services.informer.Run(stop)
 	go c.pods.informer.Run(stop)
-	go c.nodes.informer.Run(stop)
+	go c.podLocalitySource.Run(stop)
 
 	// To avoid endpoints without labels or ports, wait for sync.
-	cache.WaitForCacheSync(stop, c.nodes.informer.HasSynced, c.pods.informer.HasSynced,
+	cache.WaitForCacheSync(stop, c.podLocalitySource.HasSynced, c.pods.informer.HasSynced,
 		c.services.informer.HasSynced)
 
 	go c.endpoints.informer.Run(stop)
@@ -360,9 +383,17 @@ func (c *Controller) serviceByKey(name, namespace string) (*v1.Service, bool) {
 
 // GetPodLocality retrieves the locality for a pod.
 func (c *Controller) GetPodLocality(pod *v1.Pod) string {
+	return c.podLocalitySource.GetPodLocality(pod)
+}
+
+type nodeLocalitySource struct {
+	nodes cacheHandler
+}
+
+func (n *nodeLocalitySource) GetPodLocality(pod *v1.Pod) string {
 	// NodeName is set by the scheduler after the pod is created
 	// https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#late-initialization
-	node, exists, err := c.nodes.informer.GetStore().GetByKey(pod.Spec.NodeName)
+	node, exists, err := n.nodes.informer.GetStore().GetByKey(pod.Spec.NodeName)
 	if !exists || err != nil {
 		log.Warnf("unable to get node %q for pod %q: %v", pod.Spec.NodeName, pod.Name, err)
 		return ""
@@ -375,6 +406,34 @@ func (c *Controller) GetPodLocality(pod *v1.Pod) string {
 	}
 
 	return fmt.Sprintf("%v/%v", region, zone)
+}
+
+func (n *nodeLocalitySource) HasSynced() bool {
+	return n.nodes.informer.HasSynced()
+}
+
+func (n *nodeLocalitySource) Run(stop <-chan struct{}) {
+	n.nodes.informer.Run(stop)
+}
+
+type podLocalitySource struct {
+}
+
+func (p *podLocalitySource) GetPodLocality(pod *v1.Pod) string {
+	region, _ := pod.Labels[NodeRegionLabel]
+	zone, _ := pod.Labels[NodeZoneLabel]
+	if region == "" && zone == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%v/%v", region, zone)
+}
+
+func (p *podLocalitySource) HasSynced() bool {
+	return true
+}
+
+func (p *podLocalitySource) Run(stop <-chan struct{}) {
 }
 
 // ManagementPorts implements a service catalog operation
