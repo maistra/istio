@@ -16,7 +16,11 @@ package builtin
 
 import (
 	"fmt"
+	"istio.io/istio/pkg/listwatch"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 	"reflect"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 
@@ -29,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -54,8 +57,17 @@ var (
 				}
 				return nil
 			},
-			newInformer: func(sharedInformers informers.SharedInformerFactory) cache.SharedIndexInformer {
-				return sharedInformers.Core().V1().Services().Informer()
+			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
+				return cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
+					return &cache.ListWatch{
+						ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+							return cl.CoreV1().Services(namespace).List(opts)
+						},
+						WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+							return cl.CoreV1().Services(namespace).Watch(opts)
+						},
+					}
+				}), &v1.Service{}, resyncPeriod, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Service{}
@@ -80,8 +92,15 @@ var (
 				}
 				return nil
 			},
-			newInformer: func(sharedInformers informers.SharedInformerFactory) cache.SharedIndexInformer {
-				return sharedInformers.Core().V1().Nodes().Informer()
+			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
+				return cache.NewSharedIndexInformer(&cache.ListWatch{
+					ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+						return cl.CoreV1().Nodes().List(opts)
+					},
+					WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+						return cl.CoreV1().Nodes().Watch(opts)
+					},
+				}, &v1.Node{}, resyncPeriod, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Node{}
@@ -106,8 +125,17 @@ var (
 				}
 				return nil
 			},
-			newInformer: func(sharedInformers informers.SharedInformerFactory) cache.SharedIndexInformer {
-				return sharedInformers.Core().V1().Pods().Informer()
+			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
+				return cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
+					return &cache.ListWatch{
+						ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+							return cl.CoreV1().Pods(namespace).List(opts)
+						},
+						WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+							return cl.CoreV1().Pods(namespace).Watch(opts)
+						},
+					}
+				}), &v1.Pod{}, resyncPeriod, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Pod{}
@@ -146,8 +174,17 @@ var (
 				}
 				return nil
 			},
-			newInformer: func(sharedInformers informers.SharedInformerFactory) cache.SharedIndexInformer {
-				return sharedInformers.Core().V1().Endpoints().Informer()
+			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
+				return cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
+					return &cache.ListWatch{
+						ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+							return cl.CoreV1().Endpoints(namespace).List(opts)
+						},
+						WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+							return cl.CoreV1().Endpoints(namespace).Watch(opts)
+						},
+					}
+				}), &v1.Endpoints{}, resyncPeriod, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Endpoints{}

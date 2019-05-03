@@ -37,6 +37,9 @@ type Args struct {
 	// The path to kube configuration file.
 	KubeConfig string
 
+	// Namespace list the controller watches, separated by comma; if not set, controller watches all namespaces"
+	WatchedNamespaces string
+
 	// resync period to be passed to the K8s machinery.
 	ResyncPeriod time.Duration
 
@@ -131,6 +134,7 @@ func (a *Args) String() string {
 	buf := &bytes.Buffer{}
 
 	_, _ = fmt.Fprintf(buf, "KubeConfig: %s\n", a.KubeConfig)
+	_, _ = fmt.Fprintf(buf, "WatchedNamespaces: %v\n", a.WatchedNamespaces)
 	_, _ = fmt.Fprintf(buf, "ResyncPeriod: %v\n", a.ResyncPeriod)
 	_, _ = fmt.Fprintf(buf, "APIAddress: %s\n", a.APIAddress)
 	_, _ = fmt.Fprintf(buf, "EnableGrpcTracing: %v\n", a.EnableGRPCTracing)

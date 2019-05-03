@@ -17,6 +17,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"k8s.io/api/core/v1"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -29,9 +30,10 @@ import (
 )
 
 var (
-	resyncPeriod   time.Duration
-	kubeConfig     string
-	loggingOptions = log.DefaultOptions()
+	resyncPeriod      time.Duration
+	kubeConfig        string
+	watchedNamespaces string
+	loggingOptions    = log.DefaultOptions()
 )
 
 // GetRootCmd returns the root of the cobra command-tree.
@@ -62,6 +64,7 @@ func serverCmd() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			serverArgs.KubeConfig = kubeConfig
+			serverArgs.WatchedNamespaces = watchedNamespaces
 			serverArgs.ResyncPeriod = resyncPeriod
 			serverArgs.CredentialOptions.CACertificateFile = validationArgs.CACertFile
 			serverArgs.CredentialOptions.KeyFile = validationArgs.KeyFile
@@ -101,6 +104,8 @@ func serverCmd() *cobra.Command {
 	serverCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	serverCmd.PersistentFlags().StringVar(&kubeConfig, "kubeconfig", "",
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
+	serverCmd.PersistentFlags().StringVarP(&watchedNamespaces, "appNamespace", "a",
+		v1.NamespaceAll, "Specify the applications namespace list the controller manages, separated by comma; if not set, controller watches all namespaces")
 	serverCmd.PersistentFlags().DurationVar(&resyncPeriod, "resyncPeriod", 0,
 		"Resync period for rescanning Kubernetes resources")
 	serverCmd.PersistentFlags().StringVar(&validationArgs.CertFile, "tlsCertFile", "/etc/certs/cert-chain.pem",
