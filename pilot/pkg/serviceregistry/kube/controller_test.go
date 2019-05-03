@@ -156,16 +156,23 @@ func newLocalController(t *testing.T) (*Controller, *FakeXdsUpdater) {
 	return ctl, fx
 }
 
-func newFakeController(t *testing.T) (*Controller, *FakeXdsUpdater) {
+type ControllerOptionsMutatorFunc func(options *ControllerOptions)
+
+func newFakeController(t *testing.T, optionsMutators ...ControllerOptionsMutatorFunc) (*Controller, *FakeXdsUpdater) {
 	fx := NewFakeXDS()
 	clientSet := fake.NewSimpleClientset()
-	c := NewController(clientSet, ControllerOptions{
+	options := ControllerOptions{
 		WatchedNamespaces: "istio-system,ns-test,nsa,nsb,nsA,nsB,nsa1,nsfake", // tests create resources in multiple ns
 		ResyncPeriod:      resync,
 		DomainSuffix:      domainSuffix,
 		XDSUpdater:        fx,
 		stop:              make(chan struct{}),
-	})
+	}
+	for _, m := range optionsMutators {
+		m(&options)
+	}
+
+	c := NewController(clientSet, options)
 	c.AppendInstanceHandler(func(instance *model.ServiceInstance, event model.Event) {
 		t.Log("Instance event received")
 	})
@@ -306,7 +313,7 @@ func makeService(n, ns string, cl kubernetes.Interface, t *testing.T) {
 	log.Infof("Created service %s", n)
 }
 
-func TestController_getPodAZ(t *testing.T) {
+func TestController_getPodAZ_FromNode(t *testing.T) {
 	t.Parallel()
 	pod1 := generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{"app": "prod-app"}, map[string]string{})
 	pod2 := generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app"}, map[string]string{})
@@ -367,6 +374,18 @@ func TestController_getPodAZ(t *testing.T) {
 				pod2: "/zone2",
 			},
 		},
+		{
+			name: "should return empty az if node has neither region nor zone label",
+			pods: []*v1.Pod{pod1, pod2},
+			nodes: []*v1.Node{
+				generateNode("node1", map[string]string{}),
+				generateNode("node2", map[string]string{}),
+			},
+			wantAZ: map[*v1.Pod]string{
+				pod1: "",
+				pod2: "",
+			},
+		},
 	}
 
 	for _, c := range testCases {
@@ -383,6 +402,95 @@ func TestController_getPodAZ(t *testing.T) {
 
 			// Verify expected existing pod AZs
 			for pod, wantAZ := range c.wantAZ {
+				az := controller.GetPodLocality(pod)
+				if wantAZ != "" {
+					if !reflect.DeepEqual(az, wantAZ) {
+						t.Errorf("Wanted az: %s, got: %s", wantAZ, az)
+					}
+				} else {
+					if az != "" {
+						t.Errorf("Unexpectedly found az: %s for pod: %s", az, pod.ObjectMeta.Name)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestController_getPodAZ_FromPod(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name   string
+		pods   map[string]*v1.Pod
+		wantAZ map[string]string
+	}{
+		{
+			name: "should return correct az for given address",
+			pods: map[string]*v1.Pod{
+				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{NodeZoneLabel: "zone1", NodeRegionLabel: "region1", "app": "prod-app"}, map[string]string{}),
+				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{NodeZoneLabel: "zone2", NodeRegionLabel: "region2", "app": "prod-app"}, map[string]string{}),
+			},
+			wantAZ: map[string]string{
+				"pod1": "region1/zone1",
+				"pod2": "region2/zone2",
+			},
+		},
+		{
+			name: "should return correct az if node has only region label",
+			pods: map[string]*v1.Pod{
+				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{"app": "prod-app", NodeRegionLabel: "region1"}, map[string]string{}),
+				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app", NodeRegionLabel: "region2"}, map[string]string{}),
+			},
+			wantAZ: map[string]string{
+				"pod1": "region1/",
+				"pod2": "region2/",
+			},
+		},
+		{
+			name: "should return correct az if node has only zone label",
+			pods: map[string]*v1.Pod{
+				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{"app": "prod-app", NodeZoneLabel: "zone1"}, map[string]string{}),
+				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app", NodeZoneLabel: "zone2"}, map[string]string{}),
+			},
+			wantAZ: map[string]string{
+				"pod1": "/zone1",
+				"pod2": "/zone2",
+			},
+		},
+		{
+			name: "should return empty az if pod has neither region nor zone label",
+			pods: map[string]*v1.Pod{
+				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{"app": "prod-app"}, map[string]string{}),
+				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app"}, map[string]string{}),
+			},
+			wantAZ: map[string]string{
+				"pod1": "",
+				"pod2": "",
+			},
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+
+			// Setup kube caches
+			controller, fx := newFakeController(t, func(o *ControllerOptions) {
+				o.PodLocalitySource = "pod"
+			})
+			defer controller.Stop()
+
+			pods := make([]*v1.Pod, 0, len(c.pods))
+			for _, p := range c.pods {
+				pods = append(pods, p)
+			}
+			addPods(t, controller, pods...)
+			for range c.pods {
+				fx.Wait("workload")
+			}
+
+			// Verify expected existing pod AZs
+			for podName, wantAZ := range c.wantAZ {
+				pod := c.pods[podName]
 				az := controller.GetPodLocality(pod)
 				if wantAZ != "" {
 					if !reflect.DeepEqual(az, wantAZ) {
