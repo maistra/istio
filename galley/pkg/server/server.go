@@ -68,7 +68,7 @@ type patchTable struct {
 	newKubeFromConfigFile       func(string) (client.Interfaces, error)
 	verifyResourceTypesPresence func(client.Interfaces, []schema.ResourceSpec) error
 	findSupportedResources      func(client.Interfaces, []schema.ResourceSpec) ([]schema.ResourceSpec, error)
-	newSource                   func(client.Interfaces, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error)
+	newSource                   func(client.Interfaces, []string, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error)
 	netListen                   func(network, address string) (net.Listener, error)
 	newMeshConfigCache          func(path string) (meshconfig.Cache, error)
 	mcpMetricReporter           func(string) monitoring.Reporter
@@ -137,7 +137,8 @@ func newServer(a *Args, p patchTable) (*Server, error) {
 			}
 			sourceSchema = schema.New(found...)
 		}
-		src, err = p.newSource(k, a.ResyncPeriod, sourceSchema, converterCfg)
+		watchedNamespaces := strings.Split(a.WatchedNamespaces, ",")
+		src, err = p.newSource(k, watchedNamespaces, a.ResyncPeriod, sourceSchema, converterCfg)
 		if err != nil {
 			return nil, err
 		}
