@@ -17,6 +17,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"k8s.io/api/core/v1"
 	"time"
 
 	"k8s.io/api/core/v1"
