@@ -16,11 +16,12 @@ package builtin
 
 import (
 	"github.com/gogo/protobuf/proto"
+	"k8s.io/client-go/kubernetes"
+	"time"
 
 	"istio.io/istio/galley/pkg/source/kube/schema"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -55,8 +56,8 @@ func (p *Type) ExtractResource(o interface{}) proto.Message {
 }
 
 // NewInformer creates a new k8s informer for resources of this type.
-func (p *Type) NewInformer(sharedInformers informers.SharedInformerFactory) cache.SharedIndexInformer {
-	return p.newInformer(sharedInformers)
+func (p *Type) NewInformer(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return p.newInformer(cl, watchedNamespaces, resyncPeriod)
 }
 
 // ParseJSON parses the given JSON into a k8s object of this type.
@@ -67,5 +68,5 @@ func (p *Type) ParseJSON(input []byte) (interface{}, error) {
 type resourceEqualFn func(o1 interface{}, o2 interface{}) bool
 type objectExtractFn func(o interface{}) metav1.Object
 type itemExtractFn func(o interface{}) proto.Message
-type newInformerFn func(sharedInformers informers.SharedInformerFactory) cache.SharedIndexInformer
+type newInformerFn func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer
 type parseJSONFn func(input []byte) (interface{}, error)
