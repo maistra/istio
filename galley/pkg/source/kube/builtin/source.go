@@ -16,8 +16,10 @@ package builtin
 
 import (
 	"fmt"
+	"k8s.io/client-go/kubernetes"
 	"reflect"
 	"sync"
+	"time"
 
 	"istio.io/istio/galley/pkg/runtime"
 	"istio.io/istio/galley/pkg/runtime/resource"
@@ -26,26 +28,27 @@ import (
 	"istio.io/istio/galley/pkg/source/kube/stats"
 	"istio.io/istio/galley/pkg/source/kube/tombstone"
 
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 )
 
 var _ runtime.Source = &source{}
 
 // New creates a new built-in source. If the type is not built-in, returns an error.
-func New(sharedInformers informers.SharedInformerFactory, spec schema.ResourceSpec) (runtime.Source, error) {
+func New(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, spec schema.ResourceSpec) (runtime.Source, error) {
 	t := types[spec.Kind]
 	if t == nil {
 		return nil, fmt.Errorf("unknown resource type: name='%s', gv='%v'",
 			spec.Singular, spec.GroupVersion())
 	}
-	return newSource(sharedInformers, t), nil
+	return newSource(cl, watchedNamespaces, resyncPeriod, t), nil
 }
 
-func newSource(sharedInformers informers.SharedInformerFactory, t *Type) runtime.Source {
+func newSource(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, t *Type) runtime.Source {
 	return &source{
-		t:               t,
-		sharedInformers: sharedInformers,
+		t:                 t,
+		cl:                cl,
+		watchedNamespaces: watchedNamespaces,
+		resyncPeriod:      resyncPeriod,
 	}
 }
 
@@ -56,8 +59,10 @@ type source struct {
 	// The built-in type that is processed by this source.
 	t *Type
 
-	sharedInformers informers.SharedInformerFactory
-	informer        cache.SharedIndexInformer
+	cl                kubernetes.Interface
+	watchedNamespaces []string
+	resyncPeriod      time.Duration
+	informer          cache.SharedIndexInformer
 
 	// stopCh is used to quiesce the background activity during shutdown
 	stopCh  chan struct{}
@@ -82,7 +87,7 @@ func (s *source) Start(handler resource.EventHandler) error {
 	s.stopCh = make(chan struct{})
 	s.handler = handler
 
-	s.informer = s.t.NewInformer(s.sharedInformers)
+	s.informer = s.t.NewInformer(s.cl, s.watchedNamespaces, s.resyncPeriod)
 	s.informer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
