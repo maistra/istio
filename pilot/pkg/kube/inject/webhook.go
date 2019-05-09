@@ -82,6 +82,7 @@ type Webhook struct {
 	cert                 *tls.Certificate
 	namespace            string
 	deploymentName       string
+	webhookConfigName    string
 	webhookName          string
 	clientset            clientset.Interface
 	ownerRefs            []metav1.OwnerReference
@@ -139,7 +140,10 @@ type WebhookParameters struct {
 	// Namespace is the namespace in which the deployment and service resides.
 	Namespace string
 
-	// Name of the webhook
+	// Name of the mutatingwebhookconfiguration resource
+	WebhookConfigName string
+
+	// Name of the webhook in the mutatingwebhookconfiguration resource
 	WebhookName string
 
 	// The webhook deployment name
@@ -215,6 +219,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		caFile:                 p.CACertFile,
 		webhookConfigFile:      p.WebhookConfigFile,
 		deploymentName:         p.DeploymentName,
+		webhookConfigName:      p.WebhookConfigName,
 		webhookName:            p.WebhookName,
 		namespace:              p.Namespace,
 		clientset:              p.Clientset,
