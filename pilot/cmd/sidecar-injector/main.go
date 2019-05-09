@@ -83,6 +83,7 @@ var (
 				Port:                flags.port,
 				WebhookConfigFile:   flags.webhookConfigFile,
 				Namespace:           flags.namespace,
+				WebhookConfigName:   flags.webhookConfigName,
 				WebhookName:         flags.webhookName,
 				DeploymentName:      flags.deploymentName,
 				HealthCheckInterval: flags.healthCheckInterval,
@@ -138,7 +139,6 @@ func init() {
 		"Namespace of the deployment for the pod")
 	rootCmd.PersistentFlags().StringVar(&flags.deploymentName, "deployment-name", "istio-sidecar-injector",
 		"Name of the deployment for the pod")
-
 
 	rootCmd.PersistentFlags().DurationVar(&flags.healthCheckInterval, "healthCheckInterval", 0,
 		"Configure how frequently the health check file specified by --healthCheckFile should be updated")

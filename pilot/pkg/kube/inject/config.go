@@ -42,7 +42,7 @@ import (
 func (wh *Webhook) monitorWebhookChanges(stopC <-chan struct{}) chan struct{} {
 	webhookChangedCh := make(chan struct{}, 1000)
 	_, controller := cache.NewInformer(
-		wh.createInformerWebhookSource(wh.clientset, wh.webhookName),
+		wh.createInformerWebhookSource(wh.clientset, wh.webhookConfigName),
 		&v1beta1.MutatingWebhookConfiguration{},
 		0,
 		cache.ResourceEventHandlerFuncs{
@@ -123,7 +123,7 @@ func (wh *Webhook) rebuildWebhookConfig() error {
 	webhookConfig, err := rebuildWebhookConfigHelper(
 		wh.caFile,
 		wh.webhookConfigFile,
-		wh.webhookName,
+		wh.webhookConfigName,
 		wh.ownerRefs)
 	if err != nil {
 		log.Errorf("mutatingwebhookconfiguration (re)load failed: %v", err)
@@ -166,7 +166,7 @@ func loadCaCertPem(in io.Reader) ([]byte, error) {
 // so that the cluster-scoped mutatingwebhookconfiguration is properly
 // cleaned up when istio-galley is deleted.
 func rebuildWebhookConfigHelper(
-	caFile, webhookConfigFile, webhookName string,
+	caFile, webhookConfigFile, webhookConfigName string,
 	ownerRefs []metav1.OwnerReference,
 ) (*v1beta1.MutatingWebhookConfiguration, error) {
 	// load and validate configuration
@@ -192,7 +192,7 @@ func rebuildWebhookConfigHelper(
 	}
 
 	// the webhook name is fixed at startup time
-	webhookConfig.Name = webhookName
+	webhookConfig.Name = webhookConfigName
 
 	// update ownerRefs so configuration is cleaned up when the validation deployment is deleted.
 	webhookConfig.OwnerReferences = ownerRefs
