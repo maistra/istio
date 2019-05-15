@@ -27,6 +27,7 @@ import (
 	"istio.io/istio/galley/pkg/source/kube/tombstone"
 	"istio.io/istio/galley/pkg/util"
 	"istio.io/istio/pkg/listwatch"
+	"istio.io/istio/pkg/servicemesh/controller"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -57,11 +58,13 @@ type source struct {
 	handler resource.EventHandler
 
 	worker *util.Worker
+	mrc    controller.MemberRollController
 }
 
 // New returns a new instance of a dynamic source for the given schema.
 func New(
-	client dynamic.Interface, watchedNamespaces []string, resyncPeriod time.Duration, spec sourceSchema.ResourceSpec,
+	client dynamic.Interface, watchedNamespaces []string, resyncPeriod time.Duration,
+	mrc controller.MemberRollController, spec sourceSchema.ResourceSpec,
 	cfg *converter.Config) (runtime.Source, error) {
 
 	gv := spec.GroupVersion()
@@ -75,6 +78,7 @@ func New(
 		cfg:               cfg,
 		watchedNamespaces: watchedNamespaces,
 		resyncPeriod:      resyncPeriod,
+		mrc:               mrc,
 		resourceClient:    resourceClient,
 		worker:            util.NewWorker("dynamic source", log.Scope),
 	}, nil
@@ -89,19 +93,25 @@ func (s *source) Start(handler resource.EventHandler) error {
 
 		log.Scope.Debugf("Starting source for %s(%v)", s.spec.Singular, s.spec.GroupVersion())
 
+		mlw := listwatch.MultiNamespaceListerWatcher(s.watchedNamespaces, func(namespace string) cache.ListerWatcher {
+			return &cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (k8sRuntime.Object, error) {
+					return s.resourceClient.Namespace(namespace).List(options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					options.Watch = true
+					return s.resourceClient.Namespace(namespace).Watch(options)
+				},
+			}
+		})
+
+		if s.mrc != nil {
+			s.mrc.Register(mlw)
+		}
+
 		s.handler = handler
 		s.informer = cache.NewSharedIndexInformer(
-			listwatch.MultiNamespaceListerWatcher(s.watchedNamespaces, func(namespace string) cache.ListerWatcher {
-				return &cache.ListWatch{
-					ListFunc: func(options metav1.ListOptions) (k8sRuntime.Object, error) {
-						return s.resourceClient.Namespace(namespace).List(options)
-					},
-					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						options.Watch = true
-						return s.resourceClient.Namespace(namespace).Watch(options)
-					},
-				}
-			}),
+			mlw,
 			&unstructured.Unstructured{},
 			s.resyncPeriod,
 			cache.Indexers{})

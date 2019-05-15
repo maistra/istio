@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"istio.io/istio/pkg/servicemesh/controller"
+
 	"istio.io/istio/galley/pkg/runtime"
 	"istio.io/istio/galley/pkg/runtime/resource"
 	"istio.io/istio/galley/pkg/source/kube/builtin"
@@ -32,8 +34,8 @@ import (
 )
 
 // New creates a new kube source for the given schema.
-func New(interfaces client.Interfaces, watchedNamespaces []string, resyncPeriod time.Duration, schema *schema.Instance,
-	cfg *kubeConverter.Config) (runtime.Source, error) {
+func New(interfaces client.Interfaces, watchedNamespaces []string, resyncPeriod time.Duration,
+	mrc controller.MemberRollController, schema *schema.Instance, cfg *kubeConverter.Config) (runtime.Source, error) {
 
 	var err error
 	var cl kubernetes.Interface
@@ -52,7 +54,7 @@ func New(interfaces client.Interfaces, watchedNamespaces []string, resyncPeriod 
 			if cl, err = getKubeClient(cl, interfaces); err != nil {
 				return nil, err
 			}
-			source, err := builtin.New(cl, watchedNamespaces, resyncPeriod, spec)
+			source, err := builtin.New(cl, watchedNamespaces, resyncPeriod, mrc, spec)
 			if err != nil {
 				return nil, err
 			}
@@ -63,7 +65,7 @@ func New(interfaces client.Interfaces, watchedNamespaces []string, resyncPeriod 
 				return nil, err
 			}
 			// Unknown types use the dynamic source.
-			source, err := dynamic.New(dynClient, watchedNamespaces, resyncPeriod, spec, cfg)
+			source, err := dynamic.New(dynClient, watchedNamespaces, resyncPeriod, mrc, spec, cfg)
 			if err != nil {
 				return nil, err
 			}
