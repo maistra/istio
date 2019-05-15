@@ -70,7 +70,7 @@ func TestNewWithUnknownSpecShouldError(t *testing.T) {
 		Group:     "cofig.istio.io",
 		Converter: converter.Get("identity"),
 	}
-	_, err := builtin.New(client, []string{""}, 0, spec)
+	_, err := builtin.New(client, []string{""}, 0, nil, spec)
 	if err == nil || !strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("Expected error not found: %v", err)
 	}
@@ -440,7 +440,7 @@ func TestEndpoints(t *testing.T) {
 
 func newOrFail(t *testing.T, client kubernetes.Interface, spec *schema.ResourceSpec) runtime.Source {
 	t.Helper()
-	s, err := builtin.New(client, []string{namespace}, 0, *spec)
+	s, err := builtin.New(client, []string{namespace}, 0, nil, *spec)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

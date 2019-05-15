@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 
+	"istio.io/istio/pkg/log"
+	"istio.io/istio/pkg/servicemesh/controller"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,33 +31,108 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+type NamespaceListerWatcher interface {
+	cache.ListerWatcher
+	controller.MemberRollListener
+}
+
 // MultiNamespaceListerWatcher takes a list of namespaces and a
 // cache.ListerWatcher generator func and returns a single cache.ListerWatcher
 // capable of operating on multiple namespaces.
-func MultiNamespaceListerWatcher(namespaces []string, f func(string) cache.ListerWatcher) cache.ListerWatcher {
-	// If there is only one namespace then there is no need to create a proxy.
-	if len(namespaces) == 1 {
-		return f(namespaces[0])
-	}
-	var lws []cache.ListerWatcher
-	for _, n := range namespaces {
-		lws = append(lws, f(n))
-	}
-	return multiListerWatcher(lws)
+func MultiNamespaceListerWatcher(namespaces []string, f func(string) cache.ListerWatcher) NamespaceListerWatcher {
+	return newMultiListerWatcher(namespaces, f)
 }
 
 // multiListerWatcher abstracts several cache.ListerWatchers, allowing them
 // to be treated as a single cache.ListerWatcher.
-type multiListerWatcher []cache.ListerWatcher
+
+type listerWatcherState int
+
+const (
+	created      listerWatcherState = 0
+	listed       listerWatcherState = 1
+	watching     listerWatcherState = 2
+	errorOnWatch listerWatcherState = 3
+)
+
+type listerWatcher struct {
+	lw      cache.ListerWatcher
+	stopper func()
+}
+
+type multiListerWatcher struct {
+	namespaces []string
+	f          func(string) cache.ListerWatcher
+	state      listerWatcherState
+	result     chan watch.Event
+	stopped    chan struct{}
+	lwMap      map[string]*listerWatcher
+	lock       sync.Mutex
+}
+
+func newMultiListerWatcher(namespaces []string, f func(string) cache.ListerWatcher) *multiListerWatcher {
+	return &multiListerWatcher{
+		namespaces: append(namespaces[:0:0], namespaces...),
+		f:          f,
+		state:      created,
+	}
+}
+
+// Update the set of namespaces being tracked
+func (mlw *multiListerWatcher) UpdateNamespaces(namespaces []string) {
+	mlw.lock.Lock()
+	defer mlw.lock.Unlock()
+
+	mlw.namespaces = append(namespaces[:0:0], namespaces...)
+
+	switch mlw.state {
+	case listed:
+		mlw.state = errorOnWatch
+	case watching:
+		mlw.reportUpdatedNamespaceError()
+	}
+}
+
+// Report error on result channel and close, state changes to created
+// Must be called with lock held
+func (mlw *multiListerWatcher) reportUpdatedNamespaceError() {
+	go func(result chan watch.Event) {
+		select {
+		case <-result:
+			return
+		case result <- watch.Event{Type: watch.Error, Object: &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Reason:  metav1.StatusReasonExpired,
+			Message: "Namespaces Updated",
+		}}:
+			return
+		}
+	}(mlw.result)
+	mlw.state = created
+}
 
 // List implements the ListerWatcher interface.
 // It combines the output of the List method of every ListerWatcher into
 // a single result.
-func (mlw multiListerWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
+func (mlw *multiListerWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
 	l := metav1.List{}
 	var resourceVersions []string
-	for _, lw := range mlw {
-		list, err := lw.List(options)
+
+	mlw.lock.Lock()
+	defer mlw.lock.Unlock()
+
+	if mlw.state == watching {
+		mlw.Stop()
+	}
+
+	mlw.lwMap = make(map[string]*listerWatcher)
+
+	mlw.state = listed
+
+	for _, n := range mlw.namespaces {
+		lws := &listerWatcher{lw: mlw.f(n)}
+		mlw.lwMap[n] = lws
+		list, err := lws.lw.List(options)
 		if err != nil {
 			return nil, err
 		}
@@ -70,57 +147,71 @@ func (mlw multiListerWatcher) List(options metav1.ListOptions) (runtime.Object, 
 		for _, item := range items {
 			l.Items = append(l.Items, runtime.RawExtension{Object: item.DeepCopyObject()})
 		}
-		resourceVersions = append(resourceVersions, metaObj.GetResourceVersion())
+		resourceVersions = append(resourceVersions, fmt.Sprintf("%s=%s", n, metaObj.GetResourceVersion()))
 	}
 	// Combine the resource versions so that the composite Watch method can
 	// distribute appropriate versions to each underlying Watch func.
 	l.ListMeta.ResourceVersion = strings.Join(resourceVersions, "/")
+
 	return &l, nil
 }
 
 // Watch implements the ListerWatcher interface.
 // It returns a watch.Interface that combines the output from the
 // watch.Interface of every cache.ListerWatcher into a single result chan.
-func (mlw multiListerWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
-	resourceVersions := make([]string, len(mlw))
+func (mlw *multiListerWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
+	resourceVersions := make(map[string]string)
+
 	// Allow resource versions to be "".
 	if options.ResourceVersion != "" {
 		rvs := strings.Split(options.ResourceVersion, "/")
-		if len(rvs) != len(mlw) {
-			return nil, fmt.Errorf("expected resource version to have %d parts to match the number of ListerWatchers", len(mlw))
+		for _, nrv := range rvs {
+			equalsIndex := strings.IndexByte(nrv, '=')
+			if equalsIndex == -1 {
+				log.Infof("Received unexpected resource version %s", nrv)
+			} else {
+				namespace := nrv[:equalsIndex]
+				resourceVersion := nrv[equalsIndex+1:]
+				resourceVersions[namespace] = resourceVersion
+			}
 		}
-		resourceVersions = rvs
 	}
-	return newMultiWatch(mlw, resourceVersions, options)
-}
-
-// multiWatch abstracts multiple watch.Interface's, allowing them
-// to be treated as a single watch.Interface.
-type multiWatch struct {
-	result   chan watch.Event
-	stopped  chan struct{}
-	stoppers []func()
+	if err := mlw.newMultiWatch(resourceVersions, options); err != nil {
+		return nil, err
+	}
+	return mlw, nil
 }
 
 // newMultiWatch returns a new multiWatch or an error if one of the underlying
 // Watch funcs errored. The length of []cache.ListerWatcher and []string must
 // match.
-func newMultiWatch(lws []cache.ListerWatcher, resourceVersions []string, options metav1.ListOptions) (*multiWatch, error) {
+func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string, options metav1.ListOptions) error {
+	mlw.lock.Lock()
+	defer mlw.lock.Unlock()
+
 	var (
-		result   = make(chan watch.Event)
-		stopped  = make(chan struct{})
-		stoppers []func()
-		wg       sync.WaitGroup
+		result  = make(chan watch.Event)
+		stopped = make(chan struct{})
+		wg      sync.WaitGroup
 	)
+	mlw.result = result
+	mlw.stopped = stopped
 
-	wg.Add(len(lws))
+	if mlw.state == errorOnWatch {
+		mlw.reportUpdatedNamespaceError()
+		return nil
+	}
 
-	for i, lw := range lws {
+	mlw.state = watching
+
+	wg.Add(len(mlw.lwMap))
+
+	for n, lws := range mlw.lwMap {
 		o := options.DeepCopy()
-		o.ResourceVersion = resourceVersions[i]
-		w, err := lw.Watch(*o)
+		o.ResourceVersion = resourceVersions[n]
+		w, err := lws.lw.Watch(*o)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		go func() {
@@ -139,8 +230,7 @@ func newMultiWatch(lws []cache.ListerWatcher, resourceVersions []string, options
 				}
 			}
 		}()
-
-		stoppers = append(stoppers, w.Stop)
+		lws.stopper = w.Stop
 	}
 
 	// result chan must be closed,
@@ -149,31 +239,30 @@ func newMultiWatch(lws []cache.ListerWatcher, resourceVersions []string, options
 		wg.Wait()
 		close(result)
 	}()
-
-	return &multiWatch{
-		result:   result,
-		stoppers: stoppers,
-		stopped:  stopped,
-	}, nil
+	return nil
 }
 
 // ResultChan implements the watch.Interface interface.
-func (mw *multiWatch) ResultChan() <-chan watch.Event {
-	return mw.result
+func (mlw *multiListerWatcher) ResultChan() <-chan watch.Event {
+	return mlw.result
 }
 
 // Stop implements the watch.Interface interface.
 // It stops all of the underlying watch.Interfaces and closes the backing chan.
 // Can safely be called more than once.
-func (mw *multiWatch) Stop() {
+func (mlw *multiListerWatcher) Stop() {
+	mlw.lock.Lock()
+	defer mlw.lock.Unlock()
+
 	select {
-	case <-mw.stopped:
+	case <-mlw.stopped:
 		// nothing to do, we are already stopped
 	default:
-		for _, stop := range mw.stoppers {
-			stop()
+		for _, lw := range mlw.lwMap {
+			if lw.stopper != nil {
+				lw.stopper()
+			}
 		}
-		close(mw.stopped)
+		close(mlw.stopped)
 	}
-	return
 }

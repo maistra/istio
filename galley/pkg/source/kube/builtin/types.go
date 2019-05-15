@@ -17,6 +17,7 @@ package builtin
 import (
 	"fmt"
 	"istio.io/istio/pkg/listwatch"
+	"istio.io/istio/pkg/servicemesh/controller"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"reflect"
@@ -57,8 +58,8 @@ var (
 				}
 				return nil
 			},
-			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
-				return cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
+			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, mrc controller.MemberRollController) cache.SharedIndexInformer {
+				mlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
 					return &cache.ListWatch{
 						ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 							return cl.CoreV1().Services(namespace).List(opts)
@@ -67,7 +68,11 @@ var (
 							return cl.CoreV1().Services(namespace).Watch(opts)
 						},
 					}
-				}), &v1.Service{}, resyncPeriod, cache.Indexers{})
+				})
+				if mrc != nil {
+					mrc.Register(mlw)
+				}
+				return cache.NewSharedIndexInformer(mlw, &v1.Service{}, resyncPeriod, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Service{}
@@ -92,7 +97,7 @@ var (
 				}
 				return nil
 			},
-			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
+			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, mrc controller.MemberRollController) cache.SharedIndexInformer {
 				return cache.NewSharedIndexInformer(&cache.ListWatch{
 					ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 						return cl.CoreV1().Nodes().List(opts)
@@ -125,8 +130,8 @@ var (
 				}
 				return nil
 			},
-			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
-				return cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
+			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, mrc controller.MemberRollController) cache.SharedIndexInformer {
+				mlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
 					return &cache.ListWatch{
 						ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 							return cl.CoreV1().Pods(namespace).List(opts)
@@ -135,7 +140,11 @@ var (
 							return cl.CoreV1().Pods(namespace).Watch(opts)
 						},
 					}
-				}), &v1.Pod{}, resyncPeriod, cache.Indexers{})
+				})
+				if mrc != nil {
+					mrc.Register(mlw)
+				}
+				return cache.NewSharedIndexInformer(mlw, &v1.Pod{}, resyncPeriod, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Pod{}
@@ -174,8 +183,8 @@ var (
 				}
 				return nil
 			},
-			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
-				return cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
+			newInformer: func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, mrc controller.MemberRollController) cache.SharedIndexInformer {
+				mlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaces, func(namespace string) cache.ListerWatcher {
 					return &cache.ListWatch{
 						ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 							return cl.CoreV1().Endpoints(namespace).List(opts)
@@ -184,7 +193,11 @@ var (
 							return cl.CoreV1().Endpoints(namespace).Watch(opts)
 						},
 					}
-				}), &v1.Endpoints{}, resyncPeriod, cache.Indexers{})
+				})
+				if mrc != nil {
+					mrc.Register(mlw)
+				}
+				return cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, resyncPeriod, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Endpoints{}

@@ -24,9 +24,10 @@ package authz
 
 import (
 	"fmt"
-	"github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	"sort"
 	"strings"
+
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 
 	"istio.io/istio/pkg/spiffe"
 
@@ -866,7 +867,7 @@ func principalForKeyValue(key, value string, forTCPFilter bool) *policyproto.Pri
 
 				Header: &route.HeaderMatcher{
 					Name: header,
-					HeaderMatchSpecifier: &route.HeaderMatcher_RegexMatch {
+					HeaderMatchSpecifier: &route.HeaderMatcher_RegexMatch{
 						RegexMatch: value,
 					},
 				},
