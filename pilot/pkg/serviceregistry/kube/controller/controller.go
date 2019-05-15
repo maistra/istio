@@ -48,6 +48,7 @@ import (
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/schemas"
 	"istio.io/istio/pkg/listwatch"
+	"istio.io/istio/pkg/servicemesh/controller"
 )
 
 const (
@@ -112,6 +113,7 @@ type Options struct {
 	// locality (reading it from nodes requires cluster-level privileges, while pods require a controller to copy the
 	// node's AZ labels to the pods)
 	PodLocalitySource string
+	MemberRollName    string
 	ResyncPeriod      time.Duration
 	DomainSuffix      string
 
@@ -177,11 +179,16 @@ type PodLocalitySource interface {
 
 // NewController creates a new Kubernetes controller
 // Created by bootstrap and multicluster (see secretcontroler).
-func NewController(client kubernetes.Interface, options Options) *Controller {
-	log.Infof("Service controller watching namespace list %q for services, endpoints, nodes and pods, refresh %s",
-		options.WatchedNamespaces, options.ResyncPeriod)
-
+func NewController(client kubernetes.Interface, mrc controller.MemberRollController, options Options) *Controller {
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
+
+	if mrc == nil {
+		log.Infof("Service controller watching namespace list %q for services, endpoints, nodes and pods, refresh %s",
+			watchedNamespaceList, options.ResyncPeriod)
+	} else {
+		log.Infof("Service controller watching Member Roll list %s for services, endpoints, nodes and pods",
+			options.MemberRollName)
+	}
 
 	// Queue requires a time duration for a retry delay after a handler error
 	out := &Controller{
@@ -194,7 +201,7 @@ func NewController(client kubernetes.Interface, options Options) *Controller {
 		externalNameSvcInstanceMap: make(map[host.Name][]*model.ServiceInstance),
 	}
 
-	svcInformer := cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
+	svcMlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
 		return &cache.ListWatch{
 			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 				return client.CoreV1().Services(namespace).List(opts)
@@ -203,10 +210,14 @@ func NewController(client kubernetes.Interface, options Options) *Controller {
 				return client.CoreV1().Services(namespace).Watch(opts)
 			},
 		}
-	}), &v1.Service{}, options.ResyncPeriod, cache.Indexers{})
+	})
+	if mrc != nil {
+		mrc.Register(svcMlw)
+	}
+	svcInformer := cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, options.ResyncPeriod, cache.Indexers{})
 	out.services = out.createCacheHandler(svcInformer, "Services")
 
-	epInformer := cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
+	epMlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
 		return &cache.ListWatch{
 			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 				return client.CoreV1().Endpoints(namespace).List(opts)
@@ -215,7 +226,11 @@ func NewController(client kubernetes.Interface, options Options) *Controller {
 				return client.CoreV1().Endpoints(namespace).Watch(opts)
 			},
 		}
-	}), &v1.Endpoints{}, options.ResyncPeriod, cache.Indexers{})
+	})
+	if mrc != nil {
+		mrc.Register(epMlw)
+	}
+	epInformer := cache.NewSharedIndexInformer(epMlw, &v1.Endpoints{}, options.ResyncPeriod, cache.Indexers{})
 	out.endpoints = out.createEDSCacheHandler(epInformer, "Endpoints")
 
 	if options.PodLocalitySource == podLocalitySourcePod {
@@ -235,7 +250,7 @@ func NewController(client kubernetes.Interface, options Options) *Controller {
 		}
 	}
 
-	podInformer := cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
+	podMlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
 		return &cache.ListWatch{
 			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 				return client.CoreV1().Pods(namespace).List(opts)
@@ -244,7 +259,11 @@ func NewController(client kubernetes.Interface, options Options) *Controller {
 				return client.CoreV1().Pods(namespace).Watch(opts)
 			},
 		}
-	}), &v1.Pod{}, options.ResyncPeriod, cache.Indexers{})
+	})
+	if mrc != nil {
+		mrc.Register(podMlw)
+	}
+	podInformer := cache.NewSharedIndexInformer(podMlw, &v1.Pod{}, options.ResyncPeriod, cache.Indexers{})
 	out.pods = newPodCache(out.createCacheHandler(podInformer, "Pod"), out)
 
 	return out
