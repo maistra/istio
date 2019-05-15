@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	controller2 "istio.io/istio/pkg/servicemesh/controller"
+
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -88,7 +90,7 @@ var (
 )
 
 // NewController creates a new Kubernetes controller
-func NewController(client kubernetes.Interface, mesh *meshconfig.MeshConfig,
+func NewController(client kubernetes.Interface, mrc controller2.MemberRollController, mesh *meshconfig.MeshConfig,
 	options kubecontroller.Options) model.ConfigStoreCache {
 	handler := &kube.ChainHandler{}
 
@@ -99,9 +101,13 @@ func NewController(client kubernetes.Interface, mesh *meshconfig.MeshConfig,
 		ingressNamespace = constants.IstioIngressNamespace
 	}
 
-	log.Infof("Ingress controller watching namespace list %q", options.WatchedNamespaces)
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
-	informer := cache.NewSharedIndexInformer(listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
+	if mrc == nil {
+		log.Infof("Ingress Controller watching namespaces %q for Ingresses", watchedNamespaceList)
+	} else {
+		log.Infof("Ingress Controller watching Member Roll list %s for Ingress namespaces", options.MemberRollName)
+	}
+	mlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
 		return &cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				return client.ExtensionsV1beta1().Ingresses(namespace).List(options)
@@ -110,7 +116,12 @@ func NewController(client kubernetes.Interface, mesh *meshconfig.MeshConfig,
 				return client.ExtensionsV1beta1().Ingresses(namespace).Watch(options)
 			},
 		}
-	}), &extensionsv1beta1.Ingress{}, options.ResyncPeriod, cache.Indexers{})
+	})
+
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
+	informer := cache.NewSharedIndexInformer(mlw, &extensionsv1beta1.Ingress{}, options.ResyncPeriod, cache.Indexers{})
 
 	informer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{

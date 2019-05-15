@@ -127,10 +127,16 @@ func init() {
 			"It is recommended to be disable for highly available setups.")
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.Config.FileDir, "configDir", "",
 		"Directory to watch for updates to config yaml files. If specified, the files will be used as the source of config, rather than a CRD client.")
-	discoveryCmd.PersistentFlags().StringVarP(&serverArgs.Config.ControllerOptions.WatchedNamespaces, "appNamespace", "a",
-		metav1.NamespaceAll, "Specify the applications namespace list the controller manages, separated by comma; if not set, controller watches all namespaces")
+	discoveryCmd.PersistentFlags().StringVarP(&serverArgs.Config.ControllerOptions.WatchedNamespace, "appNamespace",
+		"a", metav1.NamespaceAll,
+		"Restrict the applications namespace the controller manages; if not set, controller watches all namespaces.  This is overridden by the memberRoll option.")
+	if err := discoveryCmd.PersistentFlags().MarkDeprecated("appNamespace", "please use ${APP_NAMESPACE} environment variable instead"); err != nil {
+		panic(err)
+	}
 	discoveryCmd.PersistentFlags().StringVarP(&serverArgs.Config.ControllerOptions.PodLocalitySource, "podLocalitySource", "",
 		"node", "Specify where the controller should obtain the Pod's zone and region from (the pod's node or the pod itself)")
+	discoveryCmd.PersistentFlags().StringVarP(&serverArgs.Config.ControllerOptions.MemberRollName, "memberRollName", "", "",
+		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
 	discoveryCmd.PersistentFlags().DurationVar(&serverArgs.Config.ControllerOptions.ResyncPeriod, "resync", 60*time.Second,
 		"Controller resync interval")
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.Config.ControllerOptions.DomainSuffix, "domain", "cluster.local",
