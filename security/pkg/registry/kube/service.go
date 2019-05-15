@@ -18,6 +18,8 @@ import (
 	"reflect"
 	"time"
 
+	"istio.io/istio/pkg/servicemesh/controller"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,7 +49,7 @@ type ServiceController struct {
 }
 
 // NewServiceController returns a new ServiceController
-func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry) *ServiceController {
+func NewServiceController(core corev1.CoreV1Interface, namespaces []string, mrc controller.MemberRollController, reg registry.Registry) *ServiceController {
 	c := &ServiceController{
 		core: core,
 		reg:  reg,
@@ -63,6 +65,9 @@ func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg 
 			},
 		}
 	})
+	if mrc != nil {
+		mrc.Register(LW)
+	}
 
 	handler := cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.serviceAdded,
@@ -98,7 +103,19 @@ func (c *ServiceController) serviceAdded(obj interface{}) {
 }
 
 func (c *ServiceController) serviceDeleted(obj interface{}) {
-	svc := obj.(*v1.Service)
+	svc, ok := obj.(*v1.Service)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		svc, ok = tombstone.Obj.(*v1.Service)
+		if !ok {
+			log.Errorf("Tombstone contained object that is not a service %#v", obj)
+			return
+		}
+	}
 	svcAcct, ok := svc.ObjectMeta.Annotations[kube.KubeServiceAccountsOnVMAnnotation]
 	if ok {
 		err := c.reg.DeleteMapping(svcAcct, svcAcct)

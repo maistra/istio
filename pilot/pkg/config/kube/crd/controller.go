@@ -18,9 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"istio.io/istio/pkg/listwatch"
+	controller2 "istio.io/istio/pkg/servicemesh/controller"
 
 	"github.com/prometheus/client_golang/prometheus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,12 +75,12 @@ func init() {
 
 // NewController creates a new Kubernetes controller for CRDs
 // Use "" for namespace to listen for all namespace changes
-func NewController(client *Client, options kube.ControllerOptions) model.ConfigStoreCache {
-	crdNamespace := kube.IstioNamespace
-	if len(options.WatchedNamespaces) > 1 {
-		crdNamespace = meta_v1.NamespaceAll
+func NewController(client *Client, mrc controller2.MemberRollController, options kube.ControllerOptions) model.ConfigStoreCache {
+	if mrc == nil {
+		log.Infof("CRD controller watching namespaces %q", options.WatchedNamespaces)
+	} else {
+		log.Infof("CRD controller watching Member Roll list %s", options.MemberRollName)
 	}
-	log.Infof("CRD controller watching namespaces %q", crdNamespace)
 
 	// Queue requires a time duration for a retry delay after a handler error
 	out := &controller{
@@ -85,46 +89,52 @@ func NewController(client *Client, options kube.ControllerOptions) model.ConfigS
 		kinds:  make(map[string]cacheHandler),
 	}
 
+	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
 	// add stores for CRD kinds
 	for _, schema := range client.ConfigDescriptor() {
-		out.addInformer(schema, crdNamespace, options.ResyncPeriod)
+		out.addInformer(schema, watchedNamespaceList, options.ResyncPeriod, mrc)
 	}
 
 	return out
 }
 
-func (c *controller) addInformer(schema model.ProtoSchema, namespace string, resyncPeriod time.Duration) {
-	c.kinds[schema.Type] = c.createInformer(knownTypes[schema.Type].object.DeepCopyObject(), schema.Type, resyncPeriod,
-		func(opts meta_v1.ListOptions) (result runtime.Object, err error) {
-			result = knownTypes[schema.Type].collection.DeepCopyObject()
-			rc, ok := c.client.clientset[apiVersion(&schema)]
-			if !ok {
-				return nil, fmt.Errorf("client not initialized %s", schema.Type)
-			}
-			req := rc.dynamic.Get().
-				Resource(ResourceName(schema.Plural)).
-				VersionedParams(&opts, meta_v1.ParameterCodec)
+func (c *controller) addInformer(schema model.ProtoSchema, namespaces []string, resyncPeriod time.Duration, mrc controller2.MemberRollController) {
+	f := func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(opts meta_v1.ListOptions) (result runtime.Object, err error) {
+				result = knownTypes[schema.Type].collection.DeepCopyObject()
+				rc, ok := c.client.clientset[apiVersion(&schema)]
+				if !ok {
+					return nil, fmt.Errorf("client not initialized %s", schema.Type)
+				}
+				req := rc.dynamic.Get().
+					Resource(ResourceName(schema.Plural)).
+					VersionedParams(&opts, meta_v1.ParameterCodec)
 
-			if !schema.ClusterScoped {
-				req = req.Namespace(namespace)
-			}
-			err = req.Do().Into(result)
-			return
-		},
-		func(opts meta_v1.ListOptions) (watch.Interface, error) {
-			rc, ok := c.client.clientset[apiVersion(&schema)]
-			if !ok {
-				return nil, fmt.Errorf("client not initialized %s", schema.Type)
-			}
-			opts.Watch = true
-			req := rc.dynamic.Get().
-				Resource(ResourceName(schema.Plural)).
-				VersionedParams(&opts, meta_v1.ParameterCodec)
-			if !schema.ClusterScoped {
-				req = req.Namespace(namespace)
-			}
-			return req.Watch()
-		})
+				if !schema.ClusterScoped {
+					req = req.Namespace(namespace)
+				}
+				err = req.Do().Into(result)
+				return
+			},
+			WatchFunc: func(opts meta_v1.ListOptions) (watch.Interface, error) {
+				rc, ok := c.client.clientset[apiVersion(&schema)]
+				if !ok {
+					return nil, fmt.Errorf("client not initialized %s", schema.Type)
+				}
+				opts.Watch = true
+				req := rc.dynamic.Get().
+					Resource(ResourceName(schema.Plural)).
+					VersionedParams(&opts, meta_v1.ParameterCodec)
+				if !schema.ClusterScoped {
+					req = req.Namespace(namespace)
+				}
+				return req.Watch()
+			},
+		}
+	}
+	c.kinds[schema.Type] = c.createInformer(knownTypes[schema.Type].object.DeepCopyObject(), schema.Type,
+		resyncPeriod, namespaces, mrc, f)
 }
 
 // notify is the first handler in the handler chain.
@@ -144,14 +154,20 @@ func (c *controller) createInformer(
 	o runtime.Object,
 	otype string,
 	resyncPeriod time.Duration,
-	lf cache.ListFunc,
-	wf cache.WatchFunc) cacheHandler {
+	namespaces []string,
+	mrc controller2.MemberRollController,
+	f func(string) cache.ListerWatcher) cacheHandler {
 	handler := &kube.ChainHandler{}
 	handler.Append(c.notify)
 
 	// TODO: finer-grained index (perf)
+	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, f)
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
+
 	informer := cache.NewSharedIndexInformer(
-		&cache.ListWatch{ListFunc: lf, WatchFunc: wf}, o,
+		mlw, o,
 		resyncPeriod, cache.Indexers{})
 
 	informer.AddEventHandler(

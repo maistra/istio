@@ -21,7 +21,9 @@ import (
 	"strings"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"istio.io/istio/pkg/servicemesh/controller"
+
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -112,7 +114,7 @@ type SecretController struct {
 func NewSecretController(ca ca.CertificateAuthority, certTTL time.Duration,
 	gracePeriodRatio float32, minGracePeriod time.Duration, dualUse bool,
 	core corev1.CoreV1Interface, forCA bool, namespaces []string,
-	dnsNames map[string]*DNSNameEntry) (*SecretController, error) {
+	dnsNames map[string]*DNSNameEntry, mrc controller.MemberRollController) (*SecretController, error) {
 
 	if gracePeriodRatio < 0 || gracePeriodRatio > 1 {
 		return nil, fmt.Errorf("grace period ratio %f should be within [0, 1]", gracePeriodRatio)
@@ -145,6 +147,10 @@ func NewSecretController(ca ca.CertificateAuthority, certTTL time.Duration,
 		}
 	})
 
+	if mrc != nil {
+		mrc.Register(saLW)
+	}
+
 	rehf := cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.saAdded,
 		DeleteFunc: c.saDeleted,
@@ -165,6 +171,11 @@ func NewSecretController(ca ca.CertificateAuthority, certTTL time.Duration,
 			},
 		}
 	})
+
+	if mrc != nil {
+		mrc.Register(scrtLW)
+	}
+
 	c.scrtStore, c.scrtController =
 		cache.NewInformer(scrtLW, &v1.Secret{}, secretResyncPeriod, cache.ResourceEventHandlerFuncs{
 			DeleteFunc: c.scrtDeleted,
@@ -199,7 +210,19 @@ func (sc *SecretController) saAdded(obj interface{}) {
 
 // Handles the event where a service account is deleted.
 func (sc *SecretController) saDeleted(obj interface{}) {
-	acct := obj.(*v1.ServiceAccount)
+	acct, ok := obj.(*v1.ServiceAccount)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		acct, ok = tombstone.Obj.(*v1.ServiceAccount)
+		if !ok {
+			log.Errorf("Tombstone contained object that is not a service account %#v", obj)
+			return
+		}
+	}
 	sc.deleteSecret(acct.GetName(), acct.GetNamespace())
 	sc.monitoring.ServiceAccountDeletion.Inc()
 }
@@ -294,8 +317,16 @@ func (sc *SecretController) deleteSecret(saName, saNamespace string) {
 func (sc *SecretController) scrtDeleted(obj interface{}) {
 	scrt, ok := obj.(*v1.Secret)
 	if !ok {
-		log.Warnf("Failed to convert to secret object: %v", obj)
-		return
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		scrt, ok = tombstone.Obj.(*v1.Secret)
+		if !ok {
+			log.Errorf("Tombstone contained object that is not a secret %#v", obj)
+			return
+		}
 	}
 
 	saName := scrt.Annotations[ServiceAccountNameAnnotationKey]

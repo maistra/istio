@@ -51,4 +51,7 @@ const (
 
 	// ListenedNamespaceKey is the key for the environment variable that specifies the namespace.
 	ListenedNamespaceKey = "NAMESPACE"
+
+	// DefaultMemberRollResyncPeriod is the default resync period for the member roll informer
+	DefaultMemberRollResyncPeriod = 10 * time.Minute
 )

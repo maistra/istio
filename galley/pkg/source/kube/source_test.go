@@ -162,7 +162,7 @@ func TestDynamic(t *testing.T) {
 }
 
 func newSource(t *testing.T, ki client.Interfaces, specs ...schema.ResourceSpec) runtime.Source {
-	src, err := kube.New(ki, []string{""}, 0, schema.New(specs...), cfg)
+	src, err := kube.New(ki, []string{""}, 0, nil, schema.New(specs...), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
