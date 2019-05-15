@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"istio.io/istio/pkg/servicemesh/controller"
+
 	"google.golang.org/grpc"
 
 	mcp "istio.io/api/mcp/v1alpha1"
@@ -65,26 +67,29 @@ type Server struct {
 }
 
 type patchTable struct {
-	newKubeFromConfigFile       func(string) (client.Interfaces, error)
-	verifyResourceTypesPresence func(client.Interfaces, []schema.ResourceSpec) error
-	findSupportedResources      func(client.Interfaces, []schema.ResourceSpec) ([]schema.ResourceSpec, error)
-	newSource                   func(client.Interfaces, []string, time.Duration, *schema.Instance, *converter.Config) (runtime.Source, error)
-	netListen                   func(network, address string) (net.Listener, error)
-	newMeshConfigCache          func(path string) (meshconfig.Cache, error)
-	mcpMetricReporter           func(string) monitoring.Reporter
-	fsNew                       func(string, *schema.Instance, *converter.Config) (runtime.Source, error)
+	newKubeFromConfigFile                 func(string) (client.Interfaces, error)
+	newMemberRollControllerFromConfigFile func(string, string, string, time.Duration) (controller.MemberRollController, error)
+	verifyResourceTypesPresence           func(client.Interfaces, []schema.ResourceSpec) error
+	findSupportedResources                func(client.Interfaces, []schema.ResourceSpec) ([]schema.ResourceSpec, error)
+	newSource                             func(client.Interfaces, []string, time.Duration, controller.MemberRollController,
+		*schema.Instance, *converter.Config) (runtime.Source, error)
+	netListen          func(network, address string) (net.Listener, error)
+	newMeshConfigCache func(path string) (meshconfig.Cache, error)
+	mcpMetricReporter  func(string) monitoring.Reporter
+	fsNew              func(string, *schema.Instance, *converter.Config) (runtime.Source, error)
 }
 
 func defaultPatchTable() patchTable {
 	return patchTable{
-		newKubeFromConfigFile:       client.NewKubeFromConfigFile,
-		verifyResourceTypesPresence: check.ResourceTypesPresence,
-		findSupportedResources:      check.FindSupportedResourceSchemas,
-		newSource:                   kubeSource.New,
-		netListen:                   net.Listen,
-		mcpMetricReporter:           func(prefix string) monitoring.Reporter { return monitoring.NewStatsContext(prefix) },
-		newMeshConfigCache:          func(path string) (meshconfig.Cache, error) { return meshconfig.NewCacheFromFile(path) },
-		fsNew:                       fs.New,
+		newKubeFromConfigFile:                 client.NewKubeFromConfigFile,
+		newMemberRollControllerFromConfigFile: controller.NewMemberRollControllerFromConfigFile,
+		verifyResourceTypesPresence:           check.ResourceTypesPresence,
+		findSupportedResources:                check.FindSupportedResourceSchemas,
+		newSource:                             kubeSource.New,
+		netListen:                             net.Listen,
+		mcpMetricReporter:                     func(prefix string) monitoring.Reporter { return monitoring.NewStatsContext(prefix) },
+		newMeshConfigCache:                    func(path string) (meshconfig.Cache, error) { return meshconfig.NewCacheFromFile(path) },
+		fsNew:                                 fs.New,
 	}
 }
 
@@ -115,6 +120,8 @@ func newServer(a *Args, p patchTable) (*Server, error) {
 
 	sourceSchema := getSourceSchema(a)
 
+	s.stopCh = make(chan struct{})
+
 	var src runtime.Source
 	if a.ConfigPath != "" {
 		src, err = p.fsNew(a.ConfigPath, sourceSchema, converterCfg)
@@ -137,8 +144,17 @@ func newServer(a *Args, p patchTable) (*Server, error) {
 			}
 			sourceSchema = schema.New(found...)
 		}
+		var mrc controller.MemberRollController
+		if a.MemberRollName != "" {
+			mrc, err = p.newMemberRollControllerFromConfigFile(a.KubeConfig, a.MemberRollNameNamespace, a.MemberRollName, a.ResyncPeriod)
+			if err != nil {
+				return nil, err
+			}
+			mrc.Start(s.stopCh)
+		}
+
 		watchedNamespaces := strings.Split(a.WatchedNamespaces, ",")
-		src, err = p.newSource(k, watchedNamespaces, a.ResyncPeriod, sourceSchema, converterCfg)
+		src, err = p.newSource(k, watchedNamespaces, a.ResyncPeriod, mrc, sourceSchema, converterCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +171,6 @@ func newServer(a *Args, p patchTable) (*Server, error) {
 	grpcOptions = append(grpcOptions, grpc.MaxConcurrentStreams(uint32(a.MaxConcurrentStreams)))
 	grpcOptions = append(grpcOptions, grpc.MaxRecvMsgSize(int(a.MaxReceivedMessageSize)))
 
-	s.stopCh = make(chan struct{})
 	var checker server.AuthChecker = server.NewAllowAllChecker()
 	if !a.Insecure {
 		checker, err = watchAccessList(s.stopCh, a.AccessListFile)
