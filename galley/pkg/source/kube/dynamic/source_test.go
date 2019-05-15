@@ -350,7 +350,7 @@ func TestSource_MangledNames(t *testing.T) {
 
 func newOrFail(t *testing.T, dynClient k8sDynamic.Interface, spec schema.ResourceSpec) runtime.Source {
 	t.Helper()
-	s, err := dynamic.New(dynClient, []string{""}, 0, spec, &cfg)
+	s, err := dynamic.New(dynClient, []string{""}, 0, nil, spec, &cfg)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
