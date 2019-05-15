@@ -20,6 +20,7 @@ import (
 
 	"istio.io/api/annotation"
 	"istio.io/istio/pkg/listwatch"
+	"istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/security/pkg/registry"
 	"istio.io/pkg/log"
 
@@ -47,7 +48,7 @@ type ServiceController struct {
 }
 
 // NewServiceController returns a new ServiceController
-func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry) *ServiceController {
+func NewServiceController(core corev1.CoreV1Interface, namespaces []string, mrc controller.MemberRollController, reg registry.Registry) *ServiceController {
 	c := &ServiceController{
 		core: core,
 		reg:  reg,
@@ -63,6 +64,9 @@ func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg 
 			},
 		}
 	})
+	if mrc != nil {
+		mrc.Register(LW)
+	}
 
 	handler := cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.serviceAdded,
@@ -98,7 +102,19 @@ func (c *ServiceController) serviceAdded(obj interface{}) {
 }
 
 func (c *ServiceController) serviceDeleted(obj interface{}) {
-	svc := obj.(*v1.Service)
+	svc, ok := obj.(*v1.Service)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		svc, ok = tombstone.Obj.(*v1.Service)
+		if !ok {
+			log.Errorf("Tombstone contained object that is not a service %#v", obj)
+			return
+		}
+	}
 	svcAcct, ok := svc.ObjectMeta.Annotations[annotation.AlphaKubernetesServiceAccounts.Name]
 	if ok {
 		err := c.reg.DeleteMapping(svcAcct, svcAcct)

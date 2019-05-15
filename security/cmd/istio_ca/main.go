@@ -29,6 +29,7 @@ import (
 
 	pkgcmd "istio.io/istio/pkg/cmd"
 	kubelib "istio.io/istio/pkg/kube"
+	mrcController "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/caclient"
 	"istio.io/istio/security/pkg/cmd"
@@ -123,6 +124,9 @@ type cliOptions struct { // nolint: maligned
 
 	// Whether SDS is enabled on.
 	sdsEnabled bool
+	// Member Role resource name
+	memberRollName         string
+	memberRollResyncPeriod time.Duration
 }
 
 var (
@@ -199,7 +203,8 @@ func initCLI() {
 	// Default to NamespaceAll, which equals to "". Kuberentes library will then watch all the namespace.
 	flags.StringVar(&opts.listenedNamespaces, "listened-namespaces", metav1.NamespaceAll,
 		"Select the namespaces for the Citadel to listen to, separated by comma. If unspecified, Citadel tries to use the ${"+
-			cmd.ListenedNamespaceKey+"} environment variable. If neither is set, Citadel listens to all namespaces.")
+			cmd.ListenedNamespaceKey+"} environment variable. If neither is set, Citadel listens to all namespaces."+
+			"The Service Mesh Member Role namespace discovery takes precedence over this configuration.")
 	flags.StringVar(&opts.istioCaStorageNamespace, "citadel-storage-namespace", "istio-system", "Namespace where "+
 		"the Citadel pod is running. Will not be used if explicit file or other storage mechanism is specified.")
 
@@ -275,6 +280,11 @@ func initCLI() {
 		false, "Enable dual-use mode. Generates certificates with a CommonName identical to the SAN.")
 
 	flags.BoolVar(&opts.sdsEnabled, "sds-enabled", false, "Whether SDS is enabled.")
+	// OpenShift ServiceMesh options
+	flags.StringVar(&opts.memberRollName, "member-role-name", "",
+		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
+	flags.DurationVar(&opts.memberRollResyncPeriod, "member-role-resync-period",
+		cmd.DefaultMemberRollResyncPeriod, "The resync period for member roll informer.")
 
 	rootCmd.AddCommand(version.CobraCommand())
 
@@ -330,6 +340,10 @@ func runCA() {
 		}
 	}
 
+	if opts.memberRollName != "" {
+		opts.listenedNamespaces = opts.istioCaStorageNamespace
+	}
+
 	listenedNamespaces := strings.Split(opts.listenedNamespaces, ",")
 
 	var webhooks map[string]*controller.DNSNameEntry
@@ -345,13 +359,25 @@ func runCA() {
 	ca := createCA(cs.CoreV1())
 
 	stopCh := make(chan struct{})
+
+	var mrc mrcController.MemberRollController
+
+	if opts.memberRollName != "" {
+		mrc, err = mrcController.NewMemberRollControllerFromConfigFile(opts.kubeConfigFile, opts.istioCaStorageNamespace,
+			opts.memberRollName, opts.memberRollResyncPeriod)
+		if err != nil {
+			fatalf("Could not create MemberRollController: %v", err)
+		}
+		mrc.Start(stopCh)
+	}
+
 	if !opts.serverOnly {
 		log.Infof("Creating Kubernetes controller to write issued keys and certs into secret ...")
 		// For workloads in K8s, we apply the configured workload cert TTL.
 		sc, err := controller.NewSecretController(ca, opts.enableNamespacesByDefault,
 			opts.workloadCertTTL, opts.workloadCertGracePeriodRatio, opts.workloadCertMinGracePeriod,
 			opts.dualUse, cs.CoreV1(), opts.signCACerts, opts.pkcs8Keys, listenedNamespaces, webhooks,
-			opts.istioCaStorageNamespace, opts.rootCertFile, opts.selfSignedCA)
+			opts.istioCaStorageNamespace, opts.rootCertFile, opts.selfSignedCA, mrc)
 		if err != nil {
 			fatalf("Failed to create secret controller: %v", err)
 		}
@@ -377,11 +403,11 @@ func runCA() {
 
 		// monitor service objects with "alpha.istio.io/kubernetes-serviceaccounts" and
 		// "alpha.istio.io/canonical-serviceaccounts" annotations
-		serviceController := kube.NewServiceController(cs.CoreV1(), listenedNamespaces, reg)
+		serviceController := kube.NewServiceController(cs.CoreV1(), listenedNamespaces, mrc, reg)
 		serviceController.Run(ch)
 
 		// monitor service account objects for istio mesh expansion
-		serviceAccountController := kube.NewServiceAccountController(cs.CoreV1(), listenedNamespaces, reg)
+		serviceAccountController := kube.NewServiceAccountController(cs.CoreV1(), listenedNamespaces, mrc, reg)
 		serviceAccountController.Run(ch)
 
 		// The CA API uses cert with the max workload cert TTL.
