@@ -145,7 +145,7 @@ func (fx *FakeXdsUpdater) Clear() {
 func newLocalController(t *testing.T) (*Controller, *FakeXdsUpdater) {
 	fx := NewFakeXDS()
 	ki := makeClient(t)
-	ctl := NewController(ki, ControllerOptions{
+	ctl := NewController(ki, nil, ControllerOptions{
 		WatchedNamespaces: "",
 		ResyncPeriod:      resync,
 		DomainSuffix:      domainSuffix,
@@ -172,7 +172,7 @@ func newFakeController(t *testing.T, optionsMutators ...ControllerOptionsMutator
 		m(&options)
 	}
 
-	c := NewController(clientSet, options)
+	c := NewController(clientSet, nil, options)
 	c.AppendInstanceHandler(func(instance *model.ServiceInstance, event model.Event) {
 		t.Log("Instance event received")
 	})

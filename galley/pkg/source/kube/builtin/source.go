@@ -16,6 +16,7 @@ package builtin
 
 import (
 	"fmt"
+	"istio.io/istio/pkg/servicemesh/controller"
 	"k8s.io/client-go/kubernetes"
 	"reflect"
 	"sync"
@@ -34,21 +35,22 @@ import (
 var _ runtime.Source = &source{}
 
 // New creates a new built-in source. If the type is not built-in, returns an error.
-func New(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, spec schema.ResourceSpec) (runtime.Source, error) {
+func New(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, mrc controller.MemberRollController, spec schema.ResourceSpec) (runtime.Source, error) {
 	t := types[spec.Kind]
 	if t == nil {
 		return nil, fmt.Errorf("unknown resource type: name='%s', gv='%v'",
 			spec.Singular, spec.GroupVersion())
 	}
-	return newSource(cl, watchedNamespaces, resyncPeriod, t), nil
+	return newSource(cl, watchedNamespaces, resyncPeriod, mrc, t), nil
 }
 
-func newSource(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, t *Type) runtime.Source {
+func newSource(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, mrc controller.MemberRollController, t *Type) runtime.Source {
 	return &source{
 		t:                 t,
 		cl:                cl,
 		watchedNamespaces: watchedNamespaces,
 		resyncPeriod:      resyncPeriod,
+		mrc:               mrc,
 	}
 }
 
@@ -63,6 +65,7 @@ type source struct {
 	watchedNamespaces []string
 	resyncPeriod      time.Duration
 	informer          cache.SharedIndexInformer
+	mrc               controller.MemberRollController
 
 	// stopCh is used to quiesce the background activity during shutdown
 	stopCh  chan struct{}
@@ -87,7 +90,7 @@ func (s *source) Start(handler resource.EventHandler) error {
 	s.stopCh = make(chan struct{})
 	s.handler = handler
 
-	s.informer = s.t.NewInformer(s.cl, s.watchedNamespaces, s.resyncPeriod)
+	s.informer = s.t.NewInformer(s.cl, s.watchedNamespaces, s.resyncPeriod, s.mrc)
 	s.informer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {

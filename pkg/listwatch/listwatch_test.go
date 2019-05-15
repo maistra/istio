@@ -24,38 +24,46 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-var _ watch.Interface = &multiWatch{}
+var _ watch.Interface = &multiListerWatcher{}
 
-func setupMultiWatch(n int, t *testing.T, rvs ...string) ([]*watch.FakeWatcher, *multiWatch) {
-	// Default resource versions to the correct length if none were passed.
-	if len(rvs) == 0 {
-		rvs = make([]string, n)
+func setupMultiWatch(t *testing.T, namespaces []string, rvs map[string]string) (map[string]*watch.FakeWatcher, *multiListerWatcher) {
+	n := len(namespaces)
+	ws := make(map[string]*watch.FakeWatcher, n)
+
+	mlw := newMultiListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				l := metav1.List{}
+				l.ListMeta.ResourceVersion = rvs[namespace]
+				return &l, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				w := watch.NewFake()
+				ws[namespace] = w
+				return w, nil
+			},
+		}
+	})
+
+	if _, err := mlw.List(metav1.ListOptions{}); err != nil {
+		t.Fatalf("failed to invoke List: %v", err)
 	}
-	ws := make([]*watch.FakeWatcher, n)
-	lws := make([]cache.ListerWatcher, n)
-	for i := range ws {
-		w := watch.NewFake()
-		ws[i] = w
-		lws[i] = &cache.ListWatch{WatchFunc: func(_ metav1.ListOptions) (watch.Interface, error) {
-			return w, nil
-		}}
-	}
-	m, err := newMultiWatch(lws, rvs, metav1.ListOptions{})
-	if err != nil {
+
+	if err := mlw.newMultiWatch(rvs, metav1.ListOptions{}); err != nil {
 		t.Fatalf("failed to create new multiWatch: %v", err)
 	}
-	return ws, m
+	return ws, mlw
 }
 
 func TestNewMultiWatch(t *testing.T) {
 	func() {
 		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected newMultiWatch to panic when number of resource versions is less than ListerWatchers")
+			if r := recover(); r != nil {
+				t.Errorf("newMultiWatch should not panic when number of resource versions is less than ListerWatchers; got: %v", r)
 			}
 		}()
 		// Create a multiWatch from 2 ListerWatchers but only pass 1 resource version.
-		_, _ = setupMultiWatch(2, t, "1")
+		_, _ = setupMultiWatch(t, []string{"1", "2"}, map[string]string{"1": "resource1"})
 	}()
 	func() {
 		defer func() {
@@ -64,12 +72,12 @@ func TestNewMultiWatch(t *testing.T) {
 			}
 		}()
 		// Create a multiWatch from 2 ListerWatchers and pass 2 resource versions.
-		_, _ = setupMultiWatch(2, t, "1", "2")
+		_, _ = setupMultiWatch(t, []string{"1", "2"}, map[string]string{"1": "resource1", "2": "resource2"})
 	}()
 }
 
 func TestMultiWatchResultChan(t *testing.T) {
-	ws, m := setupMultiWatch(10, t)
+	ws, m := setupMultiWatch(t, []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}, map[string]string{})
 	defer m.Stop()
 	var events []watch.Event
 	var wg sync.WaitGroup
@@ -97,7 +105,7 @@ func TestMultiWatchResultChan(t *testing.T) {
 }
 
 func TestMultiWatchStop(t *testing.T) {
-	ws, m := setupMultiWatch(10, t)
+	ws, m := setupMultiWatch(t, []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}, map[string]string{})
 	m.Stop()
 	var stopped int
 	for _, w := range ws {
@@ -146,12 +154,28 @@ func TestRacyMultiWatch(t *testing.T) {
 	evCh := make(chan watch.Event)
 	lw := &mockListerWatcher{evCh: evCh}
 
-	mw, err := newMultiWatch(
-		[]cache.ListerWatcher{lw},
-		[]string{"foo"},
-		metav1.ListOptions{},
-	)
-	if err != nil {
+	namespaces := []string{"namespace"}
+	rsv := map[string]string{"namespace": "foo"}
+
+	mlw := newMultiListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				l := &metav1.List{}
+				l.ResourceVersion = "foo"
+				return l, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return lw, nil
+			},
+		}
+	})
+
+	if _, err := mlw.List(metav1.ListOptions{}); err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err := mlw.newMultiWatch(rsv, metav1.ListOptions{}); err != nil {
 		t.Error(err)
 		return
 	}
@@ -162,7 +186,7 @@ func TestRacyMultiWatch(t *testing.T) {
 		Type: "foo",
 	}
 
-	if got := <-mw.ResultChan(); got.Type != "foo" {
+	if got := <-mlw.ResultChan(); got.Type != "foo" {
 		t.Errorf("expected foo, got %s", got.Type)
 		return
 	}
@@ -173,13 +197,208 @@ func TestRacyMultiWatch(t *testing.T) {
 	evCh <- watch.Event{
 		Type: "bar",
 	}
-	mw.Stop()
+	mlw.Stop()
 
 	if got := lw.stopped; got != true {
 		t.Errorf("expected watcher to be closed true, got %t", got)
 	}
 
 	// some reentrant calls, should be non-blocking
-	mw.Stop()
-	mw.Stop()
+	mlw.Stop()
+	mlw.Stop()
+}
+
+func TestUpdatingNamespaceAfterWatch(t *testing.T) {
+	namespaces1 := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
+	ws, m := setupMultiWatch(t, namespaces1, map[string]string{})
+
+	if len(m.lwMap) != len(namespaces1) {
+		t.Errorf("Expected lwMap to be of size %d, found %d", len(namespaces1), len(m.lwMap))
+		return
+	}
+
+	namespaces2 := []string{"1", "2", "3", "4", "5"}
+	m.UpdateNamespaces(namespaces2)
+
+	if got := <-m.ResultChan(); got.Type != watch.Error {
+		t.Errorf("Unexpected type on result channel, retrieved type %s but exected %s", got.Type, watch.Error)
+		return
+	}
+
+	select {
+	case <-m.stopped:
+		t.Errorf("Stop has been called unexpectedly")
+	default:
+		m.Stop()
+	}
+
+	var stopped int
+	for _, w := range ws {
+		_, running := <-w.ResultChan()
+		if !running && w.IsStopped() {
+			stopped++
+		}
+	}
+	if stopped != len(ws) {
+		t.Errorf("expected %d watchers to be stopped but got %d", len(ws), stopped)
+	}
+	select {
+	case <-m.stopped:
+		// all good, watcher is closed, proceed
+	default:
+		t.Error("expected multiWatch to be stopped")
+	}
+	if _, running := <-m.ResultChan(); running {
+		t.Errorf("expected multiWatch chan to be closed")
+	}
+
+	for n := range ws {
+		delete(ws, n)
+	}
+
+	if _, err := m.List(metav1.ListOptions{}); err != nil {
+		t.Errorf("Received unexpected error invoking List, %v", err)
+		return
+	}
+
+	if _, err := m.Watch(metav1.ListOptions{}); err != nil {
+		t.Errorf("Received unexpected error invoking Watch, %v", err)
+		return
+	}
+
+	if len(m.lwMap) != len(namespaces2) {
+		t.Errorf("Expected lwMap to be of size %d, found %d", len(namespaces2), len(m.lwMap))
+		return
+	}
+
+	var running int
+	for _, w := range ws {
+		if !w.IsStopped() {
+			running++
+		}
+	}
+	if running != len(ws) {
+		t.Errorf("expected %d watchers to be running but got %d", len(ws), running)
+	}
+}
+
+func TestUpdatingNamespaceAfterListed(t *testing.T) {
+	namespaces1 := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
+	ws := make(map[string]*watch.FakeWatcher)
+
+	m := newMultiListerWatcher(namespaces1, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				l := metav1.List{}
+				return &l, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				w := watch.NewFake()
+				ws[namespace] = w
+				return w, nil
+			},
+		}
+	})
+
+	if _, err := m.List(metav1.ListOptions{}); err != nil {
+		t.Fatalf("failed to invoke List: %v", err)
+	}
+
+	if len(m.lwMap) != len(namespaces1) {
+		t.Errorf("Expected lwMap to be of size %d, found %d", len(namespaces1), len(m.lwMap))
+		return
+	}
+
+	if len(ws) != 0 {
+		t.Errorf("Expected ws to be of size 0, found %d", len(ws))
+		return
+	}
+
+	namespaces2 := []string{"1", "2", "3", "4", "5"}
+	m.UpdateNamespaces(namespaces2)
+
+	w, err := m.Watch(metav1.ListOptions{})
+	if err != nil {
+		t.Errorf("Received unexpected error invoking Watch, %v", err)
+		return
+	}
+
+	if got := <-w.ResultChan(); got.Type != watch.Error {
+		t.Errorf("Unexpected type on result channel, retrieved type %s but exected %s", got.Type, watch.Error)
+		return
+	}
+
+	select {
+	case <-m.stopped:
+		t.Errorf("Stop has been called unexpectedly")
+	default:
+		w.Stop()
+	}
+
+	var stopped int
+	for _, w := range ws {
+		if w.IsStopped() {
+			stopped++
+		}
+	}
+	if stopped != len(ws) {
+		t.Errorf("expected %d watchers to be stopped but got %d", len(ws), stopped)
+	}
+}
+
+func TestUpdatingNamespaceAfterCreated(t *testing.T) {
+	namespaces1 := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
+	ws := make(map[string]*watch.FakeWatcher)
+
+	m := newMultiListerWatcher(namespaces1, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				l := metav1.List{}
+				return &l, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				w := watch.NewFake()
+				ws[namespace] = w
+				return w, nil
+			},
+		}
+	})
+
+	if len(m.lwMap) != 0 {
+		t.Errorf("Expected lwMap to be of size 0, found %d", len(m.lwMap))
+		return
+	}
+
+	if len(ws) != 0 {
+		t.Errorf("Expected ws to be of size 0, found %d", len(ws))
+		return
+	}
+
+	namespaces2 := []string{"1", "2", "3", "4", "5"}
+	m.UpdateNamespaces(namespaces2)
+
+	if _, err := m.List(metav1.ListOptions{}); err != nil {
+		t.Errorf("Received unexpected error invoking List, %v", err)
+		return
+	}
+
+	if _, err := m.Watch(metav1.ListOptions{}); err != nil {
+		t.Errorf("Received unexpected error invoking Watch, %v", err)
+		return
+	}
+
+	if len(m.lwMap) != len(namespaces2) {
+		t.Errorf("Expected lwMap to be of size %d, found %d", len(namespaces2), len(m.lwMap))
+		return
+	}
+
+	var running int
+	for _, w := range ws {
+		if !w.IsStopped() {
+			running++
+		}
+	}
+	if running != len(ws) {
+		t.Errorf("expected %d watchers to be running but got %d", len(ws), running)
+	}
 }

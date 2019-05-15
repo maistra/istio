@@ -17,8 +17,9 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	"k8s.io/api/core/v1"
 	"time"
+
+	"k8s.io/api/core/v1"
 
 	"github.com/spf13/cobra"
 
@@ -33,6 +34,7 @@ var (
 	resyncPeriod      time.Duration
 	kubeConfig        string
 	watchedNamespaces string
+	memberRollName    string
 	loggingOptions    = log.DefaultOptions()
 )
 
@@ -65,6 +67,8 @@ func serverCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			serverArgs.KubeConfig = kubeConfig
 			serverArgs.WatchedNamespaces = watchedNamespaces
+			serverArgs.MemberRollName = memberRollName
+			serverArgs.MemberRollNameNamespace = validationArgs.DeploymentAndServiceNamespace
 			serverArgs.ResyncPeriod = resyncPeriod
 			serverArgs.CredentialOptions.CACertificateFile = validationArgs.CACertFile
 			serverArgs.CredentialOptions.KeyFile = validationArgs.KeyFile
@@ -105,7 +109,10 @@ func serverCmd() *cobra.Command {
 	serverCmd.PersistentFlags().StringVar(&kubeConfig, "kubeconfig", "",
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
 	serverCmd.PersistentFlags().StringVarP(&watchedNamespaces, "appNamespace", "a",
-		v1.NamespaceAll, "Specify the applications namespace list the controller manages, separated by comma; if not set, controller watches all namespaces")
+		v1.NamespaceAll, "Specify the applications namespace list the controller manages, separated by comma; if not set, controller watches all namespaces."+
+			"  This is overridden by the memberRoll option.")
+	serverCmd.PersistentFlags().StringVarP(&memberRollName, "memberRollName", "", "",
+		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
 	serverCmd.PersistentFlags().DurationVar(&resyncPeriod, "resyncPeriod", 0,
 		"Resync period for rescanning Kubernetes resources")
 	serverCmd.PersistentFlags().StringVar(&validationArgs.CertFile, "tlsCertFile", "/etc/certs/cert-chain.pem",

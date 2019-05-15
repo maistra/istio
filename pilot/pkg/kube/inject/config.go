@@ -22,9 +22,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/fields"
 	"os"
 	"reflect"
+
+	"k8s.io/apimachinery/pkg/fields"
 
 	"github.com/ghodss/yaml"
 	"k8s.io/api/admissionregistration/v1beta1"

@@ -139,7 +139,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flags.deploymentName, "deployment-name", "istio-sidecar-injector",
 		"Name of the deployment for the pod")
 
-
 	rootCmd.PersistentFlags().DurationVar(&flags.healthCheckInterval, "healthCheckInterval", 0,
 		"Configure how frequently the health check file specified by --healthCheckFile should be updated")
 	rootCmd.PersistentFlags().StringVar(&flags.healthCheckFile, "healthCheckFile", "",
