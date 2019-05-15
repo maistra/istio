@@ -160,9 +160,16 @@ type PodLocalitySource interface {
 // NewController creates a new Kubernetes controller
 // Created by bootstrap and multicluster (see secretcontroler).
 func NewController(client kubernetes.Interface, mrc controller.MemberRollController, options ControllerOptions) *Controller {
-	log.Infof("Service controller watching namespace list %q for services, endpoints, nodes and pods, refresh %s",
-		options.WatchedNamespaces, options.ResyncPeriod)
+
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
+
+	if mrc == nil {
+		log.Infof("Service controller watching namespace list %q for services, endpoints, nodes and pods, refresh %s",
+			watchedNamespaceList, options.ResyncPeriod)
+	} else {
+		log.Infof("Service controller watching Member Roll list %s for services, endpoints, nodes and pods",
+			options.MemberRollName)
+	}
 
 	if mrc == nil {
 		log.Infof("Service controller watching namespace list %q for services, endpoints, nodes and pods, refresh %s",

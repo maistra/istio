@@ -16,7 +16,6 @@ package dynamic
 
 import (
 	"fmt"
-	"istio.io/istio/pkg/listwatch"
 	"sync"
 	"time"
 
