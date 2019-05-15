@@ -16,6 +16,7 @@ package builtin
 
 import (
 	"github.com/gogo/protobuf/proto"
+	"istio.io/istio/pkg/servicemesh/controller"
 	"k8s.io/client-go/kubernetes"
 	"time"
 
@@ -56,8 +57,8 @@ func (p *Type) ExtractResource(o interface{}) proto.Message {
 }
 
 // NewInformer creates a new k8s informer for resources of this type.
-func (p *Type) NewInformer(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return p.newInformer(cl, watchedNamespaces, resyncPeriod)
+func (p *Type) NewInformer(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, mrc controller.MemberRollController) cache.SharedIndexInformer {
+	return p.newInformer(cl, watchedNamespaces, resyncPeriod, mrc)
 }
 
 // ParseJSON parses the given JSON into a k8s object of this type.
@@ -68,5 +69,5 @@ func (p *Type) ParseJSON(input []byte) (interface{}, error) {
 type resourceEqualFn func(o1 interface{}, o2 interface{}) bool
 type objectExtractFn func(o interface{}) metav1.Object
 type itemExtractFn func(o interface{}) proto.Message
-type newInformerFn func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration) cache.SharedIndexInformer
+type newInformerFn func(cl kubernetes.Interface, watchedNamespaces []string, resyncPeriod time.Duration, mrc controller.MemberRollController) cache.SharedIndexInformer
 type parseJSONFn func(input []byte) (interface{}, error)

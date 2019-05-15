@@ -51,6 +51,7 @@ import (
 	"istio.io/istio/pkg/mcp/server"
 	"istio.io/istio/pkg/mcp/snapshot"
 	"istio.io/istio/pkg/mcp/source"
+	"istio.io/istio/pkg/servicemesh/controller"
 )
 
 // Processing component.
@@ -272,8 +273,18 @@ func (p *Processing) createSource(mesh meshconfig.Cache) (src runtime.Source, er
 			return
 		}
 		sourceSchema = schema.New(found...)
+
+		var mrc controller.MemberRollController
+		if p.args.MemberRollName != "" {
+			mrc, err = controller.NewMemberRollControllerFromConfigFile(p.args.KubeConfig, p.args.MemberRollNamespace, p.args.MemberRollName, p.args.ResyncPeriod)
+			if err != nil {
+				return nil, err
+			}
+			mrc.Start(p.stopCh)
+		}
+
 		watchedNamespaces := strings.Split(p.args.WatchedNamespaces, ",")
-		if src, err = newSource(k, watchedNamespaces, p.args.ResyncPeriod, sourceSchema, converterCfg); err != nil {
+		if src, err = newSource(k, watchedNamespaces, p.args.ResyncPeriod, mrc, sourceSchema, converterCfg); err != nil {
 			return
 		}
 	}
