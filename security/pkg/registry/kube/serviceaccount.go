@@ -18,6 +18,8 @@ import (
 	"reflect"
 	"time"
 
+	"istio.io/istio/pkg/servicemesh/controller"
+
 	"istio.io/istio/pkg/spiffe"
 
 	v1 "k8s.io/api/core/v1"
@@ -47,7 +49,8 @@ type ServiceAccountController struct {
 }
 
 // NewServiceAccountController returns a new ServiceAccountController
-func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry) *ServiceAccountController {
+func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []string, mrc controller.MemberRollController,
+	reg registry.Registry) *ServiceAccountController {
 	c := &ServiceAccountController{
 		core: core,
 		reg:  reg,
@@ -63,6 +66,9 @@ func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []strin
 			},
 		}
 	})
+	if mrc != nil {
+		mrc.Register(LW)
+	}
 
 	_, c.controller = cache.NewInformer(LW, &v1.ServiceAccount{}, time.Minute, cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.serviceAccountAdded,
@@ -92,13 +98,24 @@ func (c *ServiceAccountController) serviceAccountAdded(obj interface{}) {
 }
 
 func (c *ServiceAccountController) serviceAccountDeleted(obj interface{}) {
-	sa := obj.(*v1.ServiceAccount)
+	sa, ok := obj.(*v1.ServiceAccount)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		sa, ok = tombstone.Obj.(*v1.ServiceAccount)
+		if !ok {
+			log.Errorf("Tombstone contained object that is not a service account %#v", obj)
+			return
+		}
+	}
 	id := getSpiffeID(sa)
 	err := c.reg.DeleteMapping(id, id)
 	if err != nil {
 		log.Errorf("cannot delete mapping %q to %q from registry: %s", id, id, err.Error())
 	}
-
 }
 
 func (c *ServiceAccountController) serviceAccountUpdated(oldObj, newObj interface{}) {

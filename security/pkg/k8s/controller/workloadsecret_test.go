@@ -207,7 +207,7 @@ func TestSecretController(t *testing.T) {
 		controller, err := NewSecretController(createFakeCA(), enableNamespacesByDefault,
 			defaultTTL, tc.gracePeriodRatio, defaultMinGracePeriod, false, client.CoreV1(),
 			false, false, []string{metav1.NamespaceAll}, webhooks,
-			"test-ns", "", false)
+			"test-ns", "", false, nil)
 		if tc.shouldFail {
 			if err == nil {
 				t.Errorf("should have failed to create secret controller")
@@ -246,7 +246,7 @@ func TestSecretContent(t *testing.T) {
 	controller, err := NewSecretController(createFakeCA(), enableNamespacesByDefault,
 		defaultTTL, defaultGracePeriodRatio, defaultMinGracePeriod, false,
 		client.CoreV1(), false, false, []string{metav1.NamespaceAll}, map[string]*DNSNameEntry{},
-		"test-namespace", "", false)
+		"test-namespace", "", false, nil)
 	if err != nil {
 		t.Errorf("Failed to create secret controller: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestDeletedIstioSecret(t *testing.T) {
 	controller, err := NewSecretController(createFakeCA(), enableNamespacesByDefault,
 		defaultTTL, defaultGracePeriodRatio, defaultMinGracePeriod, false,
 		client.CoreV1(), false, false, []string{metav1.NamespaceAll}, nil,
-		"test-ns", "", false)
+		"test-ns", "", false, nil)
 	if err != nil {
 		t.Errorf("failed to create secret controller: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestUpdateSecret(t *testing.T) {
 		controller, err := NewSecretController(ca, enableNamespacesByDefault, time.Hour,
 			tc.gracePeriodRatio, tc.minGracePeriod, false, client.CoreV1(), false,
 			false, []string{metav1.NamespaceAll}, nil, "", "",
-			true)
+			true, nil)
 		if err != nil {
 			t.Errorf("failed to create secret controller: %v", err)
 		}
@@ -556,7 +556,7 @@ func TestManagedNamespaceRules(t *testing.T) {
 			controller, err := NewSecretController(createFakeCA(), tc.enableNamespacesByDefault,
 				defaultTTL, defaultGracePeriodRatio, defaultMinGracePeriod, false,
 				client.CoreV1(), false, false, []string{metav1.NamespaceAll},
-				nil, tc.istioCaStorageNamespace, "", false)
+				nil, tc.istioCaStorageNamespace, "", false, nil)
 			if err != nil {
 				t.Errorf("failed to create secret controller: %v", err)
 			}
@@ -631,7 +631,7 @@ func TestRetroactiveNamespaceActivation(t *testing.T) {
 			controller, err := NewSecretController(createFakeCA(), tc.enableNamespacesByDefault,
 				defaultTTL, defaultGracePeriodRatio, defaultMinGracePeriod, false,
 				client.CoreV1(), false, false, []string{metav1.NamespaceAll},
-				nil, tc.istioCaStorageNamespace, "", false)
+				nil, tc.istioCaStorageNamespace, "", false, nil)
 			if err != nil {
 				t.Errorf("failed to create secret controller: %v", err)
 			}
