@@ -16,9 +16,11 @@ package dynamic
 
 import (
 	"fmt"
-	"istio.io/istio/pkg/listwatch"
 	"sync"
 	"time"
+
+	"istio.io/istio/pkg/listwatch"
+	"istio.io/istio/pkg/servicemesh/controller"
 
 	"istio.io/istio/galley/pkg/runtime"
 	"istio.io/istio/galley/pkg/runtime/resource"
@@ -61,11 +63,14 @@ type source struct {
 	informer cache.SharedIndexInformer
 
 	handler resource.EventHandler
+
+	mrc controller.MemberRollController
 }
 
 // New returns a new instance of a dynamic source for the given schema.
 func New(
-	client dynamic.Interface, watchedNamespaces []string, resyncPeriod time.Duration, spec sourceSchema.ResourceSpec,
+	client dynamic.Interface, watchedNamespaces []string, resyncPeriod time.Duration,
+	mrc controller.MemberRollController, spec sourceSchema.ResourceSpec,
 	cfg *converter.Config) (runtime.Source, error) {
 
 	gv := spec.GroupVersion()
@@ -79,6 +84,7 @@ func New(
 		cfg:               cfg,
 		watchedNamespaces: watchedNamespaces,
 		resyncPeriod:      resyncPeriod,
+		mrc:               mrc,
 		resourceClient:    resourceClient,
 	}, nil
 }
@@ -101,18 +107,23 @@ func (s *source) Start(handler resource.EventHandler) error {
 	s.stopCh = make(chan struct{})
 	s.handler = handler
 
+	mlw := listwatch.MultiNamespaceListerWatcher(s.watchedNamespaces, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (k8sRuntime.Object, error) {
+				return s.resourceClient.Namespace(namespace).List(options)
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				options.Watch = true
+				return s.resourceClient.Namespace(namespace).Watch(options)
+			},
+		}
+	})
+	if s.mrc != nil {
+		s.mrc.Register(mlw)
+	}
+
 	s.informer = cache.NewSharedIndexInformer(
-		listwatch.MultiNamespaceListerWatcher(s.watchedNamespaces, func(namespace string) cache.ListerWatcher {
-			return &cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (k8sRuntime.Object, error) {
-					return s.resourceClient.Namespace(namespace).List(options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					options.Watch = true
-					return s.resourceClient.Namespace(namespace).Watch(options)
-				},
-			}
-		}),
+		mlw,
 		&unstructured.Unstructured{},
 		s.resyncPeriod,
 		cache.Indexers{})

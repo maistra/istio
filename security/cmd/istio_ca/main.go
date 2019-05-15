@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	mrcController "istio.io/istio/pkg/servicemesh/controller"
+
 	"istio.io/istio/pkg/spiffe"
 
 	"github.com/spf13/cobra"
@@ -103,6 +105,10 @@ type cliOptions struct { // nolint: maligned
 
 	// Enable dual-use certs - SPIFFE in SAN and in CommonName
 	dualUse bool
+
+	// Member Role resource name
+	memberRollName         string
+	memberRollResyncPeriod time.Duration
 }
 
 var (
@@ -149,7 +155,8 @@ func init() {
 
 	flags.StringVar(&opts.listenedNamespaces, "listened-namespaces", "",
 		"Select the namespaces for the Citadel to listen to, separated by comma. If unspecified, Citadel tries to use the ${"+
-			cmd.ListenedNamespaceKey+"} environment variable. If neither is set, Citadel listens to all namespaces.")
+			cmd.ListenedNamespaceKey+"} environment variable. If neither is set, Citadel listens to all namespaces."+
+			"The Service Mesh Member Role namespace discovery takes precedence over this configuration.")
 	flags.StringVar(&opts.istioCaStorageNamespace, "citadel-storage-namespace", "istio-system", "Namespace where "+
 		"the Citadel pod is running. Will not be used if explicit file or other storage mechanism is specified.")
 
@@ -228,6 +235,12 @@ func init() {
 	flags.BoolVar(&opts.dualUse, "experimental-dual-use",
 		false, "Enable dual-use mode. Generates certificates with a CommonName identical to the SAN.")
 
+	// OpenShift ServiceMesh options
+	flags.StringVar(&opts.memberRollName, "member-role-name", "",
+		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
+	flags.DurationVar(&opts.memberRollResyncPeriod, "member-role-resync-period",
+		cmd.DefaultMemberRollResyncPeriod, "The resync period for member roll informer.")
+
 	rootCmd.AddCommand(version.CobraCommand())
 
 	rootCmd.AddCommand(collateral.CobraCommand(rootCmd, &doc.GenManHeader{
@@ -272,6 +285,10 @@ func runCA() {
 		opts.istioCaStorageNamespace = value
 	}
 
+	if opts.memberRollName != "" {
+		opts.listenedNamespaces = opts.istioCaStorageNamespace
+	}
+
 	listenedNamespaces := strings.Split(opts.listenedNamespaces, ",")
 
 	verifyCommandLineOptions()
@@ -289,13 +306,25 @@ func runCA() {
 	ca := createCA(cs.CoreV1())
 
 	stopCh := make(chan struct{})
+
+	var mrc mrcController.MemberRollController
+
+	if opts.memberRollName != "" {
+		mrc, err = mrcController.NewMemberRollControllerFromConfigFile(opts.kubeConfigFile, opts.istioCaStorageNamespace,
+			opts.memberRollName, opts.memberRollResyncPeriod)
+		if err != nil {
+			fatalf("Could not create MemberRollController: %v", err)
+		}
+		mrc.Start(stopCh)
+	}
+
 	if !opts.serverOnly {
 		log.Infof("Creating Kubernetes controller to write issued keys and certs into secret ...")
 		// For workloads in K8s, we apply the configured workload cert TTL.
 		sc, err := controller.NewSecretController(ca,
 			opts.workloadCertTTL,
 			opts.workloadCertGracePeriodRatio, opts.workloadCertMinGracePeriod, opts.dualUse,
-			cs.CoreV1(), opts.signCACerts, listenedNamespaces, webhooks)
+			cs.CoreV1(), opts.signCACerts, listenedNamespaces, webhooks, mrc)
 		if err != nil {
 			fatalf("Failed to create secret controller: %v", err)
 		}
@@ -321,11 +350,11 @@ func runCA() {
 
 		// monitor service objects with "alpha.istio.io/kubernetes-serviceaccounts" and
 		// "alpha.istio.io/canonical-serviceaccounts" annotations
-		serviceController := kube.NewServiceController(cs.CoreV1(), listenedNamespaces, reg)
+		serviceController := kube.NewServiceController(cs.CoreV1(), listenedNamespaces, mrc, reg)
 		serviceController.Run(ch)
 
 		// monitor service account objects for istio mesh expansion
-		serviceAccountController := kube.NewServiceAccountController(cs.CoreV1(), listenedNamespaces, reg)
+		serviceAccountController := kube.NewServiceAccountController(cs.CoreV1(), listenedNamespaces, mrc, reg)
 		serviceAccountController.Run(ch)
 
 		// The CA API uses cert with the max workload cert TTL.
