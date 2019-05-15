@@ -30,13 +30,11 @@ import (
 	"sync"
 	"time"
 
-	"istio.io/istio/security/pkg/k8s/chiron"
-
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gogo/protobuf/types"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-multierror"
 	prom "github.com/prometheus/client_golang/prometheus"
 
 	"google.golang.org/grpc"
@@ -84,6 +82,8 @@ import (
 	"istio.io/istio/pkg/mcp/creds"
 	"istio.io/istio/pkg/mcp/monitoring"
 	"istio.io/istio/pkg/mcp/sink"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	"istio.io/istio/security/pkg/k8s/chiron"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -245,6 +245,7 @@ type Server struct {
 	configController model.ConfigStoreCache
 
 	kubeClient            kubernetes.Interface
+	mrc                   meshcontroller.MemberRollController
 	startFuncs            []startFunc
 	multicluster          *clusterregistry.Multicluster
 	httpServer            *http.Server
@@ -270,6 +271,13 @@ func NewServer(args PilotArgs) (*Server, error) {
 	if args.Namespace == "" {
 		args.Namespace = podNamespaceVar.Get()
 	}
+	if args.Config.ControllerOptions.WatchedNamespaces == "" {
+		appNamespace := os.Getenv("APP_NAMESPACE")
+		if appNamespace == "" {
+			appNamespace = meta_v1.NamespaceAll
+		}
+		args.Config.ControllerOptions.WatchedNamespaces = appNamespace
+	}
 	if args.KeepaliveOptions == nil {
 		args.KeepaliveOptions = istiokeepalive.DefaultOption()
 	}
@@ -278,6 +286,13 @@ func NewServer(args PilotArgs) (*Server, error) {
 			args.Config.ClusterRegistriesNamespace = args.Namespace
 		} else {
 			args.Config.ClusterRegistriesNamespace = constants.IstioSystemNamespace
+		}
+	}
+	if args.Config.ControllerOptions.MemberRollName != "" {
+		if args.Namespace != "" {
+			args.Config.ControllerOptions.WatchedNamespaces = args.Namespace
+		} else {
+			args.Config.ControllerOptions.WatchedNamespaces = constants.IstioSystemNamespace
 		}
 	}
 
@@ -290,6 +305,9 @@ func NewServer(args PilotArgs) (*Server, error) {
 	// Apply the arguments to the configuration.
 	if err := s.initKubeClient(&args); err != nil {
 		return nil, fmt.Errorf("kube client: %v", err)
+	}
+	if err := s.initMemberRollController(&args); err != nil {
+		return nil, fmt.Errorf("service mesh client: %v", err)
 	}
 	if err := s.initMesh(&args); err != nil {
 		return nil, fmt.Errorf("mesh: %v", err)
@@ -542,6 +560,21 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 		}
 		s.kubeClient = client
 
+	}
+
+	return nil
+}
+
+// initMemberRollController creates the service mesh client if running in an k8s environment.
+func (s *Server) initMemberRollController(args *PilotArgs) error {
+	if hasKubeRegistry(args) && args.Config.FileDir == "" && args.Config.ControllerOptions.MemberRollName != "" {
+		mrc, err := meshcontroller.NewMemberRollControllerFromConfigFile(s.getKubeCfgFile(args), args.Namespace,
+			args.Config.ControllerOptions.MemberRollName, args.Config.ControllerOptions.ResyncPeriod)
+		if err != nil {
+			return multierror.Prefix(err, "Could not create MemberRollController.")
+		}
+		s.mrc = mrc
+		s.mrc.Start(make(chan struct{}))
 	}
 
 	return nil
@@ -859,7 +892,7 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 		// Wrap the config controller with a cache.
 		configController, err := configaggregate.MakeCache([]model.ConfigStoreCache{
 			s.configController,
-			ingress.NewController(s.kubeClient, s.mesh, args.Config.ControllerOptions),
+			ingress.NewController(s.kubeClient, s.mrc, s.mesh, args.Config.ControllerOptions),
 		})
 		if err != nil {
 			return err
@@ -869,7 +902,7 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 		s.configController = configController
 
 		if ingressSyncer, errSyncer := ingress.NewStatusSyncer(s.mesh, s.kubeClient,
-			args.Namespace, args.Config.ControllerOptions); errSyncer != nil {
+			s.mrc, args.Namespace, args.Config.ControllerOptions); errSyncer != nil {
 			log.Warnf("Disabled ingress status syncer due to %v", errSyncer)
 		} else {
 			s.addStartFunc(func(stop <-chan struct{}) error {
@@ -899,7 +932,7 @@ func (s *Server) makeKubeConfigController(args *PilotArgs) (model.ConfigStoreCac
 		}
 	}
 
-	return controller.NewController(configClient, args.Config.ControllerOptions), nil
+	return controller.NewController(configClient, s.mrc, args.Config.ControllerOptions), nil
 }
 
 func (s *Server) makeFileMonitor(fileDir string, configController model.ConfigStore) error {
@@ -920,7 +953,7 @@ func (s *Server) createK8sServiceControllers(serviceControllers *aggregate.Contr
 	clusterID := string(serviceregistry.KubernetesRegistry)
 	log.Infof("Primary Cluster name: %s", clusterID)
 	args.Config.ControllerOptions.ClusterID = clusterID
-	kubectl := controller2.NewController(s.kubeClient, args.Config.ControllerOptions)
+	kubectl := controller2.NewController(s.kubeClient, s.mrc, args.Config.ControllerOptions)
 	s.kubeRegistry = kubectl
 	serviceControllers.AddRegistry(
 		aggregate.Registry{
