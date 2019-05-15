@@ -352,7 +352,7 @@ func newKubeClient(b *testing.B, ki client.Interfaces) kubernetes.Interface {
 }
 
 func newSource(b *testing.B, ki client.Interfaces, specs ...schema.ResourceSpec) runtime.Source {
-	src, err := kube.New(ki, []string{namespace}, 0, schema.New(specs...), &converterCfg)
+	src, err := kube.New(ki, []string{namespace}, 0, nil, schema.New(specs...), &converterCfg)
 	if err != nil {
 		b.Fatal(err)
 	}
