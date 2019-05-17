@@ -1,4 +1,4 @@
-package v1alpha3
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -8,12 +8,12 @@ import (
 
 // Define your schema name and the version
 var SchemeGroupVersion = schema.GroupVersion{
-	Group:   "istio.openshift.com",
-	Version: "v1alpha3",
+	Group:   "maistra.io",
+	Version: "v1",
 }
 
 var InternalSchemeGroupVersion = schema.GroupVersion{
-	Group:   "istio.openshift.com",
+	Group:   "maistra.io",
 	Version: runtime.APIVersionInternal,
 }
 
