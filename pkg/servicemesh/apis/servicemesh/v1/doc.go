@@ -1,5 +1,5 @@
 // +k8s:deepcopy-gen=package
 // +k8s:defaulter-gen=TypeMeta
-// +groupName=istio.openshift.com
+// +groupName=maistra.io
 
-package v1alpha3
+package v1
