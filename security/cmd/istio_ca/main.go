@@ -106,7 +106,7 @@ type cliOptions struct { // nolint: maligned
 	// Enable dual-use certs - SPIFFE in SAN and in CommonName
 	dualUse bool
 
-	// Member Role resource name
+	// Member Roll resource name
 	memberRollName         string
 	memberRollResyncPeriod time.Duration
 }
@@ -156,7 +156,7 @@ func init() {
 	flags.StringVar(&opts.listenedNamespaces, "listened-namespaces", "",
 		"Select the namespaces for the Citadel to listen to, separated by comma. If unspecified, Citadel tries to use the ${"+
 			cmd.ListenedNamespaceKey+"} environment variable. If neither is set, Citadel listens to all namespaces."+
-			"The Service Mesh Member Role namespace discovery takes precedence over this configuration.")
+			"The Service Mesh Member Roll namespace discovery takes precedence over this configuration.")
 	flags.StringVar(&opts.istioCaStorageNamespace, "citadel-storage-namespace", "istio-system", "Namespace where "+
 		"the Citadel pod is running. Will not be used if explicit file or other storage mechanism is specified.")
 
@@ -236,9 +236,9 @@ func init() {
 		false, "Enable dual-use mode. Generates certificates with a CommonName identical to the SAN.")
 
 	// OpenShift ServiceMesh options
-	flags.StringVar(&opts.memberRollName, "member-role-name", "",
+	flags.StringVar(&opts.memberRollName, "member-roll-name", "",
 		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
-	flags.DurationVar(&opts.memberRollResyncPeriod, "member-role-resync-period",
+	flags.DurationVar(&opts.memberRollResyncPeriod, "member-roll-resync-period",
 		cmd.DefaultMemberRollResyncPeriod, "The resync period for member roll informer.")
 
 	rootCmd.AddCommand(version.CobraCommand())
