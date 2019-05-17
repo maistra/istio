@@ -19,22 +19,22 @@ limitations under the License.
 package fake
 
 import (
-	v1alpha3 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1alpha3"
+	v1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeIstioV1alpha3 struct {
+type FakeIstioV1 struct {
 	*testing.Fake
 }
 
-func (c *FakeIstioV1alpha3) ServiceMeshMemberRolls(namespace string) v1alpha3.ServiceMeshMemberRollInterface {
+func (c *FakeIstioV1) ServiceMeshMemberRolls(namespace string) v1.ServiceMeshMemberRollInterface {
 	return &FakeServiceMeshMemberRolls{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeIstioV1alpha3) RESTClient() rest.Interface {
+func (c *FakeIstioV1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }
