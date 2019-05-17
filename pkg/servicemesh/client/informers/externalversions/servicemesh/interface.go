@@ -20,13 +20,13 @@ package istio
 
 import (
 	internalinterfaces "istio.io/istio/pkg/servicemesh/client/informers/externalversions/internalinterfaces"
-	v1alpha3 "istio.io/istio/pkg/servicemesh/client/informers/externalversions/servicemesh/v1alpha3"
+	v1 "istio.io/istio/pkg/servicemesh/client/informers/externalversions/servicemesh/v1"
 )
 
 // Interface provides access to each of this group's versions.
 type Interface interface {
-	// V1alpha3 provides access to shared informers for resources in V1alpha3.
-	V1alpha3() v1alpha3.Interface
+	// V1 provides access to shared informers for resources in V1.
+	V1() v1.Interface
 }
 
 type group struct {
@@ -40,7 +40,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &group{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// V1alpha3 returns a new v1alpha3.Interface.
-func (g *group) V1alpha3() v1alpha3.Interface {
-	return v1alpha3.New(g.factory, g.namespace, g.tweakListOptions)
+// V1 returns a new v1.Interface.
+func (g *group) V1() v1.Interface {
+	return v1.New(g.factory, g.namespace, g.tweakListOptions)
 }

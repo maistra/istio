@@ -21,7 +21,7 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha3 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha3"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -52,9 +52,9 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=istio.openshift.com, Version=v1alpha3
-	case v1alpha3.SchemeGroupVersion.WithResource("servicemeshmemberrolls"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Istio().V1alpha3().ServiceMeshMemberRolls().Informer()}, nil
+	// Group=maistra.io, Version=v1
+	case v1.SchemeGroupVersion.WithResource("servicemeshmemberrolls"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Istio().V1().ServiceMeshMemberRolls().Informer()}, nil
 
 	}
 
