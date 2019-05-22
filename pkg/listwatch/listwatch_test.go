@@ -15,6 +15,7 @@
 package listwatch
 
 import (
+	"k8s.io/api/core/v1"
 	"sync"
 	"testing"
 
@@ -85,7 +86,7 @@ func TestMultiWatchResultChan(t *testing.T) {
 		w := w
 		wg.Add(1)
 		go func() {
-			w.Add(&runtime.Unknown{})
+			w.Add(&v1.Pod{})
 		}()
 	}
 	go func() {
@@ -184,6 +185,7 @@ func TestRacyMultiWatch(t *testing.T) {
 	// receiving that event and block on the dispatching it there.
 	evCh <- watch.Event{
 		Type: "foo",
+		Object: &v1.Pod{},
 	}
 
 	if got := <-mlw.ResultChan(); got.Type != "foo" {
