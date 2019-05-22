@@ -70,6 +70,11 @@ type multiListerWatcher struct {
 	lock       sync.Mutex
 }
 
+type combinedEvent struct {
+	namespace string
+	event     watch.Event
+}
+
 func newMultiListerWatcher(namespaces []string, f func(string) cache.ListerWatcher) *multiListerWatcher {
 	return &multiListerWatcher{
 		namespaces: append(namespaces[:0:0], namespaces...),
@@ -193,6 +198,7 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 		result  = make(chan watch.Event)
 		stopped = make(chan struct{})
 		wg      sync.WaitGroup
+		combinedResult  = make(chan *combinedEvent)
 	)
 	mlw.result = result
 	mlw.stopped = stopped
@@ -215,6 +221,39 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 		}
 
 		go func() {
+			resourceVersions := make(map[string]string)
+			for {
+				event, ok := <-combinedResult
+				if !ok {
+					return
+				}
+
+				resultEvent := event.event
+				resultNamespace := event.namespace
+				if resultEvent.Type != watch.Error {
+					metaObj, err := meta.Accessor(resultEvent.Object)
+					if err != nil {
+						log.Infof("Unable to identify watch event, ignoring resource version")
+					} else {
+						resourceVersions[resultNamespace] = fmt.Sprintf("%s=%s", resultNamespace, metaObj.GetResourceVersion())
+						var versions []string
+						for _, resourceVersion := range resourceVersions {
+							versions = append(versions, resourceVersion)
+						}
+						newResourceVersion := strings.Join(versions, "/")
+						metaObj.SetResourceVersion(newResourceVersion)
+					}
+				}
+
+				select {
+				case result <- resultEvent:
+				case <-stopped:
+					return
+				}
+			}
+		}()
+
+		go func(namespace string) {
 			defer wg.Done()
 
 			for {
@@ -224,12 +263,12 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 				}
 
 				select {
-				case result <- event:
+				case combinedResult <- &combinedEvent{namespace, event}:
 				case <-stopped:
 					return
 				}
 			}
-		}()
+		}(n)
 		lws.stopper = w.Stop
 	}
 
@@ -238,6 +277,7 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 	go func() {
 		wg.Wait()
 		close(result)
+		close(combinedResult)
 	}()
 	return nil
 }
