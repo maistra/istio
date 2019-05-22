@@ -195,7 +195,8 @@ func NewController(client kubernetes.Interface, mrc controller.MemberRollControl
 	if mrc != nil {
 		mrc.Register(svcMlw)
 	}
-	svcInformer := cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, options.ResyncPeriod, cache.Indexers{})
+	svcInformer := cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, options.ResyncPeriod,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	out.services = out.createCacheHandler(svcInformer, "Services")
 
 	epMlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
