@@ -228,7 +228,7 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 					return
 				}
 
-				resultEvent := event.event
+				resultEvent := *event.event.DeepCopy()
 				resultNamespace := event.namespace
 				if resultEvent.Type != watch.Error {
 					metaObj, err := meta.Accessor(resultEvent.Object)

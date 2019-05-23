@@ -249,7 +249,10 @@ func TestPods(t *testing.T) {
 		if pod, err = client.CoreV1().Pods(namespace).Create(pod); err != nil {
 			t.Fatalf("failed creating pod: %v", err)
 		}
-		expected := toEvent(resource.Added, spec, pod, pod)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedPod := pod.DeepCopy()
+		expectedPod.ResourceVersion = namespace + "=" + pod.ResourceVersion
+		expected := toEvent(resource.Added, spec, expectedPod, expectedPod)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -262,7 +265,10 @@ func TestPods(t *testing.T) {
 		if _, err := client.CoreV1().Pods(namespace).Update(pod); err != nil {
 			t.Fatalf("failed updating pod: %v", err)
 		}
-		expected := toEvent(resource.Updated, spec, pod, pod)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedPod := pod.DeepCopy()
+		expectedPod.ResourceVersion = namespace + "=" + pod.ResourceVersion
+		expected := toEvent(resource.Updated, spec, expectedPod, expectedPod)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -281,7 +287,10 @@ func TestPods(t *testing.T) {
 		if err := client.CoreV1().Pods(namespace).Delete(pod.Name, nil); err != nil {
 			t.Fatalf("failed deleting pod: %v", err)
 		}
-		expected := toEvent(resource.Deleted, spec, pod, nil)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedPod := pod.DeepCopy()
+		expectedPod.ResourceVersion = namespace + "=" + pod.ResourceVersion
+		expected := toEvent(resource.Deleted, spec, expectedPod, nil)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -320,7 +329,10 @@ func TestServices(t *testing.T) {
 		if svc, err = client.CoreV1().Services(namespace).Create(svc); err != nil {
 			t.Fatalf("failed creating service: %v", err)
 		}
-		expected := toEvent(resource.Added, spec, svc, &svc.Spec)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedSvc := svc.DeepCopy()
+		expectedSvc.ResourceVersion = namespace + "=" + svc.ResourceVersion
+		expected := toEvent(resource.Added, spec, expectedSvc, &svc.Spec)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -333,7 +345,10 @@ func TestServices(t *testing.T) {
 		if _, err := client.CoreV1().Services(namespace).Update(svc); err != nil {
 			t.Fatalf("failed updating service: %v", err)
 		}
-		expected := toEvent(resource.Updated, spec, svc, &svc.Spec)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedSvc := svc.DeepCopy()
+		expectedSvc.ResourceVersion = namespace + "=" + svc.ResourceVersion
+		expected := toEvent(resource.Updated, spec, expectedSvc, &svc.Spec)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -352,7 +367,10 @@ func TestServices(t *testing.T) {
 		if err := client.CoreV1().Services(namespace).Delete(svc.Name, nil); err != nil {
 			t.Fatalf("failed deleting service: %v", err)
 		}
-		expected := toEvent(resource.Deleted, spec, svc, nil)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedSvc := svc.DeepCopy()
+		expectedSvc.ResourceVersion = namespace + "=" + svc.ResourceVersion
+		expected := toEvent(resource.Deleted, spec, expectedSvc, nil)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -398,7 +416,10 @@ func TestEndpoints(t *testing.T) {
 		if eps, err = client.CoreV1().Endpoints(namespace).Create(eps); err != nil {
 			t.Fatalf("failed creating endpoints: %v", err)
 		}
-		expected := toEvent(resource.Added, spec, eps, eps)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedEps := eps.DeepCopy()
+		expectedEps.ResourceVersion = namespace + "=" + eps.ResourceVersion
+		expected := toEvent(resource.Added, spec, expectedEps, expectedEps)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -411,7 +432,10 @@ func TestEndpoints(t *testing.T) {
 		if _, err := client.CoreV1().Endpoints(namespace).Update(eps); err != nil {
 			t.Fatalf("failed updating endpoints: %v", err)
 		}
-		expected := toEvent(resource.Updated, spec, eps, eps)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedEps := eps.DeepCopy()
+		expectedEps.ResourceVersion = namespace + "=" + eps.ResourceVersion
+		expected := toEvent(resource.Updated, spec, expectedEps, expectedEps)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -432,7 +456,10 @@ func TestEndpoints(t *testing.T) {
 		if err := client.CoreV1().Endpoints(namespace).Delete(eps.Name, nil); err != nil {
 			t.Fatalf("failed deleting endpoints: %v", err)
 		}
-		expected := toEvent(resource.Deleted, spec, eps, nil)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedEps := eps.DeepCopy()
+		expectedEps.ResourceVersion = namespace + "=" + eps.ResourceVersion
+		expected := toEvent(resource.Deleted, spec, expectedEps, nil)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
