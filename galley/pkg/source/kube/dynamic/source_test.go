@@ -47,6 +47,8 @@ var (
 	}
 )
 
+const listerWatcherNamespace = ""
+
 func init() {
 	b := resource.NewSchemaBuilder()
 	b.Register("empty", "type.googleapis.com/google.protobuf.Empty")
@@ -315,7 +317,8 @@ func TestSource_MangledNames(t *testing.T) {
 					Collection: emptyInfo.Collection,
 					FullName:   resource.FullNameFromNamespaceAndName("foo/"+obj.GetNamespace(), obj.GetName()),
 				},
-				Version: resource.Version(obj.GetResourceVersion()),
+				// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+				Version: resource.Version(listerWatcherNamespace + "=" + obj.GetResourceVersion()),
 			},
 			Metadata: resource.Metadata{
 				Labels:      obj.GetLabels(),
@@ -338,7 +341,7 @@ func TestSource_MangledNames(t *testing.T) {
 
 func newOrFail(t *testing.T, dynClient k8sDynamic.Interface, spec schema.ResourceSpec) runtime.Source {
 	t.Helper()
-	s, err := dynamic.New(dynClient, []string{""}, 0, nil, spec, &cfg)
+	s, err := dynamic.New(dynClient, []string{listerWatcherNamespace}, 0, nil, spec, &cfg)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -393,7 +396,8 @@ func getID(obj *unstructured.Unstructured) resource.VersionedKey {
 			Collection: emptyInfo.Collection,
 			FullName:   resource.FullNameFromNamespaceAndName(obj.GetNamespace(), obj.GetName()),
 		},
-		Version: resource.Version(obj.GetResourceVersion()),
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		Version: resource.Version(listerWatcherNamespace + "=" + obj.GetResourceVersion()),
 	}
 }
 
