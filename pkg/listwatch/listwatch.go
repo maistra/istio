@@ -210,7 +210,43 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 
 	mlw.state = watching
 
-	wg.Add(len(mlw.lwMap))
+	wg.Add(len(mlw.lwMap)+1)
+
+	go func() {
+		defer wg.Done()
+		resourceVersions := make(map[string]string)
+		for {
+			var event *combinedEvent
+			select {
+			case event = <- combinedResult:
+			case <-stopped:
+				return
+			}
+
+			resultEvent := *event.event.DeepCopy()
+			resultNamespace := event.namespace
+			if resultEvent.Type != watch.Error {
+				metaObj, err := meta.Accessor(resultEvent.Object)
+				if err != nil {
+					log.Infof("Unable to identify watch event, ignoring resource version")
+				} else {
+					resourceVersions[resultNamespace] = fmt.Sprintf("%s=%s", resultNamespace, metaObj.GetResourceVersion())
+					var versions []string
+					for _, resourceVersion := range resourceVersions {
+						versions = append(versions, resourceVersion)
+					}
+					newResourceVersion := strings.Join(versions, "/")
+					metaObj.SetResourceVersion(newResourceVersion)
+				}
+			}
+
+			select {
+			case result <- resultEvent:
+			case <-stopped:
+				return
+			}
+		}
+	}()
 
 	for n, lws := range mlw.lwMap {
 		o := options.DeepCopy()
@@ -219,39 +255,6 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 		if err != nil {
 			return err
 		}
-
-		go func() {
-			resourceVersions := make(map[string]string)
-			for {
-				event, ok := <-combinedResult
-				if !ok {
-					return
-				}
-
-				resultEvent := *event.event.DeepCopy()
-				resultNamespace := event.namespace
-				if resultEvent.Type != watch.Error {
-					metaObj, err := meta.Accessor(resultEvent.Object)
-					if err != nil {
-						log.Infof("Unable to identify watch event, ignoring resource version")
-					} else {
-						resourceVersions[resultNamespace] = fmt.Sprintf("%s=%s", resultNamespace, metaObj.GetResourceVersion())
-						var versions []string
-						for _, resourceVersion := range resourceVersions {
-							versions = append(versions, resourceVersion)
-						}
-						newResourceVersion := strings.Join(versions, "/")
-						metaObj.SetResourceVersion(newResourceVersion)
-					}
-				}
-
-				select {
-				case result <- resultEvent:
-				case <-stopped:
-					return
-				}
-			}
-		}()
 
 		go func(namespace string) {
 			defer wg.Done()
@@ -276,8 +279,8 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 	// once all event sender goroutines exited.
 	go func() {
 		wg.Wait()
-		close(result)
 		close(combinedResult)
+		close(result)
 	}()
 	return nil
 }
