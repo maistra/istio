@@ -43,7 +43,7 @@ type Args struct {
 	// The name of the MemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.
 	MemberRollName string
 	// The namespace for the MemberRoll resource, this is the same as the validation deployment namespace
-	MemberRollNameNamespace string
+	MemberRollNamespace string
 
 	// resync period to be passed to the K8s machinery.
 	ResyncPeriod time.Duration
@@ -142,6 +142,7 @@ func (a *Args) String() string {
 	_, _ = fmt.Fprintf(buf, "WatchedNamespaces: %v\n", a.WatchedNamespaces)
 	_, _ = fmt.Fprintf(buf, "ResyncPeriod: %v\n", a.ResyncPeriod)
 	_, _ = fmt.Fprintf(buf, "MemberRollName: %v\n", a.MemberRollName)
+	_, _ = fmt.Fprintf(buf, "MemberRollNamespace: %v\n", a.MemberRollNamespace)
 	_, _ = fmt.Fprintf(buf, "APIAddress: %s\n", a.APIAddress)
 	_, _ = fmt.Fprintf(buf, "EnableGrpcTracing: %v\n", a.EnableGRPCTracing)
 	_, _ = fmt.Fprintf(buf, "MaxReceivedMessageSize: %d\n", a.MaxReceivedMessageSize)

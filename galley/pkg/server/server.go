@@ -146,7 +146,7 @@ func newServer(a *Args, p patchTable) (*Server, error) {
 		}
 		var mrc controller.MemberRollController
 		if a.MemberRollName != "" {
-			mrc, err = p.newMemberRollControllerFromConfigFile(a.KubeConfig, a.MemberRollNameNamespace, a.MemberRollName, a.ResyncPeriod)
+			mrc, err = p.newMemberRollControllerFromConfigFile(a.KubeConfig, a.MemberRollNamespace, a.MemberRollName, a.ResyncPeriod)
 			if err != nil {
 				return nil, err
 			}

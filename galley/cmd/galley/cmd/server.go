@@ -31,11 +31,16 @@ import (
 )
 
 var (
-	resyncPeriod      time.Duration
-	kubeConfig        string
-	watchedNamespaces string
-	memberRollName    string
-	loggingOptions    = log.DefaultOptions()
+	resyncPeriod        time.Duration
+	kubeConfig          string
+	watchedNamespaces   string
+	memberRollName      string
+	memberRollNamespace string
+	loggingOptions      = log.DefaultOptions()
+)
+
+const (
+	defaultMemberRollNamespace = "istio-system"
 )
 
 // GetRootCmd returns the root of the cobra command-tree.
@@ -66,9 +71,19 @@ func serverCmd() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			serverArgs.KubeConfig = kubeConfig
-			serverArgs.WatchedNamespaces = watchedNamespaces
 			serverArgs.MemberRollName = memberRollName
-			serverArgs.MemberRollNameNamespace = validationArgs.DeploymentAndServiceNamespace
+			if memberRollName != "" {
+				serverArgs.MemberRollNamespace = memberRollNamespace
+				if serverArgs.MemberRollNamespace == "" {
+					serverArgs.MemberRollNamespace = validationArgs.DeploymentAndServiceNamespace
+				}
+				if serverArgs.MemberRollNamespace == "" {
+					serverArgs.MemberRollNamespace = defaultMemberRollNamespace
+				}
+				serverArgs.WatchedNamespaces = serverArgs.MemberRollNamespace
+			} else {
+				serverArgs.WatchedNamespaces = watchedNamespaces
+			}
 			serverArgs.ResyncPeriod = resyncPeriod
 			serverArgs.CredentialOptions.CACertificateFile = validationArgs.CACertFile
 			serverArgs.CredentialOptions.KeyFile = validationArgs.KeyFile
@@ -113,6 +128,8 @@ func serverCmd() *cobra.Command {
 			"  This is overridden by the memberRoll option.")
 	serverCmd.PersistentFlags().StringVarP(&memberRollName, "memberRollName", "", "",
 		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
+	serverCmd.PersistentFlags().StringVarP(&memberRollNamespace, "memberRollNamespace", "", "",
+		"The namespace of the ServiceMeshMemberRoll resource.")
 	serverCmd.PersistentFlags().DurationVar(&resyncPeriod, "resyncPeriod", 0,
 		"Resync period for rescanning Kubernetes resources")
 	serverCmd.PersistentFlags().StringVar(&validationArgs.CertFile, "tlsCertFile", "/etc/certs/cert-chain.pem",
