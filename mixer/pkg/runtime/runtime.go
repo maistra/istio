@@ -16,6 +16,7 @@ package runtime
 
 import (
 	"errors"
+	"istio.io/istio/pkg/servicemesh/controller"
 	"sync"
 	"time"
 
@@ -54,6 +55,9 @@ type Runtime struct {
 
 	*probe.Probe
 
+	mrc        controller.MemberRollController
+	namespaces []string
+
 	stateLock            sync.Mutex
 	shutdown             chan struct{}
 	waitQuiesceListening sync.WaitGroup
@@ -67,7 +71,9 @@ func New(
 	defaultConfigNamespace string,
 	executorPool *pool.GoroutinePool,
 	handlerPool *pool.GoroutinePool,
-	enableTracing bool) *Runtime {
+	enableTracing bool,
+	mrc controller.MemberRollController,
+	namespaces []string) *Runtime {
 
 	// Ignoring the errors for bad configuration that has already made it to the store.
 	// during snapshot creation the bad configuration errors are already logged.
@@ -81,6 +87,8 @@ func New(
 		handlerPool:            handlerPool,
 		Probe:                  probe.NewProbe(),
 		store:                  s,
+		mrc:                    mrc,
+		namespaces:             namespaces,
 	}
 
 	// Make sure we have a stable state.
@@ -154,7 +162,7 @@ func (c *Runtime) processNewConfig() {
 
 	oldHandlers := c.handlers
 
-	newHandlers := handler.NewTable(oldHandlers, newSnapshot, c.handlerPool)
+	newHandlers := handler.NewTable(oldHandlers, newSnapshot, c.handlerPool, c.mrc, c.namespaces)
 
 	newRoutes := routing.BuildTable(
 		newHandlers, newSnapshot, c.defaultConfigNamespace, log.DebugEnabled())

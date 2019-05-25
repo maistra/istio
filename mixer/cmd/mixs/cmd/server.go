@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"time"
 
 	"istio.io/istio/mixer/cmd/shared"
 	"istio.io/istio/mixer/pkg/adapter"
@@ -77,6 +78,13 @@ func serverCmd(info map[string]template.Info, adapters []adapter.InfoFn, printf,
 
 	serverCmd.PersistentFlags().BoolVar(&sa.UseAdapterCRDs, "useAdapterCRDs", sa.UseAdapterCRDs,
 		"Whether or not to allow configuration of Mixer via adapter-specific CRDs")
+
+	serverCmd.PersistentFlags().StringVarP(&sa.MemberRollName, "memberRollName", "", "",
+		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
+	serverCmd.PersistentFlags().StringVarP(&sa.MemberRollNamespace, "memberRollNamespace", "", "",
+		"The namespace of the ServiceMeshMemberRoll resource.")
+	serverCmd.PersistentFlags().DurationVar(&sa.MemberRollResync, "memberRollResync", time.Minute*10,
+		"The resync period for the ServiceMeshMemberRoll resource.")
 
 	sa.CredentialOptions.AttachCobraFlags(serverCmd)
 	sa.LoggingOptions.AttachCobraFlags(serverCmd)
