@@ -16,8 +16,14 @@ package handler
 
 import (
 	"context"
+	"istio.io/istio/pkg/listwatch"
+	"istio.io/istio/pkg/servicemesh/controller"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
@@ -33,10 +39,12 @@ type env struct {
 	gp               *pool.GoroutinePool
 	monitoringCtx    context.Context
 	daemons, workers *int64
+	mrc              controller.MemberRollController
+	namespaces       *[]string
 }
 
 // NewEnv returns a new environment instance.
-func NewEnv(cfgID int64, name string, gp *pool.GoroutinePool) adapter.Env {
+func NewEnv(cfgID int64, name string, gp *pool.GoroutinePool, mrc controller.MemberRollController, namespaces []string) adapter.Env {
 	ctx := context.Background()
 	var err error
 	if ctx, err = tag.New(ctx, tag.Insert(monitoring.InitConfigIDTag, strconv.FormatInt(cfgID, 10)), tag.Insert(monitoring.HandlerTag, name)); err != nil {
@@ -49,6 +57,8 @@ func NewEnv(cfgID int64, name string, gp *pool.GoroutinePool) adapter.Env {
 		monitoringCtx: ctx,
 		daemons:       new(int64),
 		workers:       new(int64),
+		mrc:           mrc,
+		namespaces:    &namespaces,
 	}
 }
 
@@ -134,4 +144,13 @@ func (e env) reportStrayWorkers() {
 	if atomic.LoadInt64(e.workers) > 0 {
 		_ = e.Logger().Errorf("adapter did not close all the scheduled workers")
 	}
+}
+
+func (e env) NewInformer(clientset kubernetes.Interface, objType runtime.Object, duration time.Duration, listerWatcher func(namespace string) cache.ListerWatcher,
+	indexers cache.Indexers) cache.SharedIndexInformer {
+	mlw := listwatch.MultiNamespaceListerWatcher(*e.namespaces, listerWatcher)
+	if e.mrc != nil {
+		e.mrc.Register(mlw)
+	}
+	return cache.NewSharedIndexInformer(mlw, objType, duration, indexers)
 }
