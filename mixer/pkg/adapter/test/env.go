@@ -16,8 +16,13 @@ package test
 
 import (
 	"fmt"
+	"istio.io/istio/pkg/listwatch"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"sync"
 	"testing"
+	"time"
 
 	"istio.io/istio/mixer/pkg/adapter"
 )
@@ -121,4 +126,10 @@ func (e *Env) log(format string, args ...interface{}) string {
 // GetDoneChan returns the channel that returns notification when the async work is done.
 func (e *Env) GetDoneChan() chan struct{} {
 	return e.done
+}
+
+func (e *Env) NewInformer(clientset kubernetes.Interface, objType runtime.Object, duration time.Duration, listerWatcher func(namespace string) cache.ListerWatcher,
+	indexers cache.Indexers) cache.SharedIndexInformer {
+	mlw := listwatch.MultiNamespaceListerWatcher([]string{""}, listerWatcher)
+	return cache.NewSharedIndexInformer(mlw, objType, duration, indexers)
 }

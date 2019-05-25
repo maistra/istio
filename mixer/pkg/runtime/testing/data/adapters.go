@@ -17,6 +17,9 @@ package data
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"time"
 
 	"github.com/gogo/protobuf/types"
@@ -81,6 +84,11 @@ func (f *FakeEnv) ScheduleWork(fn adapter.WorkFunc) { panic("should not be calle
 
 // ScheduleDaemon is an implementation of adapter.Env.ScheduleDaemon.
 func (f *FakeEnv) ScheduleDaemon(fn adapter.DaemonFunc) { panic("should not be called") }
+
+func (f *FakeEnv) NewInformer(clientset kubernetes.Interface, objType runtime.Object, duration time.Duration, listerWatcher func(namespace string) cache.ListerWatcher,
+	indexers cache.Indexers) cache.SharedIndexInformer {
+	panic("This method should not be called within the current tests")
+}
 
 var _ adapter.Env = &FakeEnv{}
 

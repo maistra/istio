@@ -49,7 +49,9 @@ func TestRuntime_Basic(t *testing.T) {
 		adapters, "istio-system",
 		egp,
 		hgp,
-		true)
+		true,
+		nil,
+		[]string{""})
 
 	d := rt.Dispatcher()
 	if d == nil {
@@ -95,7 +97,9 @@ func TestRuntime_ErrorDuringWatch(t *testing.T) {
 		adapters, "istio-system",
 		egp,
 		hgp,
-		true)
+		true,
+		nil,
+		[]string{""})
 
 	err := rt.StartListening()
 	if err == nil {
@@ -114,7 +118,9 @@ func TestRuntime_OnConfigChange(t *testing.T) {
 		adapters, "istio-system",
 		egp,
 		hgp,
-		true)
+		true,
+		nil,
+		[]string{""})
 
 	err := rt.StartListening()
 	if err != nil {
@@ -190,7 +196,9 @@ func TestRuntime_InFlightRequestsDuringConfigChange(t *testing.T) {
 		adapters, "istio-system",
 		egp,
 		hgp,
-		true)
+		true,
+		nil,
+		[]string{""})
 
 	err := rt.StartListening()
 	if err != nil {
