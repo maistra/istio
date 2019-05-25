@@ -37,7 +37,7 @@ var globalCfgI2 = data.JoinConfigs(data.HandlerACheck1, data.InstanceCheck1, dat
 func TestNew_EmptyConfig(t *testing.T) {
 	s := config.Empty()
 
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 	e, found := table.Get(data.FqnACheck1)
 	if found {
 		t.Fatal("found")
@@ -54,7 +54,7 @@ func TestNew_EmptyOldTable(t *testing.T) {
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
 
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 	e, found := table.Get(data.FqnACheck1)
 	if !found {
 		t.Fatal("not found")
@@ -71,13 +71,13 @@ func TestNew_Reuse(t *testing.T) {
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
 
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	// NewTable again using the same config, but add fault to the adapter to detect change.
 	adapters = data.BuildAdapters(nil, data.FakeAdapterSettings{Name: "tcheck", ErrorAtBuild: true})
 	s, _ = config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
 
-	table2 := NewTable(table, s, nil)
+	table2 := NewTable(table, s, nil, nil, []string{""})
 
 	if len(table2.entries) != 1 {
 		t.Fatal("size")
@@ -94,12 +94,12 @@ func TestNew_NoReuse_DifferentConfig(t *testing.T) {
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
 
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	// NewTable again using the slightly different config
 	s, _ = config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfgI2)
 
-	table2 := NewTable(table, s, nil)
+	table2 := NewTable(table, s, nil, nil, []string{""})
 
 	if len(table2.entries) != 1 {
 		t.Fatal("size")
@@ -124,7 +124,7 @@ func TestNew_NoReuse_DifferentConnectionConfig(t *testing.T) {
 		t.Fatalf("fail to load dynamic config: %v", err)
 	}
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, config1)
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	if len(table.entries) != 1 {
 		t.Fatalf("got %v entries in route table, want 1", len(table.entries))
@@ -135,7 +135,7 @@ func TestNew_NoReuse_DifferentConnectionConfig(t *testing.T) {
 	// NewTable again using the slightly different config
 	s, _ = config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, config2)
 
-	table2 := NewTable(table, s, nil)
+	table2 := NewTable(table, s, nil, nil, []string{""})
 
 	if len(table2.entries) != 1 {
 		t.Fatalf("got %v entries in route table, want 1", len(table2.entries))
@@ -192,11 +192,11 @@ func TestCleanup_Basic(t *testing.T) {
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
 
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	s = config.Empty()
 
-	table2 := NewTable(table, s, nil)
+	table2 := NewTable(table, s, nil, nil, []string{""})
 
 	table.Cleanup(table2)
 
@@ -263,7 +263,7 @@ func TestCleanup_WorkerNotClosed(t *testing.T) {
 			s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
 			s.ID = int64(idx * 2)
 
-			oldTable := NewTable(Empty(), s, pool.NewGoroutinePool(5, false))
+			oldTable := NewTable(Empty(), s, pool.NewGoroutinePool(5, false), nil, []string{""})
 			oldTable.strayWorkersRetryDuration = 5 * time.Millisecond
 
 			s = config.Empty()
@@ -272,7 +272,7 @@ func TestCleanup_WorkerNotClosed(t *testing.T) {
 			// by 2 and adding 1, give unique ids per iteration [(0,1), (1,2), ...]
 			s.ID = int64(idx*2 + 1)
 
-			newTable := NewTable(oldTable, s, nil)
+			newTable := NewTable(oldTable, s, nil, nil, []string{""})
 
 			oldTable.Cleanup(newTable)
 
@@ -299,10 +299,10 @@ func TestCleanup_NoChange(t *testing.T) {
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
 
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	// use same config again.
-	table2 := NewTable(table, s, nil)
+	table2 := NewTable(table, s, nil, nil, []string{""})
 
 	table.Cleanup(table2)
 
@@ -328,7 +328,7 @@ func TestCleanup_EmptyNewTable(t *testing.T) {
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
 
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	// Use an empty table as current.
 	table.Cleanup(Empty())
@@ -340,14 +340,14 @@ func TestCleanup_WithStartupError(t *testing.T) {
 	templates := data.BuildTemplates(nil, data.FakeTemplateSettings{Name: "tcheck", HandlerDoesNotSupportTemplate: true})
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	if _, found := table.Get(data.FqnACheck1); found {
 		t.Fail()
 	}
 
 	// use different config to force cleanup
-	table2 := NewTable(table, config.Empty(), nil)
+	table2 := NewTable(table, config.Empty(), nil, nil, []string{""})
 
 	table.Cleanup(table2)
 
@@ -363,10 +363,10 @@ func TestCleanup_CloseError(t *testing.T) {
 	templates := data.BuildTemplates(nil)
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	// use different config to force cleanup
-	table2 := NewTable(table, config.Empty(), nil)
+	table2 := NewTable(table, config.Empty(), nil, nil, []string{""})
 
 	table.Cleanup(table2)
 
@@ -398,10 +398,10 @@ func TestCleanup_ClosePanic(t *testing.T) {
 	templates := data.BuildTemplates(nil)
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, globalCfg)
-	table := NewTable(Empty(), s, nil)
+	table := NewTable(Empty(), s, nil, nil, []string{""})
 
 	// use different config to force cleanup
-	table2 := NewTable(table, config.Empty(), nil)
+	table2 := NewTable(table, config.Empty(), nil, nil, []string{""})
 
 	table.Cleanup(table2)
 

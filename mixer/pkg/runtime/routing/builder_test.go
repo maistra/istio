@@ -561,7 +561,7 @@ func buildTableWithTemplatesAndAdapters(templates map[string]*template.Info, ada
 	globalConfig := data.JoinConfigs(globalConfigs...)
 
 	s, _ := config.GetSnapshotForTest(templates, adapters, serviceConfig, globalConfig)
-	ht := handler.NewTable(handler.Empty(), s, nil)
+	ht := handler.NewTable(handler.Empty(), s, nil, nil, []string{""})
 
 	return BuildTable(ht, s, "istio-system", debugInfo), s
 }
