@@ -21,9 +21,9 @@ package v1
 import (
 	"time"
 
-	apis_v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	scheme "istio.io/istio/pkg/servicemesh/client/clientset/versioned/scheme"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
@@ -37,15 +37,15 @@ type ServiceMeshMemberRollsGetter interface {
 
 // ServiceMeshMemberRollInterface has methods to work with ServiceMeshMemberRoll resources.
 type ServiceMeshMemberRollInterface interface {
-	Create(*apis_v1.ServiceMeshMemberRoll) (*apis_v1.ServiceMeshMemberRoll, error)
-	Update(*apis_v1.ServiceMeshMemberRoll) (*apis_v1.ServiceMeshMemberRoll, error)
-	UpdateStatus(*apis_v1.ServiceMeshMemberRoll) (*apis_v1.ServiceMeshMemberRoll, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string, options v1.GetOptions) (*apis_v1.ServiceMeshMemberRoll, error)
-	List(opts v1.ListOptions) (*apis_v1.ServiceMeshMemberRollList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *apis_v1.ServiceMeshMemberRoll, err error)
+	Create(*v1.ServiceMeshMemberRoll) (*v1.ServiceMeshMemberRoll, error)
+	Update(*v1.ServiceMeshMemberRoll) (*v1.ServiceMeshMemberRoll, error)
+	UpdateStatus(*v1.ServiceMeshMemberRoll) (*v1.ServiceMeshMemberRoll, error)
+	Delete(name string, options *metav1.DeleteOptions) error
+	DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error
+	Get(name string, options metav1.GetOptions) (*v1.ServiceMeshMemberRoll, error)
+	List(opts metav1.ListOptions) (*v1.ServiceMeshMemberRollList, error)
+	Watch(opts metav1.ListOptions) (watch.Interface, error)
+	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.ServiceMeshMemberRoll, err error)
 	ServiceMeshMemberRollExpansion
 }
 
@@ -56,7 +56,7 @@ type serviceMeshMemberRolls struct {
 }
 
 // newServiceMeshMemberRolls returns a ServiceMeshMemberRolls
-func newServiceMeshMemberRolls(c *IstioV1Client, namespace string) *serviceMeshMemberRolls {
+func newServiceMeshMemberRolls(c *MaistraV1Client, namespace string) *serviceMeshMemberRolls {
 	return &serviceMeshMemberRolls{
 		client: c.RESTClient(),
 		ns:     namespace,
@@ -64,8 +64,8 @@ func newServiceMeshMemberRolls(c *IstioV1Client, namespace string) *serviceMeshM
 }
 
 // Get takes name of the serviceMeshMemberRoll, and returns the corresponding serviceMeshMemberRoll object, and an error if there is any.
-func (c *serviceMeshMemberRolls) Get(name string, options v1.GetOptions) (result *apis_v1.ServiceMeshMemberRoll, err error) {
-	result = &apis_v1.ServiceMeshMemberRoll{}
+func (c *serviceMeshMemberRolls) Get(name string, options metav1.GetOptions) (result *v1.ServiceMeshMemberRoll, err error) {
+	result = &v1.ServiceMeshMemberRoll{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("servicemeshmemberrolls").
@@ -77,12 +77,12 @@ func (c *serviceMeshMemberRolls) Get(name string, options v1.GetOptions) (result
 }
 
 // List takes label and field selectors, and returns the list of ServiceMeshMemberRolls that match those selectors.
-func (c *serviceMeshMemberRolls) List(opts v1.ListOptions) (result *apis_v1.ServiceMeshMemberRollList, err error) {
+func (c *serviceMeshMemberRolls) List(opts metav1.ListOptions) (result *v1.ServiceMeshMemberRollList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
 	}
-	result = &apis_v1.ServiceMeshMemberRollList{}
+	result = &v1.ServiceMeshMemberRollList{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("servicemeshmemberrolls").
@@ -94,7 +94,7 @@ func (c *serviceMeshMemberRolls) List(opts v1.ListOptions) (result *apis_v1.Serv
 }
 
 // Watch returns a watch.Interface that watches the requested serviceMeshMemberRolls.
-func (c *serviceMeshMemberRolls) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *serviceMeshMemberRolls) Watch(opts metav1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -109,8 +109,8 @@ func (c *serviceMeshMemberRolls) Watch(opts v1.ListOptions) (watch.Interface, er
 }
 
 // Create takes the representation of a serviceMeshMemberRoll and creates it.  Returns the server's representation of the serviceMeshMemberRoll, and an error, if there is any.
-func (c *serviceMeshMemberRolls) Create(serviceMeshMemberRoll *apis_v1.ServiceMeshMemberRoll) (result *apis_v1.ServiceMeshMemberRoll, err error) {
-	result = &apis_v1.ServiceMeshMemberRoll{}
+func (c *serviceMeshMemberRolls) Create(serviceMeshMemberRoll *v1.ServiceMeshMemberRoll) (result *v1.ServiceMeshMemberRoll, err error) {
+	result = &v1.ServiceMeshMemberRoll{}
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("servicemeshmemberrolls").
@@ -121,8 +121,8 @@ func (c *serviceMeshMemberRolls) Create(serviceMeshMemberRoll *apis_v1.ServiceMe
 }
 
 // Update takes the representation of a serviceMeshMemberRoll and updates it. Returns the server's representation of the serviceMeshMemberRoll, and an error, if there is any.
-func (c *serviceMeshMemberRolls) Update(serviceMeshMemberRoll *apis_v1.ServiceMeshMemberRoll) (result *apis_v1.ServiceMeshMemberRoll, err error) {
-	result = &apis_v1.ServiceMeshMemberRoll{}
+func (c *serviceMeshMemberRolls) Update(serviceMeshMemberRoll *v1.ServiceMeshMemberRoll) (result *v1.ServiceMeshMemberRoll, err error) {
+	result = &v1.ServiceMeshMemberRoll{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("servicemeshmemberrolls").
@@ -136,8 +136,8 @@ func (c *serviceMeshMemberRolls) Update(serviceMeshMemberRoll *apis_v1.ServiceMe
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 
-func (c *serviceMeshMemberRolls) UpdateStatus(serviceMeshMemberRoll *apis_v1.ServiceMeshMemberRoll) (result *apis_v1.ServiceMeshMemberRoll, err error) {
-	result = &apis_v1.ServiceMeshMemberRoll{}
+func (c *serviceMeshMemberRolls) UpdateStatus(serviceMeshMemberRoll *v1.ServiceMeshMemberRoll) (result *v1.ServiceMeshMemberRoll, err error) {
+	result = &v1.ServiceMeshMemberRoll{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("servicemeshmemberrolls").
@@ -150,7 +150,7 @@ func (c *serviceMeshMemberRolls) UpdateStatus(serviceMeshMemberRoll *apis_v1.Ser
 }
 
 // Delete takes name of the serviceMeshMemberRoll and deletes it. Returns an error if one occurs.
-func (c *serviceMeshMemberRolls) Delete(name string, options *v1.DeleteOptions) error {
+func (c *serviceMeshMemberRolls) Delete(name string, options *metav1.DeleteOptions) error {
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("servicemeshmemberrolls").
@@ -161,7 +161,7 @@ func (c *serviceMeshMemberRolls) Delete(name string, options *v1.DeleteOptions) 
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *serviceMeshMemberRolls) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+func (c *serviceMeshMemberRolls) DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error {
 	var timeout time.Duration
 	if listOptions.TimeoutSeconds != nil {
 		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
@@ -177,8 +177,8 @@ func (c *serviceMeshMemberRolls) DeleteCollection(options *v1.DeleteOptions, lis
 }
 
 // Patch applies the patch and returns the patched serviceMeshMemberRoll.
-func (c *serviceMeshMemberRolls) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *apis_v1.ServiceMeshMemberRoll, err error) {
-	result = &apis_v1.ServiceMeshMemberRoll{}
+func (c *serviceMeshMemberRolls) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.ServiceMeshMemberRoll, err error) {
+	result = &v1.ServiceMeshMemberRoll{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
 		Resource("servicemeshmemberrolls").

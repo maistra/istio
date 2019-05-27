@@ -19,7 +19,7 @@ limitations under the License.
 package versioned
 
 import (
-	istiov1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
+	maistrav1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -27,19 +27,19 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	IstioV1() istiov1.IstioV1Interface
+	MaistraV1() maistrav1.MaistraV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	istioV1 *istiov1.IstioV1Client
+	maistraV1 *maistrav1.MaistraV1Client
 }
 
-// IstioV1 retrieves the IstioV1Client
-func (c *Clientset) IstioV1() istiov1.IstioV1Interface {
-	return c.istioV1
+// MaistraV1 retrieves the MaistraV1Client
+func (c *Clientset) MaistraV1() maistrav1.MaistraV1Interface {
+	return c.maistraV1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -58,7 +58,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
-	cs.istioV1, err = istiov1.NewForConfig(&configShallowCopy)
+	cs.maistraV1, err = maistrav1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
-	cs.istioV1 = istiov1.NewForConfigOrDie(c)
+	cs.maistraV1 = maistrav1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -83,7 +83,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.istioV1 = istiov1.New(c)
+	cs.maistraV1 = maistrav1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

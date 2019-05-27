@@ -21,11 +21,11 @@ package v1
 import (
 	time "time"
 
-	apis_v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	servicemeshv1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	versioned "istio.io/istio/pkg/servicemesh/client/clientset/versioned"
 	internalinterfaces "istio.io/istio/pkg/servicemesh/client/informers/externalversions/internalinterfaces"
-	listers_v1 "istio.io/istio/pkg/servicemesh/client/listers/servicemesh/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "istio.io/istio/pkg/servicemesh/client/listers/servicemesh/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
@@ -35,7 +35,7 @@ import (
 // ServiceMeshMemberRolls.
 type ServiceMeshMemberRollInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() listers_v1.ServiceMeshMemberRollLister
+	Lister() v1.ServiceMeshMemberRollLister
 }
 
 type serviceMeshMemberRollInformer struct {
@@ -57,20 +57,20 @@ func NewServiceMeshMemberRollInformer(client versioned.Interface, namespace stri
 func NewFilteredServiceMeshMemberRollInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.IstioV1().ServiceMeshMemberRolls(namespace).List(options)
+				return client.MaistraV1().ServiceMeshMemberRolls(namespace).List(options)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.IstioV1().ServiceMeshMemberRolls(namespace).Watch(options)
+				return client.MaistraV1().ServiceMeshMemberRolls(namespace).Watch(options)
 			},
 		},
-		&apis_v1.ServiceMeshMemberRoll{},
+		&servicemeshv1.ServiceMeshMemberRoll{},
 		resyncPeriod,
 		indexers,
 	)
@@ -81,9 +81,9 @@ func (f *serviceMeshMemberRollInformer) defaultInformer(client versioned.Interfa
 }
 
 func (f *serviceMeshMemberRollInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apis_v1.ServiceMeshMemberRoll{}, f.defaultInformer)
+	return f.factory.InformerFor(&servicemeshv1.ServiceMeshMemberRoll{}, f.defaultInformer)
 }
 
-func (f *serviceMeshMemberRollInformer) Lister() listers_v1.ServiceMeshMemberRollLister {
-	return listers_v1.NewServiceMeshMemberRollLister(f.Informer().GetIndexer())
+func (f *serviceMeshMemberRollInformer) Lister() v1.ServiceMeshMemberRollLister {
+	return v1.NewServiceMeshMemberRollLister(f.Informer().GetIndexer())
 }
