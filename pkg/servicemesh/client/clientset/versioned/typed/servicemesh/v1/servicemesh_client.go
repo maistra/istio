@@ -24,22 +24,22 @@ import (
 	rest "k8s.io/client-go/rest"
 )
 
-type IstioV1Interface interface {
+type MaistraV1Interface interface {
 	RESTClient() rest.Interface
 	ServiceMeshMemberRollsGetter
 }
 
-// IstioV1Client is used to interact with features provided by the maistra.io group.
-type IstioV1Client struct {
+// MaistraV1Client is used to interact with features provided by the maistra.io group.
+type MaistraV1Client struct {
 	restClient rest.Interface
 }
 
-func (c *IstioV1Client) ServiceMeshMemberRolls(namespace string) ServiceMeshMemberRollInterface {
+func (c *MaistraV1Client) ServiceMeshMemberRolls(namespace string) ServiceMeshMemberRollInterface {
 	return newServiceMeshMemberRolls(c, namespace)
 }
 
-// NewForConfig creates a new IstioV1Client for the given config.
-func NewForConfig(c *rest.Config) (*IstioV1Client, error) {
+// NewForConfig creates a new MaistraV1Client for the given config.
+func NewForConfig(c *rest.Config) (*MaistraV1Client, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -48,12 +48,12 @@ func NewForConfig(c *rest.Config) (*IstioV1Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &IstioV1Client{client}, nil
+	return &MaistraV1Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new IstioV1Client for the given config and
+// NewForConfigOrDie creates a new MaistraV1Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *IstioV1Client {
+func NewForConfigOrDie(c *rest.Config) *MaistraV1Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -61,9 +61,9 @@ func NewForConfigOrDie(c *rest.Config) *IstioV1Client {
 	return client
 }
 
-// New creates a new IstioV1Client for the given RESTClient.
-func New(c rest.Interface) *IstioV1Client {
-	return &IstioV1Client{c}
+// New creates a new MaistraV1Client for the given RESTClient.
+func New(c rest.Interface) *MaistraV1Client {
+	return &MaistraV1Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -81,7 +81,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *IstioV1Client) RESTClient() rest.Interface {
+func (c *MaistraV1Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}
