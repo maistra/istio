@@ -66,6 +66,7 @@ type multiListerWatcher struct {
 	state      listerWatcherState
 	result     chan watch.Event
 	stopped    chan struct{}
+	wg         *sync.WaitGroup
 	lwMap      map[string]*listerWatcher
 	lock       sync.Mutex
 }
@@ -95,15 +96,18 @@ func (mlw *multiListerWatcher) UpdateNamespaces(namespaces []string) {
 		mlw.state = errorOnWatch
 	case watching:
 		mlw.reportUpdatedNamespaceError()
+		mlw.state = created
 	}
 }
 
 // Report error on result channel and close, state changes to created
 // Must be called with lock held
 func (mlw *multiListerWatcher) reportUpdatedNamespaceError() {
-	go func(result chan watch.Event) {
+	mlw.wg.Add(1)
+	go func(result chan watch.Event, stopped chan struct{}, wg *sync.WaitGroup) {
+		defer wg.Done()
 		select {
-		case <-result:
+		case <-stopped:
 			return
 		case result <- watch.Event{Type: watch.Error, Object: &metav1.Status{
 			Status:  metav1.StatusFailure,
@@ -112,8 +116,7 @@ func (mlw *multiListerWatcher) reportUpdatedNamespaceError() {
 		}}:
 			return
 		}
-	}(mlw.result)
-	mlw.state = created
+	}(mlw.result, mlw.stopped, mlw.wg)
 }
 
 // List implements the ListerWatcher interface.
@@ -202,6 +205,7 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 	)
 	mlw.result = result
 	mlw.stopped = stopped
+	mlw.wg = &wg
 
 	if mlw.state == errorOnWatch {
 		mlw.reportUpdatedNamespaceError()
@@ -209,7 +213,6 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 	}
 
 	mlw.state = watching
-
 	wg.Add(len(mlw.lwMap)+1)
 
 	go func() {
@@ -307,5 +310,6 @@ func (mlw *multiListerWatcher) Stop() {
 			}
 		}
 		close(mlw.stopped)
+		mlw.state = created
 	}
 }
