@@ -10,12 +10,10 @@ import (
 // ServiceMeshMemberRoll is the Schema for the servicemeshmemberrolls API
 // +k8s:openapi-gen=true
 type ServiceMeshMemberRoll struct {
-	metav1.TypeMeta `json:",inline"`
-	// +optional
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec ServiceMeshMemberRollSpec `json:"spec,omitempty"`
-	// +optional
+	Spec   ServiceMeshMemberRollSpec   `json:"spec,omitempty"`
 	Status ServiceMeshMemberRollStatus `json:"status,omitempty"`
 }
 
@@ -35,6 +33,7 @@ type ServiceMeshMemberRollSpec struct {
 
 // ServiceMeshMemberRollStatus contains the state last used to reconcile the list
 type ServiceMeshMemberRollStatus struct {
-	ObservedGeneration    int64 `json:"observedGeneration,omitempty"`
-	ServiceMeshGeneration int64 `json:"meshGeneration,omitempty"`
+	ObservedGeneration    int64    `json:"observedGeneration,omitempty"`
+	ServiceMeshGeneration int64    `json:"meshGeneration,omitempty"`
+	ConfiguredMembers     []string `json:"configuredMembers,omitempty"`
 }

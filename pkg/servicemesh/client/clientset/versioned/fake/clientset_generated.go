@@ -20,8 +20,8 @@ package fake
 
 import (
 	clientset "istio.io/istio/pkg/servicemesh/client/clientset/versioned"
-	istiov1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
-	fakeistiov1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1/fake"
+	maistrav1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
+	fakemaistrav1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -76,7 +76,7 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// IstioV1 retrieves the IstioV1Client
-func (c *Clientset) IstioV1() istiov1.IstioV1Interface {
-	return &fakeistiov1.FakeIstioV1{Fake: &c.Fake}
+// MaistraV1 retrieves the MaistraV1Client
+func (c *Clientset) MaistraV1() maistrav1.MaistraV1Interface {
+	return &fakemaistrav1.FakeMaistraV1{Fake: &c.Fake}
 }
