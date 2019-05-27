@@ -172,9 +172,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Istio() servicemesh.Interface
+	Maistra() servicemesh.Interface
 }
 
-func (f *sharedInformerFactory) Istio() servicemesh.Interface {
+func (f *sharedInformerFactory) Maistra() servicemesh.Interface {
 	return servicemesh.New(f, f.namespace, f.tweakListOptions)
 }
