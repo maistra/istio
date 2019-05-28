@@ -53,6 +53,7 @@ const (
 	listed       listerWatcherState = 1
 	watching     listerWatcherState = 2
 	errorOnWatch listerWatcherState = 3
+	stopping     listerWatcherState = 4
 )
 
 type listerWatcher struct {
@@ -95,14 +96,17 @@ func (mlw *multiListerWatcher) UpdateNamespaces(namespaces []string) {
 	case listed:
 		mlw.state = errorOnWatch
 	case watching:
-		mlw.reportUpdatedNamespaceError()
-		mlw.state = created
+		mlw.reportError("Namespaces Updated")
 	}
 }
 
 // Report error on result channel and close, state changes to created
 // Must be called with lock held
-func (mlw *multiListerWatcher) reportUpdatedNamespaceError() {
+func (mlw *multiListerWatcher) reportError(message string) {
+	if mlw.state != watching {
+		return
+	}
+	mlw.state = stopping
 	mlw.wg.Add(1)
 	go func(result chan watch.Event, stopped chan struct{}, wg *sync.WaitGroup) {
 		defer wg.Done()
@@ -112,7 +116,7 @@ func (mlw *multiListerWatcher) reportUpdatedNamespaceError() {
 		case result <- watch.Event{Type: watch.Error, Object: &metav1.Status{
 			Status:  metav1.StatusFailure,
 			Reason:  metav1.StatusReasonExpired,
-			Message: "Namespaces Updated",
+			Message: message,
 		}}:
 			return
 		}
@@ -129,7 +133,7 @@ func (mlw *multiListerWatcher) List(options metav1.ListOptions) (runtime.Object,
 	mlw.lock.Lock()
 	defer mlw.lock.Unlock()
 
-	if mlw.state == watching {
+	if mlw.state == watching || mlw.state == stopping {
 		mlw.Stop()
 	}
 
@@ -208,7 +212,9 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 	mlw.wg = &wg
 
 	if mlw.state == errorOnWatch {
-		mlw.reportUpdatedNamespaceError()
+		mlw.state = watching
+
+		mlw.reportError("Namespaces Updated")
 		return nil
 	}
 
@@ -265,6 +271,9 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 			for {
 				event, ok := <-w.ResultChan()
 				if !ok {
+					mlw.lock.Lock()
+					defer mlw.lock.Unlock()
+					mlw.reportError("Underlying Result Channel closed")
 					return
 				}
 
