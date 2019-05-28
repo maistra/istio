@@ -130,6 +130,42 @@ func TestMultiWatchStop(t *testing.T) {
 	}
 }
 
+func TestMultiWatchResultChannelStop(t *testing.T) {
+	ws, m := setupMultiWatch(t, []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}, map[string]string{})
+
+	ws["1"].Stop();
+	ws["2"].Stop();
+	event, running := <-m.ResultChan()
+	if !running {
+		t.Errorf("expected multiWatch chan to remain open for error")
+	}
+	if event.Type != watch.Error {
+		t.Errorf("expected multiWatch chan to return error")
+	}
+	m.Stop()
+
+	var stopped int
+	for _, w := range ws {
+		_, running := <-w.ResultChan()
+		if !running && w.IsStopped() {
+			stopped++
+		}
+	}
+	if stopped != len(ws) {
+		t.Errorf("expected %d watchers to be stopped but got %d", len(ws), stopped)
+	}
+	select {
+	case <-m.stopped:
+		// all good, watcher is closed, proceed
+	default:
+		t.Error("expected multiWatch to be stopped")
+	}
+	_, running = <-m.ResultChan()
+	if running {
+		t.Errorf("expected multiWatch chan to be closed")
+	}
+}
+
 type mockListerWatcher struct {
 	evCh    chan watch.Event
 	stopped bool
