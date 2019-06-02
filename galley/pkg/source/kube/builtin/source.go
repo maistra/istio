@@ -138,7 +138,7 @@ func (s *source) Stop() {
 func (s *source) handleEvent(kind resource.EventKind, obj interface{}) {
 	object := s.t.ExtractObject(obj)
 	if object == nil {
-		if object = tombstone.RecoverResource(obj); object != nil {
+		if object = tombstone.RecoverResource(obj); object == nil {
 			// Tombstone recovery failed.
 			return
 		}
