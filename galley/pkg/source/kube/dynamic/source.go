@@ -172,7 +172,7 @@ func (s *source) Stop() {
 func (s *source) handleEvent(c resource.EventKind, obj interface{}) {
 	object, ok := obj.(metav1.Object)
 	if !ok {
-		if object = tombstone.RecoverResource(obj); object != nil {
+		if object = tombstone.RecoverResource(obj); object == nil {
 			// Tombstone recovery failed.
 			return
 		}
