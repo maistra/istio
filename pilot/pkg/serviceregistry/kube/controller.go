@@ -451,27 +451,6 @@ func (p *podLocalitySource) GetPodLocality(pod *v1.Pod) string {
 	return fmt.Sprintf("%v/%v", region, zone)
 }
 
-func (n *nodeLocalitySource) HasSynced() bool {
-	return n.nodes.informer.HasSynced()
-}
-
-func (n *nodeLocalitySource) Run(stop <-chan struct{}) {
-	n.nodes.informer.Run(stop)
-}
-
-type podLocalitySource struct {
-}
-
-func (p *podLocalitySource) GetPodLocality(pod *v1.Pod) string {
-	region, _ := pod.Labels[NodeRegionLabel]
-	zone, _ := pod.Labels[NodeZoneLabel]
-	if region == "" && zone == "" {
-		return ""
-	}
-
-	return fmt.Sprintf("%v/%v", region, zone)
-}
-
 func (p *podLocalitySource) HasSynced() bool {
 	return true
 }
