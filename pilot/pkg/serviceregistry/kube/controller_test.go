@@ -313,110 +313,6 @@ func makeService(n, ns string, cl kubernetes.Interface, t *testing.T) {
 	log.Infof("Created service %s", n)
 }
 
-func TestController_GetPodLocality(t *testing.T) {
-	t.Parallel()
-	pod1 := generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{"app": "prod-app"}, map[string]string{})
-	pod2 := generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app"}, map[string]string{})
-	podOverride := generatePod("128.0.1.2", "pod2", "nsB", "",
-		"node1", map[string]string{"app": "prod-app", model.LocalityLabel: "regionOverride.zoneOverride.subzoneOverride"}, map[string]string{})
-	testCases := []struct {
-		name   string
-		pods   []*v1.Pod
-		nodes  []*v1.Node
-		wantAZ map[*v1.Pod]string
-	}{
-		{
-			name: "should return correct az for given address",
-			pods: []*v1.Pod{pod1, pod2},
-			nodes: []*v1.Node{
-				generateNode("node1", map[string]string{NodeZoneLabel: "zone1", NodeRegionLabel: "region1"}),
-				generateNode("node2", map[string]string{NodeZoneLabel: "zone2", NodeRegionLabel: "region2"}),
-			},
-			wantAZ: map[*v1.Pod]string{
-				pod1: "region1/zone1",
-				pod2: "region2/zone2",
-			},
-		},
-		{
-			name: "should return false if pod isnt in the cache",
-			wantAZ: map[*v1.Pod]string{
-				pod1: "",
-				pod2: "",
-			},
-		},
-		{
-			name: "should return false if node isnt in the cache",
-			pods: []*v1.Pod{pod1, pod2},
-			wantAZ: map[*v1.Pod]string{
-				pod1: "",
-				pod2: "",
-			},
-		},
-		{
-			name: "should return correct az if node has only region label",
-			pods: []*v1.Pod{pod1, pod2},
-			nodes: []*v1.Node{
-				generateNode("node1", map[string]string{NodeRegionLabel: "region1"}),
-				generateNode("node2", map[string]string{NodeRegionLabel: "region2"}),
-			},
-			wantAZ: map[*v1.Pod]string{
-				pod1: "region1/",
-				pod2: "region2/",
-			},
-		},
-		{
-			name: "should return correct az if node has only zone label",
-			pods: []*v1.Pod{pod1, pod2},
-			nodes: []*v1.Node{
-				generateNode("node1", map[string]string{NodeZoneLabel: "zone1"}),
-				generateNode("node2", map[string]string{NodeZoneLabel: "zone2"}),
-			},
-			wantAZ: map[*v1.Pod]string{
-				pod1: "/zone1",
-				pod2: "/zone2",
-			},
-		},
-		{
-			name: "should return correct az for given address",
-			pods: []*v1.Pod{podOverride},
-			nodes: []*v1.Node{
-				generateNode("node1", map[string]string{NodeZoneLabel: "zone1", NodeRegionLabel: "region1"}),
-			},
-			wantAZ: map[*v1.Pod]string{
-				podOverride: "regionOverride/zoneOverride/subzoneOverride",
-			},
-		},
-	}
-
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-
-			// Setup kube caches
-			controller, fx := newFakeController(t)
-			defer controller.Stop()
-			addNodes(t, controller, c.nodes...)
-			addPods(t, controller, c.pods...)
-			for range c.pods {
-				fx.Wait("workload")
-			}
-
-			// Verify expected existing pod AZs
-			for pod, wantAZ := range c.wantAZ {
-				az := controller.GetPodLocality(pod)
-				if wantAZ != "" {
-					if !reflect.DeepEqual(az, wantAZ) {
-						t.Errorf("Wanted az: %s, got: %s", wantAZ, az)
-					}
-				} else {
-					if az != "" {
-						t.Errorf("Unexpectedly found az: %s for pod: %s", az, pod.ObjectMeta.Name)
-					}
-				}
-			}
-		})
-	}
-}
-
 func TestController_getPodAZ_FromNode(t *testing.T) {
 	t.Parallel()
 	pod1 := generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{"app": "prod-app"}, map[string]string{})
@@ -481,7 +377,6 @@ func TestController_getPodAZ_FromNode(t *testing.T) {
 			},
 		},
 		{
-
 			name: "should return empty az if node has neither region nor zone label",
 			pods: []*v1.Pod{pod1, pod2},
 			nodes: []*v1.Node{
@@ -491,6 +386,40 @@ func TestController_getPodAZ_FromNode(t *testing.T) {
 			wantAZ: map[*v1.Pod]string{
 				pod1: "",
 				pod2: "",
+			},
+		},
+    {
+			name: "should return correct az if node has only region label",
+			pods: []*v1.Pod{pod1, pod2},
+			nodes: []*v1.Node{
+				generateNode("node1", map[string]string{NodeRegionLabel: "region1"}),
+				generateNode("node2", map[string]string{NodeRegionLabel: "region2"}),
+			},
+			wantAZ: map[*v1.Pod]string{
+				pod1: "region1/",
+				pod2: "region2/",
+			},
+		},
+		{
+			name: "should return correct az if node has only zone label",
+			pods: []*v1.Pod{pod1, pod2},
+			nodes: []*v1.Node{
+				generateNode("node1", map[string]string{NodeZoneLabel: "zone1"}),
+				generateNode("node2", map[string]string{NodeZoneLabel: "zone2"}),
+			},
+			wantAZ: map[*v1.Pod]string{
+				pod1: "/zone1",
+				pod2: "/zone2",
+			},
+		},
+		{
+			name: "should return correct az for given address",
+			pods: []*v1.Pod{podOverride},
+			nodes: []*v1.Node{
+				generateNode("node1", map[string]string{NodeZoneLabel: "zone1", NodeRegionLabel: "region1"}),
+			},
+			wantAZ: map[*v1.Pod]string{
+				podOverride: "regionOverride/zoneOverride/subzoneOverride",
 			},
 		},
 	}

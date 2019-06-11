@@ -171,14 +171,6 @@ func NewController(client kubernetes.Interface, mrc controller.MemberRollControl
 			options.MemberRollName)
 	}
 
-	if mrc == nil {
-		log.Infof("Service controller watching namespace list %q for services, endpoints, nodes and pods, refresh %s",
-			watchedNamespaceList, options.ResyncPeriod)
-	} else {
-		log.Infof("Service controller watching Member Roll list %s for services, endpoints, nodes and pods",
-			options.MemberRollName)
-	}
-
 	// Queue requires a time duration for a retry delay after a handler error
 	out := &Controller{
 		domainSuffix:               options.DomainSuffix,
@@ -436,6 +428,27 @@ func (n *nodeLocalitySource) GetPodLocality(pod *v1.Pod) string {
 	}
 	locality := fmt.Sprintf("%v/%v", region, zone)
 	return model.GetLocalityOrDefault(locality, pod.Labels)
+}
+
+func (n *nodeLocalitySource) HasSynced() bool {
+	return n.nodes.informer.HasSynced()
+}
+
+func (n *nodeLocalitySource) Run(stop <-chan struct{}) {
+	n.nodes.informer.Run(stop)
+}
+
+type podLocalitySource struct {
+}
+
+func (p *podLocalitySource) GetPodLocality(pod *v1.Pod) string {
+	region, _ := pod.Labels[NodeRegionLabel]
+	zone, _ := pod.Labels[NodeZoneLabel]
+	if region == "" && zone == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%v/%v", region, zone)
 }
 
 func (n *nodeLocalitySource) HasSynced() bool {
