@@ -504,17 +504,15 @@ func escapeJSONPointerValue(in string) string {
 }
 
 func updateAnnotation(target map[string]string, added map[string]string) (patch []rfc6902PatchOperation) {
-	for key, value := range added {
-		if target == nil {
-			target = map[string]string{}
-			patch = append(patch, rfc6902PatchOperation{
-				Op:   "add",
-				Path: "/metadata/annotations",
-				Value: map[string]string{
-					key: value,
-				},
-			})
-		} else {
+	if target == nil {
+		target = map[string]string{}
+		patch = append(patch, rfc6902PatchOperation{
+			Op:    "add",
+			Path:  "/metadata/annotations",
+			Value: added,
+		})
+	} else {
+		for key, value := range added {
 			op := "add"
 			if target[key] != "" {
 				op = "replace"
@@ -665,6 +663,9 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionRespons
 	}
 
 	annotations := map[string]string{annotationStatus.name: status}
+	for k, v := range spec.Annotations {
+		annotations[k] = v
+	}
 
 	patchBytes, err := createPatch(&pod, injectionStatus(&pod), annotations, spec)
 	if err != nil {
