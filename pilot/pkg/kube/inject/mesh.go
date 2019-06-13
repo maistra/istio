@@ -38,6 +38,12 @@ const (
 [[- $readinessFailureThresholdValue := (annotation .ObjectMeta $readinessFailureThresholdKey {{ .ReadinessFailureThreshold }}) -]]
 [[- $readinessApplicationPortsValue := (annotation .ObjectMeta $readinessApplicationPortsKey (applicationPorts .Spec.Containers)) -]]
 rewriteAppHTTPProbe: {{ .RewriteAppHTTPProbe }}
+{{ if .Annotations }}
+annotations:
+{{ range $key, $value := .Annotations }}
+  {{ $key }}: {{ $value }}
+{{ end }}
+{{ end }}
 initContainers:
 - name: istio-init
   image: {{ .InitImage }}

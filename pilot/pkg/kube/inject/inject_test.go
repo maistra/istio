@@ -83,6 +83,7 @@ func TestIntoResourceFile(t *testing.T) {
 		readinessPeriodSeconds       uint32
 		readinessFailureThreshold    uint32
 		tproxy                       bool
+		annotations                  map[string]string
 	}{
 		// "testdata/hello.yaml" is tested in http_test.go (with debug)
 		{
@@ -274,6 +275,7 @@ func TestIntoResourceFile(t *testing.T) {
 			readinessInitialDelaySeconds: DefaultReadinessInitialDelaySeconds,
 			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
 			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
+			annotations:                  map[string]string{"some-annotation/foo~bar": "foobar"},
 		},
 		{
 			in:                           "job.yaml",
@@ -284,6 +286,7 @@ func TestIntoResourceFile(t *testing.T) {
 			readinessInitialDelaySeconds: DefaultReadinessInitialDelaySeconds,
 			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
 			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
+			annotations:                  map[string]string{"some-annotation/foo~bar": "foobar"},
 		},
 		{
 			in:                           "replicaset.yaml",
@@ -294,6 +297,7 @@ func TestIntoResourceFile(t *testing.T) {
 			readinessInitialDelaySeconds: DefaultReadinessInitialDelaySeconds,
 			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
 			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
+			annotations:                  map[string]string{"some-annotation/foo~bar": "foobar"},
 		},
 		{
 			in:                           "replicationcontroller.yaml",
@@ -304,6 +308,7 @@ func TestIntoResourceFile(t *testing.T) {
 			readinessInitialDelaySeconds: DefaultReadinessInitialDelaySeconds,
 			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
 			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
+			annotations:                  map[string]string{"some-annotation/foo~bar": "foobar"},
 		},
 		{
 			in:                           "cronjob.yaml",
@@ -314,6 +319,7 @@ func TestIntoResourceFile(t *testing.T) {
 			readinessInitialDelaySeconds: DefaultReadinessInitialDelaySeconds,
 			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
 			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
+			annotations:                  map[string]string{"some-annotation/foo~bar": "foobar"},
 		},
 		{
 			in:                           "pod.yaml",
@@ -324,6 +330,7 @@ func TestIntoResourceFile(t *testing.T) {
 			readinessInitialDelaySeconds: DefaultReadinessInitialDelaySeconds,
 			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
 			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
+			annotations:                  map[string]string{"some-annotation/foo~bar": "foobar"},
 		},
 		{
 			in:                           "hello-host-network.yaml",
@@ -531,6 +538,7 @@ func TestIntoResourceFile(t *testing.T) {
 				ReadinessPeriodSeconds:       c.readinessPeriodSeconds,
 				ReadinessFailureThreshold:    c.readinessFailureThreshold,
 				RewriteAppHTTPProbe:          false,
+				Annotations:                  c.annotations,
 			}
 			if c.imagePullPolicy != "" {
 				params.ImagePullPolicy = c.imagePullPolicy
