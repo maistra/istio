@@ -32,7 +32,7 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/gogo/protobuf/types"
-	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-multierror"
 	"k8s.io/api/batch/v2alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -151,6 +151,7 @@ type SidecarInjectionSpec struct {
 	// RewriteHTTPProbe indicates whether Kubernetes HTTP prober in the PodSpec
 	// will be rewritten to be redirected by pilot agent.
 	RewriteAppHTTPProbe bool                          `yaml:"rewriteAppHTTPProbe"`
+	Annotations         map[string]string             `yaml:"annotations"`
 	InitContainers      []corev1.Container            `yaml:"initContainers"`
 	Containers          []corev1.Container            `yaml:"containers"`
 	Volumes             []corev1.Volume               `yaml:"volumes"`
@@ -204,6 +205,7 @@ type Params struct {
 	ReadinessFailureThreshold    uint32                 `json:"readinessFailureThreshold"`
 	SDSEnabled                   bool                   `json:"sdsEnabled"`
 	EnableSdsTokenMount          bool                   `json:"enableSdsTokenMount"`
+	Annotations                  map[string]string      `json:"annotations"`
 	// Comma separated list of IP ranges in CIDR form. If set, only redirect outbound traffic to Envoy for these IP
 	// ranges. All outbound traffic can be redirected with the wildcard character "*". Defaults to "*".
 	IncludeIPRanges string `json:"includeIPRanges"`
@@ -549,6 +551,12 @@ func injectionData(sidecarTemplate, version string, deploymentMetadata *metav1.O
 	applyConcurrency(sic.Containers)
 
 	status := &SidecarInjectionStatus{Version: version}
+	if len(sic.Annotations) > 0 {
+		status.Annotations = make(map[string]string)
+		for k, v := range sic.Annotations {
+			status.Annotations[k] = v
+		}
+	}
 	for _, c := range sic.InitContainers {
 		status.InitContainers = append(status.InitContainers, c.Name)
 	}
@@ -632,6 +640,7 @@ func intoObject(sidecarTemplate string, meshconfig *meshconfig.MeshConfig, in ru
 
 	var deploymentMetadata *metav1.ObjectMeta
 	var metadata *metav1.ObjectMeta
+	var podMetadata *metav1.ObjectMeta
 	var podSpec *corev1.PodSpec
 
 	// Handle Lists
@@ -664,10 +673,12 @@ func intoObject(sidecarTemplate string, meshconfig *meshconfig.MeshConfig, in ru
 	if job, ok := out.(*v2alpha1.CronJob); ok {
 		metadata = &job.Spec.JobTemplate.ObjectMeta
 		deploymentMetadata = &job.ObjectMeta
+		podMetadata = &job.Spec.JobTemplate.Spec.Template.ObjectMeta
 		podSpec = &job.Spec.JobTemplate.Spec.Template.Spec
 	} else if pod, ok := out.(*corev1.Pod); ok {
 		metadata = &pod.ObjectMeta
 		deploymentMetadata = &pod.ObjectMeta
+		podMetadata = &pod.ObjectMeta
 		podSpec = &pod.Spec
 	} else {
 		// `in` is a pointer to an Object. Dereference it.
@@ -682,6 +693,7 @@ func intoObject(sidecarTemplate string, meshconfig *meshconfig.MeshConfig, in ru
 			templateValue = templateValue.Elem()
 		}
 		metadata = templateValue.FieldByName("ObjectMeta").Addr().Interface().(*metav1.ObjectMeta)
+		podMetadata = metadata
 		podSpec = templateValue.FieldByName("Spec").Addr().Interface().(*corev1.PodSpec)
 	}
 
@@ -706,6 +718,13 @@ func intoObject(sidecarTemplate string, meshconfig *meshconfig.MeshConfig, in ru
 		meshconfig)
 	if err != nil {
 		return nil, err
+	}
+
+	if podMetadata.Annotations == nil {
+		podMetadata.Annotations = make(map[string]string)
+	}
+	for k, v := range spec.Annotations {
+		podMetadata.Annotations[k] = v
 	}
 
 	podSpec.InitContainers = append(podSpec.InitContainers, spec.InitContainers...)
@@ -874,11 +893,12 @@ func valueOrDefault(value string, defaultValue string) string {
 // injected sidecar. This includes the names of added containers and
 // volumes.
 type SidecarInjectionStatus struct {
-	Version          string   `json:"version"`
-	InitContainers   []string `json:"initContainers"`
-	Containers       []string `json:"containers"`
-	Volumes          []string `json:"volumes"`
-	ImagePullSecrets []string `json:"imagePullSecrets"`
+	Version          string            `json:"version"`
+	Annotations      map[string]string `json:"annotations,omitempty"`
+	InitContainers   []string          `json:"initContainers"`
+	Containers       []string          `json:"containers"`
+	Volumes          []string          `json:"volumes"`
+	ImagePullSecrets []string          `json:"imagePullSecrets"`
 }
 
 // helper function to generate a template version identifier from a
