@@ -82,7 +82,7 @@ type Webhook struct {
 	cert                 *tls.Certificate
 	namespace            string
 	deploymentName       string
-	webhookName          string
+	webhookConfigName    string
 	clientset            clientset.Interface
 	ownerRefs            []metav1.OwnerReference
 	webhookConfiguration *admissionregistrationv1beta1.MutatingWebhookConfiguration
@@ -140,7 +140,7 @@ type WebhookParameters struct {
 	Namespace string
 
 	// Name of the webhook
-	WebhookName string
+	WebhookConfigName string
 
 	// The webhook deployment name
 	DeploymentName string
@@ -215,7 +215,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		caFile:                 p.CACertFile,
 		webhookConfigFile:      p.WebhookConfigFile,
 		deploymentName:         p.DeploymentName,
-		webhookName:            p.WebhookName,
+		webhookConfigName:      p.WebhookConfigName,
 		namespace:              p.Namespace,
 		clientset:              p.Clientset,
 	}

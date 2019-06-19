@@ -83,7 +83,7 @@ var (
 				Port:                flags.port,
 				WebhookConfigFile:   flags.webhookConfigFile,
 				Namespace:           flags.namespace,
-				WebhookName:         flags.webhookName,
+				WebhookConfigName:   flags.webhookConfigName,
 				DeploymentName:      flags.deploymentName,
 				HealthCheckInterval: flags.healthCheckInterval,
 				HealthCheckFile:     flags.healthCheckFile,
