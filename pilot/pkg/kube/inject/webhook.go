@@ -20,9 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +43,8 @@ import (
 	"istio.io/istio/pilot/cmd/pilot-agent/status"
 	"istio.io/istio/pkg/log"
 )
+
+const proxyUIDAnnotation = "sidecar.istio.io/proxyUID"
 
 var (
 	runtimeScheme = runtime.NewScheme()
@@ -656,7 +658,30 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionRespons
 		}
 	}
 
-	spec, status, err := injectionData(wh.sidecarConfig.Template, wh.sidecarTemplateVersion, &pod.ObjectMeta, &pod.Spec, &pod.ObjectMeta, wh.meshConfig.DefaultConfig, wh.meshConfig) // nolint: lll
+	proxyUID, err := getProxyUID(pod)
+	if err != nil {
+		log.Infof("Could not get proxyUID from annotation: %v", err)
+	}
+	if proxyUID == nil {
+		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
+			uid := uint64(*pod.Spec.SecurityContext.RunAsUser) + 1
+			proxyUID = &uid
+		}
+		for _, c := range pod.Spec.Containers {
+			if c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
+				uid := uint64(*c.SecurityContext.RunAsUser) + 1
+				if proxyUID == nil || uid > *proxyUID {
+					proxyUID = &uid
+				}
+			}
+		}
+	}
+	if proxyUID == nil {
+		uid := DefaultSidecarProxyUID
+		proxyUID = &uid
+	}
+
+	spec, status, err := injectionData(wh.sidecarConfig.Template, wh.sidecarTemplateVersion, &pod.ObjectMeta, &pod.Spec, &pod.ObjectMeta, wh.meshConfig.DefaultConfig, wh.meshConfig, *proxyUID) // nolint: lll
 	if err != nil {
 		log.Infof("Injection data: err=%v spec=%v\n", err, status)
 		return toAdmissionResponse(err)
@@ -685,6 +710,19 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionRespons
 		}(),
 	}
 	return &reviewResponse
+}
+
+func getProxyUID(pod corev1.Pod) (*uint64, error) {
+	if pod.Annotations != nil {
+		if annotationValue, found := pod.Annotations[proxyUIDAnnotation]; found {
+			proxyUID, err := strconv.ParseUint(annotationValue, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			return &proxyUID, nil
+		}
+	}
+	return nil, nil
 }
 
 func (wh *Webhook) serveInject(w http.ResponseWriter, r *http.Request) {
