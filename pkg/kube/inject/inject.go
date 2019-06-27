@@ -165,6 +165,7 @@ type SidecarTemplateData struct {
 	ProxyConfig    *meshconfig.ProxyConfig
 	MeshConfig     *meshconfig.MeshConfig
 	Values         map[string]interface{}
+	ProxyUID       uint64
 }
 
 // Params describes configurable parameters for injecting istio proxy
@@ -530,7 +531,7 @@ func flippedContains(needle, haystack string) bool {
 
 // InjectionData renders sidecarTemplate with valuesConfig.
 func InjectionData(sidecarTemplate, valuesConfig, version string, typeMetadata *metav1.TypeMeta, deploymentMetadata *metav1.ObjectMeta, spec *corev1.PodSpec,
-	metadata *metav1.ObjectMeta, proxyConfig *meshconfig.ProxyConfig, meshConfig *meshconfig.MeshConfig) (
+	metadata *metav1.ObjectMeta, proxyConfig *meshconfig.ProxyConfig, meshConfig *meshconfig.MeshConfig, proxyUID uint64) (
 	*SidecarInjectionSpec, string, error) {
 
 	// If DNSPolicy is not ClusterFirst, the Envoy sidecar may not able to connect to Istio Pilot.
@@ -558,6 +559,7 @@ func InjectionData(sidecarTemplate, valuesConfig, version string, typeMetadata *
 		ProxyConfig:    proxyConfig,
 		MeshConfig:     meshConfig,
 		Values:         values,
+		ProxyUID:       proxyUID,
 	}
 
 	funcMap := template.FuncMap{
@@ -815,7 +817,8 @@ func IntoObject(sidecarTemplate string, valuesConfig string, meshconfig *meshcon
 		podSpec,
 		metadata,
 		meshconfig.DefaultConfig,
-		meshconfig)
+		meshconfig,
+		DefaultSidecarProxyUID)
 	if err != nil {
 		return nil, err
 	}
