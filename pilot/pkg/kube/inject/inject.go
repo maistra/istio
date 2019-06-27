@@ -167,6 +167,7 @@ type SidecarTemplateData struct {
 	Spec           *corev1.PodSpec
 	ProxyConfig    *meshconfig.ProxyConfig
 	MeshConfig     *meshconfig.MeshConfig
+	ProxyUID       uint64
 }
 
 // InitImageName returns the fully qualified image name for the istio
@@ -497,7 +498,7 @@ func directory(filepath string) string {
 }
 
 func injectionData(sidecarTemplate, version string, deploymentMetadata *metav1.ObjectMeta, spec *corev1.PodSpec,
-	metadata *metav1.ObjectMeta, proxyConfig *meshconfig.ProxyConfig, meshConfig *meshconfig.MeshConfig) (
+	metadata *metav1.ObjectMeta, proxyConfig *meshconfig.ProxyConfig, meshConfig *meshconfig.MeshConfig, proxyUID uint64) (
 	*SidecarInjectionSpec, string, error) { // nolint: lll
 	if err := validateAnnotations(metadata.GetAnnotations()); err != nil {
 		log.Infof("Invalid annotations: %v %v\n", err, metadata.GetAnnotations())
@@ -510,6 +511,7 @@ func injectionData(sidecarTemplate, version string, deploymentMetadata *metav1.O
 		Spec:           spec,
 		ProxyConfig:    proxyConfig,
 		MeshConfig:     meshConfig,
+		ProxyUID:       proxyUID,
 	}
 
 	funcMap := template.FuncMap{
@@ -715,7 +717,8 @@ func intoObject(sidecarTemplate string, meshconfig *meshconfig.MeshConfig, in ru
 		podSpec,
 		metadata,
 		meshconfig.DefaultConfig,
-		meshconfig)
+		meshconfig,
+		DefaultSidecarProxyUID)
 	if err != nil {
 		return nil, err
 	}
