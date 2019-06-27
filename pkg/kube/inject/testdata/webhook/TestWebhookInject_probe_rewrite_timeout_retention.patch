@@ -65,7 +65,10 @@
           "value": "{\"/app-health/hello/livez\":{\"httpGet\":{\"path\":\"/live\",\"port\":80},\"timeoutSeconds\":5},\"/app-health/hello/readyz\":{\"httpGet\":{\"path\":\"/ready\",\"port\":3333},\"timeoutSeconds\":5},\"/app-health/second/livez\":{\"httpGet\":{\"port\":9000},\"timeoutSeconds\":5}}"
         }
       ],
-      "resources": {}
+      "resources": {},
+      "securityContext": {
+        "runAsUser": 1337
+      }
     }
   },
   {

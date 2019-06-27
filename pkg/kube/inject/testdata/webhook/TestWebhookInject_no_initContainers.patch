@@ -16,7 +16,10 @@
     "value": {
       "name": "istio-proxy",
       "image": "example.com/proxy:latest",
-      "resources": {}
+      "resources": {},
+      "securityContext": {
+        "runAsUser": 1337
+      }
     }
   },
   {

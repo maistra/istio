@@ -46,6 +46,8 @@ import (
 	"istio.io/pkg/log"
 )
 
+const proxyUIDAnnotation = "sidecar.istio.io/proxyUID"
+
 var (
 	runtimeScheme     = runtime.NewScheme()
 	codecs            = serializer.NewCodecFactory(runtimeScheme)
@@ -305,7 +307,7 @@ func addContainer(sic *SidecarInjectionSpec, target, added []corev1.Container, b
 	first := len(target) == 0
 	var value interface{}
 	for _, add := range added {
-		if add.Name == "istio-proxy" && saJwtSecretMountName != "" {
+		if add.Name == sidecarContainerName && saJwtSecretMountName != "" {
 			// add service account secret volume mount(/var/run/secrets/kubernetes.io/serviceaccount,
 			// https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/#service-account-automation) to istio-proxy container,
 			// so that envoy could fetch/pass k8s sa jwt and pass to sds server, which will be used to request workload identity for the pod.
@@ -622,8 +624,11 @@ func extractCanonicalServiceLabel(podLabels map[string]string, workloadName stri
 // Retain deprecated hardcoded container and volumes names to aid in
 // backwards compatible migration to the new SidecarInjectionStatus.
 var (
-	legacyInitContainerNames = []string{"istio-init", "enable-core-dump"}
-	legacyContainerNames     = []string{"istio-proxy"}
+	initContainerName    = "istio-init"
+	sidecarContainerName = "istio-proxy"
+
+	legacyInitContainerNames = []string{initContainerName, "enable-core-dump"}
+	legacyContainerNames     = []string{sidecarContainerName}
 	legacyVolumeNames        = []string{"istio-certs", "istio-envoy"}
 )
 
@@ -673,9 +678,10 @@ type InjectionParameters struct {
 	revision            string
 	proxyEnvs           map[string]string
 	injectedAnnotations map[string]string
+	proxyUID            uint64
 }
 
-func injectPod(req InjectionParameters) ([]byte, error) {
+func injectPod(req InjectionParameters, partialInjection bool) ([]byte, error) {
 	pod := req.pod
 
 	if features.EnableLegacyFSGroupInjection {
@@ -704,9 +710,18 @@ func injectPod(req InjectionParameters) ([]byte, error) {
 		annotations[k] = v
 	}
 
-	patchBytes, err := createPatch(pod, injectionStatus(pod), req.revision, annotations, spec, req.deployMeta.Name, req.meshConfig)
-	if err != nil {
-		return nil, err
+	var patchBytes []byte
+	if partialInjection {
+		patchBytes, err = createPartialPatch(pod, req.injectedAnnotations, req.proxyUID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		replaceProxyRunAsUserID(spec, req.proxyUID)
+		patchBytes, err = createPatch(pod, injectionStatus(pod), req.revision, annotations, spec, req.deployMeta.Name, req.meshConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	log.Debugf("AdmissionResponse: patch=%v\n", string(patchBytes))
@@ -731,12 +746,41 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	log.Debugf("Object: %v", string(req.Object.Raw))
 	log.Debugf("OldObject: %v", string(req.OldObject.Raw))
 
+	partialInjection := false
 	if !injectRequired(ignoredNamespaces, wh.Config, &pod.Spec, &pod.ObjectMeta) {
-		log.Infof("Skipping %s/%s due to policy check", pod.ObjectMeta.Namespace, podName)
-		totalSkippedInjections.Increment()
-		return &kube.AdmissionResponse{
-			Allowed: true,
+		if wasInjectedThroughIstioctl(&pod) {
+			log.Infof("Performing partial injection into pre-injected pod %s/%s (injecting Multus annotation and runAsUser id)", pod.ObjectMeta.Namespace, podName)
+			partialInjection = true
+		} else {
+			log.Infof("Skipping %s/%s due to policy check", pod.ObjectMeta.Namespace, podName)
+			totalSkippedInjections.Increment()
+			return &kube.AdmissionResponse{
+				Allowed: true,
+			}
 		}
+	}
+
+	proxyUID, err := getProxyUID(pod)
+	if err != nil {
+		log.Infof("Could not get proxyUID from annotation: %v", err)
+	}
+	if proxyUID == nil {
+		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
+			uid := uint64(*pod.Spec.SecurityContext.RunAsUser) + 1
+			proxyUID = &uid
+		}
+		for _, c := range pod.Spec.Containers {
+			if c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
+				uid := uint64(*c.SecurityContext.RunAsUser) + 1
+				if proxyUID == nil || uid > *proxyUID {
+					proxyUID = &uid
+				}
+			}
+		}
+	}
+	if proxyUID == nil {
+		uid := DefaultSidecarProxyUID
+		proxyUID = &uid
 	}
 
 	deploy, typeMeta := kube.GetDeployMetaFromPod(&pod)
@@ -751,9 +795,10 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 		revision:            wh.revision,
 		injectedAnnotations: wh.Config.InjectedAnnotations,
 		proxyEnvs:           parseInjectEnvs(path),
+		proxyUID:            *proxyUID,
 	}
 
-	patchBytes, err := injectPod(params)
+	patchBytes, err := injectPod(params, partialInjection)
 	if err != nil {
 		handleError(fmt.Sprintf("Pod injection failed: %v", err))
 		return toAdmissionResponse(err)
@@ -769,6 +814,105 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	}
 	totalSuccessfulInjections.Increment()
 	return &reviewResponse
+}
+
+func wasInjectedThroughIstioctl(pod *corev1.Pod) bool {
+	_, found := pod.Annotations[annotation.SidecarStatus.Name]
+	return found
+}
+
+func replaceProxyRunAsUserID(spec *SidecarInjectionSpec, proxyUID uint64) {
+	for i, c := range spec.InitContainers {
+		if c.Name == initContainerName {
+			for j, arg := range c.Args {
+				if arg == "-u" {
+					spec.InitContainers[i].Args[j+1] = strconv.FormatUint(proxyUID, 10)
+					break
+				}
+			}
+			break
+		}
+	}
+	for i, c := range spec.Containers {
+		if c.Name == sidecarContainerName {
+			if c.SecurityContext == nil {
+				securityContext := corev1.SecurityContext{}
+				spec.Containers[i].SecurityContext = &securityContext
+			}
+			proxyUIDasInt64 := int64(proxyUID)
+			spec.Containers[i].SecurityContext.RunAsUser = &proxyUIDasInt64
+			break
+		}
+	}
+}
+
+func createPartialPatch(pod *corev1.Pod, annotations map[string]string, proxyUID uint64) ([]byte, error) {
+	var patch []rfc6902PatchOperation
+	patch = append(patch, patchProxyRunAsUserID(pod, proxyUID)...)
+	patch = append(patch, updateAnnotation(pod.Annotations, annotations)...)
+	return json.Marshal(patch)
+}
+
+func patchProxyRunAsUserID(pod *corev1.Pod, proxyUID uint64) (patch []rfc6902PatchOperation) {
+	for i, c := range pod.Spec.InitContainers {
+		if c.Name == initContainerName {
+			for j, arg := range c.Args {
+				if arg == "-u" {
+					patch = append(patch, rfc6902PatchOperation{
+						Op:    "replace",
+						Path:  fmt.Sprintf("/spec/initContainers/%d/args/%d", i, j+1), // j+1 because the uid is the next argument (after -u)
+						Value: strconv.FormatUint(proxyUID, 10),
+					})
+					break
+				}
+			}
+			break
+		}
+	}
+
+	for i, c := range pod.Spec.Containers {
+		if c.Name == sidecarContainerName {
+			if c.SecurityContext == nil {
+				proxyUIDasInt64 := int64(proxyUID)
+				securityContext := corev1.SecurityContext{
+					RunAsUser: &proxyUIDasInt64,
+				}
+				patch = append(patch, rfc6902PatchOperation{
+					Op:    "add",
+					Path:  fmt.Sprintf("/spec/containers/%d/securityContext", i),
+					Value: securityContext,
+				})
+			} else if c.SecurityContext.RunAsUser == nil {
+				patch = append(patch, rfc6902PatchOperation{
+					Op:    "add",
+					Path:  fmt.Sprintf("/spec/containers/%d/securityContext/runAsUser", i),
+					Value: proxyUID,
+				})
+			} else {
+				patch = append(patch, rfc6902PatchOperation{
+					Op:    "replace",
+					Path:  fmt.Sprintf("/spec/containers/%d/securityContext/runAsUser", i),
+					Value: proxyUID,
+				})
+			}
+			break
+		}
+	}
+
+	return patch
+}
+
+func getProxyUID(pod corev1.Pod) (*uint64, error) {
+	if pod.Annotations != nil {
+		if annotationValue, found := pod.Annotations[proxyUIDAnnotation]; found {
+			proxyUID, err := strconv.ParseUint(annotationValue, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			return &proxyUID, nil
+		}
+	}
+	return nil, nil
 }
 
 func (wh *Webhook) serveInject(w http.ResponseWriter, r *http.Request) {
