@@ -35,9 +35,7 @@ RUN chgrp -R 0 ${APP_ROOT} && \
     chmod -R g=rw /etc/passwd
 
 EXPOSE 9080
-USER 10001
 WORKDIR ${APP_ROOT}
 
-RUN python -m unittest discover
 ENTRYPOINT [ "uid_entrypoint" ]
 CMD python productpage.py 9080
