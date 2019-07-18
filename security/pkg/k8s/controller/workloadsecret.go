@@ -23,7 +23,7 @@ import (
 
 	"istio.io/istio/pkg/servicemesh/controller"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -107,7 +107,15 @@ type SecretController struct {
 	scrtController cache.Controller
 	scrtStore      cache.Store
 
+	// which namespaces are in the MemberRoll (if used)
+	memberRollNamespaces []string
+
 	monitoring monitoringMetrics
+}
+
+// Update the set of namespaces in the MemberRoll (if used)
+func (sc *SecretController) UpdateNamespaces(namespaces []string) {
+	sc.memberRollNamespaces = append([]string(nil), namespaces...)
 }
 
 // NewSecretController returns a pointer to a newly constructed SecretController instance.
@@ -149,6 +157,7 @@ func NewSecretController(ca ca.CertificateAuthority, certTTL time.Duration,
 
 	if mrc != nil {
 		mrc.Register(saLW)
+		mrc.Register(c)
 	}
 
 	rehf := cache.ResourceEventHandlerFuncs{
@@ -308,6 +317,9 @@ func (sc *SecretController) deleteSecret(saName, saNamespace string) {
 	if err == nil || errors.IsNotFound(err) {
 		log.Infof("Istio secret for service account \"%s\" in namespace \"%s\" has been deleted", saName, saNamespace)
 		return
+	} else if errors.IsForbidden(err) && sc.memberRollNamespaces != nil && !contains(sc.memberRollNamespaces, saNamespace) {
+		log.Infof("Not deleting Istio secret for service account \"%s\" in namespace \"%s\"", saName, saNamespace)
+		return
 	}
 
 	log.Errorf("Failed to delete Istio secret for service account \"%s\" in namespace \"%s\" (error: %s)",
@@ -444,4 +456,13 @@ func (sc *SecretController) refreshSecret(scrt *v1.Secret) error {
 
 	_, err = sc.core.Secrets(namespace).Update(scrt)
 	return err
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
