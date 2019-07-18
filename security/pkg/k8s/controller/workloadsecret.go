@@ -22,7 +22,7 @@ import (
 
 	"istio.io/istio/pkg/servicemesh/controller"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -31,9 +31,9 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 
+	"istio.io/istio/pkg/listwatch"
 	"istio.io/istio/pkg/spiffe"
 	k8ssecret "istio.io/istio/security/pkg/k8s/secret"
-	"istio.io/istio/pkg/listwatch"
 	caerror "istio.io/istio/security/pkg/pki/error"
 	"istio.io/istio/security/pkg/pki/util"
 	certutil "istio.io/istio/security/pkg/util"
@@ -169,6 +169,14 @@ type SecretController struct {
 	// If true, periodically sync with istio-ca-secret to load latest root certificate.
 	// Only used in self signed CA mode.
 	syncWithSelfSignedCaSecret bool
+
+	// which namespaces are in the MemberRoll (if used)
+	memberRollNamespaces []string
+}
+
+// UpdateNamespaces updates the set of namespaces in the MemberRoll (if used)
+func (sc *SecretController) UpdateNamespaces(namespaces []string) {
+	sc.memberRollNamespaces = append([]string(nil), namespaces...)
 }
 
 // NewSecretController returns a pointer to a newly constructed SecretController instance.
@@ -224,6 +232,7 @@ func NewSecretController(ca certificateAuthority, enableNamespacesByDefault bool
 	})
 	if mrc != nil {
 		mrc.Register(saLW)
+		mrc.Register(c)
 	}
 
 	c.saStore, c.saController =
@@ -387,6 +396,9 @@ func (sc *SecretController) deleteSecret(saName, saNamespace string) {
 	// kube-apiserver returns NotFound error when the secret is successfully deleted.
 	if err == nil || errors.IsNotFound(err) {
 		k8sControllerLog.Infof("Secret %s/%s deleted successfully", saNamespace, GetSecretName(saName))
+		return
+	} else if errors.IsForbidden(err) && sc.memberRollNamespaces != nil && !contains(sc.memberRollNamespaces, saNamespace) {
+		log.Infof("Not deleting Istio secret for service account \"%s\" in namespace \"%s\"", saName, saNamespace)
 		return
 	}
 
@@ -629,4 +641,13 @@ func (sc *SecretController) refreshSecret(scrt *v1.Secret) error {
 
 	_, err = sc.core.Secrets(namespace).Update(scrt)
 	return err
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
