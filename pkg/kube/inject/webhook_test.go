@@ -1367,10 +1367,11 @@ func TestRunAndServe(t *testing.T) {
       "path":"/spec/containers/-",
       "value":{
          "name":"istio-proxy",
-         "resources":{
-
-         }
-      }
+		 "resources": {},
+		 "securityContext": {
+		   "runAsUser": 1337
+		 }
+	  }
    },
    {
       "op":"add",
