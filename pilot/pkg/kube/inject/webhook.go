@@ -88,6 +88,7 @@ type Webhook struct {
 	clientset            clientset.Interface
 	ownerRefs            []metav1.OwnerReference
 	webhookConfiguration *admissionregistrationv1beta1.MutatingWebhookConfiguration
+	manageWebhookConfig  bool
 }
 
 func loadConfig(injectFile, meshFile string) (*Config, *meshconfig.MeshConfig, error) {
@@ -156,6 +157,14 @@ type WebhookParameters struct {
 	// that is periodically updated.
 	HealthCheckFile string
 
+	// ManageWebhookConfig determines whether the MutatingWebhookConfiguration
+	// should be watched and updated by the webhook itself. This can be disabled,
+	// in which case we simply assume the configuration to be correct. This is
+	// helpful if you want to remove ClusterRole permissions from the injector.
+	// NOTE: setting this to false requires the WebhookConfiguration to be created
+	// and updated by something that is external to the injector, e.g. an operator
+	ManageWebhookConfig bool
+
 	Clientset clientset.Interface
 }
 
@@ -191,10 +200,13 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, file := range []string{p.CACertFile, p.WebhookConfigFile} {
-		watchDir, _ := filepath.Split(file)
-		if err := configWatcher.Watch(watchDir); err != nil {
-			return nil, fmt.Errorf("could not watch %v: %v", file, err)
+	if p.ManageWebhookConfig {
+		// only actually watch the files if we manage the webhook config
+		for _, file := range []string{p.CACertFile, p.WebhookConfigFile} {
+			watchDir, _ := filepath.Split(file)
+			if err := configWatcher.Watch(watchDir); err != nil {
+				return nil, fmt.Errorf("could not watch %v: %v", file, err)
+			}
 		}
 	}
 
@@ -218,19 +230,21 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		webhookConfigFile:      p.WebhookConfigFile,
 		deploymentName:         p.DeploymentName,
 		webhookConfigName:      p.WebhookConfigName,
+		manageWebhookConfig:    p.ManageWebhookConfig,
 		namespace:              p.Namespace,
 		clientset:              p.Clientset,
 	}
-
-	if registryPullerDeployment, err := wh.clientset.ExtensionsV1beta1().Deployments(wh.namespace).Get(wh.deploymentName, metav1.GetOptions{}); err != nil {
-		log.Errorf("Could not find %s/%s deployment to set ownerRef. The mutatingwebhookconfiguration must be deleted manually",
-			wh.namespace, wh.deploymentName)
-	} else {
-		wh.ownerRefs = []metav1.OwnerReference{
-			*metav1.NewControllerRef(
-				registryPullerDeployment,
-				extensionsv1beta1.SchemeGroupVersion.WithKind("Deployment"),
-			),
+	if wh.manageWebhookConfig {
+		if registryPullerDeployment, err := wh.clientset.ExtensionsV1beta1().Deployments(wh.namespace).Get(wh.deploymentName, metav1.GetOptions{}); err != nil {
+			log.Errorf("Could not find %s/%s deployment to set ownerRef. The mutatingwebhookconfiguration must be deleted manually",
+				wh.namespace, wh.deploymentName)
+		} else {
+			wh.ownerRefs = []metav1.OwnerReference{
+				*metav1.NewControllerRef(
+					registryPullerDeployment,
+					extensionsv1beta1.SchemeGroupVersion.WithKind("Deployment"),
+				),
+			}
 		}
 	}
 
@@ -258,14 +272,17 @@ func (wh *Webhook) Run(stop <-chan struct{}) {
 	}()
 	defer wh.stop()
 
-	// Try to create the initial webhook configuration (if it doesn't
-	// already exist). Setup a persistent monitor to reconcile the
-	// configuration if the observed configuration doesn't match
-	// the desired configuration.
-	if err := wh.rebuildWebhookConfig(); err == nil {
-		wh.createOrUpdateWebhookConfig()
+	webhookChangedCh := make(chan struct{})
+	if wh.manageWebhookConfig {
+		// Try to create the initial webhook configuration (if it doesn't
+		// already exist). Setup a persistent monitor to reconcile the
+		// configuration if the observed configuration doesn't match
+		// the desired configuration.
+		if err := wh.rebuildWebhookConfig(); err == nil {
+			wh.createOrUpdateWebhookConfig()
+		}
+		webhookChangedCh = wh.monitorWebhookChanges(stop)
 	}
-	webhookChangedCh := wh.monitorWebhookChanges(stop)
 
 	var healthC <-chan time.Time
 	if wh.healthCheckInterval != 0 && wh.healthCheckFile != "" {

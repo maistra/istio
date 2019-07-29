@@ -52,6 +52,7 @@ var (
 		kubeconfigFile      string
 		webhookConfigName   string
 		webhookName         string
+		manageWebhookConfig bool
 	}{
 		loggingOptions: log.DefaultOptions(),
 	}
@@ -84,6 +85,7 @@ var (
 				WebhookConfigFile:   flags.webhookConfigFile,
 				Namespace:           flags.namespace,
 				WebhookConfigName:   flags.webhookConfigName,
+				ManageWebhookConfig: flags.manageWebhookConfig,
 				DeploymentName:      flags.deploymentName,
 				HealthCheckInterval: flags.healthCheckInterval,
 				HealthCheckFile:     flags.healthCheckFile,
@@ -149,6 +151,8 @@ func init() {
 		"Name of the mutatingwebhookconfiguration resource in Kubernetes.")
 	rootCmd.PersistentFlags().StringVar(&flags.webhookName, "webhookName", "sidecar-injector.istio.io",
 		"Name of the webhook entry in the webhook config.")
+	rootCmd.PersistentFlags().BoolVar(&flags.manageWebhookConfig, "manageWebhookConfig", true,
+		"Whether the sidecar-injector should watch and update its MutatingWebhookConfiguration")
 	// Attach the Istio logging options to the command.
 	flags.loggingOptions.AttachCobraFlags(rootCmd)
 

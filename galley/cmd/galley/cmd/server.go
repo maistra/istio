@@ -197,6 +197,8 @@ func serverCmd() *cobra.Command {
 		"Name of the validation service running in the same namespace as the deployment")
 	serverCmd.PersistentFlags().StringVar(&validationArgs.WebhookName, "webhook-name", "istio-galley",
 		"Name of the k8s validatingwebhookconfiguration")
+	serverCmd.PersistentFlags().BoolVar(&validationArgs.ManageWebhookConfig, "manageWebhookConfig", true,
+		"Whether galley should watch and update its ValidatingWebhookConfiguration")
 
 	serverArgs.IntrospectionOptions.AttachCobraFlags(serverCmd)
 	loggingOptions.AttachCobraFlags(serverCmd)
