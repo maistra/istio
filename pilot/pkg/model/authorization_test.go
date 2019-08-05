@@ -266,7 +266,7 @@ func TestRoleToBindingsForNamespace(t *testing.T) {
 }
 
 func TestNewAuthzPolicies(t *testing.T) {
-	clusterRbacConfig := &rbacproto.RbacConfig{Mode: rbacproto.RbacConfig_ON}
+	serviceMeshRbacConfig := &rbacproto.RbacConfig{Mode: rbacproto.RbacConfig_ON}
 	rbacConfig := &rbacproto.RbacConfig{Mode: rbacproto.RbacConfig_OFF}
 	cases := []struct {
 		name   string
@@ -274,9 +274,9 @@ func TestNewAuthzPolicies(t *testing.T) {
 		expect *rbacproto.RbacConfig
 	}{
 		{name: "no policy", store: storeWithConfig(nil, nil)},
-		{name: "ClusterRbacConfig only", store: storeWithConfig(clusterRbacConfig, nil), expect: clusterRbacConfig},
+		{name: "ServiceMeshRbacConfig only", store: storeWithConfig(serviceMeshRbacConfig, nil), expect: serviceMeshRbacConfig},
 		{name: "RbacConfig only", store: storeWithConfig(nil, rbacConfig), expect: rbacConfig},
-		{name: "both ClusterRbacConfig and RbacConfig", store: storeWithConfig(clusterRbacConfig, rbacConfig), expect: clusterRbacConfig},
+		{name: "both ServiceMeshRbacConfig and RbacConfig", store: storeWithConfig(serviceMeshRbacConfig, rbacConfig), expect: serviceMeshRbacConfig},
 	}
 
 	for _, c := range cases {
@@ -296,17 +296,17 @@ func TestNewAuthzPolicies(t *testing.T) {
 	}
 }
 
-func storeWithConfig(clusterRbacConfig, rbacConfig proto.Message) model.IstioConfigStore {
+func storeWithConfig(serviceMeshRbacConfig, rbacConfig proto.Message) model.IstioConfigStore {
 	store := memory.Make(model.IstioConfigTypes)
 
-	if clusterRbacConfig != nil {
+	if serviceMeshRbacConfig != nil {
 		config := model.Config{
 			ConfigMeta: model.ConfigMeta{
-				Type:      model.ClusterRbacConfig.Type,
+				Type:      model.ServiceMeshRbacConfig.Type,
 				Name:      "default",
-				Namespace: "default",
+				Namespace: model.GetServiceMeshRbacConfigNamespace(),
 			},
-			Spec: clusterRbacConfig,
+			Spec: serviceMeshRbacConfig,
 		}
 		store.Create(config)
 	}

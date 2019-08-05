@@ -175,7 +175,7 @@ spec:
 kind: CustomResourceDefinition
 apiVersion: apiextensions.k8s.io/v1beta1
 metadata:
-  name: clusterrbacconfigs.rbac.istio.io
+  name: servicemeshrbacconfigs.rbac.maistra.io
   labels:
     app: istio-pilot
     istio: rbac
@@ -184,16 +184,16 @@ metadata:
   annotations:
     "helm.sh/resource-policy": keep
 spec:
-  group: rbac.istio.io
+  group: rbac.maistra.io
   names:
-    kind: ClusterRbacConfig
-    plural: clusterrbacconfigs
-    singular: clusterrbacconfig
+    kind: ServiceMeshRbacConfig
+    plural: servicemeshrbacconfigs
+    singular: servicemeshrbacconfig
     categories:
     - istio-io
     - rbac-istio-io
-  scope: Cluster
-  version: v1alpha1
+  scope: Namespaced
+  version: v1
 ---
 kind: CustomResourceDefinition
 apiVersion: apiextensions.k8s.io/v1beta1
@@ -221,7 +221,7 @@ spec:
 kind: CustomResourceDefinition
 apiVersion: apiextensions.k8s.io/v1beta1
 metadata:
-  name: meshpolicies.authentication.istio.io
+  name: servicemeshpolicies.authentication.maistra.io
   labels:
     app: istio-citadel
     chart: istio
@@ -230,17 +230,17 @@ metadata:
   annotations:
     "helm.sh/resource-policy": keep
 spec:
-  group: authentication.istio.io
+  group: authentication.maistra.io
   names:
-    kind: MeshPolicy
-    listKind: MeshPolicyList
-    plural: meshpolicies
-    singular: meshpolicy
+    kind: ServiceMeshPolicy
+    listKind: ServiceMeshPolicyList
+    plural: servicemeshpolicies
+    singular: servicemeshpolicy
     categories:
     - istio-io
     - authentication-istio-io
-  scope: Cluster
-  version: v1alpha1
+  scope: Namespaced
+  version: v1
 ---
 kind: CustomResourceDefinition
 apiVersion: apiextensions.k8s.io/v1beta1

@@ -129,15 +129,15 @@ func (descriptor ConfigDescriptor) Validate() error {
 		}
 		descriptorTypes[v.Type] = true
 		if v.ClusterScoped {
-			if _, exists := clusterMessages[v.MessageName]; exists {
-				errs = multierror.Append(errs, fmt.Errorf("duplicate message type: %q", v.MessageName))
+			if _, exists := clusterMessages[v.Collection]; exists {
+				errs = multierror.Append(errs, fmt.Errorf("duplicate collection type: %q", v.Collection))
 			}
-			clusterMessages[v.MessageName] = true
+			clusterMessages[v.Collection] = true
 		} else {
-			if _, exists := messages[v.MessageName]; exists {
-				errs = multierror.Append(errs, fmt.Errorf("duplicate message type: %q", v.MessageName))
+			if _, exists := messages[v.Collection]; exists {
+				errs = multierror.Append(errs, fmt.Errorf("duplicate collection type: %q", v.Collection))
 			}
-			messages[v.MessageName] = true
+			messages[v.Collection] = true
 		}
 	}
 	return errs
@@ -1542,14 +1542,14 @@ func checkRbacConfig(name, typ string, msg proto.Message) error {
 	return nil
 }
 
-// ValidateClusterRbacConfig checks that ClusterRbacConfig is well-formed.
-func ValidateClusterRbacConfig(name, namespace string, msg proto.Message) error {
-	return checkRbacConfig(name, "ClusterRbacConfig", msg)
+// ValidateServiceMeshRbacConfig checks that ServiceMeshRbacConfig is well-formed.
+func ValidateServiceMeshRbacConfig(name, namespace string, msg proto.Message) error {
+	return checkRbacConfig(name, "ServiceMeshRbacConfig", msg)
 }
 
 // ValidateRbacConfig checks that RbacConfig is well-formed.
 func ValidateRbacConfig(name, namespace string, msg proto.Message) error {
-	log.Warnf("RbacConfig is deprecated, use ClusterRbacConfig instead.")
+	log.Warnf("RbacConfig is deprecated, use ServiceMeshRbacConfig instead.")
 	return checkRbacConfig(name, "RbacConfig", msg)
 }
 

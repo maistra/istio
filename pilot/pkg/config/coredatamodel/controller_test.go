@@ -370,12 +370,12 @@ func TestApplyChangeNoObjects(t *testing.T) {
 	g.Expect(len(c)).To(gomega.Equal(0))
 }
 
-func TestApplyClusterScopedAuthPolicy(t *testing.T) {
+func TestApplyMeshScopedAuthPolicy(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 	controller := coredatamodel.NewController(testControllerOptions)
 
 	message0 := convertToResource(g, model.AuthenticationPolicy.MessageName, []proto.Message{authnPolicy0})
-	message1 := convertToResource(g, model.AuthenticationMeshPolicy.MessageName, []proto.Message{authnPolicy1})
+	message1 := convertToResource(g, model.AuthenticationServiceMeshPolicy.MessageName, []proto.Message{authnPolicy1})
 
 	change := convert(
 		[]proto.Message{message0[0]},
@@ -387,7 +387,7 @@ func TestApplyClusterScopedAuthPolicy(t *testing.T) {
 	change = convert(
 		[]proto.Message{message1[0]},
 		[]string{"default"},
-		model.AuthenticationMeshPolicy.Collection, model.AuthenticationMeshPolicy.MessageName)
+		model.AuthenticationServiceMeshPolicy.Collection, model.AuthenticationServiceMeshPolicy.MessageName)
 	err = controller.Apply(change)
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 
@@ -399,12 +399,12 @@ func TestApplyClusterScopedAuthPolicy(t *testing.T) {
 	g.Expect(c[0].Type).To(gomega.Equal(model.AuthenticationPolicy.Type))
 	g.Expect(c[0].Spec).To(gomega.Equal(message0[0]))
 
-	c, err = controller.List(model.AuthenticationMeshPolicy.Type, "")
+	c, err = controller.List(model.AuthenticationServiceMeshPolicy.Type, "")
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 	g.Expect(len(c)).To(gomega.Equal(1))
 	g.Expect(c[0].Name).To(gomega.Equal("default"))
 	g.Expect(c[0].Namespace).To(gomega.Equal(""))
-	g.Expect(c[0].Type).To(gomega.Equal(model.AuthenticationMeshPolicy.Type))
+	g.Expect(c[0].Type).To(gomega.Equal(model.AuthenticationServiceMeshPolicy.Type))
 	g.Expect(c[0].Spec).To(gomega.Equal(message1[0]))
 
 	// verify the namespace scoped resource can be deleted
@@ -415,12 +415,12 @@ func TestApplyClusterScopedAuthPolicy(t *testing.T) {
 	err = controller.Apply(change)
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 
-	c, err = controller.List(model.AuthenticationMeshPolicy.Type, "")
+	c, err = controller.List(model.AuthenticationServiceMeshPolicy.Type, "")
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 	g.Expect(len(c)).To(gomega.Equal(1))
 	g.Expect(c[0].Name).To(gomega.Equal("default"))
 	g.Expect(c[0].Namespace).To(gomega.Equal(""))
-	g.Expect(c[0].Type).To(gomega.Equal(model.AuthenticationMeshPolicy.Type))
+	g.Expect(c[0].Type).To(gomega.Equal(model.AuthenticationServiceMeshPolicy.Type))
 	g.Expect(c[0].Spec).To(gomega.Equal(message1[0]))
 
 	// verify the namespace scoped resource can be added and mesh-scoped resource removed

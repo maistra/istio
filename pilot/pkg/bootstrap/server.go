@@ -220,6 +220,12 @@ func NewServer(args PilotArgs) (*Server, error) {
 	if args.Namespace == "" {
 		args.Namespace = os.Getenv("POD_NAMESPACE")
 	}
+
+	if args.Namespace != "" {
+		model.SetAuthenticationServiceMeshPolicyNamespace(args.Namespace)
+		model.SetServiceMeshRbacConfigNamespace(args.Namespace)
+	}
+
 	if args.Config.ControllerOptions.WatchedNamespaces == "" {
 		appNamespace := os.Getenv("APP_NAMESPACE")
 		if appNamespace == "" {
