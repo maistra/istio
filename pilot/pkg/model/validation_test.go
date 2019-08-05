@@ -3825,7 +3825,7 @@ func TestValidateNetworkEndpointAddress(t *testing.T) {
 	}
 }
 
-func TestValidateClusterRbacConfig(t *testing.T) {
+func TestValidateServiceMeshRbacConfig(t *testing.T) {
 	cases := []struct {
 		caseName     string
 		name         string
@@ -3835,13 +3835,13 @@ func TestValidateClusterRbacConfig(t *testing.T) {
 	}{
 		{
 			caseName:     "invalid proto",
-			expectErrMsg: "cannot cast to ClusterRbacConfig",
+			expectErrMsg: "cannot cast to ServiceMeshRbacConfig",
 		},
 		{
 			caseName: "invalid name",
 			name:     "cluster-rbac-config",
 			in:       &rbac.RbacConfig{Mode: rbac.RbacConfig_ON_WITH_INCLUSION},
-			expectErrMsg: fmt.Sprintf("ClusterRbacConfig has invalid name(cluster-rbac-config), name must be %q",
+			expectErrMsg: fmt.Sprintf("ServiceMeshRbacConfig has invalid name(cluster-rbac-config), name must be %q",
 				DefaultRbacConfigName),
 		},
 		{
@@ -3863,13 +3863,13 @@ func TestValidateClusterRbacConfig(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		err := ValidateClusterRbacConfig(c.name, c.namespace, c.in)
+		err := ValidateServiceMeshRbacConfig(c.name, c.namespace, c.in)
 		if err == nil {
 			if len(c.expectErrMsg) != 0 {
-				t.Errorf("ValidateClusterRbacConfig(%v): got nil but want %q\n", c.caseName, c.expectErrMsg)
+				t.Errorf("ValidateServiceMeshRbacConfig(%v): got nil but want %q\n", c.caseName, c.expectErrMsg)
 			}
 		} else if err.Error() != c.expectErrMsg {
-			t.Errorf("ValidateClusterRbacConfig(%v): got %q but want %q\n", c.caseName, err.Error(), c.expectErrMsg)
+			t.Errorf("ValidateServiceMeshRbacConfig(%v): got %q but want %q\n", c.caseName, err.Error(), c.expectErrMsg)
 		}
 	}
 }

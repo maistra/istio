@@ -179,13 +179,13 @@ type IstioConfigStore struct {
 	rbacConfigReturnsOnCall map[int]struct {
 		result1 *model.Config
 	}
-	ClusterRbacConfigStub        func() *model.Config
-	clusterRbacConfigMutex       sync.RWMutex
-	clusterRbacConfigArgsForCall []struct{}
-	clusterRbacConfigReturns     struct {
+	ServiceMeshRbacConfigStub        func() *model.Config
+	serviceMeshRbacConfigMutex       sync.RWMutex
+	serviceMeshRbacConfigArgsForCall []struct{}
+	serviceMeshRbacConfigReturns     struct {
 		result1 *model.Config
 	}
-	clusterRbacConfigReturnsOnCall map[int]struct {
+	serviceMeshRbacConfigReturnsOnCall map[int]struct {
 		result1 *model.Config
 	}
 	invocations      map[string][][]interface{}
@@ -903,42 +903,42 @@ func (fake *IstioConfigStore) RbacConfigReturnsOnCall(i int, result1 *model.Conf
 	}{result1}
 }
 
-func (fake *IstioConfigStore) ClusterRbacConfig() *model.Config {
-	fake.clusterRbacConfigMutex.Lock()
-	ret, specificReturn := fake.clusterRbacConfigReturnsOnCall[len(fake.clusterRbacConfigArgsForCall)]
-	fake.clusterRbacConfigArgsForCall = append(fake.clusterRbacConfigArgsForCall, struct{}{})
-	fake.recordInvocation("ClusterRbacConfig", []interface{}{})
-	fake.clusterRbacConfigMutex.Unlock()
-	if fake.ClusterRbacConfigStub != nil {
-		return fake.ClusterRbacConfigStub()
+func (fake *IstioConfigStore) ServiceMeshRbacConfig() *model.Config {
+	fake.serviceMeshRbacConfigMutex.Lock()
+	ret, specificReturn := fake.serviceMeshRbacConfigReturnsOnCall[len(fake.serviceMeshRbacConfigArgsForCall)]
+	fake.serviceMeshRbacConfigArgsForCall = append(fake.serviceMeshRbacConfigArgsForCall, struct{}{})
+	fake.recordInvocation("ServiceMeshRbacConfig", []interface{}{})
+	fake.serviceMeshRbacConfigMutex.Unlock()
+	if fake.ServiceMeshRbacConfigStub != nil {
+		return fake.ServiceMeshRbacConfigStub()
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	return fake.clusterRbacConfigReturns.result1
+	return fake.serviceMeshRbacConfigReturns.result1
 }
 
-func (fake *IstioConfigStore) ClusterRbacConfigCallCount() int {
-	fake.clusterRbacConfigMutex.RLock()
-	defer fake.clusterRbacConfigMutex.RUnlock()
-	return len(fake.clusterRbacConfigArgsForCall)
+func (fake *IstioConfigStore) ServiceMeshRbacConfigCallCount() int {
+	fake.serviceMeshRbacConfigMutex.RLock()
+	defer fake.serviceMeshRbacConfigMutex.RUnlock()
+	return len(fake.serviceMeshRbacConfigArgsForCall)
 }
 
-func (fake *IstioConfigStore) ClusterRbacConfigReturns(result1 *model.Config) {
-	fake.ClusterRbacConfigStub = nil
-	fake.clusterRbacConfigReturns = struct {
+func (fake *IstioConfigStore) ServiceMeshRbacConfigReturns(result1 *model.Config) {
+	fake.ServiceMeshRbacConfigStub = nil
+	fake.serviceMeshRbacConfigReturns = struct {
 		result1 *model.Config
 	}{result1}
 }
 
-func (fake *IstioConfigStore) ClusterRbacConfigReturnsOnCall(i int, result1 *model.Config) {
-	fake.ClusterRbacConfigStub = nil
-	if fake.clusterRbacConfigReturnsOnCall == nil {
-		fake.clusterRbacConfigReturnsOnCall = make(map[int]struct {
+func (fake *IstioConfigStore) ServiceMeshRbacConfigReturnsOnCall(i int, result1 *model.Config) {
+	fake.ServiceMeshRbacConfigStub = nil
+	if fake.serviceMeshRbacConfigReturnsOnCall == nil {
+		fake.serviceMeshRbacConfigReturnsOnCall = make(map[int]struct {
 			result1 *model.Config
 		})
 	}
-	fake.clusterRbacConfigReturnsOnCall[i] = struct {
+	fake.serviceMeshRbacConfigReturnsOnCall[i] = struct {
 		result1 *model.Config
 	}{result1}
 }
@@ -976,8 +976,8 @@ func (fake *IstioConfigStore) Invocations() map[string][][]interface{} {
 	defer fake.serviceRoleBindingsMutex.RUnlock()
 	fake.rbacConfigMutex.RLock()
 	defer fake.rbacConfigMutex.RUnlock()
-	fake.clusterRbacConfigMutex.RLock()
-	defer fake.clusterRbacConfigMutex.RUnlock()
+	fake.serviceMeshRbacConfigMutex.RLock()
+	defer fake.serviceMeshRbacConfigMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

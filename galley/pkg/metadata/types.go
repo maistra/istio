@@ -40,9 +40,6 @@ var Types *resource.Schema
 
 var (
 
-	// istio/authentication/v1alpha1/meshpolicies metadata
-	IstioAuthenticationV1alpha1Meshpolicies resource.Info
-
 	// istio/authentication/v1alpha1/policies metadata
 	IstioAuthenticationV1alpha1Policies resource.Info
 
@@ -145,7 +142,7 @@ var (
 	// istio/config/v1alpha2/legacy/tracespans metadata
 	IstioConfigV1alpha2LegacyTracespans resource.Info
 
-	// istio/config/v1alpha2/legacy/tracespans metadata
+	// istio/config/v1alpha2/legacy/zipkins metadata
 	IstioConfigV1alpha2LegacyZipkins resource.Info
 
 	// istio/config/v1alpha2/templates metadata
@@ -187,9 +184,6 @@ var (
 	// istio/policy/v1beta1/rules metadata
 	IstioPolicyV1beta1Rules resource.Info
 
-	// istio/rbac/v1alpha1/clusterrbacconfigs metadata
-	IstioRbacV1alpha1Clusterrbacconfigs resource.Info
-
 	// istio/rbac/v1alpha1/rbacconfigs metadata
 	IstioRbacV1alpha1Rbacconfigs resource.Info
 
@@ -213,14 +207,17 @@ var (
 
 	// k8s/extensions/v1beta1/ingresses metadata
 	K8sExtensionsV1beta1Ingresses resource.Info
+
+	// maistra/authentication/v1/servicemeshpolicies metadata
+	MaistraAuthenticationV1Servicemeshpolicies resource.Info
+
+	// maistra/rbac/v1/servicemeshrbacconfigs metadata
+	MaistraRbacV1Servicemeshrbacconfigs resource.Info
 )
 
 func init() {
 	b := resource.NewSchemaBuilder()
 
-	IstioAuthenticationV1alpha1Meshpolicies = b.Register(
-		"istio/authentication/v1alpha1/meshpolicies",
-		"type.googleapis.com/istio.authentication.v1alpha1.Policy")
 	IstioAuthenticationV1alpha1Policies = b.Register(
 		"istio/authentication/v1alpha1/policies",
 		"type.googleapis.com/istio.authentication.v1alpha1.Policy")
@@ -365,9 +362,6 @@ func init() {
 	IstioPolicyV1beta1Rules = b.Register(
 		"istio/policy/v1beta1/rules",
 		"type.googleapis.com/istio.policy.v1beta1.Rule")
-	IstioRbacV1alpha1Clusterrbacconfigs = b.Register(
-		"istio/rbac/v1alpha1/clusterrbacconfigs",
-		"type.googleapis.com/istio.rbac.v1alpha1.RbacConfig")
 	IstioRbacV1alpha1Rbacconfigs = b.Register(
 		"istio/rbac/v1alpha1/rbacconfigs",
 		"type.googleapis.com/istio.rbac.v1alpha1.RbacConfig")
@@ -392,6 +386,12 @@ func init() {
 	K8sExtensionsV1beta1Ingresses = b.Register(
 		"k8s/extensions/v1beta1/ingresses",
 		"type.googleapis.com/k8s.io.api.extensions.v1beta1.IngressSpec")
+	MaistraAuthenticationV1Servicemeshpolicies = b.Register(
+		"maistra/authentication/v1/servicemeshpolicies",
+		"type.googleapis.com/istio.authentication.v1alpha1.Policy")
+	MaistraRbacV1Servicemeshrbacconfigs = b.Register(
+		"maistra/rbac/v1/servicemeshrbacconfigs",
+		"type.googleapis.com/istio.rbac.v1alpha1.RbacConfig")
 
 	Types = b.Build()
 }

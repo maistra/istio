@@ -15,6 +15,7 @@
 package aggregate_test
 
 import (
+	"istio.io/istio/galley/pkg/metadata"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -34,12 +35,14 @@ func TestAggregateStoreBasicMake(t *testing.T) {
 		Type:        "some-config",
 		Plural:      "some-configs",
 		MessageName: "istio.networking.v1alpha3.DestinationRule",
+		Collection:  metadata.IstioNetworkingV1alpha3Destinationrules.Collection.String(),
 	}})
 
 	storeTwo.ConfigDescriptorReturns([]model.ProtoSchema{{
 		Type:        "other-config",
 		Plural:      "other-configs",
 		MessageName: "istio.networking.v1alpha3.Gateway",
+		Collection:  metadata.IstioNetworkingV1alpha3Gateways.Collection.String(),
 	}})
 
 	stores := []model.ConfigStore{storeOne, storeTwo}
@@ -54,11 +57,13 @@ func TestAggregateStoreBasicMake(t *testing.T) {
 			Type:        "some-config",
 			Plural:      "some-configs",
 			MessageName: "istio.networking.v1alpha3.DestinationRule",
+			Collection:  metadata.IstioNetworkingV1alpha3Destinationrules.Collection.String(),
 		},
 		{
 			Type:        "other-config",
 			Plural:      "other-configs",
 			MessageName: "istio.networking.v1alpha3.Gateway",
+			Collection:  metadata.IstioNetworkingV1alpha3Gateways.Collection.String(),
 		},
 	}))
 }
@@ -204,12 +209,14 @@ func TestAggregateStoreCache(t *testing.T) {
 		Type:        "some-config",
 		Plural:      "some-configs",
 		MessageName: "istio.networking.v1alpha3.DestinationRule",
+		Collection:  metadata.IstioNetworkingV1alpha3Destinationrules.Collection.String(),
 	}})
 
 	storeTwo.ConfigDescriptorReturns([]model.ProtoSchema{{
 		Type:        "other-config",
 		Plural:      "other-configs",
 		MessageName: "istio.networking.v1alpha3.Gateway",
+		Collection:  metadata.IstioNetworkingV1alpha3Gateways.Collection.String(),
 	}})
 
 	stores := []model.ConfigStoreCache{storeOne, storeTwo}

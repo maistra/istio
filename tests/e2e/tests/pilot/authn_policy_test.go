@@ -29,12 +29,12 @@ func TestMTlsWithAuthNPolicy(t *testing.T) {
 	}
 	// Define the default permissive global mesh resource.
 	globalPermissive := resource{
-		Kind: "MeshPolicy",
+		Kind: "ServiceMeshPolicy",
 		Name: "default",
 	}
 	// This policy will remove the permissive policy and enable mTLS mesh policy.
 	globalCfg := &deployableConfig{
-		Namespace:  "", // Use blank for cluster CRD.
+		Namespace:  tc.Kube.IstioSystemNamespace(),
 		YamlFiles:  []string{"testdata/authn/v1alpha1/global-mtls.yaml.tmpl"},
 		Removes:    []resource{globalPermissive},
 		kubeconfig: tc.Kube.KubeConfig,
