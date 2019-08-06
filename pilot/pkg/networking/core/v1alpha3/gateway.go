@@ -59,13 +59,21 @@ func (configgen *ConfigGeneratorImpl) buildGatewayListeners(env *model.Environme
 	errs := &multierror.Error{}
 	listeners := make([]*xdsapi.Listener, 0, len(mergedGateway.Servers))
 	for portNumber, servers := range mergedGateway.Servers {
+		var si *model.ServiceInstance
+		for _, w := range workloadInstances {
+			if w.Endpoint.ServicePort.Port == int(portNumber) {
+				si = w
+				break
+			}
+		}
+
 		// on a given port, we can either have plain text HTTP servers or
 		// HTTPS/TLS servers with SNI. We cannot have a mix of http and https server on same port.
 		opts := buildListenerOpts{
-			env:        env,
-			proxy:      node,
-			bind:       WildcardAddress,
-			port:       int(portNumber),
+			env:   env,
+			proxy: node,
+			bind:  WildcardAddress,
+			port:       si.Endpoint.Port,
 			bindToPort: true,
 		}
 
@@ -121,14 +129,6 @@ func (configgen *ConfigGeneratorImpl) buildGatewayListeners(env *model.Environme
 			}
 		}
 		// end shady logic
-
-		var si *model.ServiceInstance
-		for _, w := range workloadInstances {
-			if w.Endpoint.Port == int(portNumber) {
-				si = w
-				break
-			}
-		}
 
 		pluginParams := &plugin.InputParams{
 			ListenerProtocol: listenerProtocol,
