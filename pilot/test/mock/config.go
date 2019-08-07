@@ -170,8 +170,8 @@ var (
 		}},
 	}
 
-	// ExampleAuthenticationMeshPolicy is an example cluster-scoped authentication Policy
-	ExampleAuthenticationMeshPolicy = &authn.Policy{
+	// ExampleAuthenticationServiceMeshPolicy is an example mesh-scoped authentication Policy
+	ExampleAuthenticationServiceMeshPolicy = &authn.Policy{
 		Peers: []*authn.PeerAuthenticationMethod{{
 			Params: &authn.PeerAuthenticationMethod_Mtls{},
 		}},
@@ -412,6 +412,13 @@ func CheckMapInvariant(r model.ConfigStore, t *testing.T, namespace string, n in
 	log.Info("Test done, deleting namespace")
 }
 
+func getGroupDomain(schema *model.ProtoSchema) string {
+	if schema.GroupDomain != "" {
+		return "." + schema.GroupDomain
+	}
+	return "." + model.IstioAPIGroupDomain
+}
+
 // CheckIstioConfigTypes validates that an empty store can ingest Istio config objects
 func CheckIstioConfigTypes(store model.ConfigStore, namespace string, t *testing.T) {
 	configName := "example"
@@ -438,14 +445,14 @@ func CheckIstioConfigTypes(store model.ConfigStore, namespace string, t *testing
 		{"ServiceRole", configName, model.ServiceRole, ExampleServiceRole},
 		{"ServiceRoleBinding", configName, model.ServiceRoleBinding, ExampleServiceRoleBinding},
 		{"RbacConfig", model.DefaultRbacConfigName, model.RbacConfig, ExampleRbacConfig},
-		{"ClusterRbacConfig", model.DefaultRbacConfigName, model.ClusterRbacConfig, ExampleRbacConfig},
+		{"ServiceMeshRbacConfig", model.DefaultRbacConfigName, model.ServiceMeshRbacConfig, ExampleRbacConfig},
 	}
 
 	for _, c := range cases {
 		configMeta := model.ConfigMeta{
 			Type:    c.schema.Type,
 			Name:    c.configName,
-			Group:   c.schema.Group + model.IstioAPIGroupDomain,
+			Group:   c.schema.Group + getGroupDomain(&c.schema),
 			Version: c.schema.Version,
 		}
 		if !c.schema.ClusterScoped {

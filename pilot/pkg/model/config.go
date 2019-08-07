@@ -36,6 +36,12 @@ const (
 	DefaultAuthenticationPolicyName = "default"
 )
 
+var (
+	// authenticationServiceMeshPolicyNamespace is the namespace containing the mesh-scoped authentication policy.
+	// only policy in this namespace will be considered.
+	authenticationServiceMeshPolicyNamespace = "istio-system"
+)
+
 // ConfigMeta is metadata attached to each configuration unit.
 // The revision is optional, and if provided, identifies the
 // last update operation on the object.
@@ -209,6 +215,9 @@ type ProtoSchema struct {
 	// Group is the config proto group.
 	Group string
 
+	// GroupDomain is the config proto group domain, nil defaults to IstioAPIGroupDomain.
+	GroupDomain string
+
 	// Version is the config proto version.
 	Version string
 
@@ -240,6 +249,15 @@ func (descriptor ConfigDescriptor) GetByType(name string) (ProtoSchema, bool) {
 		}
 	}
 	return ProtoSchema{}, false
+}
+
+
+func GetAuthenticationServiceMeshPolicyNamespace() string {
+	return authenticationServiceMeshPolicyNamespace
+}
+
+func SetAuthenticationServiceMeshPolicyNamespace(namespace string) {
+	authenticationServiceMeshPolicyNamespace = namespace
 }
 
 // IstioConfigStore is a specialized interface to access config store using
@@ -283,14 +301,14 @@ type IstioConfigStore interface {
 	// RbacConfig selects the RbacConfig of name DefaultRbacConfigName.
 	RbacConfig() *Config
 
-	// ClusterRbacConfig selects the ClusterRbacConfig of name DefaultRbacConfigName.
-	ClusterRbacConfig() *Config
+	// ServiceMeshRbacConfig selects the ServiceMeshRbacConfig of name DefaultRbacConfigName.
+	ServiceMeshRbacConfig() *Config
 }
 
 const (
 	// IstioAPIGroupDomain defines API group domain of all Istio configuration resources.
 	// Group domain suffix to the proto schema's group to generate the full resource group.
-	IstioAPIGroupDomain = ".istio.io"
+	IstioAPIGroupDomain = "istio.io"
 
 	// Default API version of an Istio config proto message.
 	istioAPIVersion = "v1alpha2"
@@ -454,16 +472,16 @@ var (
 		Collection:  metadata.IstioAuthenticationV1alpha1Policies.Collection.String(),
 	}
 
-	// AuthenticationMeshPolicy describes an authentication policy at mesh level.
-	AuthenticationMeshPolicy = ProtoSchema{
-		ClusterScoped: true,
-		Type:          "mesh-policy",
-		Plural:        "mesh-policies",
+	// AuthenticationServiceMeshPolicy describes an authentication policy at mesh level.
+	AuthenticationServiceMeshPolicy = ProtoSchema{
+		Type:          "service-mesh-policy",
+		Plural:        "service-mesh-policies",
 		Group:         "authentication",
-		Version:       "v1alpha1",
+		GroupDomain:   "maistra.io",
+		Version:       "v1",
 		MessageName:   "istio.authentication.v1alpha1.Policy",
 		Validate:      ValidateAuthenticationPolicy,
-		Collection:    metadata.IstioAuthenticationV1alpha1Meshpolicies.Collection.String(),
+		Collection:    metadata.MaistraAuthenticationV1Servicemeshpolicies.Collection.String(),
 	}
 
 	// ServiceRole describes an RBAC service role.
@@ -490,7 +508,7 @@ var (
 	}
 
 	// RbacConfig describes the mesh level RBAC config.
-	// Deprecated, use ClusterRbacConfig instead.
+	// Deprecated, use ServiceMeshRbacConfig instead.
 	// See https://github.com/istio/istio/issues/8825 for more details.
 	RbacConfig = ProtoSchema{
 		Type:        "rbac-config",
@@ -502,16 +520,16 @@ var (
 		Collection:  metadata.IstioRbacV1alpha1Rbacconfigs.Collection.String(),
 	}
 
-	// ClusterRbacConfig describes the cluster level RBAC config.
-	ClusterRbacConfig = ProtoSchema{
-		ClusterScoped: true,
-		Type:          "cluster-rbac-config",
-		Plural:        "cluster-rbac-configs",
+	// ServiceMeshRbacConfig describes the mesh level RBAC config.
+	ServiceMeshRbacConfig = ProtoSchema{
+		Type:          "service-mesh-rbac-config",
+		Plural:        "service-mesh-rbac-configs",
 		Group:         "rbac",
-		Version:       "v1alpha1",
+		GroupDomain:   "maistra.io",
+		Version:       "v1",
 		MessageName:   "istio.rbac.v1alpha1.RbacConfig",
-		Validate:      ValidateClusterRbacConfig,
-		Collection:    metadata.IstioRbacV1alpha1Clusterrbacconfigs.Collection.String(),
+		Validate:      ValidateServiceMeshRbacConfig,
+		Collection:    metadata.MaistraRbacV1Servicemeshrbacconfigs.Collection.String(),
 	}
 
 	// IstioConfigTypes lists all Istio config types with schemas and validation
@@ -527,11 +545,11 @@ var (
 		QuotaSpec,
 		QuotaSpecBinding,
 		AuthenticationPolicy,
-		AuthenticationMeshPolicy,
+		AuthenticationServiceMeshPolicy,
 		ServiceRole,
 		ServiceRoleBinding,
 		RbacConfig,
-		ClusterRbacConfig,
+		ServiceMeshRbacConfig,
 	}
 )
 
@@ -934,10 +952,10 @@ func (store *istioConfigStore) AuthenticationPolicyByDestination(service *Servic
 	}
 
 	// Reach here if no authentication policy found in service or namespace level; check for
-	// cluster-scoped (global) policy.
-	// Note: to avoid multiple global policy, we restrict that only the one with name equals to
+	// mesh-scoped policy.
+	// Note: to avoid multiple mesg policy, we restrict that only the one with name equals to
 	// `DefaultAuthenticationPolicyName` ("default") will be used. Also, targets spec should be empty.
-	if specs, err := store.List(AuthenticationMeshPolicy.Type, ""); err == nil {
+	if specs, err := store.List(AuthenticationServiceMeshPolicy.Type, GetAuthenticationServiceMeshPolicyNamespace()); err == nil {
 		for _, spec := range specs {
 			if spec.Name == DefaultAuthenticationPolicyName {
 				return &spec
@@ -968,12 +986,12 @@ func (store *istioConfigStore) ServiceRoleBindings(namespace string) []Config {
 	return bindings
 }
 
-func (store *istioConfigStore) ClusterRbacConfig() *Config {
-	clusterRbacConfig, err := store.List(ClusterRbacConfig.Type, "")
+func (store *istioConfigStore) ServiceMeshRbacConfig() *Config {
+	serviceMeshRbacConfig, err := store.List(ServiceMeshRbacConfig.Type, GetServiceMeshRbacConfigNamespace())
 	if err != nil {
 		log.Errorf("failed to get ClusterRbacConfig: %v", err)
 	}
-	for _, rc := range clusterRbacConfig {
+	for _, rc := range serviceMeshRbacConfig {
 		if rc.Name == DefaultRbacConfigName {
 			return &rc
 		}

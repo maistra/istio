@@ -446,10 +446,13 @@ func TestAuthenticationPolicyConfigWithGlobal(t *testing.T) {
 	authNPolicies := []struct {
 		name      string
 		namespace string
+		authType  string
 		policy    *authn.Policy
 	}{
 		{
 			name:   model.DefaultAuthenticationPolicyName,
+			namespace: model.GetAuthenticationServiceMeshPolicyNamespace(),
+			authType: model.AuthenticationServiceMeshPolicy.Type,
 			policy: &globalPolicy,
 		},
 		{
@@ -473,13 +476,12 @@ func TestAuthenticationPolicyConfigWithGlobal(t *testing.T) {
 			},
 			Spec: in.policy,
 		}
-		if in.namespace == "" {
-			// Cluster-scoped policy
-			config.ConfigMeta.Type = model.AuthenticationMeshPolicy.Type
+		if in.authType != "" {
+			config.ConfigMeta.Type = in.authType
 		} else {
 			config.ConfigMeta.Type = model.AuthenticationPolicy.Type
-			config.ConfigMeta.Namespace = in.namespace
 		}
+		config.ConfigMeta.Namespace = in.namespace
 		if _, err := store.Create(config); err != nil {
 			t.Error(err)
 		}
@@ -681,10 +683,10 @@ func TestRbacConfig(t *testing.T) {
 	}
 }
 
-func TestClusterRbacConfig(t *testing.T) {
+func TestServiceMeshRbacConfig(t *testing.T) {
 	store := model.MakeIstioStore(memory.Make(model.IstioConfigTypes))
-	addRbacConfigToStore(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "", store, t)
-	rbacConfig := store.ClusterRbacConfig()
+	addRbacConfigToStore(model.ServiceMeshRbacConfig.Type, model.DefaultRbacConfigName, model.GetServiceMeshRbacConfigNamespace(), store, t)
+	rbacConfig := store.ServiceMeshRbacConfig()
 	if rbacConfig.Name != model.DefaultRbacConfigName {
 		t.Errorf("model.ClusterRbacConfig: expecting %s, but got %s", model.DefaultRbacConfigName, rbacConfig.Name)
 	}

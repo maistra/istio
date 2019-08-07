@@ -135,15 +135,14 @@ resources:
     converter:   "auth-policy-resource"
     collection:  "istio/authentication/v1alpha1/policies"
 
-  - kind:          "MeshPolicy"
-    clusterScoped: true
-    singular:      "meshpolicy"
-    plural:        "meshpolicies"
-    group:         "authentication.istio.io"
-    version:       "v1alpha1"
+  - kind:          "ServiceMeshPolicy"
+    singular:      "servicemeshpolicy"
+    plural:        "servicemeshpolicies"
+    group:         "authentication.maistra.io"
+    version:       "v1"
     proto:         "istio.authentication.v1alpha1.Policy"
     converter:     "auth-policy-resource"
-    collection:    "istio/authentication/v1alpha1/meshpolicies"
+    collection:    "maistra/authentication/v1/servicemeshpolicies"
 
   - kind:        "ServiceRole"
     singular:    "servicerole"
@@ -171,15 +170,14 @@ resources:
     proto:       "istio.rbac.v1alpha1.RbacConfig"
     collection:  "istio/rbac/v1alpha1/rbacconfigs"
 
-  - kind:        "ClusterRbacConfig"
-    clusterScoped: true
-    listKind:    "ClusterRbacConfigList"
-    singular:    "clusterrbacconfig"
-    plural:      "clusterrbacconfigs"
-    group:       "rbac.istio.io"
-    version:     "v1alpha1"
+  - kind:        "ServiceMeshRbacConfig"
+    listKind:    "ServiceMeshRbacConfigList"
+    singular:    "servicemeshrbacconfig"
+    plural:      "servicemeshrbacconfigs"
+    group:       "rbac.maistra.io"
+    version:     "v1"
     proto:       "istio.rbac.v1alpha1.RbacConfig"
-    collection:  "istio/rbac/v1alpha1/clusterrbacconfigs"
+    collection:  "maistra/rbac/v1/servicemeshrbacconfigs"
 
 # Types from Mixer
 

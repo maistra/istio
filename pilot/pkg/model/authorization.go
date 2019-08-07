@@ -26,6 +26,10 @@ const (
 )
 
 var (
+	// serviceMeshRbacConfigNamespace is the namespace of the ServiceMeshRbacConfig name.
+	// Only ServiceMeshRbacConfig in this namespace will be considered.
+	serviceMeshRbacConfigNamespace = "istio-system"
+
 	rbacLog = istiolog.RegisterScope("rbac", "rbac debugging", 0)
 )
 
@@ -138,8 +142,8 @@ func (policy *AuthorizationPolicies) RoleToBindingsForNamespace(ns string) map[s
 // NewAuthzPolicies returns the AuthorizationPolicies constructed from raw authorization policies by
 // storing policies into different namespaces.
 func NewAuthzPolicies(env *Environment) (*AuthorizationPolicies, error) {
-	// Get the ClusterRbacConfig first, if not found then fallback to get the RbacConfig.
-	rbacConfig := env.IstioConfigStore.ClusterRbacConfig()
+	// Get the ServiceMeshRbacConfig first, if not found then fallback to get the RbacConfig.
+	rbacConfig := env.IstioConfigStore.ServiceMeshRbacConfig()
 	if rbacConfig == nil {
 		rbacConfig = env.IstioConfigStore.RbacConfig()
 		if rbacConfig == nil {
@@ -168,4 +172,12 @@ func NewAuthzPolicies(env *Environment) (*AuthorizationPolicies, error) {
 	}
 
 	return policy, nil
+}
+
+func GetServiceMeshRbacConfigNamespace() string {
+	return serviceMeshRbacConfigNamespace
+}
+
+func SetServiceMeshRbacConfigNamespace(namespace string) {
+	serviceMeshRbacConfigNamespace = namespace
 }

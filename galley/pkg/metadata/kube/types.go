@@ -18,13 +18,13 @@ func init() {
 	b := schema.NewBuilder()
 
 	b.Add(schema.ResourceSpec{
-		Kind:      "MeshPolicy",
-		ListKind:  "MeshPolicyList",
-		Singular:  "meshpolicy",
-		Plural:    "meshpolicies",
-		Version:   "v1alpha1",
-		Group:     "authentication.istio.io",
-		Target:    metadata.Types.Get("istio/authentication/v1alpha1/meshpolicies"),
+		Kind:      "ServiceMeshPolicy",
+		ListKind:  "ServiceMeshPolicyList",
+		Singular:  "servicemeshpolicy",
+		Plural:    "servicemeshpolicies",
+		Version:   "v1",
+		Group:     "authentication.maistra.io",
+		Target:    metadata.Types.Get("maistra/authentication/v1/servicemeshpolicies"),
 		Converter: converter.Get("auth-policy-resource"),
 	})
 
@@ -557,13 +557,13 @@ func init() {
 	})
 
 	b.Add(schema.ResourceSpec{
-		Kind:      "ClusterRbacConfig",
-		ListKind:  "ClusterRbacConfigList",
-		Singular:  "clusterrbacconfig",
-		Plural:    "clusterrbacconfigs",
-		Version:   "v1alpha1",
-		Group:     "rbac.istio.io",
-		Target:    metadata.Types.Get("istio/rbac/v1alpha1/clusterrbacconfigs"),
+		Kind:      "ServiceMeshRbacConfig",
+		ListKind:  "ServiceMeshRbacConfigList",
+		Singular:  "servicemeshrbacconfig",
+		Plural:    "servicemeshrbacconfigs",
+		Version:   "v1",
+		Group:     "rbac.maistra.io",
+		Target:    metadata.Types.Get("maistra/rbac/v1/servicemeshrbacconfigs"),
 		Converter: converter.Get("identity"),
 	})
 

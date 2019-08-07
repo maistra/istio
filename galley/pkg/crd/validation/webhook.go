@@ -120,6 +120,14 @@ type WebhookParameters struct {
 
 	// Enable galley validation mode
 	EnableValidation bool
+
+	// ManageWebhookConfig determines whether the ValidatingWebhookConfiguration
+	// should be watched and updated by the webhook itself. This can be disabled,
+	// in which case we simply assume the configuration to be correct. This is
+	// helpful if you want to remove ClusterRole permissions from galley.
+	// NOTE: setting this to false requires the WebhookConfiguration to be created
+	// and updated by something that is external to Galley, e.g. an operator
+	ManageWebhookConfig bool
 }
 
 type createInformerWebhookSource func(cl clientset.Interface, name string) cache.ListerWatcher
@@ -158,6 +166,7 @@ func (p *WebhookParameters) String() string {
 	fmt.Fprintf(buf, "DeploymentName: %s\n", p.DeploymentName)
 	fmt.Fprintf(buf, "ServiceName: %s\n", p.ServiceName)
 	fmt.Fprintf(buf, "EnableValidation: %v\n", p.EnableValidation)
+	fmt.Fprintf(buf, "ManageWebhookConfig: %v\n", p.ManageWebhookConfig)
 
 	return buf.String()
 }
@@ -174,6 +183,7 @@ func DefaultArgs() *WebhookParameters {
 		ServiceName:                   "istio-galley",
 		WebhookName:                   "istio-galley",
 		EnableValidation:              true,
+		ManageWebhookConfig:           true,
 	}
 }
 
@@ -203,6 +213,7 @@ type Webhook struct {
 	webhookName                   string
 	ownerRefs                     []v1.OwnerReference
 	webhookConfiguration          *v1beta1.ValidatingWebhookConfiguration
+	manageWebhookConfig           bool
 
 	// test hook for informers
 	createInformerWebhookSource  createInformerWebhookSource
@@ -240,10 +251,13 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, file := range []string{p.CACertFile, p.WebhookConfigFile} {
-		watchDir, _ := filepath.Split(file)
-		if err := configWatcher.Watch(watchDir); err != nil {
-			return nil, fmt.Errorf("could not watch %v: %v", file, err)
+	if p.ManageWebhookConfig {
+		// only actually watch the files if we manage the webhook config
+		for _, file := range []string{p.CACertFile, p.WebhookConfigFile} {
+			watchDir, _ := filepath.Split(file)
+			if err := configWatcher.Watch(watchDir); err != nil {
+				return nil, fmt.Errorf("could not watch %v: %v", file, err)
+			}
 		}
 	}
 
@@ -260,6 +274,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		validator:                     p.MixerValidator,
 		caFile:                        p.CACertFile,
 		webhookConfigFile:             p.WebhookConfigFile,
+		manageWebhookConfig:           p.ManageWebhookConfig,
 		clientset:                     p.Clientset,
 		deploymentName:                p.DeploymentName,
 		serviceName:                   p.ServiceName,
@@ -269,15 +284,17 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		createInformerEndpointSource:  defaultCreateInformerEndpointSource,
 	}
 
-	if galleyDeployment, err := wh.clientset.ExtensionsV1beta1().Deployments(wh.deploymentAndServiceNamespace).Get(wh.deploymentName, v1.GetOptions{}); err != nil { // nolint: lll
-		scope.Warnf("Could not find %s/%s deployment to set ownerRef. The validatingwebhookconfiguration must be deleted manually",
-			wh.deploymentAndServiceNamespace, wh.deploymentName)
-	} else {
-		wh.ownerRefs = []v1.OwnerReference{
-			*v1.NewControllerRef(
-				galleyDeployment,
-				extensionsv1beta1.SchemeGroupVersion.WithKind("Deployment"),
-			),
+	if wh.manageWebhookConfig {
+		if galleyDeployment, err := wh.clientset.ExtensionsV1beta1().Deployments(wh.deploymentAndServiceNamespace).Get(wh.deploymentName, v1.GetOptions{}); err != nil { // nolint: lll
+			scope.Warnf("Could not find %s/%s deployment to set ownerRef. The validatingwebhookconfiguration must be deleted manually",
+				wh.deploymentAndServiceNamespace, wh.deploymentName)
+		} else {
+			wh.ownerRefs = []v1.OwnerReference{
+				*v1.NewControllerRef(
+					galleyDeployment,
+					extensionsv1beta1.SchemeGroupVersion.WithKind("Deployment"),
+				),
+			}
 		}
 	}
 
@@ -319,14 +336,17 @@ func (wh *Webhook) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	// Try to create the initial webhook configuration (if it doesn't
-	// already exist). Setup a persistent monitor to reconcile the
-	// configuration if the observed configuration doesn't match
-	// the desired configuration.
-	if err := wh.rebuildWebhookConfig(); err == nil {
-		wh.createOrUpdateWebhookConfig()
+	webhookChangedCh := make(chan struct{})
+	if wh.manageWebhookConfig {
+		// Try to create the initial webhook configuration (if it doesn't
+		// already exist). Setup a persistent monitor to reconcile the
+		// configuration if the observed configuration doesn't match
+		// the desired configuration.
+		if err := wh.rebuildWebhookConfig(); err == nil {
+			wh.createOrUpdateWebhookConfig()
+		}
+		webhookChangedCh = wh.monitorWebhookChanges(stopCh)
 	}
-	webhookChangedCh := wh.monitorWebhookChanges(stopCh)
 
 	// use a timer to debounce file updates
 	var keyCertTimerC <-chan time.Time
