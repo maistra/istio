@@ -63,11 +63,13 @@ func (configgen *ConfigGeneratorImpl) buildGatewayListeners(
 	listeners := make([]*xdsapi.Listener, 0, len(mergedGateway.Servers))
 	for portNumber, servers := range mergedGateway.Servers {
 		var si *model.ServiceInstance
+		listenerPort := int(portNumber)
 		serviceInstances := make([]*model.ServiceInstance, 0, len(node.ServiceInstances))
 		for _, w := range node.ServiceInstances {
 			if w.Endpoint.ServicePort.Port == int(portNumber) {
 				if si == nil {
 					si = w
+					listenerPort = si.Endpoint.Port
 				}
 				serviceInstances = append(serviceInstances, w)
 			}
@@ -87,7 +89,7 @@ func (configgen *ConfigGeneratorImpl) buildGatewayListeners(
 			env:        env,
 			proxy:      node,
 			bind:       actualWildcard,
-			port:       si.Endpoint.Port,
+			port:       listenerPort,
 			bindToPort: true,
 		}
 
