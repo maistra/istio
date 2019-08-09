@@ -66,14 +66,18 @@ func (configgen *ConfigGeneratorImpl) buildGatewayListeners(env *model.Environme
 				break
 			}
 		}
+		listenerPort := int(portNumber)
+		if si != nil {
+			listenerPort = si.Endpoint.Port
+		}
 
 		// on a given port, we can either have plain text HTTP servers or
 		// HTTPS/TLS servers with SNI. We cannot have a mix of http and https server on same port.
 		opts := buildListenerOpts{
-			env:   env,
-			proxy: node,
-			bind:  WildcardAddress,
-			port:       si.Endpoint.Port,
+			env:        env,
+			proxy:      node,
+			bind:       WildcardAddress,
+			port:       listenerPort,
 			bindToPort: true,
 		}
 
