@@ -132,7 +132,8 @@ func createTestWebhook(
 	t testing.TB,
 	cl clientset.Interface,
 	fakeWebhookSource, fakeEndpointSource cache.ListerWatcher,
-	config *admissionregistrationv1beta1.ValidatingWebhookConfiguration) (*Webhook, func()) {
+	config *admissionregistrationv1beta1.ValidatingWebhookConfiguration,
+	manageWebhookConfig bool) (*Webhook, func()) {
 
 	t.Helper()
 	dir, err := ioutil.TempDir("", "galley_validation_webhook")
@@ -190,6 +191,7 @@ func createTestWebhook(
 		DeploymentName:                dummyDeployment.Name,
 		ServiceName:                   dummyDeployment.Name,
 		DeploymentAndServiceNamespace: dummyDeployment.Namespace,
+		ManageWebhookConfig:           manageWebhookConfig,
 	}
 	wh, err := NewWebhook(options)
 	if err != nil {
@@ -264,7 +266,7 @@ func TestAdmitPilot(t *testing.T) {
 	invalidConfig := makePilotConfig(t, 0, false, false)
 	extraKeyConfig := makePilotConfig(t, 0, true, true)
 
-	wh, cancel := createTestWebhook(t, dummyClient, createFakeWebhookSource(), createFakeEndpointsSource(), dummyConfig)
+	wh, cancel := createTestWebhook(t, dummyClient, createFakeWebhookSource(), createFakeEndpointsSource(), dummyConfig, false)
 	defer cancel()
 
 	cases := []struct {
@@ -370,7 +372,8 @@ func TestAdmitMixer(t *testing.T) {
 		fake.NewSimpleClientset(),
 		createFakeWebhookSource(),
 		createFakeEndpointsSource(),
-		dummyConfig)
+		dummyConfig,
+		false)
 	defer cancel()
 
 	cases := []struct {
@@ -524,7 +527,8 @@ func TestServe(t *testing.T) {
 		fake.NewSimpleClientset(),
 		createFakeWebhookSource(),
 		createFakeEndpointsSource(),
-		dummyConfig)
+		dummyConfig,
+		false)
 	defer cleanup()
 	stop := make(chan struct{})
 	defer func() { close(stop) }()

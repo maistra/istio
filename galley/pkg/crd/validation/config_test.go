@@ -242,7 +242,8 @@ func TestValidatingWebhookConfig(t *testing.T) {
 				fake.NewSimpleClientset(dummyDeployment, tc.configs.DeepCopyObject()),
 				createFakeWebhookSource(),
 				createFakeEndpointsSource(),
-				want)
+				want,
+				true)
 			defer cancel()
 
 			client := fake.NewSimpleClientset(tc.configs.DeepCopyObject())
@@ -308,7 +309,8 @@ func TestReloadCert(t *testing.T) {
 		fake.NewSimpleClientset(),
 		createFakeWebhookSource(),
 		createFakeEndpointsSource(),
-		dummyConfig)
+		dummyConfig,
+		false)
 	defer cleanup()
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
@@ -387,7 +389,8 @@ func TestInitialConfigLoadError(t *testing.T) {
 		fake.NewSimpleClientset(),
 		createFakeWebhookSource(),
 		createFakeEndpointsSource(),
-		dummyConfig)
+		dummyConfig,
+		false)
 	defer cleanup()
 
 	wh.webhookConfigFile = ""
