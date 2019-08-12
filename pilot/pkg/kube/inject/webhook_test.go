@@ -1218,7 +1218,8 @@ func createWebhook(t testing.TB, sidecarTemplate string) (*Webhook, func()) {
 	}
 
 	wh, err := NewWebhook(WebhookParameters{
-		ConfigFile: configFile, MeshFile: meshFile, CertFile: certFile, KeyFile: keyFile, Port: port})
+		ConfigFile: configFile, MeshFile: meshFile, CertFile: certFile, KeyFile: keyFile, Port: port,
+		ManageWebhookConfig: false})
 	if err != nil {
 		cleanup()
 		t.Fatalf("NewWebhook() failed: %v", err)
@@ -1255,7 +1256,10 @@ func TestRunAndServe(t *testing.T) {
          "name":"istio-proxy",
          "resources":{
 
-         }
+		 },
+		 "securityContext":{
+			 "runAsUser":1337
+		 }
       }
    },
    {
@@ -1370,7 +1374,7 @@ func TestRunAndServe(t *testing.T) {
 			}
 
 			if !bytes.Equal(gotPatch.Bytes(), wantPatch.Bytes()) {
-				t.Fatalf("got bad patch: \n got %v \n want %v", gotPatch, wantPatch)
+				t.Fatalf("got bad patch: \n got %v \n want %v", gotPatch.String(), wantPatch.String())
 			}
 		})
 	}
