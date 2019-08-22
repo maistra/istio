@@ -829,12 +829,12 @@ func (s *DiscoveryServer) AdsPushAll(version string, push *model.PushContext,
 		}
 	}
 	adsLog.Infof("Cluster init time %v %s", time.Since(t0), version)
-	s.startPush(version, push, true, nil)
+	s.startPush(version, push, true, nil, "")
 }
 
 // Send a signal to all connections, with a push event.
 func (s *DiscoveryServer) startPush(version string, push *model.PushContext, full bool,
-	edsUpdates map[string]struct{}) {
+	edsUpdates map[string]struct{}, id string) {
 
 	// Push config changes, iterating over connected envoys. This cover ADS and EDS(0.7), both share
 	// the same connection table
@@ -842,6 +842,9 @@ func (s *DiscoveryServer) startPush(version string, push *model.PushContext, ful
 	// Create a temp map to avoid locking the add/remove
 	pending := []*XdsConnection{}
 	for _, v := range adsClients {
+		if id != "" && id != v.modelNode.IPAddresses[0] {
+			continue
+		}
 		pending = append(pending, v)
 	}
 	adsClientsMutex.RUnlock()

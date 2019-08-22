@@ -501,7 +501,7 @@ func (s *DiscoveryServer) edsIncremental(version string, push *model.PushContext
 	}
 	adsLog.Infof("Cluster init time %v %s", time.Since(t0), version)
 
-	s.startPush(version, push, false, edsUpdates)
+	s.startPush(version, push, false, edsUpdates, "")
 }
 
 // WorkloadUpdate is called when workload labels/annotations are updated.
@@ -521,6 +521,25 @@ func (s *DiscoveryServer) WorkloadUpdate(id string, labels map[string]string, _ 
 		s.WorkloadsByID[id] = &Workload{
 			Labels: labels,
 		}
+		adsClientsMutex.RLock()
+		for _, connection := range adsClients {
+			// if the workload has envoy proxy and connected to server,
+			// then do a full xDS push for this proxy;
+			// otherwise:
+			//   case 1: the workload has no sidecar proxy, no need xDS push at all.
+			//   case 2: the workload xDS connection has not been established,
+			//           also no need to trigger a full push here.
+			if connection.modelNode.IPAddresses[0] == id {
+				// There is a possibility that the pod comes up later than endpoint.
+				// So no endpoints add/update events after this, we should request
+				// push on the connection immediately to speed up sidecar startup.
+				// See https://github.com/istio/istio/pull/16338 for more details on the
+				// upstream fix related to this change
+				go s.startPush(versionInfo(), s.globalPushContext(), false, nil, id)
+				break
+			}
+		}
+		adsClientsMutex.RUnlock()
 		return
 	}
 	if reflect.DeepEqual(w.Labels, labels) {
