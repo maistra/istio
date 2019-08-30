@@ -202,10 +202,10 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 	defer mlw.lock.Unlock()
 
 	var (
-		result  = make(chan watch.Event)
-		stopped = make(chan struct{})
-		wg      sync.WaitGroup
-		combinedResult  = make(chan *combinedEvent)
+		result         = make(chan watch.Event)
+		stopped        = make(chan struct{})
+		wg             sync.WaitGroup
+		combinedResult = make(chan *combinedEvent)
 	)
 	mlw.result = result
 	mlw.stopped = stopped
@@ -219,7 +219,15 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 	}
 
 	mlw.state = watching
-	wg.Add(len(mlw.lwMap)+1)
+	wg.Add(1)
+
+	// result chan must be closed,
+	// once all event sender goroutines exited.
+	go func() {
+		wg.Wait()
+		close(combinedResult)
+		close(result)
+	}()
 
 	go func() {
 		defer wg.Done()
@@ -227,7 +235,7 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 		for {
 			var event *combinedEvent
 			select {
-			case event = <- combinedResult:
+			case event = <-combinedResult:
 			case <-stopped:
 				return
 			}
@@ -262,9 +270,16 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 		o.ResourceVersion = resourceVersions[n]
 		w, err := lws.lw.Watch(*o)
 		if err != nil {
+			// We got an error creating one of the Watches, so we Stop() right here
+			// to clean up and wait for the next Watch() call from the reflector -
+			// otherwise we leak goroutines and also never close the result channels
+			// of leaked watches.
+			mlw.lock.Unlock()
+			mlw.Stop()
+			mlw.lock.Lock()
 			return err
 		}
-
+		wg.Add(1)
 		go func(namespace string) {
 			defer wg.Done()
 
@@ -287,13 +302,6 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 		lws.stopper = w.Stop
 	}
 
-	// result chan must be closed,
-	// once all event sender goroutines exited.
-	go func() {
-		wg.Wait()
-		close(combinedResult)
-		close(result)
-	}()
 	return nil
 }
 
