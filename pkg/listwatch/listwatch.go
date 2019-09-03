@@ -263,6 +263,7 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 		o.ResourceVersion = resourceVersions[n]
 		w, err := lws.lw.Watch(*o)
 		if err != nil {
+			mlw.stopInternal()
 			return err
 		}
 

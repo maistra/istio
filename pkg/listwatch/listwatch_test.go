@@ -17,6 +17,7 @@ package listwatch
 import (
 	"errors"
 	"k8s.io/api/core/v1"
+	goruntime "runtime"
 	"sync"
 	"testing"
 	"time"
@@ -135,8 +136,8 @@ func TestMultiWatchStop(t *testing.T) {
 func TestMultiWatchResultChannelStop(t *testing.T) {
 	ws, m := setupMultiWatch(t, []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}, map[string]string{})
 
-	ws["1"].Stop();
-	ws["2"].Stop();
+	ws["1"].Stop()
+	ws["2"].Stop()
 	event, running := <-m.ResultChan()
 	if !running {
 		t.Errorf("expected multiWatch chan to remain open for error")
@@ -222,7 +223,7 @@ func TestRacyMultiWatch(t *testing.T) {
 	// this will not block, as newMultiWatch started a goroutine,
 	// receiving that event and block on the dispatching it there.
 	evCh <- watch.Event{
-		Type: "foo",
+		Type:   "foo",
 		Object: &v1.Pod{},
 	}
 
@@ -488,5 +489,46 @@ func TestMultiWatchDoesNotDeadlock(t *testing.T) {
 		t.Error("Deadlock while calling List()")
 	case <-listChan:
 	}
+}
 
+func TestMultiWatchDoesNotLeakGoRoutines(t *testing.T) {
+	namespaces := []string{"1", "2", "3", "4", "5"}
+
+	ws := make(map[string]*watch.FakeWatcher)
+	m := newMultiListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				l := metav1.List{}
+				return &l, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				if namespace == "4" {
+					return nil, errors.New("Some error occurred")
+				}
+				w := watch.NewFake()
+				ws[namespace] = w
+				return w, nil
+			},
+		}
+	})
+
+	if _, err := m.List(metav1.ListOptions{}); err != nil {
+		t.Errorf("Error while listing: %v", err)
+		return
+	}
+	numRoutinesStart := goruntime.NumGoroutine()
+
+	for i := 0; i < 20; i++ {
+		if _, err := m.Watch(metav1.ListOptions{}); err == nil {
+			t.Error("Expected error while watching, got nil")
+			return
+		}
+	}
+	m.Stop()
+	// block to let the other goroutines stop gracefully
+	time.Sleep(1 * time.Millisecond)
+	numRoutinesEnd := goruntime.NumGoroutine()
+	if numRoutinesStart < numRoutinesEnd {
+		t.Errorf("Multiwatch is leaking GoRoutines: %d vs %d", numRoutinesStart, numRoutinesEnd)
+	}
 }
