@@ -106,6 +106,9 @@ type cliOptions struct { // nolint: maligned
 	// Enable dual-use certs - SPIFFE in SAN and in CommonName
 	dualUse bool
 
+	// Whether SDS is enabled on.
+	sdsEnabled bool
+
 	// Member Roll resource name
 	memberRollName         string
 	memberRollResyncPeriod time.Duration
@@ -235,6 +238,8 @@ func init() {
 	flags.BoolVar(&opts.dualUse, "experimental-dual-use",
 		false, "Enable dual-use mode. Generates certificates with a CommonName identical to the SAN.")
 
+	flags.BoolVar(&opts.sdsEnabled, "sds-enabled", false, "Whether SDS is enabled.")
+
 	// OpenShift ServiceMesh options
 	flags.StringVar(&opts.memberRollName, "member-roll-name", "",
 		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
@@ -359,7 +364,8 @@ func runCA() {
 
 		// The CA API uses cert with the max workload cert TTL.
 		hostnames := append(strings.Split(opts.grpcHosts, ","), fqdn())
-		caServer, startErr := caserver.New(ca, opts.maxWorkloadCertTTL, opts.signCACerts, hostnames, opts.grpcPort, spiffe.GetTrustDomain())
+		caServer, startErr := caserver.New(ca, opts.maxWorkloadCertTTL, opts.signCACerts, hostnames,
+			opts.grpcPort, spiffe.GetTrustDomain(), opts.sdsEnabled)
 		if startErr != nil {
 			fatalf("Failed to create istio ca server: %v", startErr)
 		}
