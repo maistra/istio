@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -123,6 +124,7 @@ func (smmrl *serviceMeshMemberRollListener) updateNamespaces(operation string, m
 		log.Infof("ServiceMeshMemberRoll using incorrect name %v, ignoring", memberRollName)
 	} else {
 		namespaces := smmrl.smmrc.getNamespaces(members)
+		sort.Strings(namespaces)
 		if !smmrl.checkEquality(smmrl.currentNamespaces, namespaces) {
 			smmrl.currentNamespaces = namespaces
 			log.Infof("ServiceMeshMemberRoll %v %s, namespaces now %q", memberRollName, operation, smmrl.currentNamespaces)
