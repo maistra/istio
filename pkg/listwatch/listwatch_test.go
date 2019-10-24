@@ -15,9 +15,11 @@
 package listwatch
 
 import (
+	"errors"
 	"k8s.io/api/core/v1"
 	"sync"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -439,4 +441,52 @@ func TestUpdatingNamespaceAfterCreated(t *testing.T) {
 	if running != len(ws) {
 		t.Errorf("expected %d watchers to be running but got %d", len(ws), running)
 	}
+}
+
+func TestMultiWatchDoesNotDeadlock(t *testing.T) {
+	namespaces := []string{"1", "2", "3", "4", "5"}
+
+	ws := make(map[string]*watch.FakeWatcher)
+	m := newMultiListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				l := metav1.List{}
+				return &l, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				if namespace == "4" {
+					return nil, errors.New("Some error occurred")
+				}
+				w := watch.NewFake()
+				ws[namespace] = w
+				return w, nil
+			},
+		}
+	})
+
+	if _, err := m.List(metav1.ListOptions{}); err != nil {
+		t.Errorf("Error while listing: %v", err)
+	}
+
+	if _, err := m.Watch(metav1.ListOptions{}); err == nil {
+		t.Error("Expected error while watching, got nil")
+	}
+
+	timeout := time.NewTimer(2 * time.Second)
+
+	listChan := make(chan struct{})
+	go func() {
+		// this one is going to deadlock
+		if _, err := m.List(metav1.ListOptions{}); err != nil {
+			t.Logf("Error while listing: %v", err)
+		}
+		listChan <- struct{}{}
+	}()
+
+	select {
+	case <-timeout.C:
+		t.Error("Deadlock while calling List()")
+	case <-listChan:
+	}
+
 }

@@ -134,7 +134,7 @@ func (mlw *multiListerWatcher) List(options metav1.ListOptions) (runtime.Object,
 	defer mlw.lock.Unlock()
 
 	if mlw.state == watching || mlw.state == stopping {
-		mlw.Stop()
+		mlw.stopInternal()
 	}
 
 	mlw.lwMap = make(map[string]*listerWatcher)
@@ -308,7 +308,11 @@ func (mlw *multiListerWatcher) ResultChan() <-chan watch.Event {
 func (mlw *multiListerWatcher) Stop() {
 	mlw.lock.Lock()
 	defer mlw.lock.Unlock()
+	mlw.stopInternal()
+}
 
+// This must be called with lock held.
+func (mlw *multiListerWatcher) stopInternal() {
 	select {
 	case <-mlw.stopped:
 		// nothing to do, we are already stopped
