@@ -277,6 +277,9 @@ func (s *DiscoveryServer) distributedVersions(w http.ResponseWriter, req *http.R
 const VersionLen = 12
 
 func (s *DiscoveryServer) getResourceVersion(nonce, key string, cache map[string]string) string {
+	if len(nonce) < VersionLen {
+		return ""
+	}
 	configVersion := nonce[:VersionLen]
 	result, ok := cache[configVersion]
 	if !ok {
