@@ -14,10 +14,10 @@
 
 // Package authz converts Istio RBAC (role-based-access-control) policies (ServiceRole and ServiceRoleBinding)
 // to the Envoy RBAC filter config to enforce access control to the service co-located with Envoy.
-// The generation is controlled by ClusterRbacConfig (a singleton custom resource with cluster scope).
-// User could disable this plugin by either deleting the ClusterRbacConfig or set the ClusterRbacConfig.mode
+// The generation is controlled by ServiceMeshRbacConfig (a singleton custom resource with cluster scope).
+// User could disable this plugin by either deleting the ServiceMeshRbacConfig or set the ServiceMeshRbacConfig.mode
 // to OFF.
-// Note: ClusterRbacConfig is not created with istio installation which means this plugin doesn't
+// Note: ServiceMeshRbacConfig is not created with istio installation which means this plugin doesn't
 // generate any RBAC config by default.
 package authz
 

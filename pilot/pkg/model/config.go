@@ -34,6 +34,12 @@ import (
 	"istio.io/istio/pkg/config/schemas"
 )
 
+var (
+	// authenticationServiceMeshPolicyNamespace is the namespace containing the mesh-scoped authentication policy.
+	// only policy in this namespace will be considered.
+	authenticationServiceMeshPolicyNamespace = constants.IstioSystemNamespace
+)
+
 // ConfigMeta is metadata attached to each configuration unit.
 // The revision is optional, and if provided, identifies the
 // last update operation on the object.
@@ -83,6 +89,14 @@ type ConfigMeta struct {
 
 	// CreationTimestamp records the creation time
 	CreationTimestamp time.Time `json:"creationTimestamp,omitempty"`
+}
+
+func GetAuthenticationServiceMeshPolicyNamespace() string {
+	return authenticationServiceMeshPolicyNamespace
+}
+
+func SetAuthenticationServiceMeshPolicyNamespace(namespace string) {
+	authenticationServiceMeshPolicyNamespace = namespace
 }
 
 // Config is a configuration unit consisting of the type of configuration, the
@@ -222,8 +236,8 @@ type IstioConfigStore interface {
 	// RbacConfig selects the RbacConfig of name DefaultRbacConfigName.
 	RbacConfig() *Config
 
-	// ClusterRbacConfig selects the ClusterRbacConfig of name DefaultRbacConfigName.
-	ClusterRbacConfig() *Config
+	// ServiceMeshRbacConfig selects the ServiceMeshRbacConfig of name DefaultRbacConfigName.
+	ServiceMeshRbacConfig() *Config
 
 	// AuthorizationPolicies selects AuthorizationPolicies in the specified namespace.
 	AuthorizationPolicies(namespace string) []Config
@@ -571,12 +585,12 @@ func (store *istioConfigStore) ServiceRoleBindings(namespace string) []Config {
 	return bindings
 }
 
-func (store *istioConfigStore) ClusterRbacConfig() *Config {
-	clusterRbacConfig, err := store.List(schemas.ClusterRbacConfig.Type, "")
+func (store *istioConfigStore) ServiceMeshRbacConfig() *Config {
+	serviceMeshRbacConfig, err := store.List(schemas.ServiceMeshRbacConfig.Type, GetServiceMeshRbacConfigNamespace())
 	if err != nil {
-		log.Errorf("failed to get ClusterRbacConfig: %v", err)
+		log.Errorf("failed to get ServiceMeshRbacConfig: %v", err)
 	}
-	for _, rc := range clusterRbacConfig {
+	for _, rc := range serviceMeshRbacConfig {
 		if rc.Name == constants.DefaultRbacConfigName {
 			return &rc
 		}
@@ -595,7 +609,7 @@ func (store *istioConfigStore) RbacConfig() *Config {
 	}
 	for _, rc := range rbacConfigs {
 		if rc.Name == constants.DefaultRbacConfigName {
-			log.Warnf("RbacConfig is deprecated, Use ClusterRbacConfig instead.")
+			log.Warnf("RbacConfig is deprecated, Use ServiceMeshRbacConfig instead.")
 			return &rc
 		}
 	}

@@ -1,5 +1,5 @@
 constraints:
-  - collection: istio/authentication/v1alpha1/meshpolicies
+  - collection: maistra/authentication/v1/servicemeshpolicies
     check:
     - exactlyOne:
       - equals: {

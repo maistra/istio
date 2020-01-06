@@ -86,12 +86,12 @@ func NewAuthzPolicies(policies []*model.Config, t mockTest) *model.Authorization
 	return authzPolicies
 }
 
-func SimpleClusterRbacConfig() *model.Config {
+func SimpleServiceMeshRbacConfig() *model.Config {
 	cfg := &model.Config{
 		ConfigMeta: model.ConfigMeta{
-			Type:      schemas.ClusterRbacConfig.Type,
+			Type:      schemas.ServiceMeshRbacConfig.Type,
 			Name:      "default",
-			Namespace: "default",
+			Namespace: model.GetServiceMeshRbacConfigNamespace(),
 		},
 		Spec: &istio_rbac.RbacConfig{
 			Mode: istio_rbac.RbacConfig_ON,

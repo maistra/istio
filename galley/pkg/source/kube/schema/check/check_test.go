@@ -66,7 +66,7 @@ func TestCheckCRDPresence(t *testing.T) {
 		},
 		{
 			name:    "first missing",
-			missing: map[string]bool{"meshpolicies": true},
+			missing: map[string]bool{"servicemeshpolicies": true},
 			wantErr: true,
 		},
 		{

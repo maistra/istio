@@ -26,7 +26,7 @@ metadata:
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
 rules:
-- apiGroups: ["authentication.istio.io"] # needed to create default authn policy
+- apiGroups: ["authentication.maistra.io"] # needed to create default authn policy
   resources: ["*"]
   verbs: ["*"]
 - apiGroups: ["networking.istio.io"] # needed to create security destination rules

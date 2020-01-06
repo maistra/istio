@@ -502,7 +502,7 @@ func TestApplyClusterScopedAuthPolicy(t *testing.T) {
 
 	change = convertToChange(
 		[]proto.Message{message1},
-		[]string{"default"},
+		[]string{model.GetAuthenticationServiceMeshPolicyNamespace() + "/default"},
 		setVersion("1"),
 		setCollection(schemas.AuthenticationMeshPolicy.Collection),
 		setTypeURL(schemas.AuthenticationMeshPolicy.MessageName))
@@ -518,11 +518,11 @@ func TestApplyClusterScopedAuthPolicy(t *testing.T) {
 	g.Expect(c[0].Type).To(gomega.Equal(schemas.AuthenticationPolicy.Type))
 	g.Expect(c[0].Spec).To(gomega.Equal(message0))
 
-	c, err = controller.List(schemas.AuthenticationMeshPolicy.Type, "")
+	c, err = controller.List(schemas.AuthenticationMeshPolicy.Type, model.GetAuthenticationServiceMeshPolicyNamespace())
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 	g.Expect(len(c)).To(gomega.Equal(1))
 	g.Expect(c[0].Name).To(gomega.Equal("default"))
-	g.Expect(c[0].Namespace).To(gomega.Equal(""))
+	g.Expect(c[0].Namespace).To(gomega.Equal(model.GetAuthenticationServiceMeshPolicyNamespace()))
 	g.Expect(c[0].Type).To(gomega.Equal(schemas.AuthenticationMeshPolicy.Type))
 	g.Expect(c[0].Spec).To(gomega.Equal(message1))
 
@@ -537,11 +537,11 @@ func TestApplyClusterScopedAuthPolicy(t *testing.T) {
 	err = controller.Apply(change)
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 
-	c, err = controller.List(schemas.AuthenticationMeshPolicy.Type, "")
+	c, err = controller.List(schemas.AuthenticationMeshPolicy.Type, model.GetAuthenticationServiceMeshPolicyNamespace())
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 	g.Expect(len(c)).To(gomega.Equal(1))
 	g.Expect(c[0].Name).To(gomega.Equal("default"))
-	g.Expect(c[0].Namespace).To(gomega.Equal(""))
+	g.Expect(c[0].Namespace).To(gomega.Equal(model.GetAuthenticationServiceMeshPolicyNamespace()))
 	g.Expect(c[0].Type).To(gomega.Equal(schemas.AuthenticationMeshPolicy.Type))
 	g.Expect(c[0].Spec).To(gomega.Equal(message1))
 
@@ -558,7 +558,7 @@ func TestApplyClusterScopedAuthPolicy(t *testing.T) {
 
 	change = convertToChange(
 		[]proto.Message{},
-		[]string{"default"},
+		[]string{model.GetAuthenticationServiceMeshPolicyNamespace() + "/default"},
 		setVersion("1"),
 		setCollection(schemas.AuthenticationMeshPolicy.Collection),
 		setTypeURL(schemas.AuthenticationMeshPolicy.MessageName))

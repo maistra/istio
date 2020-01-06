@@ -791,7 +791,7 @@ func (ps *PushContext) updateContext(
 		case schemas.EnvoyFilter.Type:
 			envoyFiltersChanged = true
 		case schemas.ServiceRoleBinding.Type, schemas.ServiceRole.Type,
-			schemas.ClusterRbacConfig.Type, schemas.RbacConfig.Type,
+			schemas.ServiceMeshRbacConfig.Type, schemas.RbacConfig.Type,
 			schemas.AuthorizationPolicy.Type:
 			authzChanged = true
 		case schemas.AuthenticationPolicy.Type, schemas.AuthenticationMeshPolicy.Type:
