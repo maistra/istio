@@ -1,7 +1,8 @@
-apiVersion: authentication.istio.io/v1alpha1
-kind: MeshPolicy
+apiVersion: authentication.maistra.io/v1
+kind: ServiceMeshPolicy
 metadata:
   name: "default"
+  namespace: "istio-system"
 spec:
   peers:
   - mtls: {}

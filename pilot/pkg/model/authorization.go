@@ -18,6 +18,7 @@ import (
 	rbacproto "istio.io/api/rbac/v1alpha1"
 	authpb "istio.io/api/security/v1beta1"
 
+	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/schemas"
 
@@ -25,6 +26,10 @@ import (
 )
 
 var (
+	// serviceMeshRbacConfigNamespace is the namespace of the ServiceMeshRbacConfig name.
+	// Only ServiceMeshRbacConfig in this namespace will be considered.
+	serviceMeshRbacConfigNamespace = constants.IstioSystemNamespace
+
 	rbacLog = istiolog.RegisterScope("rbac", "rbac debugging", 0)
 )
 
@@ -73,7 +78,7 @@ func GetAuthorizationPolicies(env *Environment) (*AuthorizationPolicies, error) 
 		RootNamespace:               env.Mesh.GetRootNamespace(),
 	}
 
-	rbacConfig := env.IstioConfigStore.ClusterRbacConfig()
+	rbacConfig := env.IstioConfigStore.ServiceMeshRbacConfig()
 	if rbacConfig == nil {
 		rbacConfig = env.IstioConfigStore.RbacConfig()
 	}
@@ -105,8 +110,8 @@ func GetAuthorizationPolicies(env *Environment) (*AuthorizationPolicies, error) 
 	return policy, nil
 }
 
-// GetClusterRbacConfig returns the global RBAC config.
-func (policy *AuthorizationPolicies) GetClusterRbacConfig() *rbacproto.RbacConfig {
+// GetServiceMeshRbacConfig returns the global RBAC config.
+func (policy *AuthorizationPolicies) GetServiceMeshRbacConfig() *rbacproto.RbacConfig {
 	return policy.RbacConfig
 }
 
@@ -280,4 +285,12 @@ func isInRbacTargetList(serviceHostname string, namespace string, target *rbacpr
 		}
 	}
 	return false
+}
+
+func GetServiceMeshRbacConfigNamespace() string {
+	return serviceMeshRbacConfigNamespace
+}
+
+func SetServiceMeshRbacConfigNamespace(namespace string) {
+	serviceMeshRbacConfigNamespace = namespace
 }

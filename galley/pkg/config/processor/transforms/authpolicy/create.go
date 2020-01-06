@@ -35,9 +35,9 @@ func GetProviders() transformer.Providers {
 			handler(metadata.IstioAuthenticationV1Alpha1Policies),
 		),
 		transformer.NewSimpleTransformerProvider(
-			metadata.K8SAuthenticationIstioIoV1Alpha1Meshpolicies,
-			metadata.IstioAuthenticationV1Alpha1Meshpolicies,
-			handler(metadata.IstioAuthenticationV1Alpha1Meshpolicies),
+			metadata.K8SAuthenticationMaistraIoV1Servicemeshpolicies,
+			metadata.MaistraAuthenticationV1Servicemeshpolicies,
+			handler(metadata.MaistraAuthenticationV1Servicemeshpolicies),
 		),
 	}
 }

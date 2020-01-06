@@ -35,12 +35,14 @@ func TestAggregateStoreBasicMake(t *testing.T) {
 		Type:        "some-config",
 		Plural:      "some-configs",
 		MessageName: "istio.networking.v1alpha3.DestinationRule",
+		Collection:  "istio/networking/v1alpha3/destinationrules",
 	}})
 
 	storeTwo.ConfigDescriptorReturns([]schema.Instance{{
 		Type:        "other-config",
 		Plural:      "other-configs",
 		MessageName: "istio.networking.v1alpha3.Gateway",
+		Collection:  "istio/networking/v1alpha3/gateways",
 	}})
 
 	stores := []model.ConfigStore{storeOne, storeTwo}
@@ -55,11 +57,13 @@ func TestAggregateStoreBasicMake(t *testing.T) {
 			Type:        "some-config",
 			Plural:      "some-configs",
 			MessageName: "istio.networking.v1alpha3.DestinationRule",
+			Collection:  "istio/networking/v1alpha3/destinationrules",
 		},
 		{
 			Type:        "other-config",
 			Plural:      "other-configs",
 			MessageName: "istio.networking.v1alpha3.Gateway",
+			Collection:  "istio/networking/v1alpha3/gateways",
 		},
 	}))
 }
@@ -205,12 +209,14 @@ func TestAggregateStoreCache(t *testing.T) {
 		Type:        "some-config",
 		Plural:      "some-configs",
 		MessageName: "istio.networking.v1alpha3.DestinationRule",
+		Collection:  "istio/networking/v1alpha3/destinationrules",
 	}})
 
 	storeTwo.ConfigDescriptorReturns([]schema.Instance{{
 		Type:        "other-config",
 		Plural:      "other-configs",
 		MessageName: "istio.networking.v1alpha3.Gateway",
+		Collection:  "istio/networking/v1alpha3/gateways",
 	}})
 
 	stores := []model.ConfigStoreCache{storeOne, storeTwo}

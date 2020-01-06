@@ -23,21 +23,6 @@ func init() {
 	versions = append(versions, "v1alpha1")
 
 	b.Add(schema.ResourceSpec{
-		Kind:      "MeshPolicy",
-		ListKind:  "MeshPolicyList",
-		Singular:  "meshpolicy",
-		Plural:    "meshpolicies",
-		Versions:  versions,
-		Group:     "authentication.istio.io",
-		Target:    metadata.Types.Get("istio/authentication/v1alpha1/meshpolicies"),
-		Converter: converter.Get("auth-policy-resource"),
-	})
-
-	versions = make([]string, 0)
-
-	versions = append(versions, "v1alpha1")
-
-	b.Add(schema.ResourceSpec{
 		Kind:      "Policy",
 		ListKind:  "PolicyList",
 		Singular:  "policy",
@@ -820,21 +805,6 @@ func init() {
 	versions = append(versions, "v1alpha1")
 
 	b.Add(schema.ResourceSpec{
-		Kind:      "ClusterRbacConfig",
-		ListKind:  "ClusterRbacConfigList",
-		Singular:  "clusterrbacconfig",
-		Plural:    "clusterrbacconfigs",
-		Versions:  versions,
-		Group:     "rbac.istio.io",
-		Target:    metadata.Types.Get("istio/rbac/v1alpha1/clusterrbacconfigs"),
-		Converter: converter.Get("identity"),
-	})
-
-	versions = make([]string, 0)
-
-	versions = append(versions, "v1alpha1")
-
-	b.Add(schema.ResourceSpec{
 		Kind:      "RbacConfig",
 		ListKind:  "RbacConfigList",
 		Singular:  "rbacconfig",
@@ -974,6 +944,36 @@ func init() {
 		Group:     "extensions",
 		Target:    metadata.Types.Get("k8s/extensions/v1beta1/ingresses"),
 		Converter: converter.Get("kube-ingress-resource"),
+	})
+
+	versions = make([]string, 0)
+
+	versions = append(versions, "v1")
+
+	b.Add(schema.ResourceSpec{
+		Kind:      "ServiceMeshPolicy",
+		ListKind:  "ServiceMeshPolicyList",
+		Singular:  "servicemeshpolicy",
+		Plural:    "servicemeshpolicies",
+		Versions:  versions,
+		Group:     "authentication.maistra.io",
+		Target:    metadata.Types.Get("maistra/authentication/v1/servicemeshpolicies"),
+		Converter: converter.Get("auth-policy-resource"),
+	})
+
+	versions = make([]string, 0)
+
+	versions = append(versions, "v1")
+
+	b.Add(schema.ResourceSpec{
+		Kind:      "ServiceMeshRbacConfig",
+		ListKind:  "ServiceMeshRbacConfigList",
+		Singular:  "servicemeshrbacconfig",
+		Plural:    "servicemeshrbacconfigs",
+		Versions:  versions,
+		Group:     "rbac.maistra.io",
+		Target:    metadata.Types.Get("maistra/rbac/v1/servicemeshrbacconfigs"),
+		Converter: converter.Get("identity"),
 	})
 
 	Types = b.Build()

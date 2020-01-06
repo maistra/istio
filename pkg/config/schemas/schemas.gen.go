@@ -14,6 +14,7 @@ var (
 		Type:          "virtual-service",
 		Plural:        "virtual-services",
 		Group:         "networking",
+		GroupDomain:   "",
 		Version:       "v1alpha3",
 		MessageName:   "istio.networking.v1alpha3.VirtualService",
 		Validate:      validation.ValidateVirtualService,
@@ -27,6 +28,7 @@ var (
 		Type:          "gateway",
 		Plural:        "gateways",
 		Group:         "networking",
+		GroupDomain:   "",
 		Version:       "v1alpha3",
 		MessageName:   "istio.networking.v1alpha3.Gateway",
 		Validate:      validation.ValidateGateway,
@@ -40,6 +42,7 @@ var (
 		Type:          "service-entry",
 		Plural:        "service-entries",
 		Group:         "networking",
+		GroupDomain:   "",
 		Version:       "v1alpha3",
 		MessageName:   "istio.networking.v1alpha3.ServiceEntry",
 		Validate:      validation.ValidateServiceEntry,
@@ -53,6 +56,7 @@ var (
 		Type:          "synthetic-service-entry",
 		Plural:        "synthetic-service-entries",
 		Group:         "networking",
+		GroupDomain:   "",
 		Version:       "v1alpha3",
 		MessageName:   "istio.networking.v1alpha3.ServiceEntry",
 		Validate:      validation.ValidateSyntheticServiceEntry,
@@ -66,6 +70,7 @@ var (
 		Type:          "destination-rule",
 		Plural:        "destination-rules",
 		Group:         "networking",
+		GroupDomain:   "",
 		Version:       "v1alpha3",
 		MessageName:   "istio.networking.v1alpha3.DestinationRule",
 		Validate:      validation.ValidateDestinationRule,
@@ -79,6 +84,7 @@ var (
 		Type:          "envoy-filter",
 		Plural:        "envoy-filters",
 		Group:         "networking",
+		GroupDomain:   "",
 		Version:       "v1alpha3",
 		MessageName:   "istio.networking.v1alpha3.EnvoyFilter",
 		Validate:      validation.ValidateEnvoyFilter,
@@ -92,6 +98,7 @@ var (
 		Type:          "sidecar",
 		Plural:        "sidecars",
 		Group:         "networking",
+		GroupDomain:   "",
 		Version:       "v1alpha3",
 		MessageName:   "istio.networking.v1alpha3.Sidecar",
 		Validate:      validation.ValidateSidecar,
@@ -105,6 +112,7 @@ var (
 		Type:          "http-api-spec",
 		Plural:        "http-api-specs",
 		Group:         "config",
+		GroupDomain:   "",
 		Version:       "v1alpha2",
 		MessageName:   "istio.mixer.v1.config.client.HTTPAPISpec",
 		Validate:      validation.ValidateHTTPAPISpec,
@@ -118,6 +126,7 @@ var (
 		Type:          "http-api-spec-binding",
 		Plural:        "http-api-spec-bindings",
 		Group:         "config",
+		GroupDomain:   "",
 		Version:       "v1alpha2",
 		MessageName:   "istio.mixer.v1.config.client.HTTPAPISpecBinding",
 		Validate:      validation.ValidateHTTPAPISpecBinding,
@@ -131,6 +140,7 @@ var (
 		Type:          "quota-spec",
 		Plural:        "quota-specs",
 		Group:         "config",
+		GroupDomain:   "",
 		Version:       "v1alpha2",
 		MessageName:   "istio.mixer.v1.config.client.QuotaSpec",
 		Validate:      validation.ValidateQuotaSpec,
@@ -144,6 +154,7 @@ var (
 		Type:          "quota-spec-binding",
 		Plural:        "quota-spec-bindings",
 		Group:         "config",
+		GroupDomain:   "",
 		Version:       "v1alpha2",
 		MessageName:   "istio.mixer.v1.config.client.QuotaSpecBinding",
 		Validate:      validation.ValidateQuotaSpecBinding,
@@ -157,6 +168,7 @@ var (
 		Type:          "policy",
 		Plural:        "policies",
 		Group:         "authentication",
+		GroupDomain:   "",
 		Version:       "v1alpha1",
 		MessageName:   "istio.authentication.v1alpha1.Policy",
 		Validate:      validation.ValidateAuthenticationPolicy,
@@ -168,14 +180,15 @@ var (
 	// AuthenticationMeshPolicy describes an authentication policy at mesh
 	// level.
 	AuthenticationMeshPolicy = schema.Instance{
-		Type:          "mesh-policy",
-		Plural:        "mesh-policies",
+		Type:          "service-mesh-policy",
+		Plural:        "service-mesh-policies",
 		Group:         "authentication",
-		Version:       "v1alpha1",
+		GroupDomain:   "maistra.io",
+		Version:       "v1",
 		MessageName:   "istio.authentication.v1alpha1.Policy",
 		Validate:      validation.ValidateAuthenticationPolicy,
-		Collection:    "istio/authentication/v1alpha1/meshpolicies",
-		ClusterScoped: true,
+		Collection:    "maistra/authentication/v1/servicemeshpolicies",
+		ClusterScoped: false,
 		VariableName:  "AuthenticationMeshPolicy",
 	}
 
@@ -184,6 +197,7 @@ var (
 		Type:          "service-role",
 		Plural:        "service-roles",
 		Group:         "rbac",
+		GroupDomain:   "",
 		Version:       "v1alpha1",
 		MessageName:   "istio.rbac.v1alpha1.ServiceRole",
 		Validate:      validation.ValidateServiceRole,
@@ -197,6 +211,7 @@ var (
 		Type:          "service-role-binding",
 		Plural:        "service-role-bindings",
 		Group:         "rbac",
+		GroupDomain:   "",
 		Version:       "v1alpha1",
 		MessageName:   "istio.rbac.v1alpha1.ServiceRoleBinding",
 		Validate:      validation.ValidateServiceRoleBinding,
@@ -206,12 +221,13 @@ var (
 	}
 
 	// RbacConfig describes the mesh level RBAC config.
-	// Deprecated: use ClusterRbacConfig instead.
+	// Deprecated: use ServiceMeshRbacConfig instead.
 	// See https://github.com/istio/istio/issues/8825 for more details.
 	RbacConfig = schema.Instance{
 		Type:          "rbac-config",
 		Plural:        "rbac-configs",
 		Group:         "rbac",
+		GroupDomain:   "",
 		Version:       "v1alpha1",
 		MessageName:   "istio.rbac.v1alpha1.RbacConfig",
 		Validate:      validation.ValidateRbacConfig,
@@ -220,17 +236,18 @@ var (
 		VariableName:  "RbacConfig",
 	}
 
-	// ClusterRbacConfig describes the cluster level RBAC config.
-	ClusterRbacConfig = schema.Instance{
-		Type:          "cluster-rbac-config",
-		Plural:        "clusterrbacconfigs",
+	// ServiceMeshRbacConfig describes the mesh level RBAC config.
+	ServiceMeshRbacConfig = schema.Instance{
+		Type:          "service-mesh-rbac-config",
+		Plural:        "servicemeshrbacconfigs",
 		Group:         "rbac",
-		Version:       "v1alpha1",
+		GroupDomain:   "maistra.io",
+		Version:       "v1",
 		MessageName:   "istio.rbac.v1alpha1.RbacConfig",
-		Validate:      validation.ValidateClusterRbacConfig,
-		Collection:    "istio/rbac/v1alpha1/clusterrbacconfigs",
-		ClusterScoped: true,
-		VariableName:  "ClusterRbacConfig",
+		Validate:      validation.ValidateServiceMeshRbacConfig,
+		Collection:    "maistra/rbac/v1/servicemeshrbacconfigs",
+		ClusterScoped: false,
+		VariableName:  "ServiceMeshRbacConfig",
 	}
 
 	// AuthorizationPolicy describes the authorization policy.
@@ -238,6 +255,7 @@ var (
 		Type:          "authorization-policy",
 		Plural:        "authorizationpolicies",
 		Group:         "security",
+		GroupDomain:   "",
 		Version:       "v1beta1",
 		MessageName:   "istio.security.v1beta1.AuthorizationPolicy",
 		Validate:      validation.ValidateAuthorizationPolicy,
@@ -264,7 +282,7 @@ var (
 		ServiceRole,
 		ServiceRoleBinding,
 		RbacConfig,
-		ClusterRbacConfig,
+		ServiceMeshRbacConfig,
 		AuthorizationPolicy,
 	}
 )

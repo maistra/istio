@@ -54,9 +54,9 @@ func newService(hostname string, labels map[string]string, t *testing.T) *model.
 func simpleGlobalPermissiveMode() *model.Config {
 	cfg := &model.Config{
 		ConfigMeta: model.ConfigMeta{
-			Type:      schemas.ClusterRbacConfig.Type,
+			Type:      schemas.ServiceMeshRbacConfig.Type,
 			Name:      "default",
-			Namespace: "default",
+			Namespace: model.GetServiceMeshRbacConfigNamespace(),
 		},
 		Spec: &istio_rbac.RbacConfig{
 			Mode:            istio_rbac.RbacConfig_ON,
@@ -78,7 +78,7 @@ func TestBuilder_BuildHTTPFilter(t *testing.T) {
 		{
 			name: "XDSMarshalingToAnyEnabled",
 			policies: []*model.Config{
-				policy.SimpleClusterRbacConfig(),
+				policy.SimpleServiceMeshRbacConfig(),
 			},
 			isXDSMarshalingToAnyEnabled: true,
 			wantPolicies:                []string{},
@@ -86,14 +86,14 @@ func TestBuilder_BuildHTTPFilter(t *testing.T) {
 		{
 			name: "v1alpha1 only",
 			policies: []*model.Config{
-				policy.SimpleClusterRbacConfig(),
+				policy.SimpleServiceMeshRbacConfig(),
 				policy.SimpleRole("role-1", "a", "bar"),
 				policy.SimpleBinding("binding-1", "a", "role-1"),
 			},
 			wantPolicies: []string{"role-1"},
 		},
 		{
-			name: "v1alpha1 without ClusterRbacConfig",
+			name: "v1alpha1 without ServiceMeshRbacConfig",
 			policies: []*model.Config{
 				policy.SimpleRole("role-1", "a", "bar"),
 				policy.SimpleBinding("binding-1", "a", "role-1"),
@@ -110,7 +110,7 @@ func TestBuilder_BuildHTTPFilter(t *testing.T) {
 		{
 			name: "v1alpha1 and v1beta1",
 			policies: []*model.Config{
-				policy.SimpleClusterRbacConfig(),
+				policy.SimpleServiceMeshRbacConfig(),
 				policy.SimpleRole("role-1", "a", "bar"),
 				policy.SimpleBinding("binding-1", "a", "role-1"),
 				policy.SimpleAuthorizationPolicy("authz-bar", "a"),
@@ -179,14 +179,14 @@ func TestBuilder_BuildTCPFilter(t *testing.T) {
 		{
 			name: "XDSMarshalingToAnyEnabled",
 			policies: []*model.Config{
-				policy.SimpleClusterRbacConfig(),
+				policy.SimpleServiceMeshRbacConfig(),
 			},
 			isXDSMarshalingToAnyEnabled: true,
 		},
 		{
 			name: "HTTP rule",
 			policies: []*model.Config{
-				policy.SimpleClusterRbacConfig(),
+				policy.SimpleServiceMeshRbacConfig(),
 				policy.SimpleRole("role-1", "a", "foo"),
 				policy.SimpleBinding("binding-1", "a", "role-1"),
 			},
@@ -196,7 +196,7 @@ func TestBuilder_BuildTCPFilter(t *testing.T) {
 		{
 			name: "normal rule",
 			policies: []*model.Config{
-				policy.SimpleClusterRbacConfig(),
+				policy.SimpleServiceMeshRbacConfig(),
 			},
 			wantRules: true,
 		},

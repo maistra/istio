@@ -113,7 +113,7 @@ func TestAuthZConvert(t *testing.T) {
 			expectedError: "Error: failed to convert policies: cannot convert binding to sources: serviceRoleBinding with group is not supported\n",
 		},
 		{
-			name: "Missing ClusterRbacConfig",
+			name: "Missing ServiceMeshRbacConfig",
 			rbacV1alpha1Files: []string{
 				"testdata/authz/converter/one-rule-one-service.yaml",
 			},
@@ -190,7 +190,7 @@ func TestAuthZConvert(t *testing.T) {
 		},
 
 		{
-			name: "ClusterRbacConfig only",
+			name: "ServiceMeshRbacConfig only",
 			rbacV1alpha1Files: []string{
 				"testdata/authz/converter/rbac-global-on.yaml",
 			},
