@@ -129,7 +129,7 @@ func validateListenersNoConfig(t *testing.T, response *structpath.Structpath, mi
 					PortValue: uint32(mixerCheckPort),
 				},
 			}, "{.address.socketAddress}").
-			Select("{.filterChains[0].filters[0]}").
+			Select("{.filterChains[-1:].filters[0]}").
 			Equals("envoy.http_connection_manager", "{.name}").
 			Equals(true, "{.config.generate_request_id}").
 			Equals("mixer envoy.cors envoy.fault envoy.router", "{.config.http_filters[*].name}").
@@ -148,7 +148,7 @@ func validateListenersNoConfig(t *testing.T, response *structpath.Structpath, mi
 			NotExists("{.useOriginalDst}")
 
 		mixerListener.
-			Select("{.filterChains[0].filters[0].config.http_filters[?(@.name==\"mixer\")].config}").
+			Select("{.filterChains[-1:].filters[0].config.http_filters[?(@.name==\"mixer\")].config}").
 			Equals("kubernetes://app3.testns", "{.forward_attributes.attributes['source.uid'].string_value}").
 			Equals("testns", "{.mixer_attributes.attributes['source.namespace'].string_value}").
 			Equals("outbound", "{.mixer_attributes.attributes['context.reporter.kind'].string_value}").
@@ -166,8 +166,8 @@ func validateListenersNoConfig(t *testing.T, response *structpath.Structpath, mi
 			Equals("envoy.tcp_proxy", "{.filterChains[0].filters[*].name}").
 			// Current default for egress is allowed ( based on user feedback ).
 			// TODO: add test for blocked by default, based on setting.
-			Equals("PassthroughCluster", "{.filterChains[0].filters[0].config.cluster}").
-			Equals("PassthroughCluster", "{.filterChains[0].filters[0].config.stat_prefix}").
+			Equals("PassthroughCluster", "{.filterChains[-1:].filters[0].config.cluster}").
+			Equals("PassthroughCluster", "{.filterChains[-1:].filters[0].config.stat_prefix}").
 			Equals(true, "{.useOriginalDst}")
 	})
 }
