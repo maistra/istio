@@ -49,7 +49,8 @@ var (
 		{{ .VariableName }} = schema.Instance {
           Type: "{{ .Type }}",
           Plural: "{{ .Plural }}",
-          Group: "{{ .Group }}",
+		  Group: "{{ .Group }}",
+		  GroupDomain: "{{ .Domain }}",
           Version: "{{ .Version }}",
           MessageName: "{{ .MessageName }}",
           Validate: validation.{{ .Validate }},
@@ -167,6 +168,7 @@ type SchemaInfo struct {
 	Type          string `json:"type"`
 	Plural        string `json:"plural"`
 	Group         string `json:"group"`
+	Domain        string `json:"domain"`
 	Version       string `json:"version"`
 	MessageName   string `json:"messageName"`
 	Validate      string `json:"validate"`

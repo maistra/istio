@@ -1,6 +1,6 @@
 # Authentication policy to enable mutual TLS for all services (that have sidecar) in the mesh.
-apiVersion: authentication.istio.io/v1alpha1
-kind: MeshPolicy
+apiVersion: authentication.maistra.io/v1
+kind: ServiceMeshPolicy
 metadata:
   name: default
   namespace: istio-config

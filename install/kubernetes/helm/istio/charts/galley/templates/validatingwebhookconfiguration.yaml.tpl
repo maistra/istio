@@ -71,6 +71,24 @@ webhooks:
         - serviceentries
         - sidecars
         - virtualservices
+      - operations:
+        - CREATE
+        - UPDATE
+        apiGroups:
+        - authentication.maistra.io
+        apiVersions:
+        - "*"
+        resources:
+        - "*"
+      - operations:
+        - CREATE
+        - UPDATE
+        apiGroups:
+        - rbac.maistra.io
+        apiVersions:
+        - "*"
+        resources:
+        - "*"
     failurePolicy: Fail
     sideEffects: None
   - name: mixer.validation.istio.io

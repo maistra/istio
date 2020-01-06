@@ -102,14 +102,14 @@ schemas:
     variableName: "AuthenticationPolicy"
     description: "describes an authentication policy."
 
-  - type: "mesh-policy"
-    plural: "mesh-policies"
+  - type: "service-mesh-policy"
+    plural: "service-mesh-policies"
     group: "authentication"
-    version: "v1alpha1"
+    domain: "maistra.io"
+    version: "v1"
     messageName: "istio.authentication.v1alpha1.Policy"
     converter: "auth-policy-resource"
-    collection: "istio/authentication/v1alpha1/meshpolicies"
-    clusterScoped: true
+    collection: "maistra/authentication/v1/servicemeshpolicies"
     variableName: "AuthenticationMeshPolicy"
     validate: "ValidateAuthenticationPolicy"
     description: "describes an authentication policy at mesh level."
@@ -137,17 +137,17 @@ schemas:
     messageName: "istio.rbac.v1alpha1.RbacConfig"
     collection: "istio/rbac/v1alpha1/rbacconfigs"
     description: "describes the mesh level RBAC config.\n
-                   Deprecated: use ClusterRbacConfig instead.\n
+                   Deprecated: use ServiceMeshRbacConfig instead.\n
                    See https://github.com/istio/istio/issues/8825 for more details."
 
-  - type: "cluster-rbac-config"
-    plural: "clusterrbacconfigs"
+  - type: "service-mesh-rbac-config"
+    plural: "servicemeshrbacconfigs"
     group: "rbac"
-    version: "v1alpha1"
+    domain: "maistra.io"
+    version: "v1"
     messageName: "istio.rbac.v1alpha1.RbacConfig"
-    collection: "istio/rbac/v1alpha1/clusterrbacconfigs"
-    clusterScoped: true
-    description: "describes the cluster level RBAC config."
+    collection: "maistra/rbac/v1/servicemeshrbacconfigs"
+    description: "describes the mesh level RBAC config."
 
   - type: "authorization-policy"
     plural: "authorizationpolicies"

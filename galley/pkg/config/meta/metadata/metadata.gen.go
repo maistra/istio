@@ -66,10 +66,6 @@ var _metadataYaml = []byte(`# Copyright 2019 Istio Authors
 # The total set of collections, both Istio (i.e. MCP) and K8s (API Server/K8s).
 collections:
   ## Istio collections
-  - name: "istio/authentication/v1alpha1/meshpolicies"
-    proto: "istio.authentication.v1alpha1.Policy"
-    protoPackage: "istio.io/api/authentication/v1alpha1"
-
   - name: "istio/authentication/v1alpha1/policies"
     proto: "istio.authentication.v1alpha1.Policy"
     protoPackage: "istio.io/api/authentication/v1alpha1"
@@ -146,10 +142,6 @@ collections:
     proto: "istio.policy.v1beta1.Rule"
     protoPackage: "istio.io/api/policy/v1beta1"
 
-  - name: "istio/rbac/v1alpha1/clusterrbacconfigs"
-    proto: "istio.rbac.v1alpha1.RbacConfig"
-    protoPackage: "istio.io/api/rbac/v1alpha1"
-
   - name: "istio/rbac/v1alpha1/rbacconfigs"
     proto: "istio.rbac.v1alpha1.RbacConfig"
     protoPackage: "istio.io/api/rbac/v1alpha1"
@@ -165,6 +157,14 @@ collections:
   - name: "istio/security/v1beta1/authorizationpolicies"
     proto: "istio.security.v1beta1.AuthorizationPolicy"
     protoPackage: "istio.io/api/security/v1beta1"
+
+  - name: "maistra/rbac/v1/servicemeshrbacconfigs"
+    proto: "istio.rbac.v1alpha1.RbacConfig"
+    protoPackage: "istio.io/api/rbac/v1alpha1"
+
+  - name: "maistra/authentication/v1/servicemeshpolicies"
+    proto: "istio.authentication.v1alpha1.Policy"
+    protoPackage: "istio.io/api/authentication/v1alpha1"
 
   ### K8s collections ###
 
@@ -198,11 +198,11 @@ collections:
     protoPackage: "k8s.io/api/extensions/v1beta1"
 
   # Istio CRD collections
-  - name: "k8s/authentication.istio.io/v1alpha1/meshpolicies"
+  - name: "k8s/authentication.istio.io/v1alpha1/policies"
     proto: "istio.authentication.v1alpha1.Policy"
     protoPackage: "istio.io/api/authentication/v1alpha1"
 
-  - name: "k8s/authentication.istio.io/v1alpha1/policies"
+  - name: "k8s/authentication.maistra.io/v1/servicemeshpolicies"
     proto: "istio.authentication.v1alpha1.Policy"
     protoPackage: "istio.io/api/authentication/v1alpha1"
 
@@ -268,10 +268,6 @@ collections:
     proto: "istio.policy.v1beta1.Handler"
     protoPackage: "istio.io/api/policy/v1beta1"
 
-  - name: "k8s/rbac.istio.io/v1alpha1/clusterrbacconfigs"
-    proto: "istio.rbac.v1alpha1.RbacConfig"
-    protoPackage: "istio.io/api/rbac/v1alpha1"
-
   - name: "k8s/rbac.istio.io/v1alpha1/policy"
     proto: "istio.rbac.v1alpha1.ServiceRoleBinding"
     protoPackage: "istio.io/api/rbac/v1alpha1"
@@ -282,6 +278,10 @@ collections:
 
   - name: "k8s/rbac.istio.io/v1alpha1/serviceroles"
     proto: "istio.rbac.v1alpha1.ServiceRole"
+    protoPackage: "istio.io/api/rbac/v1alpha1"
+
+  - name: "k8s/rbac.maistra.io/v1/servicemeshrbacconfigs"
+    proto: "istio.rbac.v1alpha1.RbacConfig"
     protoPackage: "istio.io/api/rbac/v1alpha1"
 
   - name: "k8s/security.istio.io/v1beta1/authorizationpolicies"
@@ -544,7 +544,6 @@ snapshots:
   - name: "default"
     strategy: debounce
     collections:
-      - "istio/authentication/v1alpha1/meshpolicies"
       - "istio/authentication/v1alpha1/policies"
       - "istio/config/v1alpha2/adapters"
       - "istio/config/v1alpha2/httpapispecs"
@@ -563,13 +562,14 @@ snapshots:
       - "istio/policy/v1beta1/handlers"
       - "istio/policy/v1beta1/instances"
       - "istio/policy/v1beta1/rules"
-      - "istio/rbac/v1alpha1/clusterrbacconfigs"
       - "istio/rbac/v1alpha1/rbacconfigs"
       - "istio/rbac/v1alpha1/servicerolebindings"
       - "istio/rbac/v1alpha1/serviceroles"
       - "istio/security/v1beta1/authorizationpolicies"
       - "k8s/core/v1/namespaces"
       - "k8s/core/v1/services"
+      - "maistra/authentication/v1/servicemeshpolicies"
+      - "maistra/rbac/v1/servicemeshrbacconfigs"
 
       # Legacy Mixer CRDs
       - "istio/config/v1alpha2/legacy/apikeys"
@@ -740,13 +740,6 @@ sources:
       group: "authentication.istio.io"
       version: "v1alpha1"
 
-    - collection: "k8s/authentication.istio.io/v1alpha1/meshpolicies"
-      kind: "MeshPolicy"
-      plural: "meshpolicies"
-      group: "authentication.istio.io"
-      version: "v1alpha1"
-      clusterScoped: true
-
     - collection: "k8s/rbac.istio.io/v1alpha1/serviceroles"
       kind: "ServiceRole"
       plural: "serviceroles"
@@ -764,13 +757,6 @@ sources:
       plural: "rbacconfigs"
       group: "rbac.istio.io"
       version: "v1alpha1"
-
-    - collection: "k8s/rbac.istio.io/v1alpha1/clusterrbacconfigs"
-      kind: "ClusterRbacConfig"
-      plural: "clusterrbacconfigs"
-      group: "rbac.istio.io"
-      version: "v1alpha1"
-      clusterScoped: true
 
     - collection: "k8s/security.istio.io/v1beta1/authorizationpolicies"
       kind: "AuthorizationPolicy"
@@ -814,11 +800,17 @@ sources:
       group: "config.istio.io"
       version: "v1alpha2"
 
-    - collection: "k8s/authentication.istio.io/v1alpha1/meshpolicies"
-      kind: "MeshPolicy"
-      plural: "meshpolicies"
-      group: "authentication.istio.io"
-      version: "v1alpha1"
+    - collection: "k8s/authentication.maistra.io/v1/servicemeshpolicies"
+      kind: "ServiceMeshPolicy"
+      plural: "servicemeshpolicies"
+      group: "authentication.maistra.io"
+      version: "v1"
+
+    - collection: "k8s/rbac.maistra.io/v1/servicemeshrbacconfigs"
+      kind: "ServiceMeshRbacConfig"
+      plural: "servicemeshrbacconfigs"
+      group: "rbac.maistra.io"
+      version: "v1"
 
     # Legacy Mixer CRD Types
     - collection: "k8s/config.istio.io/v1alpha2/apikeys"
@@ -1029,8 +1021,9 @@ transforms:
       "k8s/networking.istio.io/v1alpha3/virtualservices": "istio/networking/v1alpha3/virtualservices"
       "k8s/rbac.istio.io/v1alpha1/policy": "istio/rbac/v1alpha1/servicerolebindings"
       "k8s/rbac.istio.io/v1alpha1/rbacconfigs": "istio/rbac/v1alpha1/rbacconfigs"
-      "k8s/rbac.istio.io/v1alpha1/clusterrbacconfigs": "istio/rbac/v1alpha1/clusterrbacconfigs"
       "k8s/rbac.istio.io/v1alpha1/serviceroles": "istio/rbac/v1alpha1/serviceroles"
+      "k8s/authentication.maistra.io/v1/servicemeshpolicies": "maistra/authentication/v1/servicemeshpolicies"
+      "k8s/rbac.maistra.io/v1/servicemeshrbacconfigs": "maistra/rbac/v1/servicemeshrbacconfigs"
       "k8s/security.istio.io/v1beta1/authorizationpolicies": "istio/security/v1beta1/authorizationpolicies"
       "k8s/core/v1/namespaces": "k8s/core/v1/namespaces"
       "k8s/core/v1/services": "k8s/core/v1/services"

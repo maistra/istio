@@ -21,16 +21,6 @@ type IstioConfigStore struct {
 	authorizationPoliciesReturnsOnCall map[int]struct {
 		result1 []model.Config
 	}
-	ClusterRbacConfigStub        func() *model.Config
-	clusterRbacConfigMutex       sync.RWMutex
-	clusterRbacConfigArgsForCall []struct {
-	}
-	clusterRbacConfigReturns struct {
-		result1 *model.Config
-	}
-	clusterRbacConfigReturnsOnCall map[int]struct {
-		result1 *model.Config
-	}
 	ConfigDescriptorStub        func() schema.Set
 	configDescriptorMutex       sync.RWMutex
 	configDescriptorArgsForCall []struct {
@@ -161,6 +151,16 @@ type IstioConfigStore struct {
 	serviceEntriesReturnsOnCall map[int]struct {
 		result1 []model.Config
 	}
+	ServiceMeshRbacConfigStub        func() *model.Config
+	serviceMeshRbacConfigMutex       sync.RWMutex
+	serviceMeshRbacConfigArgsForCall []struct {
+	}
+	serviceMeshRbacConfigReturns struct {
+		result1 *model.Config
+	}
+	serviceMeshRbacConfigReturnsOnCall map[int]struct {
+		result1 *model.Config
+	}
 	ServiceRoleBindingsStub        func(string) []model.Config
 	serviceRoleBindingsMutex       sync.RWMutex
 	serviceRoleBindingsArgsForCall []struct {
@@ -267,58 +267,6 @@ func (fake *IstioConfigStore) AuthorizationPoliciesReturnsOnCall(i int, result1 
 	}
 	fake.authorizationPoliciesReturnsOnCall[i] = struct {
 		result1 []model.Config
-	}{result1}
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfig() *model.Config {
-	fake.clusterRbacConfigMutex.Lock()
-	ret, specificReturn := fake.clusterRbacConfigReturnsOnCall[len(fake.clusterRbacConfigArgsForCall)]
-	fake.clusterRbacConfigArgsForCall = append(fake.clusterRbacConfigArgsForCall, struct {
-	}{})
-	fake.recordInvocation("ClusterRbacConfig", []interface{}{})
-	fake.clusterRbacConfigMutex.Unlock()
-	if fake.ClusterRbacConfigStub != nil {
-		return fake.ClusterRbacConfigStub()
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	fakeReturns := fake.clusterRbacConfigReturns
-	return fakeReturns.result1
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfigCallCount() int {
-	fake.clusterRbacConfigMutex.RLock()
-	defer fake.clusterRbacConfigMutex.RUnlock()
-	return len(fake.clusterRbacConfigArgsForCall)
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfigCalls(stub func() *model.Config) {
-	fake.clusterRbacConfigMutex.Lock()
-	defer fake.clusterRbacConfigMutex.Unlock()
-	fake.ClusterRbacConfigStub = stub
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfigReturns(result1 *model.Config) {
-	fake.clusterRbacConfigMutex.Lock()
-	defer fake.clusterRbacConfigMutex.Unlock()
-	fake.ClusterRbacConfigStub = nil
-	fake.clusterRbacConfigReturns = struct {
-		result1 *model.Config
-	}{result1}
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfigReturnsOnCall(i int, result1 *model.Config) {
-	fake.clusterRbacConfigMutex.Lock()
-	defer fake.clusterRbacConfigMutex.Unlock()
-	fake.ClusterRbacConfigStub = nil
-	if fake.clusterRbacConfigReturnsOnCall == nil {
-		fake.clusterRbacConfigReturnsOnCall = make(map[int]struct {
-			result1 *model.Config
-		})
-	}
-	fake.clusterRbacConfigReturnsOnCall[i] = struct {
-		result1 *model.Config
 	}{result1}
 }
 
@@ -973,6 +921,58 @@ func (fake *IstioConfigStore) ServiceEntriesReturnsOnCall(i int, result1 []model
 	}{result1}
 }
 
+func (fake *IstioConfigStore) ServiceMeshRbacConfig() *model.Config {
+	fake.serviceMeshRbacConfigMutex.Lock()
+	ret, specificReturn := fake.serviceMeshRbacConfigReturnsOnCall[len(fake.serviceMeshRbacConfigArgsForCall)]
+	fake.serviceMeshRbacConfigArgsForCall = append(fake.serviceMeshRbacConfigArgsForCall, struct {
+	}{})
+	fake.recordInvocation("ServiceMeshRbacConfig", []interface{}{})
+	fake.serviceMeshRbacConfigMutex.Unlock()
+	if fake.ServiceMeshRbacConfigStub != nil {
+		return fake.ServiceMeshRbacConfigStub()
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.serviceMeshRbacConfigReturns
+	return fakeReturns.result1
+}
+
+func (fake *IstioConfigStore) ServiceMeshRbacConfigCallCount() int {
+	fake.serviceMeshRbacConfigMutex.RLock()
+	defer fake.serviceMeshRbacConfigMutex.RUnlock()
+	return len(fake.serviceMeshRbacConfigArgsForCall)
+}
+
+func (fake *IstioConfigStore) ServiceMeshRbacConfigCalls(stub func() *model.Config) {
+	fake.serviceMeshRbacConfigMutex.Lock()
+	defer fake.serviceMeshRbacConfigMutex.Unlock()
+	fake.ServiceMeshRbacConfigStub = stub
+}
+
+func (fake *IstioConfigStore) ServiceMeshRbacConfigReturns(result1 *model.Config) {
+	fake.serviceMeshRbacConfigMutex.Lock()
+	defer fake.serviceMeshRbacConfigMutex.Unlock()
+	fake.ServiceMeshRbacConfigStub = nil
+	fake.serviceMeshRbacConfigReturns = struct {
+		result1 *model.Config
+	}{result1}
+}
+
+func (fake *IstioConfigStore) ServiceMeshRbacConfigReturnsOnCall(i int, result1 *model.Config) {
+	fake.serviceMeshRbacConfigMutex.Lock()
+	defer fake.serviceMeshRbacConfigMutex.Unlock()
+	fake.ServiceMeshRbacConfigStub = nil
+	if fake.serviceMeshRbacConfigReturnsOnCall == nil {
+		fake.serviceMeshRbacConfigReturnsOnCall = make(map[int]struct {
+			result1 *model.Config
+		})
+	}
+	fake.serviceMeshRbacConfigReturnsOnCall[i] = struct {
+		result1 *model.Config
+	}{result1}
+}
+
 func (fake *IstioConfigStore) ServiceRoleBindings(arg1 string) []model.Config {
 	fake.serviceRoleBindingsMutex.Lock()
 	ret, specificReturn := fake.serviceRoleBindingsReturnsOnCall[len(fake.serviceRoleBindingsArgsForCall)]
@@ -1213,8 +1213,6 @@ func (fake *IstioConfigStore) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.authorizationPoliciesMutex.RLock()
 	defer fake.authorizationPoliciesMutex.RUnlock()
-	fake.clusterRbacConfigMutex.RLock()
-	defer fake.clusterRbacConfigMutex.RUnlock()
 	fake.configDescriptorMutex.RLock()
 	defer fake.configDescriptorMutex.RUnlock()
 	fake.createMutex.RLock()
@@ -1237,6 +1235,8 @@ func (fake *IstioConfigStore) Invocations() map[string][][]interface{} {
 	defer fake.rbacConfigMutex.RUnlock()
 	fake.serviceEntriesMutex.RLock()
 	defer fake.serviceEntriesMutex.RUnlock()
+	fake.serviceMeshRbacConfigMutex.RLock()
+	defer fake.serviceMeshRbacConfigMutex.RUnlock()
 	fake.serviceRoleBindingsMutex.RLock()
 	defer fake.serviceRoleBindingsMutex.RUnlock()
 	fake.serviceRolesMutex.RLock()

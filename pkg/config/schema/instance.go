@@ -45,6 +45,9 @@ type Instance struct {
 	// Group is the config proto group.
 	Group string
 
+	// GroupDomain is the config group domain, nil defaults to IstioAPIGroupDomain.
+	GroupDomain string
+
 	// Version is the config proto version.
 	Version string
 

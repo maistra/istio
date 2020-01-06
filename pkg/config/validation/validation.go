@@ -1700,14 +1700,14 @@ func checkRbacConfig(name, typ string, msg proto.Message) error {
 	return nil
 }
 
-// ValidateClusterRbacConfig checks that ClusterRbacConfig is well-formed.
-func ValidateClusterRbacConfig(name, _ string, msg proto.Message) error {
-	return checkRbacConfig(name, "ClusterRbacConfig", msg)
+// ValidateServiceMeshRbacConfig checks that ServiceMeshRbacConfig is well-formed.
+func ValidateServiceMeshRbacConfig(name, _ string, msg proto.Message) error {
+	return checkRbacConfig(name, "ServiceMeshRbacConfig", msg)
 }
 
 // ValidateRbacConfig checks that RbacConfig is well-formed.
 func ValidateRbacConfig(name, _ string, msg proto.Message) error {
-	scope.Warnf("RbacConfig is deprecated, use ClusterRbacConfig instead.")
+	scope.Warnf("RbacConfig is deprecated, use ServiceMeshRbacConfig instead.")
 	return checkRbacConfig(name, "RbacConfig", msg)
 }
 

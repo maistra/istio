@@ -83,17 +83,17 @@ metadata:
     heritage: Tiller
     istio: rbac
     release: istio
-  name: clusterrbacconfigs.rbac.istio.io
+  name: servicemeshrbacconfigs.rbac.maistra.io
 spec:
-  group: rbac.istio.io
+  group: rbac.maistra.io
   names:
     categories:
     - istio-io
     - rbac-istio-io
-    kind: ClusterRbacConfig
-    plural: clusterrbacconfigs
-    singular: clusterrbacconfig
-  scope: Cluster
+    kind: ServiceMeshRbacConfig
+    plural: servicemeshrbacconfigs
+    singular: servicemeshrbacconfig
+  scope: Namespaced
   subresources:
     status: {}
   validation:
@@ -153,7 +153,7 @@ spec:
           type: object
       type: object
   versions:
-  - name: v1alpha1
+  - name: v1
     served: true
     storage: true
 
@@ -1678,18 +1678,18 @@ metadata:
     chart: istio
     heritage: Tiller
     release: istio
-  name: meshpolicies.authentication.istio.io
+  name: servicemeshpolicies.authentication.maistra.io
 spec:
-  group: authentication.istio.io
+  group: authentication.maistra.io
   names:
     categories:
     - istio-io
     - authentication-istio-io
-    kind: MeshPolicy
-    listKind: MeshPolicyList
-    plural: meshpolicies
-    singular: meshpolicy
-  scope: Cluster
+    kind: ServiceMeshPolicy
+    listKind: ServiceMeshPolicyList
+    plural: servicemeshpolicies
+    singular: servicemeshpolicy
+  scope: Namespaced
   subresources:
     status: {}
   validation:
@@ -2393,7 +2393,7 @@ spec:
           type: object
       type: object
   versions:
-  - name: v1alpha1
+  - name: v1
     served: true
     storage: true
 

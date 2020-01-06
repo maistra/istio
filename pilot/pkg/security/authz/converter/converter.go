@@ -211,16 +211,16 @@ func (c *Converter) ConvertV1alpha1ToV1beta1() error {
 
 // convert is the main function that converts RBAC v1alphal1 to v1beta1 for local policy files
 func (c *Converter) convert(authzPolicies *model.AuthorizationPolicies) error {
-	// Convert ClusterRbacConfig to AuthorizationPolicy
-	err := c.convertClusterRbacConfig(authzPolicies)
+	// Convert ServiceMeshRbacConfig to AuthorizationPolicy
+	err := c.convertServiceMeshRbacConfig(authzPolicies)
 	if err != nil {
 		// Users might not have access to the cluster-wide RBAC config, so instead of returning an error,
 		// output a warning instead.
-		log.Warnf("failed to convert ClusterRbacConfig: %s", err)
+		log.Warnf("failed to convert ServiceMeshRbacConfig: %s", err)
 	}
 	namespaces := authzPolicies.ListV1alpha1Namespaces()
 	if len(namespaces) == 0 {
-		// Similarly, a user might want to convert ClusterRbacConfig only.
+		// Similarly, a user might want to convert ServiceMeshRbacConfig only.
 		log.Warn("no namespace found for ServiceRole and ServiceRoleBinding")
 		return nil
 	}
@@ -242,56 +242,56 @@ func (c *Converter) convert(authzPolicies *model.AuthorizationPolicies) error {
 	return nil
 }
 
-// convertClusterRbacConfig converts ClusterRbacConfig to AuthorizationPolicy.
-func (c *Converter) convertClusterRbacConfig(authzPolicies *model.AuthorizationPolicies) error {
-	clusterRbacConfig := authzPolicies.GetClusterRbacConfig()
-	if clusterRbacConfig == nil {
-		return fmt.Errorf("no ClusterRbacConfig found")
+// convertServiceMeshRbacConfig converts ServiceMeshRbacConfig to AuthorizationPolicy.
+func (c *Converter) convertServiceMeshRbacConfig(authzPolicies *model.AuthorizationPolicies) error {
+	serviceMeshRbacConfig := authzPolicies.GetServiceMeshRbacConfig()
+	if serviceMeshRbacConfig == nil {
+		return fmt.Errorf("no ServiceMeshRbacConfig found")
 	}
 	// RbacConfig_ON_WITH_INCLUSION doesn't require the config root namespace.
-	if clusterRbacConfig.Mode == rbac_v1alpha1.RbacConfig_ON_WITH_INCLUSION {
+	if serviceMeshRbacConfig.Mode == rbac_v1alpha1.RbacConfig_ON_WITH_INCLUSION {
 		// Support namespace-level only.
-		if len(clusterRbacConfig.Inclusion.Services) > 0 {
-			return fmt.Errorf("service-level ClusterRbacConfig (found in ON_WITH_INCLUSION rule) is not supported")
+		if len(serviceMeshRbacConfig.Inclusion.Services) > 0 {
+			return fmt.Errorf("service-level ServiceMeshRbacConfig (found in ON_WITH_INCLUSION rule) is not supported")
 		}
 		// For each namespace in RbacConfig_ON_WITH_INCLUSION, we simply generate a deny-all rule for that namespace.
-		return c.generateClusterRbacConfig(rbacNamespaceDeny, clusterRbacConfig.Inclusion.Namespaces, false)
+		return c.generateServiceMeshRbacConfig(rbacNamespaceDeny, serviceMeshRbacConfig.Inclusion.Namespaces, false)
 	}
-	switch clusterRbacConfig.Mode {
+	switch serviceMeshRbacConfig.Mode {
 	case rbac_v1alpha1.RbacConfig_OFF:
-		return c.generateClusterRbacConfig(rbacNamespaceAllow, []string{c.RootNamespace}, true)
+		return c.generateServiceMeshRbacConfig(rbacNamespaceAllow, []string{c.RootNamespace}, true)
 	case rbac_v1alpha1.RbacConfig_ON:
-		return c.generateClusterRbacConfig(rbacNamespaceDeny, []string{c.RootNamespace}, true)
+		return c.generateServiceMeshRbacConfig(rbacNamespaceDeny, []string{c.RootNamespace}, true)
 	case rbac_v1alpha1.RbacConfig_ON_WITH_EXCLUSION:
 		// Support namespace-level only.
-		if len(clusterRbacConfig.Exclusion.Services) > 0 {
-			return fmt.Errorf("service-level ClusterRbacConfig (found in ON_WITH_EXCLUSION rule) is not supported")
+		if len(serviceMeshRbacConfig.Exclusion.Services) > 0 {
+			return fmt.Errorf("service-level ServiceMeshRbacConfig (found in ON_WITH_EXCLUSION rule) is not supported")
 		}
 		// First generate a cluster-wide deny rule.
-		err := c.generateClusterRbacConfig(rbacNamespaceDeny, []string{c.RootNamespace}, true)
+		err := c.generateServiceMeshRbacConfig(rbacNamespaceDeny, []string{c.RootNamespace}, true)
 		if err != nil {
-			return fmt.Errorf("failed to convert ClusterRbacConfig: %v", err)
+			return fmt.Errorf("failed to convert ServiceMeshRbacConfig: %v", err)
 		}
 		// For each namespace in RbacConfig_ON_WITH_EXCLUSION, we simply generate an allow-rule rule for that namespace.
-		return c.generateClusterRbacConfig(rbacNamespaceAllow, clusterRbacConfig.Exclusion.Namespaces, false)
+		return c.generateServiceMeshRbacConfig(rbacNamespaceAllow, serviceMeshRbacConfig.Exclusion.Namespaces, false)
 	}
 	return nil
 }
 
-func (c *Converter) generateClusterRbacConfig(template string, namespaces []string, isRootNamespace bool) error {
-	clusterRbacConfigData := map[string]string{
+func (c *Converter) generateServiceMeshRbacConfig(template string, namespaces []string, isRootNamespace bool) error {
+	serviceMeshRbacConfigData := map[string]string{
 		"ScopeName": "",
 		"Namespace": "",
 	}
 	for _, ns := range namespaces {
-		clusterRbacConfigData["Namespace"] = ns
-		clusterRbacConfigData["ScopeName"] = ns
+		serviceMeshRbacConfigData["Namespace"] = ns
+		serviceMeshRbacConfigData["ScopeName"] = ns
 		if isRootNamespace {
-			clusterRbacConfigData["ScopeName"] = "global"
+			serviceMeshRbacConfigData["ScopeName"] = "global"
 		}
-		policy, err := fillTemplate(template, clusterRbacConfigData)
+		policy, err := fillTemplate(template, serviceMeshRbacConfigData)
 		if err != nil {
-			return fmt.Errorf("failed to convert ClusterRbacConfig: %v", err)
+			return fmt.Errorf("failed to convert ServiceMeshRbacConfig: %v", err)
 		}
 		c.ConvertedPolicies.WriteString(policy)
 	}

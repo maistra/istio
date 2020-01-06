@@ -459,12 +459,12 @@ func TestRbacConfig(t *testing.T) {
 	}
 }
 
-func TestClusterRbacConfig(t *testing.T) {
+func TestServiceMeshRbacConfig(t *testing.T) {
 	store := model.MakeIstioStore(memory.Make(schemas.Istio))
-	addRbacConfigToStore(schemas.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "", store, t)
-	rbacConfig := store.ClusterRbacConfig()
+	addRbacConfigToStore(schemas.ServiceMeshRbacConfig.Type, constants.DefaultRbacConfigName, model.GetServiceMeshRbacConfigNamespace(), store, t)
+	rbacConfig := store.ServiceMeshRbacConfig()
 	if rbacConfig.Name != constants.DefaultRbacConfigName {
-		t.Errorf("model.ClusterRbacConfig: expecting %s, but got %s", constants.DefaultRbacConfigName, rbacConfig.Name)
+		t.Errorf("model.ServiceMeshRbacConfig: expecting %s, but got %s", constants.DefaultRbacConfigName, rbacConfig.Name)
 	}
 }
 
