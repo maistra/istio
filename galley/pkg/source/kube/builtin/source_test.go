@@ -33,7 +33,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -67,7 +66,6 @@ func TestNewWithUnknownSpecShouldError(t *testing.T) {
 	defer restoreLogLevel(prevLevel)
 
 	client := fake.NewSimpleClientset()
-	informerFactory := informers.NewSharedInformerFactory(client, 0)
 
 	spec := schema.ResourceSpec{
 		Kind:      "Unknown",
@@ -78,7 +76,7 @@ func TestNewWithUnknownSpecShouldError(t *testing.T) {
 		Group:     "cofig.istio.io",
 		Converter: converter.Get("identity"),
 	}
-	_, err := builtin.New(informerFactory, spec)
+	_, err := builtin.New(client, []string{""}, 0, nil, spec)
 	if err == nil || !strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("Expected error not found: %v", err)
 	}
@@ -92,10 +90,10 @@ func TestStartTwiceShouldError(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	// Start the source.
-	_, informerFactory := kubeResources()
+	client := kubeResources()
 	spec := builtin.GetType("Node").GetSpec()
 	ch := make(chan resource.Event)
-	s := newOrFail(t, informerFactory, spec)
+	s := newOrFail(t, client, spec)
 	_ = startOrFail(t, s)
 	defer s.Stop()
 
@@ -110,9 +108,9 @@ func TestStopTwiceShouldSucceed(t *testing.T) {
 	defer restoreLogLevel(prevLevel)
 
 	// Start the source.
-	_, informerFactory := kubeResources()
+	client := kubeResources()
 	spec := builtin.GetType("Node").GetSpec()
-	s := newOrFail(t, informerFactory, spec)
+	s := newOrFail(t, client, spec)
 	_ = startOrFail(t, s)
 
 	// Stop the resource twice.
@@ -125,11 +123,11 @@ func TestUnknownResourceShouldNotCreateEvent(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	client, informerFactory := kubeResources()
+	client := kubeResources()
 	spec := builtin.GetType("Node").GetSpec()
 
 	// Start the source.
-	s := newOrFail(t, informerFactory, spec)
+	s := newOrFail(t, client, spec)
 	ch := startOrFail(t, s)
 	defer s.Stop()
 
@@ -159,11 +157,11 @@ func TestNodes(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	client, informerFactory := kubeResources()
+	client := kubeResources()
 	spec := builtin.GetType("Node").GetSpec()
 
 	// Start the source.
-	s := newOrFail(t, informerFactory, spec)
+	s := newOrFail(t, client, spec)
 	ch := startOrFail(t, s)
 	defer s.Stop()
 
@@ -227,10 +225,10 @@ func TestPods(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	client, informerFactory := kubeResources()
+	client := kubeResources()
 
 	spec := builtin.GetType("Pod").GetSpec()
-	s := newOrFail(t, informerFactory, spec)
+	s := newOrFail(t, client, spec)
 	defer s.Stop()
 
 	// Start the source.
@@ -265,7 +263,10 @@ func TestPods(t *testing.T) {
 		if pod, err = client.CoreV1().Pods(namespace).Create(pod); err != nil {
 			t.Fatalf("failed creating pod: %v", err)
 		}
-		expected := toEvent(resource.Added, spec, pod, pod)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedPod := pod.DeepCopy()
+		expectedPod.ResourceVersion = namespace + "=" + pod.ResourceVersion
+		expected := toEvent(resource.Added, spec, expectedPod, expectedPod)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -278,7 +279,10 @@ func TestPods(t *testing.T) {
 		if _, err := client.CoreV1().Pods(namespace).Update(pod); err != nil {
 			t.Fatalf("failed updating pod: %v", err)
 		}
-		expected := toEvent(resource.Updated, spec, pod, pod)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedPod := pod.DeepCopy()
+		expectedPod.ResourceVersion = namespace + "=" + pod.ResourceVersion
+		expected := toEvent(resource.Updated, spec, expectedPod, expectedPod)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -297,7 +301,10 @@ func TestPods(t *testing.T) {
 		if err := client.CoreV1().Pods(namespace).Delete(pod.Name, nil); err != nil {
 			t.Fatalf("failed deleting pod: %v", err)
 		}
-		expected := toEvent(resource.Deleted, spec, pod, pod)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedPod := pod.DeepCopy()
+		expectedPod.ResourceVersion = namespace + "=" + pod.ResourceVersion
+		expected := toEvent(resource.Deleted, spec, expectedPod, expectedPod)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -308,10 +315,10 @@ func TestServices(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	client, informerFactory := kubeResources()
+	client := kubeResources()
 
 	spec := builtin.GetType("Service").GetSpec()
-	s := newOrFail(t, informerFactory, spec)
+	s := newOrFail(t, client, spec)
 	defer s.Stop()
 
 	// Start the source.
@@ -340,7 +347,10 @@ func TestServices(t *testing.T) {
 		if svc, err = client.CoreV1().Services(namespace).Create(svc); err != nil {
 			t.Fatalf("failed creating service: %v", err)
 		}
-		expected := toEvent(resource.Added, spec, svc, &svc.Spec)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedSvc := svc.DeepCopy()
+		expectedSvc.ResourceVersion = namespace + "=" + svc.ResourceVersion
+		expected := toEvent(resource.Added, spec, expectedSvc, &svc.Spec)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -353,7 +363,10 @@ func TestServices(t *testing.T) {
 		if _, err := client.CoreV1().Services(namespace).Update(svc); err != nil {
 			t.Fatalf("failed updating service: %v", err)
 		}
-		expected := toEvent(resource.Updated, spec, svc, &svc.Spec)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedSvc := svc.DeepCopy()
+		expectedSvc.ResourceVersion = namespace + "=" + svc.ResourceVersion
+		expected := toEvent(resource.Updated, spec, expectedSvc, &svc.Spec)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -372,7 +385,10 @@ func TestServices(t *testing.T) {
 		if err := client.CoreV1().Services(namespace).Delete(svc.Name, nil); err != nil {
 			t.Fatalf("failed deleting service: %v", err)
 		}
-		expected := toEvent(resource.Deleted, spec, svc, &svc.Spec)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedSvc := svc.DeepCopy()
+		expectedSvc.ResourceVersion = namespace + "=" + svc.ResourceVersion
+		expected := toEvent(resource.Deleted, spec, expectedSvc, &expectedSvc.Spec)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -383,10 +399,10 @@ func TestEndpoints(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	client, informerFactory := kubeResources()
+	client := kubeResources()
 
 	spec := builtin.GetType("Endpoints").GetSpec()
-	s := newOrFail(t, informerFactory, spec)
+	s := newOrFail(t, client, spec)
 	defer s.Stop()
 
 	// Start the source.
@@ -422,7 +438,10 @@ func TestEndpoints(t *testing.T) {
 		if eps, err = client.CoreV1().Endpoints(namespace).Create(eps); err != nil {
 			t.Fatalf("failed creating endpoints: %v", err)
 		}
-		expected := toEvent(resource.Added, spec, eps, eps)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedEps := eps.DeepCopy()
+		expectedEps.ResourceVersion = namespace + "=" + eps.ResourceVersion
+		expected := toEvent(resource.Added, spec, expectedEps, expectedEps)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -435,7 +454,10 @@ func TestEndpoints(t *testing.T) {
 		if _, err := client.CoreV1().Endpoints(namespace).Update(eps); err != nil {
 			t.Fatalf("failed updating endpoints: %v", err)
 		}
-		expected := toEvent(resource.Updated, spec, eps, eps)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedEps := eps.DeepCopy()
+		expectedEps.ResourceVersion = namespace + "=" + eps.ResourceVersion
+		expected := toEvent(resource.Updated, spec, expectedEps, expectedEps)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
@@ -456,15 +478,18 @@ func TestEndpoints(t *testing.T) {
 		if err := client.CoreV1().Endpoints(namespace).Delete(eps.Name, nil); err != nil {
 			t.Fatalf("failed deleting endpoints: %v", err)
 		}
-		expected := toEvent(resource.Deleted, spec, eps, eps)
+		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
+		expectedEps := eps.DeepCopy()
+		expectedEps.ResourceVersion = namespace + "=" + eps.ResourceVersion
+		expected := toEvent(resource.Deleted, spec, expectedEps, expectedEps)
 		actual := events.Expect(t, ch)
 		g.Expect(actual).To(Equal(expected))
 	})
 }
 
-func newOrFail(t *testing.T, informerFactory informers.SharedInformerFactory, spec *schema.ResourceSpec) runtime.Source {
+func newOrFail(t *testing.T, client kubernetes.Interface, spec *schema.ResourceSpec) runtime.Source {
 	t.Helper()
-	s, err := builtin.New(informerFactory, *spec)
+	s, err := builtin.New(client, []string{namespace}, 0, nil, *spec)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -492,11 +517,8 @@ func expectFullSync(t *testing.T, ch chan resource.Event) {
 	g.Expect(actual).To(Equal(resource.FullSyncEvent))
 }
 
-func kubeResources() (kubernetes.Interface, informers.SharedInformerFactory) {
-	client := fake.NewSimpleClientset()
-	informerFactory := informers.NewSharedInformerFactoryWithOptions(client, 0,
-		informers.WithNamespace(namespace))
-	return client, informerFactory
+func kubeResources() kubernetes.Interface {
+	return fake.NewSimpleClientset()
 }
 
 func toEvent(kind resource.EventKind, spec *schema.ResourceSpec, objectMeta metav1.Object,

@@ -254,7 +254,6 @@ func init() {
 		"File containing the x509 Certificate for HTTPS.")
 	rootCmd.PersistentFlags().IntVar(&flags.port, "port", 443, "Webhook port")
 	rootCmd.PersistentFlags().IntVar(&flags.monitoringPort, "monitoringPort", 15014, "Webhook monitoring port")
-
 	rootCmd.PersistentFlags().DurationVar(&flags.healthCheckInterval, "healthCheckInterval", 0,
 		"Configure how frequently the health check file specified by --healthCheckFile should be updated")
 	rootCmd.PersistentFlags().StringVar(&flags.healthCheckFile, "healthCheckFile", "",

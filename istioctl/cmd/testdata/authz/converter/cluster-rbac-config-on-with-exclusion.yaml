@@ -1,7 +1,8 @@
 apiVersion: "rbac.istio.io/v1alpha1"
-kind: ClusterRbacConfig
+kind: ServiceMeshRbacConfig
 metadata:
   name: default
+  namespace: istio-system
 spec:
   mode: 'ON_WITH_EXCLUSION'
   exclusion:

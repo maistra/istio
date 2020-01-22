@@ -32,7 +32,10 @@
           "value": "{\"/app-health/hello/livez\":{\"path\":\"/live\",\"port\":80},\"/app-health/hello/readyz\":{\"path\":\"/ready\",\"port\":3333,\"scheme\":\"HTTPS\"},\"/app-health/second/livez\":{\"port\":9000}}"
         }
       ],
-      "resources": {}
+      "resources": {},
+      "securityContext": {
+        "runAsUser": 1337
+      }
     }
   },
   {

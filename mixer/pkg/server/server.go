@@ -16,7 +16,9 @@ package server
 
 import (
 	"fmt"
+	"github.com/hashicorp/go-multierror"
 	"io"
+	"istio.io/istio/pkg/servicemesh/controller"
 	"net"
 	"os"
 	"strings"
@@ -68,6 +70,9 @@ type Server struct {
 	readinessProbe probe.Controller
 	*probe.Probe
 	configStore store.Store
+
+	mrc     controller.MemberRollController
+	mrcStop chan struct{}
 }
 
 type listenFunc func(network string, address string) (net.Listener, error)
@@ -76,7 +81,9 @@ type listenFunc func(network string, address string) (net.Listener, error)
 type patchTable struct {
 	newRuntime func(s store.Store, templates map[string]*template.Info, adapters map[string]*adapter.Info,
 		defaultConfigNamespace string, executorPool *pool.GoroutinePool,
-		handlerPool *pool.GoroutinePool, enableTracing bool) *runtime.Runtime
+		handlerPool *pool.GoroutinePool, enableTracing bool,
+		mrc controller.MemberRollController,
+		namespaces []string) *runtime.Runtime
 	configTracing func(serviceName string, options *tracing.Options) (io.Closer, error)
 	startMonitor  func(port uint16, enableProfiling bool, lf listenFunc) (*monitor, error)
 	listen        listenFunc
@@ -207,6 +214,19 @@ func newServer(a *Args, p *patchTable) (server *Server, err error) {
 		return nil, fmt.Errorf("unable to initialize config store: %v", err)
 	}
 
+	var namespaces []string
+	if a.MemberRollName != "" {
+		mrc, err := controller.NewMemberRollControllerFromConfigFile(a.ConfigStoreURL, a.MemberRollNamespace, a.MemberRollName, a.MemberRollResync)
+		if err != nil {
+			_ = s.Close()
+			return nil, multierror.Prefix(err, "Could not create MemberRollController.")
+		}
+		s.mrcStop = make(chan struct{})
+		s.mrc = mrc
+		mrc.Start(s.mrcStop)
+	} else {
+		namespaces = []string{""}
+	}
 	// block wait for the config store to sync
 	log.Info("Awaiting for config store sync...")
 	if err := st.WaitForSynced(a.ConfigWaitTimeout); err != nil {
@@ -215,7 +235,7 @@ func newServer(a *Args, p *patchTable) (server *Server, err error) {
 	s.configStore = st
 	log.Info("Starting runtime config watch...")
 	rt := p.newRuntime(st, templateMap, adapterMap, a.ConfigDefaultNamespace,
-		s.gp, s.adapterGP, a.TracingOptions.TracingEnabled())
+		s.gp, s.adapterGP, a.TracingOptions.TracingEnabled(), s.mrc, namespaces)
 
 	if err = p.runtimeListen(rt); err != nil {
 		return nil, fmt.Errorf("unable to listen: %v", err)
@@ -315,6 +335,11 @@ func (s *Server) Close() error {
 	if s.shutdown != nil {
 		s.server.GracefulStop()
 		_ = s.Wait()
+	}
+
+	if s.mrc != nil {
+		close(s.mrcStop)
+		s.mrc = nil
 	}
 
 	if s.controlZ != nil {

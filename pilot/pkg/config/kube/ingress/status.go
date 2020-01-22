@@ -41,6 +41,8 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 	controller2 "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
+	"istio.io/istio/pkg/listwatch"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/env"
 	"istio.io/pkg/log"
 )
@@ -79,6 +81,7 @@ var podNameVar = env.RegisterStringVar("POD_NAME", "", "")
 // NewStatusSyncer creates a new instance
 func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 	client kubernetes.Interface,
+	mrc meshcontroller.MemberRollController,
 	pilotNamespace string,
 	options controller2.Options) (*StatusSyncer, error) {
 
@@ -94,17 +97,26 @@ func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 	// queue requires a time duration for a retry delay after a handler error
 	queue := kube.NewQueue(1 * time.Second)
 
-	informer := cache.NewSharedIndexInformer(
-		&cache.ListWatch{
+	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
+	if mrc == nil {
+		log.Infof("Status Syncer watching namespaces %q for Ingresses", watchedNamespaceList)
+	} else {
+		log.Infof("Status Syncer watching Member Roll list %s for Ingress namespaces", options.MemberRollName)
+	}
+	mlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
 			ListFunc: func(opts metaV1.ListOptions) (runtime.Object, error) {
-				return client.ExtensionsV1beta1().Ingresses(options.WatchedNamespace).List(opts)
+				return client.ExtensionsV1beta1().Ingresses(namespace).List(opts)
 			},
 			WatchFunc: func(opts metaV1.ListOptions) (watch.Interface, error) {
-				return client.ExtensionsV1beta1().Ingresses(options.WatchedNamespace).Watch(opts)
+				return client.ExtensionsV1beta1().Ingresses(namespace).Watch(opts)
 			},
-		},
-		&v1beta1.Ingress{}, options.ResyncPeriod, cache.Indexers{},
-	)
+		}
+	})
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
+	informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, options.ResyncPeriod, cache.Indexers{})
 
 	st := StatusSyncer{
 		client:              client,

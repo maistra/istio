@@ -62,13 +62,34 @@ func (configgen *ConfigGeneratorImpl) buildGatewayListeners(
 	errs := &multierror.Error{}
 	listeners := make([]*xdsapi.Listener, 0, len(mergedGateway.Servers))
 	for portNumber, servers := range mergedGateway.Servers {
+		var si *model.ServiceInstance
+		listenerPort := int(portNumber)
+		serviceInstances := make([]*model.ServiceInstance, 0, len(node.ServiceInstances))
+		for _, w := range node.ServiceInstances {
+			if w.Endpoint.ServicePort.Port == int(portNumber) {
+				if si == nil {
+					si = w
+					listenerPort = si.Endpoint.Port
+				}
+				serviceInstances = append(serviceInstances, w)
+			}
+		}
+		if len(serviceInstances) != 1 {
+			names := make([]host.Name, 0, len(serviceInstances))
+			for _, s := range serviceInstances {
+				names = append(names, s.Service.Hostname)
+			}
+			log.Warnf("buildGatewayListeners: found %d services on port %d: %v",
+				len(serviceInstances), portNumber, names)
+		}
+
 		// on a given port, we can either have plain text HTTP servers or
 		// HTTPS/TLS servers with SNI. We cannot have a mix of http and https server on same port.
 		opts := buildListenerOpts{
 			env:        env,
 			proxy:      node,
 			bind:       actualWildcard,
-			port:       int(portNumber),
+			port:       listenerPort,
 			bindToPort: true,
 		}
 
@@ -126,25 +147,6 @@ func (configgen *ConfigGeneratorImpl) buildGatewayListeners(
 			}
 		}
 		// end shady logic
-
-		var si *model.ServiceInstance
-		serviceInstances := make([]*model.ServiceInstance, 0, len(node.ServiceInstances))
-		for _, w := range node.ServiceInstances {
-			if w.Endpoint.Port == int(portNumber) {
-				if si == nil {
-					si = w
-				}
-				serviceInstances = append(serviceInstances, w)
-			}
-		}
-		if len(serviceInstances) != 1 {
-			names := make([]host.Name, 0, len(serviceInstances))
-			for _, s := range serviceInstances {
-				names = append(names, s.Service.Hostname)
-			}
-			log.Warnf("buildGatewayListeners: found %d services on port %d: %v",
-				len(serviceInstances), portNumber, names)
-		}
 
 		pluginParams := &plugin.InputParams{
 			ListenerProtocol:           listenerProtocol,

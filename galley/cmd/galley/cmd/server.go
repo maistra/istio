@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"strings"
 
+	"k8s.io/api/core/v1"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -33,6 +35,10 @@ import (
 
 var (
 	loggingOptions = log.DefaultOptions()
+)
+
+const (
+	defaultMemberRollNamespace = "istio-system"
 )
 
 // GetRootCmd returns the root of the cobra command-tree.
@@ -70,6 +76,15 @@ func serverCmd() *cobra.Command {
 			if len(serverArgs.ValidationArgs.CACertFile) < 1 {
 				serverArgs.ValidationArgs.CACertFile = serverArgs.CredentialOptions.CACertificateFile
 			}
+			if serverArgs.MemberRollName != "" {
+				if serverArgs.MemberRollNamespace == "" {
+					serverArgs.MemberRollNamespace = serverArgs.ValidationArgs.DeploymentAndServiceNamespace
+				}
+				if serverArgs.MemberRollNamespace == "" {
+					serverArgs.MemberRollNamespace = defaultMemberRollNamespace
+				}
+				serverArgs.WatchedNamespaces = serverArgs.MemberRollNamespace
+			}
 			if len(serverArgs.ValidationArgs.CertFile) < 1 {
 				serverArgs.ValidationArgs.CertFile = serverArgs.CredentialOptions.CertificateFile
 			}
@@ -99,8 +114,15 @@ func serverCmd() *cobra.Command {
 	svr.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	svr.PersistentFlags().StringVar(&serverArgs.KubeConfig, "kubeconfig", serverArgs.KubeConfig,
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
+	svr.PersistentFlags().StringVarP(&serverArgs.MemberRollName, "memberRollName", "", "",
+		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
+	svr.PersistentFlags().StringVarP(&serverArgs.MemberRollNamespace, "memberRollNamespace", "", "",
+		"The namespace of the ServiceMeshMemberRoll resource.")
 	svr.PersistentFlags().DurationVar(&serverArgs.ResyncPeriod, "resyncPeriod", serverArgs.ResyncPeriod,
 		"Resync period for rescanning Kubernetes resources")
+	svr.PersistentFlags().StringVarP(&serverArgs.AppNamespace, "appNamespace", "a",
+		v1.NamespaceAll, "Specify the applications namespace list the controller manages, separated by comma; if not set, controller watches all namespaces."+
+			"  This is overridden by the memberRoll option.")
 	svr.PersistentFlags().StringVar(&serverArgs.CredentialOptions.CertificateFile, "tlsCertFile", constants.DefaultCertChain,
 		"File containing the x509 Certificate for HTTPS.")
 	svr.PersistentFlags().StringVar(&serverArgs.CredentialOptions.KeyFile, "tlsKeyFile", constants.DefaultKey,
@@ -223,6 +245,7 @@ func setupAliases() {
 	viper.RegisterAlias("processing.server.auth.mtls.caCertificates", "caCertFile")
 	viper.RegisterAlias("processing.server.auth.mtls.accessListFile", "accessListFile")
 	viper.RegisterAlias("processing.server.auth.insecure", "insecure")
+	viper.RegisterAlias("processing.source.watchedNamespaces", "watchedNamespaces")
 	viper.RegisterAlias("processing.source.kubernetes.resyncPeriod", "resyncPeriod")
 	viper.RegisterAlias("processing.source.filesystem.path", "configPath")
 	viper.RegisterAlias("validation.enable", "enable-validation")

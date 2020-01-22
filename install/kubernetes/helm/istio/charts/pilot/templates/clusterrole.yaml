@@ -44,3 +44,9 @@ rules:
     - "certificatesigningrequests/approval"
     - "certificatesigningrequests/status"
   verbs: ["update", "create", "get", "delete"]
+- apiGroups: ["authentication.maistra.io"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["rbac.maistra.io"]
+  resources: ["*"]
+  verbs: ["get", "watch", "list"]

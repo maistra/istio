@@ -9,9 +9,6 @@ import (
 
 var (
 
-	// IstioAuthenticationV1Alpha1Meshpolicies is the name of collection istio/authentication/v1alpha1/meshpolicies
-	IstioAuthenticationV1Alpha1Meshpolicies = collection.NewName("istio/authentication/v1alpha1/meshpolicies")
-
 	// IstioAuthenticationV1Alpha1Policies is the name of collection istio/authentication/v1alpha1/policies
 	IstioAuthenticationV1Alpha1Policies = collection.NewName("istio/authentication/v1alpha1/policies")
 
@@ -162,9 +159,6 @@ var (
 	// IstioPolicyV1Beta1Rules is the name of collection istio/policy/v1beta1/rules
 	IstioPolicyV1Beta1Rules = collection.NewName("istio/policy/v1beta1/rules")
 
-	// IstioRbacV1Alpha1Clusterrbacconfigs is the name of collection istio/rbac/v1alpha1/clusterrbacconfigs
-	IstioRbacV1Alpha1Clusterrbacconfigs = collection.NewName("istio/rbac/v1alpha1/clusterrbacconfigs")
-
 	// IstioRbacV1Alpha1Rbacconfigs is the name of collection istio/rbac/v1alpha1/rbacconfigs
 	IstioRbacV1Alpha1Rbacconfigs = collection.NewName("istio/rbac/v1alpha1/rbacconfigs")
 
@@ -180,11 +174,11 @@ var (
 	// K8SAppsV1Deployments is the name of collection k8s/apps/v1/deployments
 	K8SAppsV1Deployments = collection.NewName("k8s/apps/v1/deployments")
 
-	// K8SAuthenticationIstioIoV1Alpha1Meshpolicies is the name of collection k8s/authentication.istio.io/v1alpha1/meshpolicies
-	K8SAuthenticationIstioIoV1Alpha1Meshpolicies = collection.NewName("k8s/authentication.istio.io/v1alpha1/meshpolicies")
-
 	// K8SAuthenticationIstioIoV1Alpha1Policies is the name of collection k8s/authentication.istio.io/v1alpha1/policies
 	K8SAuthenticationIstioIoV1Alpha1Policies = collection.NewName("k8s/authentication.istio.io/v1alpha1/policies")
+
+	// K8SAuthenticationMaistraIoV1Servicemeshpolicies is the name of collection k8s/authentication.maistra.io/v1/servicemeshpolicies
+	K8SAuthenticationMaistraIoV1Servicemeshpolicies = collection.NewName("k8s/authentication.maistra.io/v1/servicemeshpolicies")
 
 	// K8SConfigIstioIoV1Alpha2Adapters is the name of collection k8s/config.istio.io/v1alpha2/adapters
 	K8SConfigIstioIoV1Alpha2Adapters = collection.NewName("k8s/config.istio.io/v1alpha2/adapters")
@@ -345,9 +339,6 @@ var (
 	// K8SNetworkingIstioIoV1Alpha3Virtualservices is the name of collection k8s/networking.istio.io/v1alpha3/virtualservices
 	K8SNetworkingIstioIoV1Alpha3Virtualservices = collection.NewName("k8s/networking.istio.io/v1alpha3/virtualservices")
 
-	// K8SRbacIstioIoV1Alpha1Clusterrbacconfigs is the name of collection k8s/rbac.istio.io/v1alpha1/clusterrbacconfigs
-	K8SRbacIstioIoV1Alpha1Clusterrbacconfigs = collection.NewName("k8s/rbac.istio.io/v1alpha1/clusterrbacconfigs")
-
 	// K8SRbacIstioIoV1Alpha1Policy is the name of collection k8s/rbac.istio.io/v1alpha1/policy
 	K8SRbacIstioIoV1Alpha1Policy = collection.NewName("k8s/rbac.istio.io/v1alpha1/policy")
 
@@ -357,14 +348,22 @@ var (
 	// K8SRbacIstioIoV1Alpha1Serviceroles is the name of collection k8s/rbac.istio.io/v1alpha1/serviceroles
 	K8SRbacIstioIoV1Alpha1Serviceroles = collection.NewName("k8s/rbac.istio.io/v1alpha1/serviceroles")
 
+	// K8SRbacMaistraIoV1Servicemeshrbacconfigs is the name of collection k8s/rbac.maistra.io/v1/servicemeshrbacconfigs
+	K8SRbacMaistraIoV1Servicemeshrbacconfigs = collection.NewName("k8s/rbac.maistra.io/v1/servicemeshrbacconfigs")
+
 	// K8SSecurityIstioIoV1Beta1Authorizationpolicies is the name of collection k8s/security.istio.io/v1beta1/authorizationpolicies
 	K8SSecurityIstioIoV1Beta1Authorizationpolicies = collection.NewName("k8s/security.istio.io/v1beta1/authorizationpolicies")
+
+	// MaistraAuthenticationV1Servicemeshpolicies is the name of collection maistra/authentication/v1/servicemeshpolicies
+	MaistraAuthenticationV1Servicemeshpolicies = collection.NewName("maistra/authentication/v1/servicemeshpolicies")
+
+	// MaistraRbacV1Servicemeshrbacconfigs is the name of collection maistra/rbac/v1/servicemeshrbacconfigs
+	MaistraRbacV1Servicemeshrbacconfigs = collection.NewName("maistra/rbac/v1/servicemeshrbacconfigs")
 )
 
 // CollectionNames returns the collection names declared in this package.
 func CollectionNames() []collection.Name {
 	return []collection.Name{
-		IstioAuthenticationV1Alpha1Meshpolicies,
 		IstioAuthenticationV1Alpha1Policies,
 		IstioConfigV1Alpha2Adapters,
 		IstioConfigV1Alpha2Httpapispecbindings,
@@ -415,14 +414,13 @@ func CollectionNames() []collection.Name {
 		IstioPolicyV1Beta1Handlers,
 		IstioPolicyV1Beta1Instances,
 		IstioPolicyV1Beta1Rules,
-		IstioRbacV1Alpha1Clusterrbacconfigs,
 		IstioRbacV1Alpha1Rbacconfigs,
 		IstioRbacV1Alpha1Servicerolebindings,
 		IstioRbacV1Alpha1Serviceroles,
 		IstioSecurityV1Beta1Authorizationpolicies,
 		K8SAppsV1Deployments,
-		K8SAuthenticationIstioIoV1Alpha1Meshpolicies,
 		K8SAuthenticationIstioIoV1Alpha1Policies,
+		K8SAuthenticationMaistraIoV1Servicemeshpolicies,
 		K8SConfigIstioIoV1Alpha2Adapters,
 		K8SConfigIstioIoV1Alpha2Apikeys,
 		K8SConfigIstioIoV1Alpha2Attributemanifests,
@@ -476,10 +474,12 @@ func CollectionNames() []collection.Name {
 		K8SNetworkingIstioIoV1Alpha3Serviceentries,
 		K8SNetworkingIstioIoV1Alpha3Sidecars,
 		K8SNetworkingIstioIoV1Alpha3Virtualservices,
-		K8SRbacIstioIoV1Alpha1Clusterrbacconfigs,
 		K8SRbacIstioIoV1Alpha1Policy,
 		K8SRbacIstioIoV1Alpha1Rbacconfigs,
 		K8SRbacIstioIoV1Alpha1Serviceroles,
+		K8SRbacMaistraIoV1Servicemeshrbacconfigs,
 		K8SSecurityIstioIoV1Beta1Authorizationpolicies,
+		MaistraAuthenticationV1Servicemeshpolicies,
+		MaistraRbacV1Servicemeshrbacconfigs,
 	}
 }

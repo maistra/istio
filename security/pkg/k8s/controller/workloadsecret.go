@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"istio.io/istio/pkg/servicemesh/controller"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,9 +31,9 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 
+	"istio.io/istio/pkg/listwatch"
 	"istio.io/istio/pkg/spiffe"
 	k8ssecret "istio.io/istio/security/pkg/k8s/secret"
-	"istio.io/istio/security/pkg/listwatch"
 	caerror "istio.io/istio/security/pkg/pki/error"
 	"istio.io/istio/security/pkg/pki/util"
 	certutil "istio.io/istio/security/pkg/util"
@@ -167,6 +169,14 @@ type SecretController struct {
 	// If true, periodically sync with istio-ca-secret to load latest root certificate.
 	// Only used in self signed CA mode.
 	syncWithSelfSignedCaSecret bool
+
+	// which namespaces are in the MemberRoll (if used)
+	memberRollNamespaces []string
+}
+
+// UpdateNamespaces updates the set of namespaces in the MemberRoll (if used)
+func (sc *SecretController) UpdateNamespaces(namespaces []string) {
+	sc.memberRollNamespaces = append([]string(nil), namespaces...)
 }
 
 // NewSecretController returns a pointer to a newly constructed SecretController instance.
@@ -174,7 +184,7 @@ func NewSecretController(ca certificateAuthority, enableNamespacesByDefault bool
 	certTTL time.Duration, gracePeriodRatio float32, minGracePeriod time.Duration,
 	dualUse bool, core corev1.CoreV1Interface, forCA bool, pkcs8Key bool, namespaces []string,
 	dnsNames map[string]*DNSNameEntry, istioCaStorageNamespace, rootCertFile string,
-	selfSignedCa bool) (*SecretController, error) {
+	selfSignedCa bool, mrc controller.MemberRollController) (*SecretController, error) {
 
 	if gracePeriodRatio < 0 || gracePeriodRatio > 1 {
 		return nil, fmt.Errorf("grace period ratio %f should be within [0, 1]", gracePeriodRatio)
@@ -220,6 +230,11 @@ func NewSecretController(ca certificateAuthority, enableNamespacesByDefault bool
 			},
 		}
 	})
+	if mrc != nil {
+		mrc.Register(saLW)
+		mrc.Register(c)
+	}
+
 	c.saStore, c.saController =
 		cache.NewInformer(saLW, &v1.ServiceAccount{}, time.Minute, cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.saAdded,
@@ -239,6 +254,11 @@ func NewSecretController(ca certificateAuthority, enableNamespacesByDefault bool
 			},
 		}
 	})
+
+	if mrc != nil {
+		mrc.Register(scrtLW)
+	}
+
 	c.scrtStore, c.scrtController =
 		cache.NewInformer(scrtLW, &v1.Secret{}, secretResyncPeriod, cache.ResourceEventHandlerFuncs{
 			DeleteFunc: c.scrtDeleted,
@@ -309,7 +329,19 @@ func (sc *SecretController) saAdded(obj interface{}) {
 
 // Handles the event where a service account is deleted.
 func (sc *SecretController) saDeleted(obj interface{}) {
-	acct := obj.(*v1.ServiceAccount)
+	acct, ok := obj.(*v1.ServiceAccount)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		acct, ok = tombstone.Obj.(*v1.ServiceAccount)
+		if !ok {
+			log.Errorf("Tombstone contained object that is not a service account %#v", obj)
+			return
+		}
+	}
 	sc.deleteSecret(acct.GetName(), acct.GetNamespace())
 	sc.monitoring.ServiceAccountDeletion.Increment()
 }
@@ -365,6 +397,9 @@ func (sc *SecretController) deleteSecret(saName, saNamespace string) {
 	if err == nil || errors.IsNotFound(err) {
 		k8sControllerLog.Infof("Secret %s/%s deleted successfully", saNamespace, GetSecretName(saName))
 		return
+	} else if errors.IsForbidden(err) && sc.memberRollNamespaces != nil && !contains(sc.memberRollNamespaces, saNamespace) {
+		log.Infof("Not deleting Istio secret for service account \"%s\" in namespace \"%s\"", saName, saNamespace)
+		return
 	}
 
 	k8sControllerLog.Errorf("Failed to delete secret %s/%s (error: %s)", saNamespace, GetSecretName(saName), err)
@@ -373,8 +408,16 @@ func (sc *SecretController) deleteSecret(saName, saNamespace string) {
 func (sc *SecretController) scrtDeleted(obj interface{}) {
 	scrt, ok := obj.(*v1.Secret)
 	if !ok {
-		k8sControllerLog.Warnf("Failed to convert to secret object: %v", obj)
-		return
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		scrt, ok = tombstone.Obj.(*v1.Secret)
+		if !ok {
+			log.Errorf("Tombstone contained object that is not a secret %#v", obj)
+			return
+		}
 	}
 
 	saName := scrt.Annotations[ServiceAccountNameAnnotationKey]
@@ -598,4 +641,13 @@ func (sc *SecretController) refreshSecret(scrt *v1.Secret) error {
 
 	_, err = sc.core.Secrets(namespace).Update(scrt)
 	return err
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }

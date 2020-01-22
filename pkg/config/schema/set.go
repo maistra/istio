@@ -67,15 +67,15 @@ func (s Set) Validate() error {
 		}
 		descriptorTypes[v.Type] = true
 		if v.ClusterScoped {
-			if _, exists := clusterMessages[v.MessageName]; exists {
-				errs = multierror.Append(errs, fmt.Errorf("duplicate message type: %q", v.MessageName))
+			if _, exists := clusterMessages[v.Collection]; exists {
+				errs = multierror.Append(errs, fmt.Errorf("duplicate collection type: %q", v.Collection))
 			}
-			clusterMessages[v.MessageName] = true
+			clusterMessages[v.Collection] = true
 		} else {
-			if _, exists := messages[v.MessageName]; exists {
-				errs = multierror.Append(errs, fmt.Errorf("duplicate message type: %q", v.MessageName))
+			if _, exists := messages[v.Collection]; exists {
+				errs = multierror.Append(errs, fmt.Errorf("duplicate collection type: %q", v.Collection))
 			}
-			messages[v.MessageName] = true
+			messages[v.Collection] = true
 		}
 	}
 	return errs

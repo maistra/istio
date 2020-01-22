@@ -655,7 +655,7 @@ func TestAuthorizationPolicies_IsRBACEnabled(t *testing.T) {
 			want:      true,
 		},
 		{
-			name: "enabled by ClusterRbacConfig overriding RbacConfig",
+			name: "enabled by ServiceMeshRbacConfig overriding RbacConfig",
 			config: []Config{
 				{
 					ConfigMeta: ConfigMeta{
@@ -744,7 +744,7 @@ func newConfig(name, ns string, spec proto.Message) Config {
 
 	switch spec.(type) {
 	case *rbacproto.RbacConfig:
-		typ = schemas.ClusterRbacConfig.Type
+		typ = schemas.ServiceMeshRbacConfig.Type
 	case *rbacproto.ServiceRole:
 		typ = schemas.ServiceRole.Type
 	case *rbacproto.ServiceRoleBinding:
