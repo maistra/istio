@@ -6,6 +6,7 @@ metadata:
     app: mixer
     package: cloudwatch
     istio: mixer-adapter
+    release: istio
   annotations:
     "helm.sh/resource-policy": keep
 spec:
@@ -28,6 +29,7 @@ metadata:
     app: mixer
     package: dogstatsd
     istio: mixer-adapter
+    release: istio
   annotations:
     "helm.sh/resource-policy": keep
 spec:
@@ -73,6 +75,7 @@ metadata:
     app: mixer
     package: zipkin
     istio: mixer-adapter
+    release: istio
   annotations:
     "helm.sh/resource-policy": keep
 spec:
