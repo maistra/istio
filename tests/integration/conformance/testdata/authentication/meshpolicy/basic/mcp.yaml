@@ -13,7 +13,7 @@ constraints:
           ]
         },
         "Metadata": {
-          "name": "default"
+          "name": "{{.Namespace}}/default"
         },
         "TypeURL": "type.googleapis.com/istio.authentication.v1alpha1.Policy"
       }
