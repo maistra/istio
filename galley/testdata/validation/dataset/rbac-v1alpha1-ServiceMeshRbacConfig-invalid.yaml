@@ -1,7 +1,6 @@
-apiVersion: "rbac.istio.io/v1alpha1"
+apiVersion: "rbac.maistra.io/v1"
 kind: ServiceMeshRbacConfig
 metadata:
   name: default
-  namespace: istio-system
 spec:
   mode: 'ON_WITH_EXCLUSION'
