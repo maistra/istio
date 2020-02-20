@@ -29,6 +29,7 @@ func TestMain(m *testing.M) {
 	framework.
 		NewSuite("outbound_traffic_policy_allow_any", m).
 		Label(label.CustomSetup).
+		RequireEnvironment(environment.Kube).
 		SetupOnEnv(environment.Kube, istio.Setup(&ist, setupConfig)).
 		Run()
 }

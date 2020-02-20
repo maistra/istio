@@ -34,6 +34,7 @@ import (
 // - Send HTTP/gRPC requests between apps.
 func TestReachability(t *testing.T) {
 	framework.NewTest(t).
+		RequiresEnvironment(environment.Kube).
 		Run(func(ctx framework.TestContext) {
 
 			rctx := reachability.CreateContext(ctx, g, p)
