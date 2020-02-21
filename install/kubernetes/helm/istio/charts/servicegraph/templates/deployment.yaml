@@ -10,6 +10,11 @@ metadata:
     release: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.replicaCount }}
+
+  selector:
+    matchLabels:
+        app: servicegraph
+        release: {{ .Release.Name }}
   template:
     metadata:
       labels:

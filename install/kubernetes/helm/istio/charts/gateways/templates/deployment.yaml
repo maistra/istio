@@ -21,6 +21,11 @@ spec:
   replicas: 1
 {{- end }}
 {{- end }}
+  selector:
+    matchLabels:
+      {{- range $key, $val := $spec.labels }}
+      {{ $key }}: {{ $val }}
+      {{- end }}
   template:
     metadata:
       labels:

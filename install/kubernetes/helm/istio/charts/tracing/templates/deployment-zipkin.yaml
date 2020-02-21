@@ -11,6 +11,11 @@ metadata:
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
+
+  selector:
+    matchLabels:
+        app: zipkin
+        release: {{ .Release.Name }}
   template:
     metadata:
       labels:

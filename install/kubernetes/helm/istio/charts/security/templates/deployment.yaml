@@ -16,6 +16,12 @@ spec:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
+
+  selector:
+    matchLabels:
+        app: {{ template "security.name" . }}
+        release: {{ .Release.Name }}
+        istio: citadel
   template:
     metadata:
       labels:
