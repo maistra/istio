@@ -2,7 +2,7 @@
 title: v1alpha1
 layout: protoc-gen-docs
 generator: protoc-gen-docs
-number_of_entries: 86
+number_of_entries: 90
 ---
 <h2 id="AddonIngressConfig">AddonIngressConfig</h2>
 <section>
@@ -224,9 +224,127 @@ No
 No
 </td>
 </tr>
+<tr id="CNIConfig-repair">
+<td><code>repair</code></td>
+<td><code><a href="#CNIRepairConfig">CNIRepairConfig</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
 <tr id="CNIConfig-podAnnotations" class="deprecated ">
 <td><code>podAnnotations</code></td>
 <td><code><a href="#TypeMapStringInterface">TypeMapStringInterface</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+</tbody>
+</table>
+</section>
+<h2 id="CNIRepairConfig">CNIRepairConfig</h2>
+<section>
+<table class="message-fields">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr id="CNIRepairConfig-enabled">
+<td><code>enabled</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+<p>Controls whether repair behavior is enabled.</p>
+
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-hub">
+<td><code>hub</code></td>
+<td><code>string</code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-tag">
+<td><code>tag</code></td>
+<td><code>string</code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-image">
+<td><code>image</code></td>
+<td><code>string</code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-labelPods">
+<td><code>labelPods</code></td>
+<td><code>string</code></td>
+<td>
+<p>Controls whether various repair behaviors are enabled.</p>
+
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-createEvents">
+<td><code>createEvents</code></td>
+<td><code>string</code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-deletePods">
+<td><code>deletePods</code></td>
+<td><code>string</code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-brokenPodLabelKey">
+<td><code>brokenPodLabelKey</code></td>
+<td><code>string</code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-brokenPodLabelValue">
+<td><code>brokenPodLabelValue</code></td>
+<td><code>string</code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CNIRepairConfig-initContainerName">
+<td><code>initContainerName</code></td>
+<td><code>string</code></td>
 <td>
 </td>
 <td>
@@ -390,6 +508,33 @@ No
 
 <p>See https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#resource-requests-and-limits-of-pod-and-container</p>
 
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CertManagerConfig-podAntiAffinityLabelSelector" class="deprecated ">
+<td><code>podAntiAffinityLabelSelector</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CertManagerConfig-podAntiAffinityTermLabelSelector" class="deprecated ">
+<td><code>podAntiAffinityTermLabelSelector</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="CertManagerConfig-tolerations" class="deprecated ">
+<td><code>tolerations</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
 </td>
 <td>
 No
@@ -692,7 +837,7 @@ No
 </tr>
 <tr id="EgressGatewayConfig-env">
 <td><code>env</code></td>
-<td><code>map&lt;string,&nbsp;string&gt;</code></td>
+<td><code><a href="#TypeMapStringInterface">TypeMapStringInterface</a></code></td>
 <td>
 <p>Environment variables passed to the proxy container.</p>
 
@@ -857,6 +1002,15 @@ No
 
 <p>See https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#resource-requests-and-limits-of-pod-and-container</p>
 
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="EgressGatewayConfig-tolerations" class="deprecated ">
+<td><code>tolerations</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
 </td>
 <td>
 No
@@ -1187,6 +1341,15 @@ No
 <td>
 <p>K8s rolling update strategy</p>
 
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="GalleyConfig-tolerations" class="deprecated ">
+<td><code>tolerations</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
 </td>
 <td>
 No
@@ -2046,7 +2209,7 @@ No
 </tr>
 <tr id="IngressGatewayConfig-env">
 <td><code>env</code></td>
-<td><code>map&lt;string,&nbsp;string&gt;</code></td>
+<td><code><a href="#TypeMapStringInterface">TypeMapStringInterface</a></code></td>
 <td>
 <p>Environment variables passed to the proxy container.</p>
 
@@ -2197,6 +2360,60 @@ No
 No
 </td>
 </tr>
+<tr id="IngressGatewayConfig-externalTrafficPolicy">
+<td><code>externalTrafficPolicy</code></td>
+<td><code>string</code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="IngressGatewayConfig-ingressPorts">
+<td><code>ingressPorts</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="IngressGatewayConfig-additionalContainers">
+<td><code>additionalContainers</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="IngressGatewayConfig-configVolumes">
+<td><code>configVolumes</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="IngressGatewayConfig-certificates">
+<td><code>certificates</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="IngressGatewayConfig-tls">
+<td><code>tls</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
 <tr id="IngressGatewayConfig-cpu" class="deprecated ">
 <td><code>cpu</code></td>
 <td><code><a href="#CPUTargetUtilizationConfig">CPUTargetUtilizationConfig</a></code></td>
@@ -2299,6 +2516,15 @@ No
 <td>
 <p>K8s rolling update strategy</p>
 
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="IngressGatewayConfig-tolerations" class="deprecated ">
+<td><code>tolerations</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
 </td>
 <td>
 No
@@ -2571,6 +2797,15 @@ No
 <td>
 <p>See PodAntiAffinityLabelSelector.</p>
 
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="KialiConfig-tolerations" class="deprecated ">
+<td><code>tolerations</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
 </td>
 <td>
 No
@@ -3332,7 +3567,7 @@ No
 </tr>
 <tr id="MixerTelemetryConfig-env">
 <td><code>env</code></td>
-<td><code>map&lt;string,&nbsp;string&gt;</code></td>
+<td><code><a href="#TypeMapStringInterface">TypeMapStringInterface</a></code></td>
 <td>
 <p>Environment variables passed to the Mixer container.</p>
 
@@ -3906,7 +4141,7 @@ No
 </tr>
 <tr id="PilotConfig-env">
 <td><code>env</code></td>
-<td><code>map&lt;string,&nbsp;string&gt;</code></td>
+<td><code><a href="#TypeMapStringInterface">TypeMapStringInterface</a></code></td>
 <td>
 <p>Environment variables passed to the Pilot container.</p>
 
@@ -5376,6 +5611,15 @@ No
 No
 </td>
 </tr>
+<tr id="SecurityConfig-tolerations" class="deprecated ">
+<td><code>tolerations</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
 </tbody>
 </table>
 </section>
@@ -5624,6 +5868,15 @@ No
 No
 </td>
 </tr>
+<tr id="SidecarInjectorConfig-tolerations" class="deprecated ">
+<td><code>tolerations</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
 </tbody>
 </table>
 </section>
@@ -5843,6 +6096,17 @@ No
 No
 </td>
 </tr>
+<tr id="TelemetryConfig-v1">
+<td><code>v1</code></td>
+<td><code><a href="#TelemetryV1Config">TelemetryV1Config</a></code></td>
+<td>
+<p>Use telemetry v1.</p>
+
+</td>
+<td>
+No
+</td>
+</tr>
 <tr id="TelemetryConfig-v2">
 <td><code>v2</code></td>
 <td><code><a href="#TelemetryV2Config">TelemetryV2Config</a></code></td>
@@ -5857,9 +6121,37 @@ No
 </tbody>
 </table>
 </section>
-<h2 id="TelemetryV2Config">TelemetryV2Config</h2>
+<h2 id="TelemetryV1Config">TelemetryV1Config</h2>
 <section>
 <p>Controls whether pilot will configure telemetry v1.</p>
+
+<table class="message-fields">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr id="TelemetryV1Config-enabled">
+<td><code>enabled</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+<p>Controls whether pilot will configure telemetry v1.</p>
+
+</td>
+<td>
+No
+</td>
+</tr>
+</tbody>
+</table>
+</section>
+<h2 id="TelemetryV2Config">TelemetryV2Config</h2>
+<section>
+<p>Controls whether pilot will configure telemetry v2.</p>
 
 <table class="message-fields">
 <thead>
@@ -5875,8 +6167,116 @@ No
 <td><code>enabled</code></td>
 <td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
 <td>
-<p>Controls whether pilot will configure telemetry v1.</p>
+<p>Controls whether pilot will configure telemetry v2.</p>
 
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="TelemetryV2Config-prometheus">
+<td><code>prometheus</code></td>
+<td><code><a href="#TelemetryV2PrometheusConfig">TelemetryV2PrometheusConfig</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="TelemetryV2Config-stackdriver">
+<td><code>stackdriver</code></td>
+<td><code><a href="#TelemetryV2StackDriverConfig">TelemetryV2StackDriverConfig</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+</tbody>
+</table>
+</section>
+<h2 id="TelemetryV2PrometheusConfig">TelemetryV2PrometheusConfig</h2>
+<section>
+<p>Conrols telemetry v2 prometheus settings.</p>
+
+<table class="message-fields">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr id="TelemetryV2PrometheusConfig-enabled">
+<td><code>enabled</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+<p>Controls whether stats envoyfilter would be enabled or not.</p>
+
+</td>
+<td>
+No
+</td>
+</tr>
+</tbody>
+</table>
+</section>
+<h2 id="TelemetryV2StackDriverConfig">TelemetryV2StackDriverConfig</h2>
+<section>
+<p>Conrols telemetry v2 stackdriver settings.</p>
+
+<table class="message-fields">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr id="TelemetryV2StackDriverConfig-enabled">
+<td><code>enabled</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="TelemetryV2StackDriverConfig-logging">
+<td><code>logging</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="TelemetryV2StackDriverConfig-monitoring">
+<td><code>monitoring</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="TelemetryV2StackDriverConfig-topology">
+<td><code>topology</code></td>
+<td><code><a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#boolvalue">BoolValue</a></code></td>
+<td>
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="TelemetryV2StackDriverConfig-configOverride">
+<td><code>configOverride</code></td>
+<td><code><a href="#TypeMapStringInterface">TypeMapStringInterface</a></code></td>
+<td>
 </td>
 <td>
 No
@@ -6182,6 +6582,15 @@ No
 <td>
 <p>See EgressGatewayConfig.</p>
 
+</td>
+<td>
+No
+</td>
+</tr>
+<tr id="TracingConfig-tolerations" class="deprecated ">
+<td><code>tolerations</code></td>
+<td><code><a href="#TypeSliceOfMapStringInterface">TypeSliceOfMapStringInterface</a></code></td>
+<td>
 </td>
 <td>
 No

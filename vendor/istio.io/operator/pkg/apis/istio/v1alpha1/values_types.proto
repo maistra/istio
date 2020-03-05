@@ -74,6 +74,34 @@ message CNIConfig {
   string psp_cluster_role = 11;
 
   string logLevel = 12;
+
+
+  CNIRepairConfig repair = 13;
+}
+
+message CNIRepairConfig {
+  // Controls whether repair behavior is enabled.
+  google.protobuf.BoolValue enabled = 1;
+
+  string hub = 2;
+
+  string tag = 3;
+
+  string image = 4;
+
+  // Controls whether various repair behaviors are enabled.
+  string labelPods = 5;
+
+  string createEvents = 6;
+
+  string deletePods = 7;
+
+  string brokenPodLabelKey = 8;
+
+  string brokenPodLabelValue = 9;
+
+  string initContainerName = 10;
+
 }
 
 // Configuration for CPU target utilization for HorizontalPodAutoscaler target.
@@ -116,6 +144,12 @@ message CertManagerConfig {
   string podDnsPolicy = 10;
 
   TypeMapStringInterface podDnsConfig = 11;
+
+  TypeSliceOfMapStringInterface podAntiAffinityLabelSelector = 12 [deprecated=true];
+
+  TypeSliceOfMapStringInterface podAntiAffinityTermLabelSelector = 13 [deprecated=true];
+
+  TypeSliceOfMapStringInterface tolerations = 14 [deprecated=true];
 }
 
 // Mirrors Resources for unmarshaling.
@@ -207,7 +241,7 @@ message EgressGatewayConfig {
   google.protobuf.BoolValue enabled = 7;
 
   // Environment variables passed to the proxy container.
-  map<string, string> env = 8;
+  TypeMapStringInterface env = 8;
 
   GatewayLabelsConfig labels = 9;
 
@@ -269,6 +303,8 @@ message EgressGatewayConfig {
 
   // Enables cross-cluster access using SNI matching.
   ZeroVPNConfig zvpn = 19;
+
+  TypeSliceOfMapStringInterface tolerations = 20 [deprecated=true];
 }
 
 // EnvoyMetricsConfig is a set of configuration options for Envoy metrics.
@@ -324,6 +360,8 @@ message GalleyConfig {
 
   // K8s rolling update strategy
   TypeIntOrStringForPB rollingMaxUnavailable = 10 [deprecated=true];
+
+  TypeSliceOfMapStringInterface tolerations = 11 [deprecated=true];
 }
 
 // GatewayLabelsConfig is a set of Configuration for gateway labels.
@@ -593,7 +631,7 @@ message IngressGatewayConfig {
   google.protobuf.BoolValue enabled = 10;
 
   // Environment variables passed to the proxy container.
-  map<string, string> env = 11;
+  TypeMapStringInterface env = 11;
 
   repeated string externalIPs = 12;
 
@@ -661,6 +699,20 @@ message IngressGatewayConfig {
 
   // Ports to explicitly check for readiness
   string applicationPorts = 33;
+
+  string externalTrafficPolicy = 34;
+
+  TypeSliceOfMapStringInterface tolerations = 35 [deprecated=true];
+
+  TypeSliceOfMapStringInterface ingressPorts = 36;
+
+  TypeSliceOfMapStringInterface additionalContainers = 37;
+
+  TypeSliceOfMapStringInterface configVolumes = 38;
+
+  google.protobuf.BoolValue certificates = 39;
+
+  google.protobuf.BoolValue tls = 40;
 }
 
 // Secret Discovery Service (SDS) Configuration for ingress gateway.
@@ -859,7 +911,7 @@ message MixerTelemetryConfig {
   // env:
   //   ENV_VAR_1: value1
   //   ENV_VAR_2: value2
-  map<string, string> env = 7;
+  TypeMapStringInterface env = 7;
 
   // Image name used for Mixer Telemetry.
   //
@@ -1056,7 +1108,7 @@ message PilotConfig {
   // env:
   //   ENV_VAR_1: value1
   //   ENV_VAR_2: value2
-  map<string, string> env = 21;
+  TypeMapStringInterface env = 21;
 
   // Controls whether Istio policy is applied to Pilot.
   PilotPolicyConfig policy = 22;
@@ -1123,15 +1175,48 @@ message TelemetryConfig {
   // Controls whether telemetry is exported for Pilot.
   google.protobuf.BoolValue enabled = 1;
 
+  // Use telemetry v1.
+  TelemetryV1Config v1 = 2;
+
   // Use telemetry v2.
   TelemetryV2Config v2 = 3;
 }
 
 // Controls whether pilot will configure telemetry v1.
-message TelemetryV2Config {
+message TelemetryV1Config {
   // Controls whether pilot will configure telemetry v1.
   google.protobuf.BoolValue enabled = 1;
 }
+
+// Controls whether pilot will configure telemetry v2.
+message TelemetryV2Config {
+  // Controls whether pilot will configure telemetry v2.
+  google.protobuf.BoolValue enabled = 1;
+
+  TelemetryV2PrometheusConfig prometheus = 2;
+
+  TelemetryV2StackDriverConfig stackdriver = 3;
+}
+
+// Conrols telemetry v2 prometheus settings.
+message TelemetryV2PrometheusConfig {
+  // Controls whether stats envoyfilter would be enabled or not.
+  google.protobuf.BoolValue enabled = 1;
+}
+
+// Conrols telemetry v2 stackdriver settings.
+message TelemetryV2StackDriverConfig {
+  google.protobuf.BoolValue enabled = 1;
+
+  google.protobuf.BoolValue logging = 2;
+
+  google.protobuf.BoolValue monitoring = 3;
+
+  google.protobuf.BoolValue topology = 4;
+
+  TypeMapStringInterface configOverride = 5;
+}
+
 
 // Controls whether pilot will configure telemetry v2.
 message PilotTelemetryV2Config {
@@ -1489,6 +1574,8 @@ message SecurityConfig {
 
   // How long workload certs are valid for
   string workloadCertTtl = 13;
+
+  TypeSliceOfMapStringInterface tolerations = 14 [deprecated=true];
 }
 
 // ServiceConfig is described in istio.io documentation.
@@ -1562,6 +1649,8 @@ message SidecarInjectorConfig {
 
   // Enable objectSelector to filter out pods with no need for sidecar before calling istio-sidecar-injector.
   TypeMapStringInterface objectSelector = 21;
+
+  TypeSliceOfMapStringInterface tolerations = 22 [deprecated=true];
 }
 
 // Configuration for stdio adapter in mixer, recommended for debug usage only.
@@ -1677,6 +1766,8 @@ message TracingConfig {
 
   // See EgressGatewayConfig.
   TypeSliceOfMapStringInterface podAntiAffinityTermLabelSelector = 14 [deprecated=true];
+
+  TypeSliceOfMapStringInterface tolerations = 15 [deprecated=true];
 }
 
 message TracingOpencensusConfig {
@@ -1864,6 +1955,8 @@ message KialiConfig {
 
   // See PodAntiAffinityLabelSelector.
   TypeSliceOfMapStringInterface podAntiAffinityTermLabelSelector = 13 [deprecated=true];
+
+  TypeSliceOfMapStringInterface tolerations = 14 [deprecated=true];
 }
 
 message Values {

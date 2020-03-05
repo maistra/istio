@@ -16,6 +16,7 @@ package version
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -23,10 +24,16 @@ import (
 	goversion "github.com/hashicorp/go-version"
 )
 
+const (
+	// releasePrefix is the prefix we used in http://gcr.io/istio-release for releases
+	releasePrefix = "release-"
+)
+
 // CompatibilityMapping is a mapping from an Istio operator version and the corresponding recommended and
 // supported versions of Istio.
 type CompatibilityMapping struct {
 	OperatorVersion          *goversion.Version    `json:"operatorVersion,omitempty"`
+	OperatorVersionRange     goversion.Constraints `json:"operatorVersionRange,omitempty"`
 	SupportedIstioVersions   goversion.Constraints `json:"supportedIstioVersions,omitempty"`
 	RecommendedIstioVersions goversion.Constraints `json:"recommendedIstioVersions,omitempty"`
 }
@@ -64,6 +71,9 @@ func (v *CompatibilityMapping) MarshalYAML() (interface{}, error) {
 	if v.OperatorVersion != nil {
 		out["operatorVersion"] = v.OperatorVersion.String()
 	}
+	if v.OperatorVersionRange != nil {
+		out["operatorVersionRange"] = v.OperatorVersionRange.String()
+	}
 	if v.SupportedIstioVersions != nil {
 		out["supportedIstioVersions"] = v.SupportedIstioVersions.String()
 	}
@@ -80,6 +90,7 @@ func (v *CompatibilityMapping) MarshalYAML() (interface{}, error) {
 func (v *CompatibilityMapping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type inStruct struct {
 		OperatorVersion          string `yaml:"operatorVersion"`
+		OperatorVersionRange     string `yaml:"operatorVersionRange"`
 		SupportedIstioVersions   string `yaml:"supportedIstioVersions"`
 		RecommendedIstioVersions string `yaml:"recommendedIstioVersions"`
 	}
@@ -96,17 +107,25 @@ func (v *CompatibilityMapping) UnmarshalYAML(unmarshal func(interface{}) error) 
 	}
 
 	var err error
-	v.OperatorVersion, err = goversion.NewVersion(tmp.OperatorVersion)
-	if err != nil {
+	if v.OperatorVersion, err = goversion.NewVersion(tmp.OperatorVersion); err != nil {
 		return err
 	}
-	v.SupportedIstioVersions, err = goversion.NewConstraint(tmp.SupportedIstioVersions)
-	if err != nil {
+
+	if tmp.OperatorVersionRange != "" {
+		if v.OperatorVersionRange, err = goversion.NewConstraint(tmp.OperatorVersionRange); err != nil {
+			return err
+		}
+	} else {
+		if v.OperatorVersionRange, err = goversion.NewConstraint(tmp.OperatorVersion); err != nil {
+			return err
+		}
+	}
+
+	if v.SupportedIstioVersions, err = goversion.NewConstraint(tmp.SupportedIstioVersions); err != nil {
 		return err
 	}
 	if tmp.RecommendedIstioVersions != "" {
-		v.RecommendedIstioVersions, err = goversion.NewConstraint(tmp.RecommendedIstioVersions)
-		if err != nil {
+		if v.RecommendedIstioVersions, err = goversion.NewConstraint(tmp.RecommendedIstioVersions); err != nil {
 			return err
 		}
 	}
@@ -115,8 +134,28 @@ func (v *CompatibilityMapping) UnmarshalYAML(unmarshal func(interface{}) error) 
 
 // IsVersionString checks whether the given string is a version string
 func IsVersionString(path string) bool {
+	_, err := goversion.NewSemver(path)
+	if err != nil {
+		return false
+	}
 	vs := Version{}
 	return yaml.Unmarshal([]byte(path), &vs) == nil
+}
+
+// TagToVersionString converts an istio container tag into a version string
+func TagToVersionString(path string) (string, error) {
+	path = strings.TrimPrefix(path, releasePrefix)
+	ver, err := goversion.NewSemver(path)
+	if err != nil {
+		return "", err
+	}
+	segments := ver.Segments()
+	fmtParts := make([]string, len(segments))
+	for i, s := range segments {
+		str := strconv.Itoa(s)
+		fmtParts[i] = str
+	}
+	return strings.Join(fmtParts, "."), nil
 }
 
 // MajorVersion represents a major version.

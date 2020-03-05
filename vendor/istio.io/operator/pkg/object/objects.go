@@ -73,7 +73,7 @@ func NewK8sObject(u *unstructured.Unstructured, json, yaml []byte) *K8sObject {
 func Hash(kind, namespace, name string) string {
 	switch kind {
 	// TODO: replace strings with k8s const (istio/istio#17237).
-	case "ClusterRole", "ClusterRoleBinding":
+	case "ClusterRole", "ClusterRoleBinding", "MeshPolicy":
 		namespace = ""
 	}
 	return strings.Join([]string{kind, namespace, name}, ":")
@@ -218,7 +218,7 @@ func ParseK8sObjectsFromYAMLManifest(manifest string) (K8sObjects, error) {
 	scanner := bufio.NewScanner(strings.NewReader(manifest))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if line == "---" {
+		if strings.TrimSpace(line) == "---" {
 			// yaml separator
 			yamls = append(yamls, b.String())
 			b.Reset()
