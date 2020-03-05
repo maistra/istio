@@ -1,5 +1,5 @@
 constraints:
-  - collection: istio/rbac/v1alpha1/clusterrbacconfigs
+  - collection: maistra/rbac/v1/servicemeshrbacconfigs
     check:
       - exactlyOne:
           - equals: {
@@ -12,7 +12,7 @@ constraints:
               "mode": "ON_WITH_INCLUSION"
             },
             "Metadata": {
-              "name": "default"
+              "name": "{{.Namespace}}/default"
             },
             "TypeURL": "type.googleapis.com/istio.rbac.v1alpha1.RbacConfig"
           }

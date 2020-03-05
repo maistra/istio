@@ -24,6 +24,7 @@ import (
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/echo"
 	"istio.io/istio/pkg/test/framework/components/echo/echoboot"
+	"istio.io/istio/pkg/test/framework/components/environment"
 	"istio.io/istio/pkg/test/framework/components/namespace"
 	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/istio/tests/integration/security/util/connection"
@@ -40,9 +41,11 @@ type callOptions struct {
 }
 
 func TestReachability(t *testing.T) {
-	framework.NewTest(t).Run(func(ctx framework.TestContext) {
-		doTest(t, ctx)
-	})
+	framework.NewTest(t).
+		RequiresEnvironment(environment.Kube).
+		Run(func(ctx framework.TestContext) {
+			doTest(t, ctx)
+		})
 }
 
 func doTest(t *testing.T, ctx framework.TestContext) {

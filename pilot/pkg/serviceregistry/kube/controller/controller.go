@@ -136,6 +136,7 @@ type Controller struct {
 	queue     kube.Queue
 	services  cacheHandler
 	endpoints cacheHandler
+	nodes     cacheHandler
 
 	podLocalitySource PodLocalitySource
 
