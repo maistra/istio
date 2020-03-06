@@ -53,7 +53,8 @@ endif
 export TARGET_OUT ?= $(shell pwd)/out/$(TARGET_OS)_$(TARGET_ARCH)
 
 ifeq ($(BUILD_WITH_CONTAINER),1)
-export TARGET_OUT = /work/out/$(TARGET_OS)_$(TARGET_ARCH)
+WORK_DIR=/work/src/istio.io/istio
+export TARGET_OUT = $(WORK_DIR)/out/$(TARGET_OS)_$(TARGET_ARCH)
 CONTAINER_CLI ?= docker
 DOCKER_SOCKET_MOUNT ?= -v /var/run/docker.sock:/var/run/docker.sock
 IMG ?= gcr.io/istio-testing/build-tools:release-1.4-2019-11-12T19-29-46
@@ -85,17 +86,17 @@ RUN = $(CONTAINER_CLI) run -t -i --sig-proxy=true -u $(UID):docker --rm \
 	-v /etc/passwd:/etc/passwd:ro \
 	$(DOCKER_SOCKET_MOUNT) \
 	$(CONTAINER_OPTIONS) \
-	--mount type=bind,source="$(PWD)",destination="/work" \
+	--mount type=bind,source="$(PWD)",destination=$(WORK_DIR) \
 	--mount type=volume,source=go,destination="/go" \
 	--mount type=volume,source=gocache,destination="/gocache" \
-	-w /work $(IMG)
+	-w $(WORK_DIR) $(IMG)
 else
 $(info Building with your local toolchain.)
 RUN =
 export GOBIN ?= $(GOPATH)/bin
 endif
 
-MAKE = $(RUN) make --no-print-directory -e -f Makefile.core.mk
+MAKE = $(RUN) make $(MFLAGS) --no-print-directory -e -f Makefile.core.mk
 
 %:
 	@$(MAKE) $@
