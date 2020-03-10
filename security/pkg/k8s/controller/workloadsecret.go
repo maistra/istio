@@ -291,7 +291,6 @@ func (sc *SecretController) Run(stopCh chan struct{}) {
 	cache.WaitForCacheSync(stopCh, sc.scrtController.HasSynced)
 
 	go sc.saController.Run(stopCh)
-	go sc.namespaceController.Run(stopCh)
 }
 
 // GetSecretName returns the secret name for a given service account name.
