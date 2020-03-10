@@ -49,10 +49,6 @@ var (
 		version.NewMinorVersion(1, 4): {
 			APIMapping: map[string]*Translation{},
 			KubernetesPatternMapping: map[string]string{
-				"{{.ValueComponentName}}.podAntiAffinityLabelSelector": "{{.FeatureName}}.Components.{{.ComponentName}}.K8s." +
-					"Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution",
-				"{{.ValueComponentName}}.podAntiAffinityTermLabelSelector": "{{.FeatureName}}.Components.{{.ComponentName}}.K8s." +
-					"Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution",
 				"{{.ValueComponentName}}.env":                   "{{.FeatureName}}.Components.{{.ComponentName}}.K8s.Env",
 				"{{.ValueComponentName}}.autoscaleEnabled":      "{{.FeatureName}}.Components.{{.ComponentName}}.K8s.HpaSpec",
 				"{{.ValueComponentName}}.imagePullPolicy":       "{{.FeatureName}}.Components.{{.ComponentName}}.K8s.ImagePullPolicy",
@@ -115,7 +111,7 @@ func (t *ReverseTranslator) initK8SMapping(valueTree map[string]interface{}) err
 	outputMapping := make(map[string]*Translation)
 	for valKey, componentName := range t.ValuesToComponentName {
 		featureName := name.ComponentNameToFeatureName[componentName]
-		cnEnabled, err := name.IsComponentEnabledFromValue(valKey, valueTree)
+		cnEnabled, _, err := name.IsComponentEnabledFromValue(valKey, valueTree)
 		if err != nil {
 			return err
 		}
@@ -142,51 +138,63 @@ func (t *ReverseTranslator) initK8SMapping(valueTree map[string]interface{}) err
 
 // NewReverseTranslator creates a new ReverseTranslator for minorVersion and returns a ptr to it.
 func NewReverseTranslator(minorVersion version.MinorVersion) (*ReverseTranslator, error) {
+	return newReverseTranslator(minorVersion, maxFallbackNum)
+}
+
+func newReverseTranslator(minorVersion version.MinorVersion, fallbackNum uint) (*ReverseTranslator, error) {
 	t := ReverseTranslators[minorVersion]
 	if t == nil {
+		if fallbackNum > 0 && minorVersion.Minor > 0 {
+			major := minorVersion.Major
+			minor := minorVersion.Minor - 1
+			previous := version.NewMinorVersion(major, minor)
+			log.Warnf("no value.yaml translator available for version %s, fallback to version %s",
+				minorVersion, previous)
+			return newReverseTranslator(previous, fallbackNum-1)
+		}
 		return nil, fmt.Errorf("no value.yaml translator available for version %s", minorVersion)
 	}
-
 	err := t.initAPIAndComponentMapping(minorVersion)
 	if err != nil {
 		return nil, fmt.Errorf("error initialize API mapping: %s", err)
 	}
+	t.Version = minorVersion
 	return t, nil
 }
 
 // TranslateFromValueToSpec translates from values.yaml value to IstioControlPlaneSpec.
-func (t *ReverseTranslator) TranslateFromValueToSpec(values []byte) (controlPlaneSpec *v1alpha2.IstioControlPlaneSpec, err error) {
+func (t *ReverseTranslator) TranslateFromValueToSpec(values []byte) (translatedYAML string, controlPlaneSpec *v1alpha2.IstioControlPlaneSpec, err error) {
 
 	var yamlTree = make(map[string]interface{})
 	err = yaml.Unmarshal(values, &yamlTree)
 	if err != nil {
-		return nil, fmt.Errorf("error when unmarshalling into untype tree %v", err)
+		return "", nil, fmt.Errorf("error when unmarshalling into untype tree %v", err)
 	}
 
 	outputTree := make(map[string]interface{})
 	err = t.TranslateTree(yamlTree, outputTree, nil)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	outputVal, err := yaml.Marshal(outputTree)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	var cpSpec = &v1alpha2.IstioControlPlaneSpec{}
 	err = util.UnmarshalWithJSONPB(string(outputVal), cpSpec)
 
 	if err != nil {
-		return nil, fmt.Errorf("error when unmarshalling into control plane spec %v, \nyaml:\n %s", err, outputVal)
+		return "", nil, fmt.Errorf("error when unmarshalling into control plane spec %v, \nyaml:\n %s", err, outputVal)
 	}
 
-	return cpSpec, nil
+	return string(outputVal), cpSpec, nil
 }
 
 // TranslateTree translates input value.yaml Tree to ControlPlaneSpec Tree.
 func (t *ReverseTranslator) TranslateTree(valueTree map[string]interface{}, cpSpecTree map[string]interface{}, path util.Path) error {
 	// translate enablement and namespace
-	err := t.setEnablementAndNamespacesFromValue(valueTree, cpSpecTree)
+	err := t.setEnablementFromValue(valueTree, cpSpecTree)
 	if err != nil {
 		return fmt.Errorf("error when translating enablement and namespace from value.yaml tree: %v", err)
 	}
@@ -214,13 +222,16 @@ func (t *ReverseTranslator) TranslateTree(valueTree map[string]interface{}, cpSp
 	return nil
 }
 
-// setEnablementAndNamespaces translates the enablement and namespace value of each component in the baseYAML values
+// setEnablementFromValue translates the enablement value of components in the values.yaml
 // tree, based on feature/component inheritance relationship.
-func (t *ReverseTranslator) setEnablementAndNamespacesFromValue(valueSpec map[string]interface{}, root map[string]interface{}) error {
+func (t *ReverseTranslator) setEnablementFromValue(valueSpec map[string]interface{}, root map[string]interface{}) error {
 	for cnv, cni := range t.ValuesToComponentName {
-		enabled, err := name.IsComponentEnabledFromValue(cnv, valueSpec)
+		enabled, pathExist, err := name.IsComponentEnabledFromValue(cnv, valueSpec)
 		if err != nil {
 			return err
+		}
+		if !pathExist {
+			continue
 		}
 		featureName := name.ComponentNameToFeatureName[cni]
 		tmpl := componentEnablementPattern
@@ -248,18 +259,6 @@ func (t *ReverseTranslator) setEnablementAndNamespacesFromValue(valueSpec map[st
 		}
 	}
 
-	// set namespace
-	for vp, nsList := range t.NamespaceMapping {
-		namespace, err := name.NamespaceFromValue(vp, valueSpec)
-		if err != nil {
-			return err
-		}
-		for _, ns := range nsList {
-			if err := tpath.WriteNode(root, util.ToYAMLPath(ns), namespace); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }
 
@@ -387,19 +386,6 @@ func translateEnv(outPath string, value interface{}, cpSpecTree map[string]inter
 	return nil
 }
 
-// translateAffinity translates Affinity related configurations from helm values.yaml tree
-func translateAffinity(outPath string, value interface{}, cpSpecTree map[string]interface{}) error {
-	affinityNode, ok := value.([]interface{})
-	if !ok {
-		return fmt.Errorf("expect affinity node type to be []interface{} but got: %T", affinityNode)
-	}
-	log.Infof("path has value in helm Value.yaml tree, mapping to output path %s", affinityNode)
-	if err := tpath.WriteNode(cpSpecTree, util.ToYAMLPath(outPath), affinityNode); err != nil {
-		return err
-	}
-	return nil
-}
-
 // translateK8sTree is internal method for translating K8s configurations from value.yaml tree.
 func (t *ReverseTranslator) translateK8sTree(valueTree map[string]interface{},
 	cpSpecTree map[string]interface{}) error {
@@ -442,12 +428,6 @@ func (t *ReverseTranslator) translateK8sTree(valueTree map[string]interface{},
 			err := translateEnv(v.OutPath, m, cpSpecTree)
 			if err != nil {
 				return fmt.Errorf("error in translating k8s Env: %s", err)
-			}
-
-		case "podAntiAffinityLabelSelector", "podAntiAffinityTermLabelSelector":
-			err := translateAffinity(v.OutPath, m, cpSpecTree)
-			if err != nil {
-				return fmt.Errorf("error in translating k8s Affinity: %s", err)
 			}
 
 		case "rollingMaxSurge", "rollingMaxUnavailable":

@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pilot/pkg/model"
@@ -38,6 +39,9 @@ type PodCache struct {
 	// this allows us to retrieve the latest status by pod IP.
 	// This should only contain RUNNING or PENDING pods with an allocated IP.
 	podsByIP map[string]string
+	// IPByPods is a reverse map of podsByIP. This exists to allow us to prune stale entries in the
+	// pod cache if a pod changes IP.
+	IPByPods map[string]string
 
 	c *Controller
 }
@@ -47,6 +51,7 @@ func newPodCache(ch cacheHandler, c *Controller) *PodCache {
 		cacheHandler: ch,
 		c:            c,
 		podsByIP:     make(map[string]string),
+		IPByPods:     make(map[string]string),
 	}
 
 	ch.handler.Append(out.event)
@@ -82,42 +87,57 @@ func (pc *PodCache) event(obj interface{}, ev model.Event) error {
 		case model.EventAdd:
 			switch pod.Status.Phase {
 			case v1.PodPending, v1.PodRunning:
-				if _, ok := pc.podsByIP[ip]; !ok {
+				if key != pc.podsByIP[ip] {
 					// add to cache if the pod is running or pending
-					pc.podsByIP[ip] = key
-					pc.proxyUpdates(ip)
+					pc.update(ip, key)
 				}
 			}
 		case model.EventUpdate:
 			if pod.DeletionTimestamp != nil {
 				// delete only if this pod was in the cache
 				if pc.podsByIP[ip] == key {
-					delete(pc.podsByIP, ip)
+					pc.deleteIP(ip)
 				}
 				return nil
 			}
 			switch pod.Status.Phase {
 			case v1.PodPending, v1.PodRunning:
-				if _, ok := pc.podsByIP[ip]; !ok {
+				if key != pc.podsByIP[ip] {
 					// add to cache if the pod is running or pending
-					pc.podsByIP[ip] = key
-					pc.proxyUpdates(ip)
+					pc.update(ip, key)
 				}
 
 			default:
 				// delete if the pod switched to other states and is in the cache
 				if pc.podsByIP[ip] == key {
-					delete(pc.podsByIP, ip)
+					pc.deleteIP(ip)
 				}
 			}
 		case model.EventDelete:
 			// delete only if this pod was in the cache
 			if pc.podsByIP[ip] == key {
-				delete(pc.podsByIP, ip)
+				pc.deleteIP(ip)
 			}
 		}
 	}
 	return nil
+}
+
+func (pc *PodCache) deleteIP(ip string) {
+	pod := pc.podsByIP[ip]
+	delete(pc.podsByIP, ip)
+	delete(pc.IPByPods, pod)
+}
+
+func (pc *PodCache) update(ip, key string) {
+	if current, f := pc.IPByPods[key]; f {
+		// The pod already exists, but with another IP Address. We need to clean up that
+		delete(pc.podsByIP, current)
+	}
+	pc.podsByIP[ip] = key
+	pc.IPByPods[key] = ip
+
+	pc.proxyUpdates(ip)
 }
 
 func (pc *PodCache) proxyUpdates(ip string) {
@@ -145,6 +165,16 @@ func (pc *PodCache) getPodByIP(addr string) *v1.Pod {
 		return nil
 	}
 	return item.(*v1.Pod)
+}
+
+// getPod loads the pod from k8s.
+func (pc *PodCache) getPod(name string, namespace string) *v1.Pod {
+	pod, err := pc.c.client.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
+	if err != nil {
+		log.Warnf("failed to get pod %s/%s from kube-apiserver: %v", namespace, name, err)
+		return nil
+	}
+	return pod
 }
 
 // labelsByIP returns pod labels or nil if pod not found or an error occurred

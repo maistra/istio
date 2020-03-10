@@ -56,8 +56,8 @@ func TestBuildHTTPRoutes(t *testing.T) {
 		IPAddresses:  []string{"1.1.1.1"},
 		ID:           "someID",
 		DNSDomain:    "foo.com",
-		Metadata:     &model.NodeMetadata{IstioVersion: "1.3.0"},
-		IstioVersion: &model.IstioVersion{Major: 1, Minor: 3},
+		Metadata:     &model.NodeMetadata{IstioVersion: "1.4.0"},
+		IstioVersion: &model.IstioVersion{Major: 1, Minor: 4},
 	}
 	gatewayNames := map[string]bool{"some-gateway": true}
 
@@ -76,6 +76,8 @@ func TestBuildHTTPRoutes(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		g.Expect(len(routes)).To(gomega.Equal(1))
 		g.Expect(routes[0].GetMatch().GetSafeRegex().GetRegex()).To(gomega.Equal("\\/(.?)\\/status"))
+		g.Expect(routes[0].GetMatch().GetSafeRegex().GetGoogleRe2().GetMaxProgramSize().GetValue()).To(gomega.Equal(uint32(1024)))
+
 	})
 
 	t.Run("for virtual service with unsafe regex matching on URI", func(t *testing.T) {

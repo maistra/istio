@@ -207,6 +207,7 @@ type Params struct {
 	DebugMode                    bool                   `json:"debugMode"`
 	Privileged                   bool                   `json:"privileged"`
 	SDSEnabled                   bool                   `json:"sdsEnabled"`
+	EnableCni                    bool                   `json:"enablecni"`
 	PodDNSSearchNamespaces       []string               `json:"podDNSSearchNamespaces"`
 }
 
@@ -244,6 +245,7 @@ func (p *Params) intoHelmValues() map[string]string {
 		"global.proxy.excludeInboundPorts":           p.ExcludeInboundPorts,
 		"sidecarInjectorWebhook.rewriteAppHTTPProbe": strconv.FormatBool(p.RewriteAppHTTPProbe),
 		"global.podDNSSearchNamespaces":              getHelmValue(p.PodDNSSearchNamespaces),
+		"istio_cni.enabled":                          strconv.FormatBool(p.EnableCni),
 	}
 	return vals
 }
@@ -837,8 +839,12 @@ func IntoObject(sidecarTemplate string, valuesConfig string, meshconfig *meshcon
 	// workaround by https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
 	if meshconfig.SdsUdsPath != "" {
 		var grp = int64(1337)
-		podSpec.SecurityContext = &corev1.PodSecurityContext{
-			FSGroup: &grp,
+		if podSpec.SecurityContext == nil {
+			podSpec.SecurityContext = &corev1.PodSecurityContext{
+				FSGroup: &grp,
+			}
+		} else {
+			podSpec.SecurityContext.FSGroup = &grp
 		}
 	}
 

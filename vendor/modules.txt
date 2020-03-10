@@ -113,6 +113,8 @@ github.com/circonus-labs/circonus-gometrics/checkmgr
 github.com/circonus-labs/circonusllhist
 # github.com/containerd/containerd v1.3.0
 github.com/containerd/containerd/errdefs
+# github.com/coreos/etcd v3.3.15+incompatible
+github.com/coreos/etcd/pkg/cpuutil
 # github.com/coreos/go-oidc v2.1.0+incompatible
 github.com/coreos/go-oidc
 # github.com/cpuguy83/go-md2man v1.0.10
@@ -784,7 +786,7 @@ gopkg.in/square/go-jose.v2/cipher
 gopkg.in/square/go-jose.v2/json
 # gopkg.in/yaml.v2 v2.2.4
 gopkg.in/yaml.v2
-# istio.io/api v0.0.0-20191115173247-e1a1952e5b81
+# istio.io/api v0.0.0-20200107183329-ed4b507c54e1
 istio.io/api/annotation
 istio.io/api/authentication/v1alpha1
 istio.io/api/mcp/v1alpha1
@@ -800,7 +802,7 @@ istio.io/api/type/v1beta1
 # istio.io/gogo-genproto v0.0.0-20191029161641-f7d19ec0141d
 istio.io/gogo-genproto/googleapis/google/api
 istio.io/gogo-genproto/googleapis/google/rpc
-# istio.io/operator v0.0.0-20191202210744-2689e5c3357f
+# istio.io/operator v0.0.0-20200213054244-508c83195d0b
 istio.io/operator/cmd/mesh
 istio.io/operator/pkg/apis/istio/v1alpha1
 istio.io/operator/pkg/apis/istio/v1alpha2
@@ -931,6 +933,7 @@ k8s.io/apimachinery/pkg/util/json
 k8s.io/apimachinery/pkg/util/mergepatch
 k8s.io/apimachinery/pkg/util/naming
 k8s.io/apimachinery/pkg/util/net
+k8s.io/apimachinery/pkg/util/rand
 k8s.io/apimachinery/pkg/util/remotecommand
 k8s.io/apimachinery/pkg/util/runtime
 k8s.io/apimachinery/pkg/util/sets

@@ -116,13 +116,15 @@ const (
 	staledConnectionRecycleInterval = "STALED_CONNECTION_RECYCLE_RUN_INTERVAL"
 
 	// The environmental variable name for the initial backoff in milliseconds.
-	// example value format like "10"
-	InitialBackoff     = "INITIAL_BACKOFF_MSEC"
-	InitialBackoffFlag = "initialBackoff"
+	// example value format like "1000"
+	InitialBackoffInMilliSec     = "INITIAL_BACKOFF_MSEC"
+	InitialBackoffInMilliSecFlag = "initialBackoff"
 
 	MonitoringPort  = "MONITORING_PORT"
 	EnableProfiling = "ENABLE_PROFILING"
 	DebugPort       = "DEBUG_PORT"
+
+	pkcs8Key = "PKCS8_KEY"
 )
 
 var (
@@ -208,6 +210,7 @@ func newSecretCache(serverOptions sds.Options) (workloadSecretCache, gatewaySecr
 			os.Exit(1)
 		}
 		workloadSdsCacheOptions.TrustDomain = serverOptions.TrustDomain
+		workloadSdsCacheOptions.Pkcs8Keys = serverOptions.Pkcs8Keys
 		workloadSdsCacheOptions.Plugins = sds.NewPlugins(serverOptions.PluginNames)
 		workloadSecretCache = cache.NewSecretCache(wSecretFetcher, sds.NotifyProxy, workloadSdsCacheOptions)
 	} else {
@@ -244,16 +247,17 @@ var (
 	vaultSignCsrPathEnv                = env.RegisterStringVar(vaultSignCsrPath, "", "").Get()
 	vaultTLSRootCertEnv                = env.RegisterStringVar(vaultTLSRootCert, "", "").Get()
 	secretTTLEnv                       = env.RegisterDurationVar(secretTTL, 24*time.Hour, "").Get()
-	secretRefreshGraceDurationEnv      = env.RegisterDurationVar(SecretRefreshGraceDuration, 1*time.Hour, "").Get()
+	secretRefreshGraceDurationEnv      = env.RegisterDurationVar(SecretRefreshGraceDuration, 12*time.Hour, "").Get()
 	secretRotationIntervalEnv          = env.RegisterDurationVar(SecretRotationInterval, 10*time.Minute, "").Get()
 	staledConnectionRecycleIntervalEnv = env.RegisterDurationVar(staledConnectionRecycleInterval, 5*time.Minute, "").Get()
-	initialBackoffEnv                  = env.RegisterIntVar(InitialBackoff, 10, "").Get()
+	initialBackoffInMilliSecEnv        = env.RegisterIntVar(InitialBackoffInMilliSec, 2000, "").Get()
 	monitoringPortEnv                  = env.RegisterIntVar(MonitoringPort, 15014,
 		"The port number for monitoring Citadel agent").Get()
 	debugPortEnv = env.RegisterIntVar(DebugPort, 8080,
 		"Debug endpoints dump SDS configuration and connection data from this port").Get()
 	enableProfilingEnv = env.RegisterBoolVar(EnableProfiling, true,
 		"Enabling profiling when monitoring Citadel agent").Get()
+	pkcs8KeyEnv = env.RegisterBoolVar(pkcs8Key, false, "Whether to generate PKCS#8 private keys").Get()
 )
 
 func applyEnvVars(cmd *cobra.Command) {
@@ -323,17 +327,18 @@ func applyEnvVars(cmd *cobra.Command) {
 
 	serverOptions.RecycleInterval = staledConnectionRecycleIntervalEnv
 
-	if !cmd.Flag(InitialBackoffFlag).Changed {
-		workloadSdsCacheOptions.InitialBackoff = int64(initialBackoffEnv)
+	if !cmd.Flag(InitialBackoffInMilliSecFlag).Changed {
+		workloadSdsCacheOptions.InitialBackoffInMilliSec = int64(initialBackoffInMilliSecEnv)
 	}
 
 	serverOptions.DebugPort = debugPortEnv
+	serverOptions.Pkcs8Keys = pkcs8KeyEnv
 }
 
 func validateOptions() error {
 	// The initial backoff time (in millisec) is a random number between 0 and initBackoff.
 	// Default to 10, a valid range is [10, 120000].
-	initBackoff := workloadSdsCacheOptions.InitialBackoff
+	initBackoff := workloadSdsCacheOptions.InitialBackoffInMilliSec
 	if initBackoff < 10 || initBackoff > 120000 {
 		return fmt.Errorf("initial backoff should be within range 10 to 120000, found: %d", initBackoff)
 	}
@@ -385,8 +390,8 @@ func main() {
 	rootCmd.PersistentFlags().DurationVar(&workloadSdsCacheOptions.RotationInterval, secretRotationIntervalFlag,
 		10*time.Minute, "Secret rotation job running interval")
 
-	rootCmd.PersistentFlags().Int64Var(&workloadSdsCacheOptions.InitialBackoff, InitialBackoffFlag, 10,
-		"The initial backoff interval in milliseconds, must be within the range [10, 120000]")
+	rootCmd.PersistentFlags().Int64Var(&workloadSdsCacheOptions.InitialBackoffInMilliSec, InitialBackoffInMilliSecFlag, 2000,
+		"The initial backoff interval in milliseconds, default value is 2000, must be within the range [10, 120000]")
 
 	rootCmd.PersistentFlags().DurationVar(&workloadSdsCacheOptions.EvictionDuration, "secretEvictionDuration",
 		24*time.Hour, "Secret eviction time duration")

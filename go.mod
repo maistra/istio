@@ -35,6 +35,7 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/containerd/containerd v1.3.0 // indirect
 	github.com/containerd/continuity v0.0.0-20190426062206-aaeac12a7ffc // indirect
+	github.com/coreos/etcd v3.3.15+incompatible
 	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/d4l3k/messagediff v1.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1
@@ -153,9 +154,9 @@ require (
 	gopkg.in/ory-am/dockertest.v3 v3.3.4 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.2.4
-	istio.io/api v0.0.0-20191115173247-e1a1952e5b81
+	istio.io/api v0.0.0-20200107183329-ed4b507c54e1
 	istio.io/gogo-genproto v0.0.0-20191029161641-f7d19ec0141d
-	istio.io/operator v0.0.0-20191202210744-2689e5c3357f
+	istio.io/operator v0.0.0-20200213054244-508c83195d0b
 	istio.io/pkg v0.0.0-20191030005435-10d06b6b315e
 	k8s.io/api v0.0.0
 	k8s.io/apiextensions-apiserver v0.0.0
