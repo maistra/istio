@@ -49,7 +49,7 @@ func genApplyManifests(setOverlay []string, inFilename string, force bool, dryRu
 		return fmt.Errorf("failed to generate tree from the set overlay, error: %v", err)
 	}
 
-	manifests, err := genManifests(inFilename, overlayFromSet, force, l)
+	manifests, icps, err := GenManifests(inFilename, overlayFromSet, force, l)
 	if err != nil {
 		return fmt.Errorf("failed to generate manifest: %v", err)
 	}
@@ -65,62 +65,74 @@ func genApplyManifests(setOverlay []string, inFilename string, force bool, dryRu
 		return fmt.Errorf("failed to apply manifest with kubectl client: %v", err)
 	}
 	gotError := false
+	skippedComponentMap := map[name.ComponentName]bool{}
+	for cn := range manifests {
+		enabledInSpec, err := name.IsComponentEnabledInSpec(name.ComponentNameToFeatureName[cn], cn, icps)
+		if err != nil {
+			l.logAndPrintf("failed to check if %s is enabled in IstioControlPlaneSpec: %v", cn, err)
+		}
+		// Skip the output of a component when it is disabled
+		// and not pruned (indicated by applied manifest out[cn].Manifest).
+		if !enabledInSpec && out[cn].Err == nil && out[cn].Manifest == "" {
+			skippedComponentMap[cn] = true
+		}
+	}
+
 	for cn := range manifests {
 		if out[cn].Err != nil {
-			cs := fmt.Sprintf("Component %s install returned the following errors:", cn)
-			l.logAndPrintf("\n%s\n%s", cs, strings.Repeat("=", len(cs)))
+			cs := fmt.Sprintf("Component %s - manifest apply returned the following errors:", cn)
+			l.logAndPrintf("\n%s", cs)
 			l.logAndPrint("Error: ", out[cn].Err, "\n")
 			gotError = true
-		} else {
-			cs := fmt.Sprintf("Component %s installed successfully:", cn)
-			l.logAndPrintf("\n%s\n%s", cs, strings.Repeat("=", len(cs)))
+		} else if skippedComponentMap[cn] {
+			continue
 		}
 
 		if !ignoreError(out[cn].Stderr) {
-			l.logAndPrint("Error detail:\n", out[cn].Stderr, "\n")
+			l.logAndPrint("Error detail:\n", out[cn].Stderr, "\n", out[cn].Stdout, "\n")
 			gotError = true
-		}
-		if !ignoreError(out[cn].Stderr) {
-			l.logAndPrint(out[cn].Stdout, "\n")
 		}
 	}
 
 	if gotError {
-		l.logAndPrint("\n\n*** Errors were logged during apply operation. Please check component installation logs above. ***\n")
+		l.logAndPrint("\n\n✘ Errors were logged during apply operation. Please check component installation logs above.\n")
+		return fmt.Errorf("errors were logged during apply operation")
 	}
 
+	l.logAndPrint("\n\n✔ Installation complete\n")
 	return nil
 }
 
-func genManifests(inFilename string, setOverlayYAML string, force bool, l *logger) (name.ManifestMap, error) {
+// GenManifests generate manifest from input file and setOverLay
+func GenManifests(inFilename string, setOverlayYAML string, force bool, l *logger) (name.ManifestMap, *v1alpha2.IstioControlPlaneSpec, error) {
 	mergedYAML, err := genProfile(false, inFilename, "", setOverlayYAML, "", force, l)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	mergedICPS, err := unmarshalAndValidateICPS(mergedYAML, force, l)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	t, err := translate.NewTranslator(version.OperatorBinaryVersion.MinorVersion)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := fetchInstallPackageFromURL(mergedICPS); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cp := controlplane.NewIstioControlPlane(mergedICPS, t)
 	if err := cp.Run(); err != nil {
-		return nil, fmt.Errorf("failed to create Istio control plane with spec: \n%v\nerror: %s", mergedICPS, err)
+		return nil, nil, fmt.Errorf("failed to create Istio control plane with spec: \n%v\nerror: %s", mergedICPS, err)
 	}
 
 	manifests, errs := cp.RenderManifest()
 	if errs != nil {
-		return manifests, errs.ToError()
+		return manifests, mergedICPS, errs.ToError()
 	}
-	return manifests, nil
+	return manifests, mergedICPS, nil
 }
 
 func ignoreError(stderr string) bool {

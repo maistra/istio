@@ -16,6 +16,8 @@
 
 WD=$(dirname "$0")
 WD=$(cd "$WD"; pwd)
+# This is a shellcheck false positive
+# shellcheck disable=SC2034
 ROOT=$(dirname "$WD")
 
 set -eux
@@ -35,7 +37,7 @@ DOCKER_HUB=${DOCKER_HUB:-gcr.io/istio-testing}
 GCS_BUCKET=${GCS_BUCKET:-istio-build/dev}
 
 # Use a pinned version in case breaking changes are needed
-BUILDER_SHA=ffe0588fd71739b79de5442054cfe6897ce0619e
+BUILDER_SHA=898c5ac1c2fd507a95016b55026a21dd2a002432
 
 # Reference to the next minor version of Istio
 # This will create a version like 1.4-alpha.sha
@@ -53,6 +55,7 @@ version: ${VERSION}
 docker: ${DOCKER_HUB}
 directory: ${WORK_DIR}
 dependencies:
+${DEPENDENCIES:-$(cat <<EOD
   istio:
     localpath: ${ROOT}
   cni:
@@ -83,6 +86,9 @@ dependencies:
   tools:
     git: https://github.com/istio/tools
     branch: release-1.4
+EOD
+)}
+${PROXY_OVERRIDE:-}
 EOF
 )
 

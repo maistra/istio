@@ -84,8 +84,6 @@
 // ../../data/charts/istio-control/istio-config/values.yaml
 // ../../data/charts/istio-control/istio-discovery/Chart.yaml
 // ../../data/charts/istio-control/istio-discovery/NOTES.txt
-// ../../data/charts/istio-control/istio-discovery/metadata-exchange-v2.yaml
-// ../../data/charts/istio-control/istio-discovery/stats-filter-v2.yaml
 // ../../data/charts/istio-control/istio-discovery/templates/_affinity.tpl
 // ../../data/charts/istio-control/istio-discovery/templates/_helpers.tpl
 // ../../data/charts/istio-control/istio-discovery/templates/autoscale.yaml
@@ -98,7 +96,7 @@
 // ../../data/charts/istio-control/istio-discovery/templates/poddisruptionbudget.yaml
 // ../../data/charts/istio-control/istio-discovery/templates/service.yaml
 // ../../data/charts/istio-control/istio-discovery/templates/serviceaccount.yaml
-// ../../data/charts/istio-control/istio-discovery/templates/telemetryv2.yaml
+// ../../data/charts/istio-control/istio-discovery/templates/telemetryv2_1.4.yaml
 // ../../data/charts/istio-control/istio-discovery/values.yaml
 // ../../data/charts/istio-policy/Chart.yaml
 // ../../data/charts/istio-policy/templates/_affinity.tpl
@@ -107,6 +105,7 @@
 // ../../data/charts/istio-policy/templates/clusterrole.yaml
 // ../../data/charts/istio-policy/templates/clusterrolebinding.yaml
 // ../../data/charts/istio-policy/templates/config.yaml
+// ../../data/charts/istio-policy/templates/configmap-envoy.yaml
 // ../../data/charts/istio-policy/templates/deployment.yaml
 // ../../data/charts/istio-policy/templates/poddisruptionbudget.yaml
 // ../../data/charts/istio-policy/templates/service.yaml
@@ -215,6 +214,7 @@
 // ../../data/charts/security/nodeagent/templates/daemonset.yaml
 // ../../data/charts/security/nodeagent/templates/serviceaccount.yaml
 // ../../data/charts/security/nodeagent/values.yaml
+// ../../data/examples/googleca/values-istio-google-ca.yaml
 // ../../data/examples/multicluster/values-istio-multicluster-gateways.yaml
 // ../../data/examples/multicluster/values-istio-multicluster-primary.yaml
 // ../../data/examples/vm/values-istio-meshexpansion-gateways.yaml
@@ -6470,7 +6470,7 @@ spec:
           - name: ISTIO_META_WORKLOAD_NAME
             value: istio-egressgateway
           - name: ISTIO_META_OWNER
-            value: kubernetes://api/apps/v1/namespaces/{{ .Release.Namespace }}/deployments/istio-egressgateway
+            value: kubernetes://apis/apps/v1/namespaces/{{ .Release.Namespace }}/deployments/istio-egressgateway
           {{- if $.Values.global.meshID }}
           - name: ISTIO_META_MESH_ID
             value: "{{ $.Values.global.meshID }}"
@@ -6518,10 +6518,11 @@ spec:
             readOnly: true
           - name: istio-token
             mountPath: /var/run/secrets/tokens
-          {{- end }}
+          {{- else }}
           - name: istio-certs
             mountPath: /etc/certs
             readOnly: true
+          {{- end }}
           {{- range $gateway.secretVolumes }}
           - name: {{ .name }}
             mountPath: {{ .mountPath | quote }}
@@ -6547,11 +6548,12 @@ spec:
       - name: sdsudspath
         hostPath:
           path: /var/run/sds
-      {{- end }}
+      {{- else }}
       - name: istio-certs
         secret:
           secretName: istio.default
           optional: true
+      {{- end }}
       {{- range $gateway.secretVolumes }}
       - name: {{ .name }}
         secret:
@@ -6693,7 +6695,7 @@ spec:
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
 metadata:
-  name: istio-multicluster-destinationrule
+  name: istio-multicluster-egressgateway
   namespace: {{ .Release.Namespace }}
   labels:
     app: istio-egressgateway
@@ -7564,7 +7566,7 @@ spec:
           - name: ISTIO_META_WORKLOAD_NAME
             value: istio-ingressgateway
           - name: ISTIO_META_OWNER
-            value: kubernetes://api/apps/v1/namespaces/{{ .Release.Namespace }}/deployments/istio-ingressgateway
+            value: kubernetes://apis/apps/v1/namespaces/{{ .Release.Namespace }}/deployments/istio-ingressgateway
           {{- if $.Values.global.meshID }}
           - name: ISTIO_META_MESH_ID
             value: "{{ $.Values.global.meshID }}"
@@ -7613,14 +7615,15 @@ spec:
             readOnly: true
           - name: istio-token
             mountPath: /var/run/secrets/tokens
+          {{- else }}
+          - name: istio-certs
+            mountPath: /etc/certs
+            readOnly: true
           {{- end }}
           {{- if $gateway.sds.enabled }}
           - name: ingressgatewaysdsudspath
             mountPath: /var/run/ingress_gateway
           {{- end }}
-          - name: istio-certs
-            mountPath: /etc/certs
-            readOnly: true
           {{- range $gateway.secretVolumes }}
           - name: {{ .name }}
             mountPath: {{ .mountPath | quote }}
@@ -7645,11 +7648,12 @@ spec:
               path: istio-token
               expirationSeconds: 43200
               audience: {{ .Values.global.sds.token.aud }}
-      {{- end }}
+      {{- else }}
       - name: istio-certs
         secret:
           secretName: istio.istio-ingressgateway-service-account
           optional: true
+      {{- end }}
       {{- range $gateway.secretVolumes }}
       - name: {{ .name }}
         secret:
@@ -8037,7 +8041,7 @@ spec:
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
 metadata:
-  name: istio-multicluster-destinationrule
+  name: istio-multicluster-ingressgateway
   namespace: {{ .Release.Namespace }}
   labels:
     app: istio-ingressgateway
@@ -8527,7 +8531,23 @@ rules:
   - nodes
   verbs:
   - get
-`)
+---
+{{- if .Values.cni.repair.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: istio-cni-repair-role
+  labels:
+    app: istio-cni
+    release: {{ .Release.Name }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "delete", "patch", "update" ]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch", "delete", "patch", "update", "create" ]
+{{- end }}`)
 
 func chartsIstioCniTemplatesClusterroleYamlBytes() ([]byte, error) {
 	return _chartsIstioCniTemplatesClusterroleYaml, nil
@@ -8575,7 +8595,24 @@ subjects:
   name: istio-cni
   namespace: {{ .Release.Namespace }}
 {{- end }}
-`)
+---
+{{- if .Values.cni.repair.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: istio-cni-repair-rolebinding
+  namespace: {{ .Release.Namespace}}
+  labels:
+    k8s-app: istio-cni-repair
+subjects:
+- kind: ServiceAccount
+  name: istio-cni
+  namespace: {{ .Release.Namespace}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: istio-cni-repair-role
+{{- end }}`)
 
 func chartsIstioCniTemplatesClusterrolebindingYamlBytes() ([]byte, error) {
 	return _chartsIstioCniTemplatesClusterrolebindingYaml, nil
@@ -8710,6 +8747,41 @@ spec:
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
+{{- if .Values.cni.repair.enabled }}
+        - name: repair-cni
+{{- if contains "/" .Values.cni.image }}
+          image: "{{ .Values.cni.image }}"
+{{- else }}
+          image: "{{ .Values.cni.hub | default .Values.global.hub }}/{{ .Values.cni.image | default "install-cni" }}:{{ .Values.cni.tag | default .Values.global.tag }}"
+{{- end }}
+{{- if or .Values.cni.pullPolicy .Values.global.imagePullPolicy }}
+          imagePullPolicy: {{ .Values.cni.pullPolicy | default .Values.global.imagePullPolicy }}
+{{- end }}
+
+          command: ["/opt/cni/bin/istio-cni-repair"]
+          env:
+          - name: "REPAIR_NODE-NAME"
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: "REPAIR_LABEL-PODS"
+            value: "{{.Values.cni.repair.labelPods}}"
+          - name: "REPAIR_CREATE-EVENTS"
+            value: "{{.Values.cni.repair.createEvents}}"
+          # Set to true to enable pod deletion
+          - name: "REPAIR_DELETE-PODS"
+            value: "{{.Values.cni.repair.deletePods}}"
+          - name: "REPAIR_RUN-AS-DAEMON"
+            value: "true"
+          - name: "REPAIR_SIDECAR-ANNOTATION"
+            value: "sidecar.istio.io/status"
+          - name: "REPAIR_INIT-CONTAINER-NAME"
+            value: "{{.Values.cni.repair.initContainerName}}"
+          - name: "REPAIR_BROKEN-POD-LABEL-KEY"
+            value: "{{.Values.cni.repair.brokenPodLabelKey}}"
+          - name: "REPAIR_BROKEN-POD-LABEL-VALUE"
+            value: "{{.Values.cni.repair.brokenPodLabelValue}}"
+{{- end }}
       volumes:
         # Used to install CNI.
         - name: cni-bin-dir
@@ -8796,6 +8868,20 @@ var _chartsIstioCniValuesYaml = []byte(`cni:
   # This can be used to bind a preexisting ClusterRole to the istio/cni ServiceAccount
   # e.g. if you use PodSecurityPolicies
   psp_cluster_role: ""
+
+  repair:
+    enabled: true
+    hub: gcr.io/istio-testing
+    tag: latest
+
+    labelPods: "true"
+    createEvents: "true"
+    deletePods: "false"
+
+    initContainerName: "istio-validation"
+
+    brokenPodLabelKey: "cni.istio.io/uninitialized"
+    brokenPodLabelValue: "true"
 `)
 
 func chartsIstioCniValuesYamlBytes() ([]byte, error) {
@@ -8895,21 +8981,31 @@ func chartsIstioControlIstioAutoinjectNotesTxt() (*asset, error) {
 }
 
 var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`template: |
+  {{- $cniDisabled := (not .Values.istio_cni.enabled) }}
+  {{- $cniRepairEnabled := (and .Values.istio_cni.enabled .Values.istio_cni.repair.enabled) }}
+  {{- $enableInitContainer := (or $cniDisabled $cniRepairEnabled .Values.global.proxy.enableCoreDump) }}
   rewriteAppHTTPProbe: {{ valueOrDefault .Values.sidecarInjectorWebhook.rewriteAppHTTPProbe false }}
-  {{- if or (not .Values.istio_cni.enabled) .Values.global.proxy.enableCoreDump }}
+  {{- if $enableInitContainer }}
   initContainers:
-  {{ if ne (annotation .ObjectMeta `+"`"+`sidecar.istio.io/interceptionMode`+"`"+` .ProxyConfig.InterceptionMode) `+"`"+`NONE`+"`"+` }}
-  {{- if not .Values.istio_cni.enabled }}
+  {{- if ne (annotation .ObjectMeta `+"`"+`sidecar.istio.io/interceptionMode`+"`"+` .ProxyConfig.InterceptionMode) `+"`"+`NONE`+"`"+` }}
+  {{ if $cniRepairEnabled -}}
+  - name: istio-validation
+  {{ else -}}
   - name: istio-init
+  {{ end -}}
   {{- if contains "/" .Values.global.proxy_init.image }}
     image: "{{ .Values.global.proxy_init.image }}"
   {{- else }}
     image: "{{ .Values.global.hub }}/{{ .Values.global.proxy_init.image }}:{{ .Values.global.tag }}"
   {{- end }}
     command:
+  {{- if $cniRepairEnabled }}
+    - istio-iptables-go
+  {{- else }}
     - istio-iptables
+  {{- end }}
     - "-p"
-    - 15001
+    - "15001"
     - "-z"
     - "15006"
     - "-u"
@@ -8932,6 +9028,10 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
     - "-k"
     - "{{ index .ObjectMeta.Annotations `+"`"+`traffic.sidecar.istio.io/kubevirtInterfaces`+"`"+` }}"
     {{ end -}}
+    {{ if $cniRepairEnabled -}}
+    - "--run-validation"
+    - "--skip-rule-apply"
+    {{- end }}
     imagePullPolicy: "{{ valueOrDefault .Values.global.imagePullPolicy `+"`"+`Always`+"`"+` }}"
   {{- if .Values.global.proxy_init.resources }}
     resources:
@@ -8940,17 +9040,28 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
     resources: {}
   {{- end }}
     securityContext:
-      runAsUser: 0
-      runAsNonRoot: false
+      allowPrivilegeEscalation: {{ .Values.global.proxy.privileged }}
+      privileged: {{ .Values.global.proxy.privileged }}
       capabilities:
+    {{- if not $cniRepairEnabled }}
         add:
         - NET_ADMIN
-      {{- if .Values.global.proxy.privileged }}
-      privileged: true
-      {{- end }}
+        - NET_RAW
+    {{- end }}
+        drop:
+        - ALL
+      readOnlyRootFilesystem: false
+    {{- if not $cniRepairEnabled }}
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    {{- else }}
+      runAsGroup: 1337
+      runAsUser: 1337
+      runAsNonRoot: true
+    {{- end }}
     restartPolicy: Always
-  {{- end }}
-  {{  end -}}
+  {{ end -}}
   {{- if eq .Values.global.proxy.enableCoreDump true }}
   - name: enable-core-dump
     args:
@@ -8966,11 +9077,19 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
     imagePullPolicy: "{{ valueOrDefault .Values.global.imagePullPolicy `+"`"+`Always`+"`"+` }}"
     resources: {}
     securityContext:
-      runAsUser: 0
-      runAsNonRoot: false
+      allowPrivilegeEscalation: true
+      capabilities:
+        add:
+        - SYS_ADMIN
+        drop:
+        - ALL
       privileged: true
+      readOnlyRootFilesystem: false
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
   {{ end }}
-  {{- end }}
+  {{ end }}
   containers:
   - name: istio-proxy
   {{- if contains "/" (annotation .ObjectMeta `+"`"+`sidecar.istio.io/proxyImage`+"`"+` .Values.global.proxy.image) }}
@@ -9054,6 +9173,7 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
     - "{{ annotation .ObjectMeta `+"`"+`status.sidecar.istio.io/port`+"`"+` .Values.global.proxy.statusPort }}"
     - --applicationPorts
     - "{{ annotation .ObjectMeta `+"`"+`readiness.status.sidecar.istio.io/applicationPorts`+"`"+` (applicationPorts .Spec.Containers) }}"
+
   {{- end }}
   {{- if .Values.global.trustDomain }}
     - --trust-domain={{ .Values.global.trustDomain }}
@@ -9064,6 +9184,10 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
   {{- if (isset .ObjectMeta.Annotations `+"`"+`sidecar.istio.io/bootstrapOverride`+"`"+`) }}
     - --templateFile=/etc/istio/custom-bootstrap/envoy_bootstrap.json
   {{- end }}
+  {{- if .Values.global.proxy.lifecycle }}
+    lifecycle:
+      {{ toYaml .Values.global.proxy.lifecycle | indent 4 }}
+    {{- end }}
     env:
     - name: POD_NAME
       valueFrom:
@@ -9096,9 +9220,13 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
     - name: ISTIO_META_POD_PORTS
       value: |-
         [
+        {{- $first := true }}
         {{- range $index1, $c := .Spec.Containers }}
           {{- range $index2, $p := $c.Ports }}
-            {{if or (ne $index1 0) (ne $index2 0)}},{{end}}{{ structToJSON $p }}
+            {{- if (structToJSON $p) }}
+            {{if not $first}},{{end}}{{ structToJSON $p }}
+            {{- $first = false }}
+            {{- end }}
           {{- end}}
         {{- end}}
         ]
@@ -9138,7 +9266,7 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
     {{ end }}
     {{- if and .TypeMeta.APIVersion .DeploymentMeta.Name }}
     - name: ISTIO_META_OWNER
-      value: kubernetes://api/{{ .TypeMeta.APIVersion }}/namespaces/{{ valueOrDefault .DeploymentMeta.Namespace `+"`"+`default`+"`"+` }}/{{ toLower .TypeMeta.Kind}}s/{{ .DeploymentMeta.Name }}
+      value: kubernetes://apis/{{ .TypeMeta.APIVersion }}/namespaces/{{ valueOrDefault .DeploymentMeta.Namespace `+"`"+`default`+"`"+` }}/{{ toLower .TypeMeta.Kind}}s/{{ .DeploymentMeta.Name }}
     {{- end}}
     {{- if (isset .ObjectMeta.Annotations `+"`"+`sidecar.istio.io/bootstrapOverride`+"`"+`) }}
     - name: ISTIO_BOOTSTRAP_OVERRIDE
@@ -9172,21 +9300,22 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
       failureThreshold: {{ annotation .ObjectMeta `+"`"+`readiness.status.sidecar.istio.io/failureThreshold`+"`"+` .Values.global.proxy.readinessFailureThreshold }}
     {{ end -}}
     securityContext:
-      {{- if .Values.global.proxy.privileged }}
-      privileged: true
-      {{- end }}
-      {{- if ne .Values.global.proxy.enableCoreDump true }}
-      readOnlyRootFilesystem: true
-      {{- end }}
-      {{ if eq (annotation .ObjectMeta `+"`"+`sidecar.istio.io/interceptionMode`+"`"+` .ProxyConfig.InterceptionMode) `+"`"+`TPROXY`+"`"+` -}}
+      allowPrivilegeEscalation: {{ .Values.global.proxy.privileged }}
       capabilities:
+        {{ if eq (annotation .ObjectMeta `+"`"+`sidecar.istio.io/interceptionMode`+"`"+` .ProxyConfig.InterceptionMode) `+"`"+`TPROXY`+"`"+` -}}
         add:
         - NET_ADMIN
+        {{- end }}
+        drop:
+        - ALL
+      privileged: {{ .Values.global.proxy.privileged }}
+      readOnlyRootFilesystem: {{ not .Values.global.proxy.enableCoreDump }}
       runAsGroup: 1337
-      {{ else -}}
-      {{ if .Values.global.sds.enabled }}
-      runAsGroup: 1337
-      {{- end }}
+      {{ if eq (annotation .ObjectMeta `+"`"+`sidecar.istio.io/interceptionMode`+"`"+` .ProxyConfig.InterceptionMode) `+"`"+`TPROXY`+"`"+` -}}
+      runAsNonRoot: false
+      runAsUser: 0
+      {{- else -}}
+      runAsNonRoot: true
       runAsUser: 1337
       {{- end }}
     resources:
@@ -9605,20 +9734,31 @@ data:
         {{- end }}
       {{- end }}
 
+    {{- $defPilotHostname := printf "istio-pilot%s.%s" .Values.version .Values.global.configNamespace }}
+    {{- $pilotAddress := .Values.global.remotePilotAddress | default $defPilotHostname }}
+
     {{- if .Values.global.controlPlaneSecurityEnabled }}
       #
       # Mutual TLS authentication between sidecars and istio control plane.
       controlPlaneAuthPolicy: MUTUAL_TLS
       #
       # Address where istio Pilot service is running
-      discoveryAddress: istio-pilot{{ .Values.version }}.{{ .Values.global.configNamespace }}:15011
+      {{- if or .Values.global.remotePilotCreateSvcEndpoint .Values.global.createRemoteSvcEndpoints }}
+      discoveryAddress: {{ $defPilotHostname }}:15011
+      {{- else }}
+      discoveryAddress: {{ $pilotAddress }}:15011
+      {{- end }}
     {{- else }}
       #
       # Mutual TLS authentication between sidecars and istio control plane.
       controlPlaneAuthPolicy: NONE
       #
       # Address where istio Pilot service is running
-      discoveryAddress: istio-pilot{{ .Values.version }}.{{ .Values.global.configNamespace }}:15010
+      {{- if or .Values.global.remotePilotCreateSvcEndpoint .Values.global.createRemoteSvcEndpoints }}
+      discoveryAddress: {{ $defPilotHostname }}:15010
+      {{- else }}
+      discoveryAddress: {{ $pilotAddress }}:15010
+      {{- end }}
     {{- end }}
 ---
 `)
@@ -10079,6 +10219,7 @@ var _chartsIstioControlIstioAutoinjectValuesYaml = []byte(`sidecarInjectorWebhoo
   #   container.apparmor.security.beta.kubernetes.io/istio-init: runtime/default
   #   container.apparmor.security.beta.kubernetes.io/istio-proxy: runtime/default
   injectedAnnotations: {}
+  lifecycle: {}
 
   # If set, will use the value as injection label. The value must match the 'release' label of the injector,
   # except when 1.2 istio-injection label is used, which must be set to "enabled".
@@ -10123,6 +10264,8 @@ var _chartsIstioControlIstioAutoinjectValuesYaml = []byte(`sidecarInjectorWebhoo
 # TODO: rename to 'enableIptables' or add 'interceptionMode: CNI'
 istio_cni:
   enabled: false
+  repair:
+    enabled: true
 `)
 
 func chartsIstioControlIstioAutoinjectValuesYamlBytes() ([]byte, error) {
@@ -10439,13 +10582,16 @@ rules:
   - apiGroups: ["extensions"]
     resources: ["ingresses"]
     verbs: ["get", "list", "watch"]
-  - apiGroups: ["extensions"]
-    resources: ["deployments/finalizers"]
-    resourceNames: ["istio-galley"]
+  - apiGroups: [""]
+    resources: ["namespaces/finalizers"]
     verbs: ["update"]
   - apiGroups: ["apiextensions.k8s.io"]
     resources: ["customresourcedefinitions"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    verbs: ["get", "list", "watch"]
+---
 `)
 
 func chartsIstioControlIstioConfigTemplatesClusterroleYamlBytes() ([]byte, error) {
@@ -10571,6 +10717,54 @@ data:
                     route:
                       cluster: in.9901
                       timeout: 0.000s
+        {{- if .Values.global.sds.enabled }}
+          tls_context:
+            common_tls_context:
+              alpn_protocols:
+              - h2
+              tls_certificate_sds_secret_configs:
+              - name: default
+                sds_config:
+                  api_config_source:
+                    api_type: GRPC
+                    grpc_services:
+                    - google_grpc:
+                        target_uri: {{ .Values.global.sds.udsPath }}
+                        channel_credentials:
+                          local_credentials: {}
+                        call_credentials:
+                        - from_plugin:
+                            name: envoy.grpc_credentials.file_based_metadata
+                            config:
+                              header_key: istio_sds_credentials_header-bin
+                              secret_data:
+                                filename: /var/run/secrets/tokens/istio-token
+                        credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                        stat_prefix: sdsstat
+              combined_validation_context:
+                default_validation_context:
+                  verify_subject_alt_name: []
+                validation_context_sds_secret_config:
+                  name: ROOTCA
+                  sds_config:
+                    api_config_source:
+                      api_type: GRPC
+                      grpc_services:
+                      - google_grpc:
+                          target_uri: {{ .Values.global.sds.udsPath }}
+                          channel_credentials:
+                            local_credentials: {}
+                          call_credentials:
+                          - from_plugin:
+                              name: envoy.grpc_credentials.file_based_metadata
+                              config:
+                                header_key: istio_sds_credentials_header-bin
+                                secret_data:
+                                  filename: /var/run/secrets/tokens/istio-token
+                          credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                          stat_prefix: sdsstat
+            require_client_certificate: true
+        {{- else }}
           tls_context:
             common_tls_context:
               alpn_protocols:
@@ -10584,6 +10778,7 @@ data:
                 trusted_ca:
                   filename: /etc/certs/root-cert.pem
             require_client_certificate: true
+        {{- end }}
 {{- end }}
 ---
 `)
@@ -10750,14 +10945,15 @@ spec:
 {{- end }}
           volumeMounts:
   {{- if .Values.global.configValidation }}
-          - name: istio-certs
-            mountPath: /etc/certs
-            readOnly: true
-  {{- end }}
-  {{- if .Values.global.certificates }}
+    {{- if .Values.global.certificates }}
           - name: dnscerts
             mountPath: /etc/dnscerts
             readOnly: true
+    {{- else }}
+          - name: istio-certs
+            mountPath: /etc/certs
+            readOnly: true
+    {{- end }}
   {{- end }}
           - name: config
             mountPath: /etc/config
@@ -10839,23 +11035,43 @@ spec:
 {{ toYaml .Values.global.defaultResources | indent 12 }}
 {{- end }}
           volumeMounts:
+          - name: envoy-config
+            mountPath: /var/lib/istio/galley/envoy
+          {{- if .Values.global.sds.enabled }}
+          - name: sds-uds-path
+            mountPath: /var/run/sds
+            readOnly: true
+          - name: istio-token
+            mountPath: /var/run/secrets/tokens
+          {{- else }}
           - name: istio-certs
             mountPath: /etc/certs
             readOnly: true
-          - name: envoy-config
-            mountPath: /var/lib/istio/galley/envoy
+          {{- end }}
 {{- end }}
 
       volumes:
-  {{- if or .Values.global.controlPlaneSecurityEnabled .Values.global.configValidation }}
-      - name: istio-certs
-        secret:
-          secretName: istio.istio-galley-service-account
+  {{- if and .Values.global.controlPlaneSecurityEnabled .Values.global.sds.enabled }}
+      - hostPath:
+          path: /var/run/sds
+        name: sds-uds-path
+      - name: istio-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: {{ .Values.global.sds.token.aud }}
+              expirationSeconds: 43200
+              path: istio-token
   {{- end }}
-  {{- if .Values.global.certificates }}
+  {{- if and .Values.global.configValidation .Values.global.certificates }}
       - name: dnscerts
         secret:
           secretName: dns.istio-galley-service-account
+  {{- end }}
+  {{- if or (and .Values.global.controlPlaneSecurityEnabled (not .Values.global.sds.enabled)) (and .Values.global.configValidation (not .Values.global.certificates)) }}
+      - name: istio-certs
+        secret:
+          secretName: istio.istio-galley-service-account
   {{- end }}
   {{- if .Values.global.controlPlaneSecurityEnabled }}
       - name: envoy-config
@@ -11261,146 +11477,6 @@ func chartsIstioControlIstioDiscoveryNotesTxt() (*asset, error) {
 	return a, nil
 }
 
-var _chartsIstioControlIstioDiscoveryMetadataExchangeV2Yaml = []byte(`apiVersion: networking.istio.io/v1alpha3
-kind: EnvoyFilter
-metadata:
-  name: metadata-exchange
-spec:
-  configPatches:
-    - applyTo: HTTP_FILTER
-      match:
-        context: ANY # inbound, outbound, and gateway
-        listener:
-          filterChain:
-            filter:
-              name: "envoy.http_connection_manager"
-      patch:
-        operation: INSERT_BEFORE
-        value:
-          name: envoy.filters.http.wasm
-          config:
-            config:
-              configuration: envoy.wasm.metadata_exchange
-              vm_config:
-                runtime: envoy.wasm.runtime.null
-                code:
-                  inline_string: envoy.wasm.metadata_exchange`)
-
-func chartsIstioControlIstioDiscoveryMetadataExchangeV2YamlBytes() ([]byte, error) {
-	return _chartsIstioControlIstioDiscoveryMetadataExchangeV2Yaml, nil
-}
-
-func chartsIstioControlIstioDiscoveryMetadataExchangeV2Yaml() (*asset, error) {
-	bytes, err := chartsIstioControlIstioDiscoveryMetadataExchangeV2YamlBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	info := bindataFileInfo{name: "charts/istio-control/istio-discovery/metadata-exchange-v2.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info}
-	return a, nil
-}
-
-var _chartsIstioControlIstioDiscoveryStatsFilterV2Yaml = []byte(`apiVersion: networking.istio.io/v1alpha3
-kind: EnvoyFilter
-metadata:
-  name: stats-filter
-spec:
-  configPatches:
-    - applyTo: HTTP_FILTER
-      match:
-        context: SIDECAR_OUTBOUND
-        listener:
-          filterChain:
-            filter:
-              name: "envoy.http_connection_manager"
-              subFilter:
-                name: "envoy.router"
-      patch:
-        operation: INSERT_BEFORE
-        value:
-          name: envoy.filters.http.wasm
-          config:
-            config:
-              root_id: stats_outbound
-              configuration: |
-                {
-                  "debug": "false",
-                  "stat_prefix": "istio",
-                }
-              vm_config:
-                vm_id: stats_outbound
-                runtime: envoy.wasm.runtime.null
-                code:
-                  inline_string: envoy.wasm.stats
-    - applyTo: HTTP_FILTER
-      match:
-        context: SIDECAR_INBOUND
-        listener:
-          filterChain:
-            filter:
-              name: "envoy.http_connection_manager"
-              subFilter:
-                name: "envoy.router"
-      patch:
-        operation: INSERT_BEFORE
-        value:
-          name: envoy.filters.http.wasm
-          config:
-            config:
-              root_id: stats_inbound
-              configuration: |
-                {
-                  "debug": "false",
-                  "stat_prefix": "istio",
-                }
-              vm_config:
-                vm_id: stats_inbound
-                runtime: envoy.wasm.runtime.null
-                code:
-                  inline_string: envoy.wasm.stats
-    - applyTo: HTTP_FILTER
-      match:
-        context: GATEWAY
-        listener:
-          filterChain:
-            filter:
-              name: "envoy.http_connection_manager"
-              subFilter:
-                name: "envoy.router"
-      patch:
-        operation: INSERT_BEFORE
-        value:
-          name: envoy.filters.http.wasm
-          config:
-            config:
-              root_id: stats_outbound
-              configuration: |
-                {
-                  "debug": "false",
-                  "stat_prefix": "istio",
-                }
-              vm_config:
-                vm_id: stats_outbound
-                runtime: envoy.wasm.runtime.null
-                code:
-                  inline_string: envoy.wasm.stats`)
-
-func chartsIstioControlIstioDiscoveryStatsFilterV2YamlBytes() ([]byte, error) {
-	return _chartsIstioControlIstioDiscoveryStatsFilterV2Yaml, nil
-}
-
-func chartsIstioControlIstioDiscoveryStatsFilterV2Yaml() (*asset, error) {
-	bytes, err := chartsIstioControlIstioDiscoveryStatsFilterV2YamlBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	info := bindataFileInfo{name: "charts/istio-control/istio-discovery/stats-filter-v2.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info}
-	return a, nil
-}
-
 var _chartsIstioControlIstioDiscoveryTemplates_affinityTpl = []byte(`{{/* affinity - https://kubernetes.io/docs/concepts/configuration/assign-pod-node/ */}}
 
 {{- define "nodeaffinity" }}
@@ -11716,7 +11792,57 @@ data:
               max_pending_requests: 100000
               max_requests: 100000
               max_retries: 3
-
+        hosts:
+          - socket_address:
+              address: istio-galley.{{ .Values.global.configNamespace }}
+              port_value: 15019
+      {{- if .Values.global.controlPlaneSecurityEnabled }}
+      {{- if .Values.global.sds.enabled }}
+        tls_context:
+          common_tls_context:
+            tls_certificate_sds_secret_configs:
+            - name: default
+              sds_config:
+                api_config_source:
+                  api_type: GRPC
+                  grpc_services:
+                  - google_grpc:
+                      target_uri: {{ .Values.global.sds.udsPath }}
+                      channel_credentials:
+                        local_credentials: {}
+                      call_credentials:
+                      - from_plugin:
+                          name: envoy.grpc_credentials.file_based_metadata
+                          config:
+                            header_key: istio_sds_credentials_header-bin
+                            secret_data:
+                              filename: /var/run/secrets/tokens/istio-token
+                      credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                      stat_prefix: sdsstat
+            combined_validation_context:
+              default_validation_context:
+                verify_subject_alt_name:
+                - spiffe://{{ .Values.global.trustDomain }}/ns/{{ .Values.global.configNamespace }}/sa/istio-galley-service-account
+              validation_context_sds_secret_config:
+                name: ROOTCA
+                sds_config:
+                  api_config_source:
+                    api_type: GRPC
+                    grpc_services:
+                    - google_grpc:
+                        target_uri: {{ .Values.global.sds.udsPath }}
+                        channel_credentials:
+                          local_credentials: {}
+                        call_credentials:
+                        - from_plugin:
+                            name: envoy.grpc_credentials.file_based_metadata
+                            config:
+                              header_key: istio_sds_credentials_header-bin
+                              secret_data:
+                                filename: /var/run/secrets/tokens/istio-token
+                        credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                        stat_prefix: sdsstat
+      {{- else }}
         tls_context:
           common_tls_context:
             tls_certificates:
@@ -11729,12 +11855,8 @@ data:
                 filename: /etc/certs/root-cert.pem
               verify_subject_alt_name:
               - spiffe://{{ .Values.global.trustDomain }}/ns/{{ .Values.global.configNamespace }}/sa/istio-galley-service-account
-
-        hosts:
-          - socket_address:
-              address: istio-galley.{{ .Values.global.configNamespace }}
-              port_value: 15019
-
+      {{- end }}
+      {{- end }}
 
       listeners:
       - name: "in.15011"
@@ -11779,21 +11901,68 @@ data:
                     decorator:
                       operation: xDS
 
+        {{- if .Values.global.sds.enabled }}
           tls_context:
-            require_client_certificate: true
             common_tls_context:
-              validation_context:
-                trusted_ca:
-                  filename: /etc/certs/root-cert.pem
-
               alpn_protocols:
               - h2
-
+              tls_certificate_sds_secret_configs:
+              - name: default
+                sds_config:
+                  api_config_source:
+                    api_type: GRPC
+                    grpc_services:
+                    - google_grpc:
+                        target_uri: {{ .Values.global.sds.udsPath }}
+                        channel_credentials:
+                          local_credentials: {}
+                        call_credentials:
+                        - from_plugin:
+                            name: envoy.grpc_credentials.file_based_metadata
+                            config:
+                              header_key: istio_sds_credentials_header-bin
+                              secret_data:
+                                filename: /var/run/secrets/tokens/istio-token
+                        credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                        stat_prefix: sdsstat
+              combined_validation_context:
+                default_validation_context:
+                  verify_subject_alt_name: []
+                validation_context_sds_secret_config:
+                  name: ROOTCA
+                  sds_config:
+                    api_config_source:
+                      api_type: GRPC
+                      grpc_services:
+                      - google_grpc:
+                          target_uri: {{ .Values.global.sds.udsPath }}
+                          channel_credentials:
+                            local_credentials: {}
+                          call_credentials:
+                          - from_plugin:
+                              name: envoy.grpc_credentials.file_based_metadata
+                              config:
+                                header_key: istio_sds_credentials_header-bin
+                                secret_data:
+                                  filename: /var/run/secrets/tokens/istio-token
+                          credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                          stat_prefix: sdsstat
+            require_client_certificate: true
+        {{- else }}
+          tls_context:
+            common_tls_context:
+              alpn_protocols:
+              - h2
               tls_certificates:
               - certificate_chain:
                   filename: /etc/certs/cert-chain.pem
                 private_key:
                   filename: /etc/certs/key.pem
+              validation_context:
+                trusted_ca:
+                  filename: /etc/certs/root-cert.pem
+            require_client_certificate: true
+        {{- end }}
 
 
       # Manual 'whitebox' mode
@@ -11880,6 +12049,10 @@ data:
     # Set accessLogFile to empty string to disable access log.
     accessLogFile: "{{ .Values.global.proxy.accessLogFile }}"
 
+    accessLogFormat: {{ .Values.global.proxy.accessLogFormat | quote }}
+
+    accessLogEncoding: '{{ .Values.global.proxy.accessLogEncoding }}'
+
     enableEnvoyAccessLogService: {{ .Values.global.proxy.envoyAccessLogService.enabled }}
 
     {{- if .Values.global.istioRemote }}
@@ -11901,12 +12074,15 @@ data:
 
     {{- else }}
 
+    {{- if .Values.mixer.policy.enabled }}
     {{- if .Values.global.controlPlaneSecurityEnabled }}
     mixerCheckServer: istio-policy.{{ .Values.global.policyNamespace }}.svc.{{ .Values.global.proxy.clusterDomain }}:15004
     {{- else }}
     mixerCheckServer: istio-policy.{{ .Values.global.policyNamespace }}.svc.{{ .Values.global.proxy.clusterDomain }}:9091
     {{- end }}
-    {{- if .Values.telemetry.enabled}}
+    {{- end }}
+
+    {{- if and .Values.telemetry.v1.enabled .Values.telemetry.enabled}}
     {{- if .Values.global.controlPlaneSecurityEnabled }}
     mixerReportServer: istio-telemetry.{{ .Values.global.telemetryNamespace }}.svc.{{ .Values.global.proxy.clusterDomain }}:15004
     {{- else }}
@@ -11943,7 +12119,7 @@ data:
     disableMixerHttpReports: false
     {{- end }}
 
-    {{- if .Values.pilot.policy.enabled }}
+    {{- if not .Values.global.disablePolicyChecks }}
 
     # Set the following variable to true to disable policy checks by the Mixer.
     # Note that metrics will still be reported to the Mixer.
@@ -11959,6 +12135,16 @@ data:
 
     {{- end }}
 
+    # Automatic protocol detection uses a set of heuristics to
+    # determine whether the connection is using TLS or not (on the
+    # server side), as well as the application protocol being used
+    # (e.g., http vs tcp). These heuristics rely on the client sending
+    # the first bits of data. For server first protocols like MySQL,
+    # MongoDB, etc., Envoy will timeout on the protocol detection after
+    # the specified period, defaulting to non mTLS plain TCP
+    # traffic. Set this field to tweak the period that Envoy will wait
+    # for the client to send the first bits of data. (MUST BE >=1ms)
+    protocolDetectionTimeout: {{ .Values.global.proxy.protocolDetectionTimeout }}
 
     # This is the k8s ingress service name, update if you used a different name
     {{- if .Values.pilot.ingress }}
@@ -12353,9 +12539,6 @@ spec:
 {{ toYaml .Values.global.defaultResources | trim | indent 12 }}
 {{- end }}
           volumeMounts:
-          - name: istio-certs
-            mountPath: /etc/certs
-            readOnly: true
           - name: pilot-envoy-config
             mountPath: /var/lib/envoy
           {{- if .Values.global.sds.enabled }}
@@ -12364,6 +12547,10 @@ spec:
             readOnly: true
           - name: istio-token
             mountPath: /var/run/secrets/tokens
+          {{ else }}
+          - name: istio-certs
+            mountPath: /etc/certs
+            readOnly: true
           {{- end }}
 {{- end }}
       volumes:
@@ -12378,6 +12565,11 @@ spec:
               audience: {{ .Values.global.sds.token.aud }}
               expirationSeconds: 43200
               path: istio-token
+      {{ else }}
+      - name: istio-certs
+        secret:
+          secretName: istio.istio-pilot-service-account
+          optional: true
       {{- end }}
       - name: config-volume
         configMap:
@@ -12385,12 +12577,6 @@ spec:
       - name: pilot-envoy-config
         configMap:
           name: pilot-envoy-config{{ .Values.version }}
-  {{- if .Values.global.controlPlaneSecurityEnabled}}
-      - name: istio-certs
-        secret:
-          secretName: istio.istio-pilot-service-account
-          optional: true
-  {{- end }}
       affinity:
       {{- include "nodeaffinity" . | indent 6 }}
       {{- include "podAntiAffinity" . | indent 6 }}
@@ -12617,23 +12803,253 @@ func chartsIstioControlIstioDiscoveryTemplatesServiceaccountYaml() (*asset, erro
 	return a, nil
 }
 
-var _chartsIstioControlIstioDiscoveryTemplatesTelemetryv2Yaml = []byte(`{{- if and .Values.telemetry.enabled .Values.telemetry.v2.enabled }}
-{{ .Files.Get "metadata-exchange-v2.yaml" }}
+var _chartsIstioControlIstioDiscoveryTemplatesTelemetryv2_14Yaml = []byte(`# these EnvoyFilter templates work for release 1.4 only
+{{- if and .Values.telemetry.enabled .Values.telemetry.v2.enabled }}
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: metadata-exchange-1.4
+  {{- if .Values.global.configRootNamespace }}
+  namespace: {{ .Values.global.configRootNamespace }}
+  {{- else }}
+  namespace: {{ .Release.Namespace }}
+  {{- end }}
+spec:
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: ANY # inbound, outbound, and gateway
+        proxy:
+          proxyVersion: '1\.4.*'
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.http_connection_manager"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.wasm
+          config:
+            config:
+              configuration: envoy.wasm.metadata_exchange
+              vm_config:
+                runtime: envoy.wasm.runtime.null
+                code:
+                  inline_string: envoy.wasm.metadata_exchange
 ---
-{{ .Files.Get "stats-filter-v2.yaml" }}
-{{- end }}`)
+{{- if .Values.telemetry.v2.prometheus.enabled }}
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: stats-filter-1.4
+  {{- if .Values.global.configRootNamespace }}
+  namespace: {{ .Values.global.configRootNamespace }}
+  {{- else }}
+  namespace: {{ .Release.Namespace }}
+  {{- end }}
+spec:
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_OUTBOUND
+        proxy:
+          proxyVersion: '1\.4.*'
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.http_connection_manager"
+              subFilter:
+                name: "envoy.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.wasm
+          config:
+            config:
+              root_id: stats_outbound
+              configuration: |
+                {
+                  "debug": "false",
+                  "stat_prefix": "istio",
+                }
+              vm_config:
+                vm_id: stats_outbound
+                runtime: envoy.wasm.runtime.null
+                code:
+                  inline_string: envoy.wasm.stats
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        proxy:
+          proxyVersion: '1\.4.*'
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.http_connection_manager"
+              subFilter:
+                name: "envoy.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.wasm
+          config:
+            config:
+              root_id: stats_inbound
+              configuration: |
+                {
+                  "debug": "false",
+                  "stat_prefix": "istio",
+                }
+              vm_config:
+                vm_id: stats_inbound
+                runtime: envoy.wasm.runtime.null
+                code:
+                  inline_string: envoy.wasm.stats
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        proxy:
+          proxyVersion: '1\.4.*'
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.http_connection_manager"
+              subFilter:
+                name: "envoy.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.wasm
+          config:
+            config:
+              root_id: stats_outbound
+              configuration: |
+                {
+                  "debug": "false",
+                  "stat_prefix": "istio",
+                }
+              vm_config:
+                vm_id: stats_outbound
+                runtime: envoy.wasm.runtime.null
+                code:
+                  inline_string: envoy.wasm.stats
+---
+{{- end }}
 
-func chartsIstioControlIstioDiscoveryTemplatesTelemetryv2YamlBytes() ([]byte, error) {
-	return _chartsIstioControlIstioDiscoveryTemplatesTelemetryv2Yaml, nil
+{{- if .Values.telemetry.v2.stackdriver.enabled }}
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: stackdriver-filter-1.4
+  {{- if .Values.global.configRootNamespace }}
+  namespace: {{ .Values.global.configRootNamespace }}
+  {{- else }}
+  namespace: {{ .Release.Namespace }}
+  {{- end }}
+spec:
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_OUTBOUND
+        proxy:
+          proxyVersion: '1\.4.*'
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.http_connection_manager"
+              subFilter:
+                name: "envoy.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.wasm
+          config:
+            config:
+              root_id: stackdriver_outbound
+              configuration: |
+                {{- if not .Values.telemetry.v2.stackdriver.configOverride }}
+                {"enable_mesh_edges_reporting": {{ .Values.telemetry.v2.stackdriver.topology }}, "disable_server_access_logging": {{ not .Values.telemetry.v2.stackdriver.logging }}, "meshEdgesReportingDuration": "600s"}
+                {{- else }}
+                {{ toJson .Values.telemetry.v2.stackdriver.configOverride | indent 8 }}
+                {{- end }}
+              vm_config:
+                vm_id: stackdriver_outbound
+                runtime: envoy.wasm.runtime.null
+                code:
+                  inline_string: envoy.wasm.null.stackdriver
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        proxy:
+          proxyVersion: '1\.4.*'
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.http_connection_manager"
+              subFilter:
+                name: "envoy.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.wasm
+          config:
+            config:
+              root_id: stackdriver_inbound
+              configuration: |
+                {{- if not .Values.telemetry.v2.stackdriver.configOverride }}
+                {"enable_mesh_edges_reporting": {{ .Values.telemetry.v2.stackdriver.topology }}, "disable_server_access_logging": {{ not .Values.telemetry.v2.stackdriver.logging }}, "meshEdgesReportingDuration": "600s"}
+                {{- else }}
+                {{ toJson .Values.telemetry.v2.stackdriver.configOverride | indent 16 }}
+                {{- end }}
+              vm_config:
+                vm_id: stackdriver_inbound
+                runtime: envoy.wasm.runtime.null
+                code:
+                  inline_string: envoy.wasm.null.stackdriver
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        proxy:
+          proxyVersion: '1\.4.*'
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.http_connection_manager"
+              subFilter:
+                name: "envoy.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.wasm
+          config:
+            config:
+              root_id: stackdriver_outbound
+              configuration: |
+                {{- if not .Values.telemetry.v2.stackdriver.configOverride }}
+                {"enable_mesh_edges_reporting": {{ .Values.telemetry.v2.stackdriver.topology }}, "disable_server_access_logging": {{ not .Values.telemetry.v2.stackdriver.logging }}, "meshEdgesReportingDuration": "600s", "disable_host_header_fallback": true}
+                {{- else }}
+                {{ toJson .Values.telemetry.v2.stackdriver.configOverride | indent 16 }}
+                {{- end }}
+              vm_config:
+                vm_id: stackdriver_outbound
+                runtime: envoy.wasm.runtime.null
+                code:
+                  inline_string: envoy.wasm.null.stackdriver
+---
+{{- end}}
+{{- end}}`)
+
+func chartsIstioControlIstioDiscoveryTemplatesTelemetryv2_14YamlBytes() ([]byte, error) {
+	return _chartsIstioControlIstioDiscoveryTemplatesTelemetryv2_14Yaml, nil
 }
 
-func chartsIstioControlIstioDiscoveryTemplatesTelemetryv2Yaml() (*asset, error) {
-	bytes, err := chartsIstioControlIstioDiscoveryTemplatesTelemetryv2YamlBytes()
+func chartsIstioControlIstioDiscoveryTemplatesTelemetryv2_14Yaml() (*asset, error) {
+	bytes, err := chartsIstioControlIstioDiscoveryTemplatesTelemetryv2_14YamlBytes()
 	if err != nil {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "charts/istio-control/istio-discovery/templates/telemetryv2.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	info := bindataFileInfo{name: "charts/istio-control/istio-discovery/templates/telemetryv2_1.4.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -12761,10 +13177,30 @@ mixer:
 
 telemetry:
   enabled: true
+  v1:
+    # Set true to enable Mixer based telemetry
+    enabled: true
   v2:
     # For Null VM case now. If enabled, will set disableMixerHttpReports to true and not define mixerReportServer
     # also enable metadata exchange and stats filter.
-    enabled: false`)
+    enabled: false
+    # Indicate if prometheus stats filter is enabled or not
+    prometheus:
+      enabled: true
+    # stackdriver filter settings.
+    stackdriver:
+      enabled: false
+      logging: false
+      monitoring: false
+      topology: false
+    #  configOverride parts give you the ability to override the low level configuration params passed to envoy filter.
+
+      configOverride: {}
+      #  e.g.
+      #  enable_mesh_edges_reporting: true
+      #  disable_server_access_logging: false
+      #  meshEdgesReportingDuration: 500s
+      #  disable_host_header_fallback: true`)
 
 func chartsIstioControlIstioDiscoveryValuesYamlBytes() ([]byte, error) {
 	return _chartsIstioControlIstioDiscoveryValuesYaml, nil
@@ -13428,6 +13864,504 @@ func chartsIstioPolicyTemplatesConfigYaml() (*asset, error) {
 	return a, nil
 }
 
+var _chartsIstioPolicyTemplatesConfigmapEnvoyYaml = []byte(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: policy-envoy-config
+  labels:
+    release: {{ .Release.Name }}
+data:
+  # Explicitly defined - moved from istio/istio/pilot/docker.
+  envoy.yaml.tmpl: |-
+    admin:
+      access_log_path: /dev/null
+      address:
+        socket_address:
+          address: 127.0.0.1
+          port_value: 15000
+    stats_config:
+      use_all_default_tags: false
+      stats_tags:
+      - tag_name: cluster_name
+        regex: '^cluster\.((.+?(\..+?\.svc\.cluster\.local)?)\.)'
+      - tag_name: tcp_prefix
+        regex: '^tcp\.((.*?)\.)\w+?$'
+      - tag_name: response_code
+        regex: '_rq(_(\d{3}))$'
+      - tag_name: response_code_class
+        regex: '_rq(_(\dxx))$'
+      - tag_name: http_conn_manager_listener_prefix
+        regex: '^listener(?=\.).*?\.http\.(((?:[_.[:digit:]]*|[_\[\]aAbBcCdDeEfF[:digit:]]*))\.)'
+      - tag_name: http_conn_manager_prefix
+        regex: '^http\.(((?:[_.[:digit:]]*|[_\[\]aAbBcCdDeEfF[:digit:]]*))\.)'
+      - tag_name: listener_address
+        regex: '^listener\.(((?:[_.[:digit:]]*|[_\[\]aAbBcCdDeEfF[:digit:]]*))\.)'
+
+    static_resources:
+      clusters:
+      - name: prometheus_stats
+        type: STATIC
+        connect_timeout: 0.250s
+        lb_policy: ROUND_ROBIN
+        hosts:
+        - socket_address:
+            protocol: TCP
+            address: 127.0.0.1
+            port_value: 15000
+
+      - circuit_breakers:
+          thresholds:
+          - max_connections: 100000
+            max_pending_requests: 100000
+            max_requests: 100000
+            max_retries: 3
+        connect_timeout: 1.000s
+        hosts:
+        - pipe:
+            path: /sock/mixer.socket
+        http2_protocol_options: {}
+        name: inbound_9092
+
+      - circuit_breakers:
+          thresholds:
+          - max_connections: 100000
+            max_pending_requests: 100000
+            max_requests: 100000
+            max_retries: 3
+        connect_timeout: 1.000s
+        hosts:
+        - socket_address:
+            address: istio-telemetry
+            port_value: 15004
+        http2_protocol_options: {}
+        name: mixer_report_server
+
+    {{- if .Values.global.controlPlaneSecurityEnabled }}
+    {{- if .Values.global.sds.enabled }}
+        tls_context:
+          common_tls_context:
+            tls_certificate_sds_secret_configs:
+            - name: default
+              sds_config:
+                api_config_source:
+                  api_type: GRPC
+                  grpc_services:
+                  - google_grpc:
+                      target_uri: {{ .Values.global.sds.udsPath }}
+                      channel_credentials:
+                        local_credentials: {}
+                      call_credentials:
+                      - from_plugin:
+                          name: envoy.grpc_credentials.file_based_metadata
+                          config:
+                            header_key: istio_sds_credentials_header-bin
+                            secret_data:
+                              filename: /var/run/secrets/tokens/istio-token
+                      credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                      stat_prefix: sdsstat
+            combined_validation_context:
+              default_validation_context:
+                verify_subject_alt_name:
+                - spiffe://{{ .Values.global.trustDomain }}/ns/{{ .Values.global.configNamespace }}/sa/istio-mixer-service-account
+              validation_context_sds_secret_config:
+                name: ROOTCA
+                sds_config:
+                  api_config_source:
+                    api_type: GRPC
+                    grpc_services:
+                    - google_grpc:
+                        target_uri: {{ .Values.global.sds.udsPath }}
+                        channel_credentials:
+                          local_credentials: {}
+                        call_credentials:
+                        - from_plugin:
+                            name: envoy.grpc_credentials.file_based_metadata
+                            config:
+                              header_key: istio_sds_credentials_header-bin
+                              secret_data:
+                                filename: /var/run/secrets/tokens/istio-token
+                        credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                        stat_prefix: sdsstat
+    {{- else }}
+        tls_context:
+          common_tls_context:
+            tls_certificates:
+            - certificate_chain:
+                filename: /etc/certs/cert-chain.pem
+              private_key:
+                filename: /etc/certs/key.pem
+            validation_context:
+              trusted_ca:
+                filename: /etc/certs/root-cert.pem
+              verify_subject_alt_name:
+              - spiffe://{{ .Values.global.trustDomain }}/ns/{{ .Values.global.configNamespace }}/sa/istio-mixer-service-account
+    {{- end }}
+    {{- end }}
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+
+      - name: out.galley.15019
+        http2_protocol_options: {}
+        connect_timeout: 1.000s
+        type: STRICT_DNS
+
+        circuit_breakers:
+          thresholds:
+            - max_connections: 100000
+              max_pending_requests: 100000
+              max_requests: 100000
+              max_retries: 3
+        hosts:
+          - socket_address:
+              address: istio-galley.{{ .Values.global.configNamespace }}
+              port_value: 15019
+      {{- if .Values.global.controlPlaneSecurityEnabled }}
+      {{- if .Values.global.sds.enabled }}
+        tls_context:
+          common_tls_context:
+            tls_certificate_sds_secret_configs:
+            - name: default
+              sds_config:
+                api_config_source:
+                  api_type: GRPC
+                  grpc_services:
+                  - google_grpc:
+                      target_uri: {{ .Values.global.sds.udsPath }}
+                      channel_credentials:
+                        local_credentials: {}
+                      call_credentials:
+                      - from_plugin:
+                          name: envoy.grpc_credentials.file_based_metadata
+                          config:
+                            header_key: istio_sds_credentials_header-bin
+                            secret_data:
+                              filename: /var/run/secrets/tokens/istio-token
+                      credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                      stat_prefix: sdsstat
+            combined_validation_context:
+              default_validation_context:
+                verify_subject_alt_name:
+                - spiffe://{{ .Values.global.trustDomain }}/ns/{{ .Values.global.configNamespace }}/sa/istio-galley-service-account
+              validation_context_sds_secret_config:
+                name: ROOTCA
+                sds_config:
+                  api_config_source:
+                    api_type: GRPC
+                    grpc_services:
+                    - google_grpc:
+                        target_uri: {{ .Values.global.sds.udsPath }}
+                        channel_credentials:
+                          local_credentials: {}
+                        call_credentials:
+                        - from_plugin:
+                            name: envoy.grpc_credentials.file_based_metadata
+                            config:
+                              header_key: istio_sds_credentials_header-bin
+                              secret_data:
+                                filename: /var/run/secrets/tokens/istio-token
+                        credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                        stat_prefix: sdsstat
+      {{- else }}
+        tls_context:
+          common_tls_context:
+            tls_certificates:
+            - certificate_chain:
+                filename: /etc/certs/cert-chain.pem
+              private_key:
+                filename: /etc/certs/key.pem
+            validation_context:
+              trusted_ca:
+                filename: /etc/certs/root-cert.pem
+              verify_subject_alt_name:
+              - spiffe://{{ .Values.global.trustDomain }}/ns/{{ .Values.global.configNamespace }}/sa/istio-galley-service-account
+      {{- end }}
+      {{- end }}
+
+      listeners:
+      - name: "15090"
+        address:
+          socket_address:
+            protocol: TCP
+            address: 0.0.0.0
+            port_value: 15090
+        filter_chains:
+        - filters:
+          - name: envoy.http_connection_manager
+            config:
+              codec_type: AUTO
+              stat_prefix: stats
+              route_config:
+                virtual_hosts:
+                - name: backend
+                  domains:
+                  - '*'
+                  routes:
+                  - match:
+                      prefix: /stats/prometheus
+                    route:
+                      cluster: prometheus_stats
+              http_filters:
+              - name: envoy.router
+
+      - name: "15004"
+        address:
+          socket_address:
+            address: 0.0.0.0
+            port_value: 15004
+        filter_chains:
+        - filters:
+          - config:
+              codec_type: HTTP2
+              http2_protocol_options:
+                max_concurrent_streams: 1073741824
+              generate_request_id: true
+              http_filters:
+              - config:
+                  default_destination_service: istio-policy.{{ .Release.Namespace }}.svc.cluster.local
+                  service_configs:
+                    istio-policy.{{ .Release.Namespace }}.svc.cluster.local:
+                      disable_check_calls: true
+    {{"{{"}}- if .DisableReportCalls {{"}}"}}
+                      disable_report_calls: true
+    {{"{{"}}- end {{"}}"}}
+                      mixer_attributes:
+                        attributes:
+                          destination.service.host:
+                            string_value: istio-policy.{{ .Release.Namespace }}.svc.cluster.local
+                          destination.service.uid:
+                            string_value: istio://{{ .Release.Namespace }}/services/istio-policy
+                          destination.service.name:
+                            string_value: istio-policy
+                          destination.service.namespace:
+                            string_value: {{ .Release.Namespace }}
+                          destination.uid:
+                            string_value: kubernetes://{{"{{"}} .PodName {{"}}"}}.{{ .Release.Namespace }}
+                          destination.namespace:
+                            string_value: {{.Release.Namespace }}
+                          destination.ip:
+                            bytes_value: {{"{{"}} .PodIP {{"}}"}}
+                          destination.port:
+                            int64_value: 15004
+                          context.reporter.kind:
+                            string_value: inbound
+                          context.reporter.uid:
+                            string_value: kubernetes://{{"{{"}} .PodName {{"}}"}}.{{ .Release.Namespace }}
+                  transport:
+                    check_cluster: mixer_check_server
+                    report_cluster: mixer_report_server
+                    attributes_for_mixer_proxy:
+                      attributes:
+                        source.uid:
+                          string_value: kubernetes://{{"{{"}} .PodName {{"}}"}}.{{ .Release.Namespace }}
+                name: mixer
+              - name: envoy.router
+              route_config:
+                name: "15004"
+                virtual_hosts:
+                - domains:
+                  - '*'
+                  name: istio-policy.{{ .Release.Namespace }}.svc.cluster.local
+                  routes:
+                  - decorator:
+                      operation: Check
+                    match:
+                      prefix: /
+                    route:
+                      cluster: inbound_9092
+                      timeout: 0.000s
+              stat_prefix: "15004"
+            name: envoy.http_connection_manager
+    {{- if .Values.global.controlPlaneSecurityEnabled }}
+        {{- if .Values.global.sds.enabled }}
+          tls_context:
+            common_tls_context:
+              alpn_protocols:
+              - h2
+              tls_certificate_sds_secret_configs:
+              - name: default
+                sds_config:
+                  api_config_source:
+                    api_type: GRPC
+                    grpc_services:
+                    - google_grpc:
+                        target_uri: {{ .Values.global.sds.udsPath }}
+                        channel_credentials:
+                          local_credentials: {}
+                        call_credentials:
+                        - from_plugin:
+                            name: envoy.grpc_credentials.file_based_metadata
+                            config:
+                              header_key: istio_sds_credentials_header-bin
+                              secret_data:
+                                filename: /var/run/secrets/tokens/istio-token
+                        credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                        stat_prefix: sdsstat
+              combined_validation_context:
+                default_validation_context:
+                  verify_subject_alt_name: []
+                validation_context_sds_secret_config:
+                  name: ROOTCA
+                  sds_config:
+                    api_config_source:
+                      api_type: GRPC
+                      grpc_services:
+                      - google_grpc:
+                          target_uri: {{ .Values.global.sds.udsPath }}
+                          channel_credentials:
+                            local_credentials: {}
+                          call_credentials:
+                          - from_plugin:
+                              name: envoy.grpc_credentials.file_based_metadata
+                              config:
+                                header_key: istio_sds_credentials_header-bin
+                                secret_data:
+                                  filename: /var/run/secrets/tokens/istio-token
+                          credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                          stat_prefix: sdsstat
+            require_client_certificate: true
+        {{- else }}
+          tls_context:
+            common_tls_context:
+              alpn_protocols:
+              - h2
+              tls_certificates:
+              - certificate_chain:
+                  filename: /etc/certs/cert-chain.pem
+                private_key:
+                  filename: /etc/certs/key.pem
+              validation_context:
+                trusted_ca:
+                  filename: /etc/certs/root-cert.pem
+            require_client_certificate: true
+        {{- end }}
+    {{- end }}
+
+      - name: "9091"
+        address:
+          socket_address:
+            address: 0.0.0.0
+            port_value: 9091
+        filter_chains:
+        - filters:
+          - config:
+              codec_type: HTTP2
+              http2_protocol_options:
+                max_concurrent_streams: 1073741824
+              generate_request_id: true
+              http_filters:
+              - config:
+                  default_destination_service: istio-policy.{{ .Release.Namespace }}.svc.cluster.local
+                  service_configs:
+                    istio-policy.{{ .Release.Namespace }}.svc.cluster.local:
+                      disable_check_calls: true
+    {{"{{"}}- if .DisableReportCalls {{"}}"}}
+                      disable_report_calls: true
+    {{"{{"}}- end {{"}}"}}
+                      mixer_attributes:
+                        attributes:
+                          destination.service.host:
+                            string_value: istio-policy.{{ .Release.Namespace }}.svc.cluster.local
+                          destination.service.uid:
+                            string_value: istio://{{ .Release.Namespace }}/services/istio-policy
+                          destination.service.name:
+                            string_value: istio-policy
+                          destination.service.namespace:
+                            string_value: {{ .Release.Namespace }}
+                          destination.uid:
+                            string_value: kubernetes://{{"{{"}} .PodName {{"}}"}}.{{ .Release.Namespace }}
+                          destination.namespace:
+                            string_value: {{.Release.Namespace }}
+                          destination.ip:
+                            bytes_value: {{"{{"}} .PodIP {{"}}"}}
+                          destination.port:
+                            int64_value: 9091
+                          context.reporter.kind:
+                            string_value: inbound
+                          context.reporter.uid:
+                            string_value: kubernetes://{{"{{"}} .PodName {{"}}"}}.{{ .Release.Namespace }}
+                  transport:
+                    check_cluster: mixer_check_server
+                    report_cluster: mixer_report_server
+                    attributes_for_mixer_proxy:
+                      attributes:
+                        source.uid:
+                          string_value: kubernetes://{{"{{"}} .PodName {{"}}"}}.{{ .Release.Namespace }}
+                name: mixer
+              - name: envoy.router
+              route_config:
+                name: "9091"
+                virtual_hosts:
+                - domains:
+                  - '*'
+                  name: istio-policy.{{ .Release.Namespace }}.svc.cluster.local
+                  routes:
+                  - decorator:
+                      operation: Check
+                    match:
+                      prefix: /
+                    route:
+                      cluster: inbound_9092
+                      timeout: 0.000s
+              stat_prefix: "9091"
+            name: envoy.http_connection_manager
+        name: "9091"
+
+      - name: "local.15019"
+        address:
+          socket_address:
+            address: 127.0.0.1
+            port_value: 15019
+        filter_chains:
+          - filters:
+              - name: envoy.http_connection_manager
+                config:
+                  codec_type: HTTP2
+                  stat_prefix: "15019"
+                  http2_protocol_options:
+                    max_concurrent_streams: 1073741824
+
+                  access_log:
+                    - name: envoy.file_access_log
+                      config:
+                        path: /dev/stdout
+
+                  http_filters:
+                    - name: envoy.router
+
+                  route_config:
+                    name: "15019"
+
+                    virtual_hosts:
+                      - name: istio-galley
+
+                        domains:
+                          - '*'
+
+                        routes:
+                          - match:
+                              prefix: /
+                            route:
+                              cluster: out.galley.15019
+                              timeout: 0.000s
+---
+`)
+
+func chartsIstioPolicyTemplatesConfigmapEnvoyYamlBytes() ([]byte, error) {
+	return _chartsIstioPolicyTemplatesConfigmapEnvoyYaml, nil
+}
+
+func chartsIstioPolicyTemplatesConfigmapEnvoyYaml() (*asset, error) {
+	bytes, err := chartsIstioPolicyTemplatesConfigmapEnvoyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "charts/istio-policy/templates/configmap-envoy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _chartsIstioPolicyTemplatesDeploymentYaml = []byte(`apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13490,6 +14424,9 @@ spec:
         secret:
           secretName: policy-adapter-secret
           optional: true
+      - name: policy-envoy-config
+        configMap:
+          name: policy-envoy-config
       affinity:
       {{- include "nodeaffinity" . | indent 6 }}
       {{- include "podAntiAffinity" . | indent 6 }}
@@ -13525,7 +14462,7 @@ spec:
 {{- end }}
 {{- if .Values.global.useMCP }}
     {{- if .Values.global.controlPlaneSecurityEnabled}}
-          - --configStoreURL=mcps://istio-galley.{{ .Values.global.configNamespace }}.svc:15019
+          - --configStoreURL=mcp://localhost:15019
     {{- else }}
           - --configStoreURL=mcp://istio-galley.{{ .Values.global.configNamespace }}.svc:9901
     {{- end }}
@@ -13599,7 +14536,7 @@ spec:
         - --serviceCluster
         - istio-policy
         - --templateFile
-        - /etc/istio/proxy/envoy_policy.yaml.tmpl
+        - /var/lib/envoy/envoy.yaml.tmpl
       {{- if .Values.global.controlPlaneSecurityEnabled }}
         - --controlPlaneAuthPolicy
         - MUTUAL_TLS
@@ -13638,15 +14575,18 @@ spec:
 {{ toYaml .Values.global.defaultResources | indent 10 }}
 {{- end }}
         volumeMounts:
-        - name: istio-certs
-          mountPath: /etc/certs
-          readOnly: true
+        - name: policy-envoy-config
+          mountPath: /var/lib/envoy
         {{- if .Values.global.sds.enabled }}
         - name: sds-uds-path
           mountPath: /var/run/sds
           readOnly: true
         - name: istio-token
           mountPath: /var/run/secrets/tokens
+        {{ else }}
+        - name: istio-certs
+          mountPath: /etc/certs
+          readOnly: true
         {{- end }}
         - name: uds-socket
           mountPath: /sock
@@ -13685,7 +14625,6 @@ spec:
   selector:
     matchLabels:
       app: policy
-      release: {{ .Release.Name }}
       istio: mixer
       istio-mixer-type: policy
 ---
@@ -15468,14 +16407,14 @@ var _chartsIstioTelemetryGrafanaDashboardsGalleyDashboardJson = []byte(`{
           "refId": "A"
         },
         {
-          "expr": "galley_mcp_source_clients_total",
+          "expr": "istio_mcp_clients_total{component=\"galley\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "clients_total",
           "refId": "B"
         },
         {
-          "expr": "go_goroutines{job=\"galley\"}/galley_mcp_source_clients_total",
+          "expr": "go_goroutines{job=\"galley\"}/sum(istio_mcp_clients_total{component=\"galley\"}) without (component)",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "avg_goroutines_per_client",
@@ -16447,7 +17386,7 @@ var _chartsIstioTelemetryGrafanaDashboardsGalleyDashboardJson = []byte(`{
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(galley_mcp_source_clients_total)",
+          "expr": "sum(istio_mcp_clients_total{component=\"galley\"})",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Clients",
@@ -16532,7 +17471,7 @@ var _chartsIstioTelemetryGrafanaDashboardsGalleyDashboardJson = []byte(`{
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum by(collection)(irate(galley_mcp_source_request_acks_total[1m]) * 60)",
+          "expr": "sum by(collection)(irate(istio_mcp_request_acks_total{component=\"galley\"}[1m]) * 60)",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "",
@@ -16617,7 +17556,7 @@ var _chartsIstioTelemetryGrafanaDashboardsGalleyDashboardJson = []byte(`{
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(galley_mcp_source_request_nacks_total[1m]) * 60",
+          "expr": "rate(istio_mcp_request_nacks_total{component=\"galley\"}[1m]) * 60",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -16645,6 +17584,95 @@ var _chartsIstioTelemetryGrafanaDashboardsGalleyDashboardJson = []byte(`{
         {
           "format": "short",
           "label": "NACKs/min",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": null,
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 48
+      },
+      "id": 48,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(increase(istio_mcp_message_sizes_bytes_bucket[5m])) by (le)",
+          "format": "heatmap",
+          "instant": false,
+          "intervalFactor": 1,
+          "legendFormat": "{{le}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Response message sizes",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "none",
+          "label": null,
           "logBase": 1,
           "max": null,
           "min": null,
@@ -30593,7 +31621,57 @@ data:
               max_pending_requests: 100000
               max_requests: 100000
               max_retries: 3
-
+        hosts:
+          - socket_address:
+              address: istio-galley.{{ .Values.global.configNamespace }}
+              port_value: 15019
+      {{- if .Values.global.controlPlaneSecurityEnabled }}
+      {{- if .Values.global.sds.enabled }}
+        tls_context:
+          common_tls_context:
+            tls_certificate_sds_secret_configs:
+            - name: default
+              sds_config:
+                api_config_source:
+                  api_type: GRPC
+                  grpc_services:
+                  - google_grpc:
+                      target_uri: {{ .Values.global.sds.udsPath }}
+                      channel_credentials:
+                        local_credentials: {}
+                      call_credentials:
+                      - from_plugin:
+                          name: envoy.grpc_credentials.file_based_metadata
+                          config:
+                            header_key: istio_sds_credentials_header-bin
+                            secret_data:
+                              filename: /var/run/secrets/tokens/istio-token
+                      credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                      stat_prefix: sdsstat
+            combined_validation_context:
+              default_validation_context:
+                verify_subject_alt_name:
+                - spiffe://{{ .Values.global.trustDomain }}/ns/{{ .Values.global.configNamespace }}/sa/istio-galley-service-account
+              validation_context_sds_secret_config:
+                name: ROOTCA
+                sds_config:
+                  api_config_source:
+                    api_type: GRPC
+                    grpc_services:
+                    - google_grpc:
+                        target_uri: {{ .Values.global.sds.udsPath }}
+                        channel_credentials:
+                          local_credentials: {}
+                        call_credentials:
+                        - from_plugin:
+                            name: envoy.grpc_credentials.file_based_metadata
+                            config:
+                              header_key: istio_sds_credentials_header-bin
+                              secret_data:
+                                filename: /var/run/secrets/tokens/istio-token
+                        credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                        stat_prefix: sdsstat
+      {{- else }}
         tls_context:
           common_tls_context:
             tls_certificates:
@@ -30606,12 +31684,8 @@ data:
                 filename: /etc/certs/root-cert.pem
               verify_subject_alt_name:
               - spiffe://{{ .Values.global.trustDomain }}/ns/{{ .Values.global.configNamespace }}/sa/istio-galley-service-account
-
-        hosts:
-          - socket_address:
-              address: istio-galley.{{ .Values.global.configNamespace }}
-              port_value: 15019
-
+      {{- end }}
+      {{- end }}
 
       listeners:
       - name: "15090"
@@ -30704,6 +31778,54 @@ data:
               stat_prefix: "15004"
             name: envoy.http_connection_manager
     {{- if .Values.global.controlPlaneSecurityEnabled }}
+        {{- if .Values.global.sds.enabled }}
+          tls_context:
+            common_tls_context:
+              alpn_protocols:
+              - h2
+              tls_certificate_sds_secret_configs:
+              - name: default
+                sds_config:
+                  api_config_source:
+                    api_type: GRPC
+                    grpc_services:
+                    - google_grpc:
+                        target_uri: {{ .Values.global.sds.udsPath }}
+                        channel_credentials:
+                          local_credentials: {}
+                        call_credentials:
+                        - from_plugin:
+                            name: envoy.grpc_credentials.file_based_metadata
+                            config:
+                              header_key: istio_sds_credentials_header-bin
+                              secret_data:
+                                filename: /var/run/secrets/tokens/istio-token
+                        credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                        stat_prefix: sdsstat
+              combined_validation_context:
+                default_validation_context:
+                  verify_subject_alt_name: []
+                validation_context_sds_secret_config:
+                  name: ROOTCA
+                  sds_config:
+                    api_config_source:
+                      api_type: GRPC
+                      grpc_services:
+                      - google_grpc:
+                          target_uri: {{ .Values.global.sds.udsPath }}
+                          channel_credentials:
+                            local_credentials: {}
+                          call_credentials:
+                          - from_plugin:
+                              name: envoy.grpc_credentials.file_based_metadata
+                              config:
+                                header_key: istio_sds_credentials_header-bin
+                                secret_data:
+                                  filename: /var/run/secrets/tokens/istio-token
+                          credentials_factory_name: envoy.grpc_credentials.file_based_metadata
+                          stat_prefix: sdsstat
+            require_client_certificate: true
+        {{- else }}
           tls_context:
             common_tls_context:
               alpn_protocols:
@@ -30717,6 +31839,7 @@ data:
                 trusted_ca:
                   filename: /etc/certs/root-cert.pem
             require_client_certificate: true
+        {{- end }}
     {{- end }}
 
       - name: "9091"
@@ -31050,15 +32173,16 @@ spec:
         volumeMounts:
         - name: telemetry-envoy-config
           mountPath: /var/lib/envoy
-        - name: istio-certs
-          mountPath: /etc/certs
-          readOnly: true
         {{- if .Values.global.sds.enabled }}
         - name: sds-uds-path
           mountPath: /var/run/sds
           readOnly: true
         - name: istio-token
           mountPath: /var/run/secrets/tokens
+        {{ else }}
+        - name: istio-certs
+          mountPath: /etc/certs
+          readOnly: true
         {{- end }}
         - name: uds-socket
           mountPath: /sock
@@ -31097,7 +32221,6 @@ spec:
   selector:
     matchLabels:
       app: telemetry
-      release: {{ .Release.Name }}
       istio: mixer
       istio-mixer-type: telemetry
 ---
@@ -36564,6 +37687,48 @@ func chartsSecurityNodeagentValuesYaml() (*asset, error) {
 	return a, nil
 }
 
+var _examplesGooglecaValuesIstioGoogleCaYaml = []byte(`apiVersion: install.istio.io/v1alpha2
+kind: IstioControlPlane
+spec:
+  security:
+    components:
+      nodeAgent:
+        enabled: true
+  values:
+    global:
+      controlPlaneSecurityEnabled: true
+      mtls:
+        enabled: true
+      sds:
+        enabled: true
+        udsPath: "unix:/var/run/sds/uds_path"
+        token:
+          aud: "istio-ca"
+      useMCP: true
+    nodeagent:
+      image: node-agent-k8s
+      env:
+        CA_PROVIDER: "GoogleCA"
+        CA_ADDR: "meshca.googleapis.com:443"
+        PLUGINS: "GoogleTokenExchange"
+        GKE_CLUSTER_URL: ""
+`)
+
+func examplesGooglecaValuesIstioGoogleCaYamlBytes() ([]byte, error) {
+	return _examplesGooglecaValuesIstioGoogleCaYaml, nil
+}
+
+func examplesGooglecaValuesIstioGoogleCaYaml() (*asset, error) {
+	bytes, err := examplesGooglecaValuesIstioGoogleCaYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "examples/googleca/values-istio-google-ca.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _examplesMulticlusterValuesIstioMulticlusterGatewaysYaml = []byte(`apiVersion: install.istio.io/v1alpha2
 kind: IstioControlPlane
 spec:
@@ -37125,8 +38290,25 @@ spec:
       useMCP: true
     telemetry:
       enabled: true
+      v1:
+        enabled: true
       v2:
+        # For Null VM case now. If enabled, will set disableMixerHttpReports to true and not define mixerReportServer
+        # also enable metadata exchange and stats filter.
         enabled: false
+        # prometheus stats filter settings.
+        prometheus:
+          # stats filter would be enabled when telemetry and v2 is enabled.
+          enabled: true
+        # stackdriver filter settings.
+        stackdriver:
+          enabled: false
+          logging: false
+          monitoring: false
+          topology: false
+          #  configOverride parts give you the ability to override the low level configuration params passed to envoy filter.
+
+          configOverride: {}
     mixer:
       adapters:
         stdio:
@@ -37993,8 +39175,6 @@ var _translateconfigTranslateconfig14Yaml = []byte(`apiMapping:
     outPath: "global.resources"
   DefaultNamespace:
     outPath: "global.istioNamespace"
-  Values.Proxy:
-    outPath: "global.proxy"
   ConfigManagement.Components.Namespace:
     outPath: "global.configNamespace"
   Policy.Components.Namespace:
@@ -38235,9 +39415,36 @@ var _versionsYaml = []byte(`- operatorVersion: 1.3.0
 - operatorVersion: 1.3.3
   supportedIstioVersions: ">=1.3.0,<=1.3.3"
   recommendedIstioVersions: 1.3.3
+- operatorVersion: 1.3.4
+  supportedIstioVersions: ">=1.3.0,<=1.3.4"
+  recommendedIstioVersions: 1.3.4
+- operatorVersion: 1.3.5
+  supportedIstioVersions: ">=1.3.0,<=1.3.5"
+  recommendedIstioVersions: 1.3.5
+- operatorVersion: 1.3.6
+  supportedIstioVersions: ">=1.3.0,<=1.3.6"
+  recommendedIstioVersions: 1.3.6
+- operatorVersion: 1.3.7
+  operatorVersionRange: ">=1.3.7,<1.4.0"
+  supportedIstioVersions: ">=1.3.0,<1.4.0"
+  recommendedIstioVersions: 1.3.7
 - operatorVersion: 1.4.0
   supportedIstioVersions: ">=1.3.3, <1.6"
   recommendedIstioVersions: 1.4.0
+- operatorVersion: 1.4.1
+  supportedIstioVersions: ">=1.3.3, <1.6"
+  recommendedIstioVersions: 1.4.1
+- operatorVersion: 1.4.2
+  supportedIstioVersions: ">=1.3.3, <1.6"
+  recommendedIstioVersions: 1.4.2
+- operatorVersion: 1.4.3
+  operatorVersionRange: ">=1.4.3,<1.5.0"
+  supportedIstioVersions: ">=1.3.3, <1.6"
+  recommendedIstioVersions: 1.4.3
+- operatorVersion: 1.4.4
+  operatorVersionRange: ">=1.4.4,<1.5.0"
+  supportedIstioVersions: ">=1.3.3, <1.6"
+  recommendedIstioVersions: 1.4.4
 `)
 
 func versionsYamlBytes() ([]byte, error) {
@@ -38391,8 +39598,6 @@ var _bindata = map[string]func() (*asset, error){
 	"charts/istio-control/istio-config/values.yaml": chartsIstioControlIstioConfigValuesYaml,
 	"charts/istio-control/istio-discovery/Chart.yaml": chartsIstioControlIstioDiscoveryChartYaml,
 	"charts/istio-control/istio-discovery/NOTES.txt": chartsIstioControlIstioDiscoveryNotesTxt,
-	"charts/istio-control/istio-discovery/metadata-exchange-v2.yaml": chartsIstioControlIstioDiscoveryMetadataExchangeV2Yaml,
-	"charts/istio-control/istio-discovery/stats-filter-v2.yaml": chartsIstioControlIstioDiscoveryStatsFilterV2Yaml,
 	"charts/istio-control/istio-discovery/templates/_affinity.tpl": chartsIstioControlIstioDiscoveryTemplates_affinityTpl,
 	"charts/istio-control/istio-discovery/templates/_helpers.tpl": chartsIstioControlIstioDiscoveryTemplates_helpersTpl,
 	"charts/istio-control/istio-discovery/templates/autoscale.yaml": chartsIstioControlIstioDiscoveryTemplatesAutoscaleYaml,
@@ -38405,7 +39610,7 @@ var _bindata = map[string]func() (*asset, error){
 	"charts/istio-control/istio-discovery/templates/poddisruptionbudget.yaml": chartsIstioControlIstioDiscoveryTemplatesPoddisruptionbudgetYaml,
 	"charts/istio-control/istio-discovery/templates/service.yaml": chartsIstioControlIstioDiscoveryTemplatesServiceYaml,
 	"charts/istio-control/istio-discovery/templates/serviceaccount.yaml": chartsIstioControlIstioDiscoveryTemplatesServiceaccountYaml,
-	"charts/istio-control/istio-discovery/templates/telemetryv2.yaml": chartsIstioControlIstioDiscoveryTemplatesTelemetryv2Yaml,
+	"charts/istio-control/istio-discovery/templates/telemetryv2_1.4.yaml": chartsIstioControlIstioDiscoveryTemplatesTelemetryv2_14Yaml,
 	"charts/istio-control/istio-discovery/values.yaml": chartsIstioControlIstioDiscoveryValuesYaml,
 	"charts/istio-policy/Chart.yaml": chartsIstioPolicyChartYaml,
 	"charts/istio-policy/templates/_affinity.tpl": chartsIstioPolicyTemplates_affinityTpl,
@@ -38414,6 +39619,7 @@ var _bindata = map[string]func() (*asset, error){
 	"charts/istio-policy/templates/clusterrole.yaml": chartsIstioPolicyTemplatesClusterroleYaml,
 	"charts/istio-policy/templates/clusterrolebinding.yaml": chartsIstioPolicyTemplatesClusterrolebindingYaml,
 	"charts/istio-policy/templates/config.yaml": chartsIstioPolicyTemplatesConfigYaml,
+	"charts/istio-policy/templates/configmap-envoy.yaml": chartsIstioPolicyTemplatesConfigmapEnvoyYaml,
 	"charts/istio-policy/templates/deployment.yaml": chartsIstioPolicyTemplatesDeploymentYaml,
 	"charts/istio-policy/templates/poddisruptionbudget.yaml": chartsIstioPolicyTemplatesPoddisruptionbudgetYaml,
 	"charts/istio-policy/templates/service.yaml": chartsIstioPolicyTemplatesServiceYaml,
@@ -38522,6 +39728,7 @@ var _bindata = map[string]func() (*asset, error){
 	"charts/security/nodeagent/templates/daemonset.yaml": chartsSecurityNodeagentTemplatesDaemonsetYaml,
 	"charts/security/nodeagent/templates/serviceaccount.yaml": chartsSecurityNodeagentTemplatesServiceaccountYaml,
 	"charts/security/nodeagent/values.yaml": chartsSecurityNodeagentValuesYaml,
+	"examples/googleca/values-istio-google-ca.yaml": examplesGooglecaValuesIstioGoogleCaYaml,
 	"examples/multicluster/values-istio-multicluster-gateways.yaml": examplesMulticlusterValuesIstioMulticlusterGatewaysYaml,
 	"examples/multicluster/values-istio-multicluster-primary.yaml": examplesMulticlusterValuesIstioMulticlusterPrimaryYaml,
 	"examples/vm/values-istio-meshexpansion-gateways.yaml": examplesVmValuesIstioMeshexpansionGatewaysYaml,
@@ -38693,8 +39900,6 @@ var _bintree = &bintree{nil, map[string]*bintree{
 			"istio-discovery": &bintree{nil, map[string]*bintree{
 				"Chart.yaml": &bintree{chartsIstioControlIstioDiscoveryChartYaml, map[string]*bintree{}},
 				"NOTES.txt": &bintree{chartsIstioControlIstioDiscoveryNotesTxt, map[string]*bintree{}},
-				"metadata-exchange-v2.yaml": &bintree{chartsIstioControlIstioDiscoveryMetadataExchangeV2Yaml, map[string]*bintree{}},
-				"stats-filter-v2.yaml": &bintree{chartsIstioControlIstioDiscoveryStatsFilterV2Yaml, map[string]*bintree{}},
 				"templates": &bintree{nil, map[string]*bintree{
 					"_affinity.tpl": &bintree{chartsIstioControlIstioDiscoveryTemplates_affinityTpl, map[string]*bintree{}},
 					"_helpers.tpl": &bintree{chartsIstioControlIstioDiscoveryTemplates_helpersTpl, map[string]*bintree{}},
@@ -38708,7 +39913,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 					"poddisruptionbudget.yaml": &bintree{chartsIstioControlIstioDiscoveryTemplatesPoddisruptionbudgetYaml, map[string]*bintree{}},
 					"service.yaml": &bintree{chartsIstioControlIstioDiscoveryTemplatesServiceYaml, map[string]*bintree{}},
 					"serviceaccount.yaml": &bintree{chartsIstioControlIstioDiscoveryTemplatesServiceaccountYaml, map[string]*bintree{}},
-					"telemetryv2.yaml": &bintree{chartsIstioControlIstioDiscoveryTemplatesTelemetryv2Yaml, map[string]*bintree{}},
+					"telemetryv2_1.4.yaml": &bintree{chartsIstioControlIstioDiscoveryTemplatesTelemetryv2_14Yaml, map[string]*bintree{}},
 				}},
 				"values.yaml": &bintree{chartsIstioControlIstioDiscoveryValuesYaml, map[string]*bintree{}},
 			}},
@@ -38722,6 +39927,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 				"clusterrole.yaml": &bintree{chartsIstioPolicyTemplatesClusterroleYaml, map[string]*bintree{}},
 				"clusterrolebinding.yaml": &bintree{chartsIstioPolicyTemplatesClusterrolebindingYaml, map[string]*bintree{}},
 				"config.yaml": &bintree{chartsIstioPolicyTemplatesConfigYaml, map[string]*bintree{}},
+				"configmap-envoy.yaml": &bintree{chartsIstioPolicyTemplatesConfigmapEnvoyYaml, map[string]*bintree{}},
 				"deployment.yaml": &bintree{chartsIstioPolicyTemplatesDeploymentYaml, map[string]*bintree{}},
 				"poddisruptionbudget.yaml": &bintree{chartsIstioPolicyTemplatesPoddisruptionbudgetYaml, map[string]*bintree{}},
 				"service.yaml": &bintree{chartsIstioPolicyTemplatesServiceYaml, map[string]*bintree{}},
@@ -38884,6 +40090,9 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		}},
 	}},
 	"examples": &bintree{nil, map[string]*bintree{
+		"googleca": &bintree{nil, map[string]*bintree{
+			"values-istio-google-ca.yaml": &bintree{examplesGooglecaValuesIstioGoogleCaYaml, map[string]*bintree{}},
+		}},
 		"multicluster": &bintree{nil, map[string]*bintree{
 			"values-istio-multicluster-gateways.yaml": &bintree{examplesMulticlusterValuesIstioMulticlusterGatewaysYaml, map[string]*bintree{}},
 			"values-istio-multicluster-primary.yaml": &bintree{examplesMulticlusterValuesIstioMulticlusterPrimaryYaml, map[string]*bintree{}},
