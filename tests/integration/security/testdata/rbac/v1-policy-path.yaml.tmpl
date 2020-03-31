@@ -1,16 +1,3 @@
-# Enable istio RBAC
-
-apiVersion: "rbac.maistra.io/v1"
-kind: ServiceMeshRbacConfig
-metadata:
-  name: default
-  namespace: istio-system
-spec:
-  mode: 'ON_WITH_INCLUSION'
-  inclusion:
-    namespaces: ["{{ .Namespace }}"]
----
-
 # For service a:
 # * Allow GET requests at path with prefix "/public".
 # * Deny any other requests by default.
