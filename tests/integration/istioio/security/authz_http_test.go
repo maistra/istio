@@ -54,7 +54,7 @@ func TestAuthorizationForHTTPServices(t *testing.T) {
 					Value: `
 kubectl delete policy default -n default || true
 kubectl delete destinationrule default -n default || true
-kubectl delete clusterrbacconfig default || true
+kubectl delete servicemeshrbacconfig default || true
 kubectl delete servicerole --all -n default || true
 kubectl delete servicerolebinding --all -n default || true
 

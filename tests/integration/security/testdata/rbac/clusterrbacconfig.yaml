@@ -1,5 +1,5 @@
 # Enable istio RBAC
-apiVersion: "rbac.istio.io/v1alpha1"
+apiVersion: "rbac.maistra.io/v1"
 kind: ServiceMeshRbacConfig
 metadata:
   name: default

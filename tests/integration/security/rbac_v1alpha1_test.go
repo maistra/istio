@@ -84,11 +84,13 @@ func TestV1_OptionalJWT(t *testing.T) {
 				"Namespace": ns.Name(),
 			}
 			policies := tmpl.EvaluateAllOrFail(t, args,
-				file.AsStringOrFail(t, rbacClusterConfigTmpl),
 				file.AsStringOrFail(t, "testdata/rbac/v1-policy-optional-jwt.yaml.tmpl"))
+			rbacConfig := tmpl.EvaluateOrFail(t, file.AsStringOrFail(t, rbacClusterConfigTmpl), args)
 
 			g.ApplyConfigOrFail(t, ns, policies...)
+			g.ApplyConfigOrFail(t, nil, rbacConfig)
 			defer g.DeleteConfigOrFail(t, ns, policies...)
+			defer g.DeleteConfigOrFail(t, nil, rbacConfig)
 
 			rbacUtil.RunRBACTest(t, cases)
 		})
@@ -173,11 +175,13 @@ func TestV1_Group(t *testing.T) {
 				"Namespace": ns.Name(),
 			}
 			policies := tmpl.EvaluateAllOrFail(t, args,
-				file.AsStringOrFail(t, rbacClusterConfigTmpl),
 				file.AsStringOrFail(t, "testdata/rbac/v1-policy-group.yaml.tmpl"))
+			rbacConfig := tmpl.EvaluateOrFail(t, file.AsStringOrFail(t, rbacClusterConfigTmpl), args)
 
 			g.ApplyConfigOrFail(t, ns, policies...)
+			g.ApplyConfigOrFail(t, nil, rbacConfig)
 			defer g.DeleteConfigOrFail(t, ns, policies...)
+			defer g.DeleteConfigOrFail(t, nil, rbacConfig)
 
 			rbacUtil.RunRBACTest(t, cases)
 		})
@@ -240,10 +244,13 @@ func TestV1_GRPC(t *testing.T) {
 			}
 
 			policies := tmpl.EvaluateAllOrFail(t, namespaceTmpl,
-				file.AsStringOrFail(t, rbacClusterConfigTmpl),
 				file.AsStringOrFail(t, "testdata/rbac/v1-policy-grpc.yaml.tmpl"))
+			rbacConfig := tmpl.EvaluateOrFail(t, file.AsStringOrFail(t, rbacClusterConfigTmpl), namespaceTmpl)
+
 			g.ApplyConfigOrFail(t, ns, policies...)
+			g.ApplyConfigOrFail(t, nil, rbacConfig)
 			defer g.DeleteConfigOrFail(t, ns, policies...)
+			defer g.DeleteConfigOrFail(t, nil, rbacConfig)
 
 			rbacUtil.RunRBACTest(t, cases)
 		})
@@ -317,10 +324,13 @@ func TestV1_Path(t *testing.T) {
 				"Namespace": ns.Name(),
 			}
 			policies := tmpl.EvaluateAllOrFail(t, args,
-				file.AsStringOrFail(t, rbacClusterConfigTmpl),
 				file.AsStringOrFail(t, "testdata/rbac/v1-policy-path.yaml.tmpl"))
+			rbacConfig := tmpl.EvaluateOrFail(t, file.AsStringOrFail(t, rbacClusterConfigTmpl), args)
+
 			g.ApplyConfigOrFail(t, ns, policies...)
+			g.ApplyConfigOrFail(t, nil, rbacConfig)
 			defer g.DeleteConfigOrFail(t, ns, policies...)
+			defer g.DeleteConfigOrFail(t, nil, rbacConfig)
 
 			rbacUtil.RunRBACTest(t, cases)
 		})
