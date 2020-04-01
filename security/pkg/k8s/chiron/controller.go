@@ -339,11 +339,16 @@ func (wc *WebhookController) refreshSecret(scrt *v1.Secret) error {
 		return err
 	}
 
-	scrt.Data[ca.CertChainID] = chain
-	scrt.Data[ca.PrivateKeyID] = key
-	scrt.Data[ca.RootCertID] = caCert
+	secret, err := wc.core.Secrets(namespace).Get(scrtName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
 
-	_, err = wc.core.Secrets(namespace).Update(scrt)
+	secret.Data[ca.CertChainID] = chain
+	secret.Data[ca.PrivateKeyID] = key
+	secret.Data[ca.RootCertID] = caCert
+
+	_, err = wc.core.Secrets(namespace).Update(secret)
 	return err
 }
 
