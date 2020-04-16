@@ -21,7 +21,7 @@ display_usage() {
     echo "USAGE: ./build_push_update_images.sh <version> [-h|--help] [--prefix=value] [--scan-images]"
     echo "	version : Version of the sample app images (Required)"
     echo "	-h|--help : Prints usage information"
-    echo "	--prefix: Use the value as the prefix for image names. By default, 'istio' is used"
+    echo "	--prefix: Use the value as the prefix for image names. By default, 'docker.io/istio' is used"
     echo -e "	--scan-images : Enable security vulnerability scans for docker images \n\t\t\trelated to bookinfo sample apps. By default, this feature \n\t\t\tis disabled."
     exit 1
 }
@@ -36,7 +36,7 @@ else
 fi
 
 # Process the input arguments. By default, image scanning is disabled. 
-PREFIX=istio
+PREFIX=docker.io/istio
 ENABLE_IMAGE_SCAN=false
 echo "$@"
 for i in "$@"
@@ -109,4 +109,4 @@ do
 done
 
 #Update image references in the yaml files
-find . -name "*bookinfo*.yaml" -exec sed -i.bak "s/\\(istio\\/examples-bookinfo-.*\\):[[:digit:]]*\\.[[:digit:]]*\\.[[:digit:]]*/\\1:$VERSION/g" {} +
+find . -name "*bookinfo*.yaml" -exec sed -i.bak "s/image:\\s.*\\(\\/examples-bookinfo-.*\\):.*/image: ${PREFIX//\//\\\/}\\1:$VERSION/g" {} +
