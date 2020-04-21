@@ -51,7 +51,7 @@ spec:
     spec:
       containers:
       - name: ratings
-        image: maistra/examples-bookinfo-ratings-v1:1.1.0
+        image: maistra/examples-bookinfo-ratings-v1:1.2.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9080
