@@ -82,6 +82,8 @@ type Webhook struct {
 	keyFile    string
 	cert       *tls.Certificate
 	mon        *monitor
+
+	injectPodRedirectAnnot bool
 }
 
 func loadConfig(injectFile, meshFile, valuesFile string) (*Config, *meshconfig.MeshConfig, string, error) {
@@ -145,6 +147,11 @@ type WebhookParameters struct {
 	// HealthCheckFile specifies the path to the health check file
 	// that is periodically updated.
 	HealthCheckFile string
+
+	// InjectPodRedirectAnnot specifies whether the webhook should
+	// inject the annotations specified in the podRedirectAnnot field
+	// of the injection template
+	InjectPodRedirectAnnot bool
 }
 
 // NewWebhook creates a new instance of a mutating webhook for automatic sidecar injection.
@@ -188,6 +195,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		certFile:               p.CertFile,
 		keyFile:                p.KeyFile,
 		cert:                   &pair,
+		injectPodRedirectAnnot: p.InjectPodRedirectAnnot,
 	}
 	// mtls disabled because apiserver webhook cert usage is still TBD.
 	wh.server.TLSConfig = &tls.Config{GetCertificate: wh.getCert}
@@ -718,7 +726,13 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionRespons
 	} else {
 		replaceProxyRunAsUserID(spec, *proxyUID)
 
-		annotations := map[string]string{annotation.SidecarStatus.Name: iStatus}
+		annotations := map[string]string{
+			annotation.SidecarStatus.Name: iStatus,
+		}
+		if wh.injectPodRedirectAnnot {
+			rewriteCniPodSPec(annotations, spec)
+		}
+
 		// Add all additional injected annotations
 		for k, v := range wh.sidecarConfig.InjectedAnnotations {
 			annotations[k] = v
