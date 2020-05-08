@@ -718,7 +718,11 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionRespons
 	} else {
 		replaceProxyRunAsUserID(spec, *proxyUID)
 
-		annotations := map[string]string{annotation.SidecarStatus.Name: iStatus}
+		annotations := map[string]string{
+			annotation.SidecarStatus.Name: iStatus,
+		}
+		rewriteCniPodSPec(annotations, spec)
+
 		// Add all additional injected annotations
 		for k, v := range wh.sidecarConfig.InjectedAnnotations {
 			annotations[k] = v
