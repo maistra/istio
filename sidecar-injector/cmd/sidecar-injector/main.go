@@ -62,6 +62,7 @@ var (
 		webhookName            string
 		monitoringPort         int
 		reconcileWebhookConfig bool
+		injectPodRedirectAnnot bool
 	}{
 		loggingOptions: log.DefaultOptions(),
 	}
@@ -80,15 +81,16 @@ var (
 			log.Infof("version %s", version.Info.String())
 
 			parameters := inject.WebhookParameters{
-				ConfigFile:          flags.injectConfigFile,
-				ValuesFile:          flags.injectValuesFile,
-				MeshFile:            flags.meshconfig,
-				CertFile:            flags.certFile,
-				KeyFile:             flags.privateKeyFile,
-				Port:                flags.port,
-				HealthCheckInterval: flags.healthCheckInterval,
-				HealthCheckFile:     flags.healthCheckFile,
-				MonitoringPort:      flags.monitoringPort,
+				ConfigFile:             flags.injectConfigFile,
+				ValuesFile:             flags.injectValuesFile,
+				MeshFile:               flags.meshconfig,
+				CertFile:               flags.certFile,
+				KeyFile:                flags.privateKeyFile,
+				Port:                   flags.port,
+				HealthCheckInterval:    flags.healthCheckInterval,
+				HealthCheckFile:        flags.healthCheckFile,
+				MonitoringPort:         flags.monitoringPort,
+				InjectPodRedirectAnnot: flags.injectPodRedirectAnnot,
 			}
 			wh, err := inject.NewWebhook(parameters)
 			if err != nil {
@@ -266,6 +268,8 @@ func init() {
 		"Name of the webhook entry in the webhook config.")
 	rootCmd.PersistentFlags().BoolVar(&flags.reconcileWebhookConfig, "reconcileWebhookConfig", true,
 		"Enable managing webhook configuration.")
+	rootCmd.PersistentFlags().BoolVar(&flags.injectPodRedirectAnnot, "injectPodRedirectAnnot", false,
+		"Enable injection of annotations specified in podRedirectAnnot field of the injection template.")
 	// Attach the Istio logging options to the command.
 	flags.loggingOptions.AttachCobraFlags(rootCmd)
 
