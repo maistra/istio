@@ -85,6 +85,8 @@ type Webhook struct {
 	mon        *monitor
 	env        *model.Environment
 	revision   string
+
+	injectPodRedirectAnnot bool
 }
 
 // env will be used for other things besides meshConfig - when webhook is running in Istiod it can take advantage
@@ -165,6 +167,11 @@ type WebhookParameters struct {
 
 	// The istio.io/rev this injector is responsible for
 	Revision string
+
+	// InjectPodRedirectAnnot specifies whether the webhook should
+	// inject the annotations specified in the podRedirectAnnot field
+	// of the injection template
+	InjectPodRedirectAnnot bool
 }
 
 // NewWebhook creates a new instance of a mutating webhook for automatic sidecar injection.
@@ -212,6 +219,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		cert:                   &pair,
 		env:                    p.Env,
 		revision:               p.Revision,
+		injectPodRedirectAnnot: p.InjectPodRedirectAnnot,
 	}
 
 	var mux *http.ServeMux
@@ -850,7 +858,13 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionRespons
 	} else {
 		replaceProxyRunAsUserID(spec, *proxyUID)
 
-		annotations := map[string]string{annotation.SidecarStatus.Name: iStatus}
+		annotations := map[string]string{
+			annotation.SidecarStatus.Name: iStatus,
+		}
+		if wh.injectPodRedirectAnnot {
+			rewriteCniPodSpec(annotations, spec)
+		}
+
 		// Add all additional injected annotations
 		for k, v := range wh.Config.InjectedAnnotations {
 			annotations[k] = v

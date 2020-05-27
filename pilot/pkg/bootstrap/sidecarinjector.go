@@ -59,9 +59,10 @@ func (s *Server) initSidecarInjector(args *PilotArgs) error {
 		CertFile:   model.GetOrDefault(args.TLSOptions.CertFile, filepath.Join(dnsCertDir, "cert-chain.pem")),
 		KeyFile:    model.GetOrDefault(args.TLSOptions.KeyFile, filepath.Join(dnsCertDir, "key.pem")),
 		// Disable monitoring. The injection metrics will be picked up by Pilots metrics exporter already
-		MonitoringPort: -1,
-		Mux:            s.httpsMux,
-		Revision:       args.Revision,
+		MonitoringPort:         -1,
+		Mux:                    s.httpsMux,
+		Revision:               args.Revision,
+		InjectPodRedirectAnnot: args.InjectPodRedirectAnnot,
 	}
 
 	wh, err := inject.NewWebhook(parameters)

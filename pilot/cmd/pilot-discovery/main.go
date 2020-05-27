@@ -126,6 +126,8 @@ func init() {
 		"Select a namespace where the controller resides. If not set, uses ${POD_NAMESPACE} environment variable")
 	discoveryCmd.PersistentFlags().StringSliceVar(&serverArgs.Plugins, "plugins", bootstrap.DefaultPlugins,
 		"comma separated list of networking plugins to enable")
+	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.InjectPodRedirectAnnot, "injectPodRedirectAnnot", false,
+		"Enable injection of annotations specified in podRedirectAnnot field of the injection template.")
 
 	// MCP client flags
 	discoveryCmd.PersistentFlags().IntVar(&serverArgs.MCPOptions.MaxMessageSize, "mcpMaxMsgSize", defaultMCPMaxMessageSize,
