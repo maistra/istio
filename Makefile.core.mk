@@ -626,3 +626,5 @@ include tests/istio.mk
 include tests/integration/tests.mk
 
 include common/Makefile.common.mk
+
+include pkg/servicemesh/maistra.mk
