@@ -86,6 +86,7 @@ var (
 		annotation.SidecarTrafficExcludeInboundPorts.Name:         ValidateExcludeInboundPorts,
 		annotation.SidecarTrafficExcludeOutboundPorts.Name:        ValidateExcludeOutboundPorts,
 		annotation.SidecarTrafficKubevirtInterfaces.Name:          alwaysValidFunc,
+		"k8s.v1.cni.cncf.io/networks":                             alwaysValidFunc,
 	}
 )
 
