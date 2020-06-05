@@ -86,6 +86,7 @@ var (
 		annotation.SidecarTrafficExcludeInboundPorts.Name:         ValidateExcludeInboundPorts,
 		annotation.SidecarTrafficExcludeOutboundPorts.Name:        ValidateExcludeOutboundPorts,
 		annotation.SidecarTrafficKubevirtInterfaces.Name:          alwaysValidFunc,
+		"k8s.v1.cni.cncf.io/networks":                             alwaysValidFunc,
 	}
 )
 
@@ -208,6 +209,7 @@ type Params struct {
 	Privileged                   bool                   `json:"privileged"`
 	SDSEnabled                   bool                   `json:"sdsEnabled"`
 	EnableCni                    bool                   `json:"enablecni"`
+	IstioCniNetwork              string                 `json:"istioCniNetwork"`
 	PodDNSSearchNamespaces       []string               `json:"podDNSSearchNamespaces"`
 }
 
@@ -246,6 +248,7 @@ func (p *Params) intoHelmValues() map[string]string {
 		"sidecarInjectorWebhook.rewriteAppHTTPProbe": strconv.FormatBool(p.RewriteAppHTTPProbe),
 		"global.podDNSSearchNamespaces":              getHelmValue(p.PodDNSSearchNamespaces),
 		"istio_cni.enabled":                          strconv.FormatBool(p.EnableCni),
+		"istio_cni.istio_cni_network":                p.IstioCniNetwork,
 	}
 	return vals
 }

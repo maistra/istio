@@ -97,6 +97,7 @@ func TestIntoResourceFile(t *testing.T) {
 		tproxy                       bool
 		podDNSSearchNamespaces       []string
 		enableCni                    bool
+		istioCniNetwork              string
 	}{
 		//"testdata/hello.yaml" is tested in http_test.go (with debug)
 		{
@@ -120,6 +121,19 @@ func TestIntoResourceFile(t *testing.T) {
 			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
 			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
 			enableCni:                    true,
+		},
+		// verify cni network
+		{
+			in:                           "hello.yaml.cni_network",
+			want:                         "hello.yaml.cni_network.injected",
+			includeIPRanges:              DefaultIncludeIPRanges,
+			includeInboundPorts:          DefaultIncludeInboundPorts,
+			statusPort:                   DefaultStatusPort,
+			readinessInitialDelaySeconds: DefaultReadinessInitialDelaySeconds,
+			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
+			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
+			enableCni:                    true,
+			istioCniNetwork:              "istio-cni-network",
 		},
 		//verifies that the sidecar will not be injected again for an injected yaml
 		{
@@ -594,6 +608,7 @@ func TestIntoResourceFile(t *testing.T) {
 				RewriteAppHTTPProbe:          false,
 				PodDNSSearchNamespaces:       c.podDNSSearchNamespaces,
 				EnableCni:                    c.enableCni,
+				IstioCniNetwork:              c.istioCniNetwork,
 			}
 			if c.imagePullPolicy != "" {
 				params.ImagePullPolicy = c.imagePullPolicy
