@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -158,6 +159,25 @@ var (
 			},
 		},
 	}
+	virtualServiceNoMatchSpec = &networking.VirtualService{
+		Hosts:    []string{"test.com"},
+		Gateways: []string{"mesh"},
+		Tcp: []*networking.TCPRoute{
+			{
+				Route: []*networking.RouteDestination{
+					{
+						Destination: &networking.Destination{
+							Host: "test.org",
+							Port: &networking.PortSelector{
+								Number: 80,
+							},
+						},
+						Weight: 100,
+					},
+				},
+			},
+		},
+	}
 )
 
 func TestInboundListenerConfigProxyV13(t *testing.T) {
@@ -223,6 +243,30 @@ func TestOutboundListenerConflict_UnknownWithCurrentTCPV13(t *testing.T) {
 	testOutboundListenerConflictV13(t,
 		buildService("test1.com", wildcardIP, "unknown", tnow.Add(1*time.Second)),
 		buildService("test2.com", wildcardIP, protocol.TCP, tnow),
+		buildService("test3.com", wildcardIP, "unknown", tnow.Add(2*time.Second)))
+}
+
+func TestOutboundListenerConflict_UnknownWithCurrentTCPVirtualServiceAndNoBlackholeV13(t *testing.T) {
+	_ = os.Setenv(features.EnableProtocolSniffingForOutbound.Name, "true")
+	defer func() { _ = os.Unsetenv(features.EnableProtocolSniffingForOutbound.Name) }()
+	curEnv := features.RestrictPodIPTrafficLoops.Get()
+	os.Setenv(features.RestrictPodIPTrafficLoops.Name, "false")
+	defer os.Setenv(features.RestrictPodIPTrafficLoops.Name, strconv.FormatBool(curEnv))
+
+	virtualService := model.Config{
+		ConfigMeta: model.ConfigMeta{
+			Type:      schemas.VirtualService.Type,
+			Version:   schemas.VirtualService.Version,
+			Name:      "test_vs",
+			Namespace: "default",
+		},
+		// uses test.com as host
+		Spec: virtualServiceNoMatchSpec,
+	}
+
+	testOutboundListenerConflictWithVirtualServiceV13(t, &virtualService,
+		buildService("test1.com", wildcardIP, "unknown", tnow.Add(1*time.Second)),
+		buildService("test.com", wildcardIP, protocol.TCP, tnow),
 		buildService("test3.com", wildcardIP, "unknown", tnow.Add(2*time.Second)))
 }
 
@@ -607,10 +651,14 @@ func testOutboundListenerRouteV13(t *testing.T, services ...*model.Service) {
 }
 
 func testOutboundListenerConflictV13(t *testing.T, services ...*model.Service) {
+	testOutboundListenerConflictWithVirtualServiceV13(t, nil, services...)
+}
+
+func testOutboundListenerConflictWithVirtualServiceV13(t *testing.T, virtualService *model.Config, services ...*model.Service) {
 	t.Helper()
 	oldestService := getOldestService(services...)
 	p := &fakePlugin{}
-	listeners := buildOutboundListeners(p, &proxy13, nil, nil, services...)
+	listeners := buildOutboundListeners(p, &proxy13, nil, virtualService, services...)
 	if len(listeners) != 1 {
 		t.Fatalf("expected %d listeners, found %d", 1, len(listeners))
 	}
@@ -649,7 +697,7 @@ func testOutboundListenerConflictV13(t *testing.T, services ...*model.Service) {
 		if rds != expect {
 			t.Fatalf("expect routes %s, found %s", expect, rds)
 		}
-	} else {
+	} else if features.RestrictPodIPTrafficLoops.Get() {
 		if len(listeners[0].FilterChains) != 3 {
 			t.Fatalf("expectd %d filter chains, found %d", 3, len(listeners[0].FilterChains))
 		}
@@ -663,6 +711,25 @@ func testOutboundListenerConflictV13(t *testing.T, services ...*model.Service) {
 		}
 
 		verifyHTTPFilterChainMatch(t, listeners[0].FilterChains[2], model.TrafficDirectionOutbound)
+		if len(listeners[0].ListenerFilters) != 2 ||
+			listeners[0].ListenerFilters[0].Name != "envoy.listener.tls_inspector" ||
+			listeners[0].ListenerFilters[1].Name != "envoy.listener.http_inspector" {
+			t.Fatalf("expected %d listener filter, found %d", 2, len(listeners[0].ListenerFilters))
+		}
+	} else {
+		if len(listeners[0].FilterChains) != 2 {
+			t.Fatalf("expected %d filter chains, found %d", 2, len(listeners[0].FilterChains))
+		}
+
+		if !isTCPFilterChain(listeners[0].FilterChains[0]) {
+			t.Fatalf("expected tcp filter chain, found %s", listeners[0].FilterChains[2].Filters[0].Name)
+		}
+
+		if !isHTTPFilterChain(listeners[0].FilterChains[1]) {
+			t.Fatalf("expected http filter chain, found %s", listeners[0].FilterChains[1].Filters[0].Name)
+		}
+
+		verifyHTTPFilterChainMatch(t, listeners[0].FilterChains[1], model.TrafficDirectionOutbound)
 		if len(listeners[0].ListenerFilters) != 2 ||
 			listeners[0].ListenerFilters[0].Name != "envoy.listener.tls_inspector" ||
 			listeners[0].ListenerFilters[1].Name != "envoy.listener.http_inspector" {
