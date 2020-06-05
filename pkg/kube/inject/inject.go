@@ -93,6 +93,7 @@ var (
 		annotation.SidecarTrafficKubevirtInterfaces.Name:          alwaysValidFunc,
 		annotation.PrometheusMergeMetrics.Name:                    validateBool,
 		ProxyConfigAnnotation:                                     validateProxyConfig,
+		"k8s.v1.cni.cncf.io/networks":                             alwaysValidFunc,
 	}
 )
 
