@@ -6487,12 +6487,6 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
-          {{- if $gateway.sds }}
-          {{- if $gateway.sds.enabled }}
-          - name: ISTIO_META_USER_SDS
-            value: "true"
-          {{- end }}
-          {{- end }}
           {{- if $gateway.env }}
           {{- range $key, $val := $gateway.env }}
           - name: {{ $key }}
@@ -6543,11 +6537,6 @@ spec:
               path: istio-token
               expirationSeconds: 43200
               audience: {{ .Values.global.sds.token.aud }}
-      {{- end }}
-      {{ if .Values.global.sds.enabled }}
-      - name: sdsudspath
-        hostPath:
-          path: /var/run/sds
       {{- else }}
       - name: istio-certs
         secret:
@@ -6767,32 +6756,7 @@ func chartsGatewaysIstioEgressTemplatesServiceYaml() (*asset, error) {
 	return a, nil
 }
 
-var _chartsGatewaysIstioEgressTemplatesServiceaccountYaml = []byte(`{{ $gateway := index .Values "gateways" "istio-egressgateway" }}
-{{ if ($gateway.sds) and ($gateway.sds.enabled) }}
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: istio-egressgateway-sds
-  namespace: {{ .Release.Namespace }}
-rules:
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["get", "watch", "list"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: istio-egressgateway-sds
-  namespace: {{ .Release.Namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: istio-egressgateway-sds
-subjects:
-- kind: ServiceAccount
-  name: istio-egressgateway-service-account
----
-apiVersion: v1
+var _chartsGatewaysIstioEgressTemplatesServiceaccountYaml = []byte(`apiVersion: v1
 kind: ServiceAccount
 {{- if .Values.global.imagePullSecrets }}
 imagePullSecrets:
@@ -6806,7 +6770,6 @@ metadata:
   labels:
     app: istio-egressgateway
     release: {{ .Release.Name }}
-{{ end }}
 `)
 
 func chartsGatewaysIstioEgressTemplatesServiceaccountYamlBytes() ([]byte, error) {
@@ -6881,20 +6844,6 @@ gateways:
     - name: egressgateway-ca-certs
       secretName: istio-egressgateway-ca-certs
       mountPath: /etc/istio/egressgateway-ca-certs
-
-    sds:
-      # If true, ingress gateway fetches credentials from SDS server to handle TLS connections.
-      enabled: false
-      # SDS server that watches kubernetes secrets and provisions credentials to ingress gateway.
-      # This server runs in the same pod as ingress gateway.
-      image: node-agent-k8s
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 2000m
-          memory: 1024Mi
 
     configVolumes: []
     additionalContainers: []
@@ -8642,6 +8591,8 @@ data:
   # values in this config will be automatically populated.
   cni_network_config: |-
         {
+          "cniVersion": "0.3.1",
+          "name": "istio-cni",
           "type": "istio-cni",
           "log_level": {{ quote .Values.cni.logLevel }},
           "kubernetes": {
@@ -8742,6 +8693,9 @@ spec:
                   key: cni_network_config
             - name: CNI_NET_DIR
               value: {{ default "/etc/cni/net.d" .Values.cni.cniConfDir }}
+            # Deploy as a standalone CNI plugin or as chained?
+            - name: CHAINED_CNI_PLUGIN
+              value: "{{ .Values.cni.chained }}"
           volumeMounts:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir
@@ -8868,6 +8822,10 @@ var _chartsIstioCniValuesYaml = []byte(`cni:
   # This can be used to bind a preexisting ClusterRole to the istio/cni ServiceAccount
   # e.g. if you use PodSecurityPolicies
   psp_cluster_role: ""
+
+  # Deploy the config files as plugin chain (value "true") or as standalone files in the conf dir (value "false")?
+  # Some k8s flavors (e.g. OpenShift) do not support the chain approach, set to false if this is the case
+  chained: true
 
   repair:
     enabled: true
@@ -9282,6 +9240,18 @@ var _chartsIstioControlIstioAutoinjectFilesInjectionTemplateYaml = []byte(`templ
     {{- else if .Values.global.trustDomain }}
     - name: ISTIO_META_MESH_ID
       value: "{{ .Values.global.trustDomain }}"
+    {{- end }}
+    {{- if eq .Values.global.proxy.tracer "stackdriver" }}
+    - name: STACKDRIVER_TRACING_ENABLED
+      value: "true"
+    - name: STACKDRIVER_TRACING_DEBUG
+      value: "{{ .ProxyConfig.GetTracing.GetStackdriver.GetDebug }}"
+    - name: STACKDRIVER_TRACING_MAX_NUMBER_OF_ANNOTATIONS
+      value: "{{ .ProxyConfig.GetTracing.GetStackdriver.GetMaxNumberOfAnnotations.Value }}"
+    - name: STACKDRIVER_TRACING_MAX_NUMBER_OF_ATTRIBUTES
+      value: "{{ .ProxyConfig.GetTracing.GetStackdriver.GetMaxNumberOfAttributes.Value }}"
+    - name: STACKDRIVER_TRACING_MAX_NUMBER_OF_MESSAGE_EVENTS
+      value: "{{ .ProxyConfig.GetTracing.GetStackdriver.GetMaxNumberOfMessageEvents.Value }}"
     {{- end }}
     {{- if and (eq .Values.global.proxy.tracer "datadog") (isset .ObjectMeta.Annotations `+"`"+`apm.datadoghq.com/env`+"`"+`) }}
     {{- range $key, $value := fromJSON (index .ObjectMeta.Annotations `+"`"+`apm.datadoghq.com/env`+"`"+`) }}
@@ -9731,6 +9701,30 @@ data:
           address: {{ .Values.global.tracer.zipkin.address }}
         {{- else }}
           address: zipkin.{{ .Values.global.telemetryNamespace }}:9411
+        {{- end }}
+      {{- else if eq .Values.global.proxy.tracer "datadog" }}
+      tracing:
+        datadog:
+          # Address of the DataDog Agent
+          address: {{ .Values.global.tracer.datadog.address }}
+      {{- else if eq .Values.global.proxy.tracer "stackdriver" }}
+      tracing:
+        stackdriver:
+          # enables trace output to stdout.
+        {{- if $.Values.global.tracer.stackdriver.debug }}
+          debug: {{ $.Values.global.tracer.stackdriver.debug }}
+        {{- end }}
+        {{- if $.Values.global.tracer.stackdriver.maxNumberOfAttributes }}
+          # The global default max number of attributes per span.
+          maxNumberOfAttributes: {{ $.Values.global.tracer.stackdriver.maxNumberOfAttributes }}
+        {{- end }}
+        {{- if $.Values.global.tracer.stackdriver.maxNumberOfAnnotations }}
+          # The global default max number of annotation events per span.
+          maxNumberOfAnnotations: {{ $.Values.global.tracer.stackdriver.maxNumberOfAnnotations }}
+        {{- end }}
+        {{- if $.Values.global.tracer.stackdriver.maxNumberOfMessageEvents }}
+          # The global default max number of message events per span.
+          maxNumberOfMessageEvents: {{ $.Values.global.tracer.stackdriver.maxNumberOfMessageEvents }}
         {{- end }}
       {{- end }}
 
@@ -12279,7 +12273,21 @@ data:
           address: {{ .Values.global.tracer.datadog.address }}
       {{- else if eq .Values.global.proxy.tracer "stackdriver" }}
       tracing:
-        stackdriver: {}
+        stackdriver:
+          # enables trace output to stdout.
+          debug: {{ $.Values.global.tracer.stackdriver.debug }}
+        {{- if $.Values.global.tracer.stackdriver.maxNumberOfAttributes }}
+          # The global default max number of attributes per span.
+          maxNumberOfAttributes: {{ $.Values.global.tracer.stackdriver.maxNumberOfAttributes }}
+        {{- end }}
+        {{- if $.Values.global.tracer.stackdriver.maxNumberOfAnnotations }}
+          # The global default max number of annotation events per span.
+          maxNumberOfAnnotations: {{ $.Values.global.tracer.stackdriver.maxNumberOfAnnotations }}
+        {{- end }}
+        {{- if $.Values.global.tracer.stackdriver.maxNumberOfMessageEvents }}
+          # The global default max number of message events per span.
+          maxNumberOfMessageEvents: {{ $.Values.global.tracer.stackdriver.maxNumberOfMessageEvents }}
+        {{- end }}
       {{- end }}
 
     {{- $defPilotHostname := printf "istio-pilot.%s" .Release.Namespace }}
@@ -29613,8 +29621,8 @@ func chartsIstioTelemetryGrafanaValuesYaml() (*asset, error) {
 var _chartsIstioTelemetryKialiChartYaml = []byte(`apiVersion: v1
 description: Kiali is an open source project for service mesh observability, refer to https://www.kiali.io for details.
 name: kiali
-version: 1.9.0
-appVersion: 1.9.0
+version: 1.9.1
+appVersion: 1.15.0
 tillerVersion: ">=2.7.2"
 `)
 
@@ -29958,6 +29966,8 @@ data:
     istio_namespace: {{ .Values.global.istioNamespace }}
     deployment:
       accessible_namespaces: ['**']
+    login_token:
+      signing_key: {{ randAlphaNum 10 | quote }}
     server:
       port: 20001
 {{- if .Values.kiali.contextPath }}
@@ -30208,7 +30218,7 @@ kiali:
   enabled: false # Note that if using the demo or demo-auth yaml when installing via Helm, this default will be `+"`"+`true`+"`"+`.
   replicaCount: 1
   hub: quay.io/kiali
-  tag: v1.9
+  tag: v1.15
   image: kiali
   contextPath: /kiali # The root context path to access the Kiali UI.
   nodeSelector: {}
@@ -38220,6 +38230,11 @@ spec:
           address: ""
         datadog:
           address: "$(HOST_IP):8126"
+        stackdriver:
+          debug: false
+          maxNumberOfAttributes: 200
+          maxNumberOfAnnotations: 200
+          maxNumberOfMessageEvents: 200
       mtls:
         enabled: false
         auto: false
@@ -38610,7 +38625,7 @@ spec:
       enabled: false
       replicaCount: 1
       hub: quay.io/kiali
-      tag: v1.9
+      tag: v1.15
       contextPath: /kiali
       nodeSelector: {}
       podAntiAffinityLabelSelector: []
