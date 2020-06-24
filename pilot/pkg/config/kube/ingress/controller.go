@@ -49,6 +49,7 @@ import (
 	"istio.io/istio/pkg/config/schema/resource"
 	"istio.io/istio/pkg/listwatch"
 	"istio.io/istio/pkg/queue"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 )
 
 // In 1.0, the Gateway is defined in the namespace where the actual controller runs, and needs to be managed by
@@ -122,7 +123,7 @@ func ingressClassSupported(client kubernetes.Interface) bool {
 }
 
 // NewController creates a new Kubernetes controller
-func NewController(client kubernetes.Interface, mesh *meshconfig.MeshConfig,
+func NewController(client kubernetes.Interface, mrc meshcontroller.MemberRollController, mesh *meshconfig.MeshConfig,
 	options kubecontroller.Options) model.ConfigStoreCache {
 
 	// queue requires a time duration for a retry delay after a handler error
@@ -133,6 +134,12 @@ func NewController(client kubernetes.Interface, mesh *meshconfig.MeshConfig,
 	}
 
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
+
+	if mrc == nil {
+		log.Infof("Ingress Controller watching namespaces %q for Ingresses", watchedNamespaceList)
+	} else {
+		log.Infof("Ingress Controller watching Member Roll list %s for Ingress namespaces", options.MemberRollName)
+	}
 
 	mlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
 		return &cache.ListWatch{
@@ -145,9 +152,12 @@ func NewController(client kubernetes.Interface, mesh *meshconfig.MeshConfig,
 		}
 	})
 
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
+
 	informer := cache.NewSharedIndexInformer(mlw, &ingress.Ingress{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
-	log.Infof("Ingress controller watching namespaces %q", options.WatchedNamespaces)
 
 	var classes *v1beta1.IngressClassInformer
 	if ingressClassSupported(client) {

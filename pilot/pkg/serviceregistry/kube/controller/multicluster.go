@@ -113,7 +113,7 @@ func (m *Multicluster) AddMemberCluster(clientset kubernetes.Interface, metadata
 	var remoteKubeController kubeController
 	remoteKubeController.stopCh = stopCh
 	m.m.Lock()
-	kubectl := NewController(clientset, metadataClient, Options{
+	kubectl := NewController(clientset, metadataClient, nil, Options{
 		WatchedNamespaces: m.WatchedNamespaces,
 		ResyncPeriod:      m.ResyncPeriod,
 		DomainSuffix:      m.DomainSuffix,
@@ -139,7 +139,7 @@ func (m *Multicluster) AddMemberCluster(clientset kubernetes.Interface, metadata
 	}
 	webhookConfigName := strings.ReplaceAll(validationWebhookConfigNameTemplate, validationWebhookConfigNameTemplateVar, m.secretNamespace)
 	if m.fetchCaRoot != nil {
-		nc := NewNamespaceController(m.fetchCaRoot, opts, clientset)
+		nc := NewNamespaceController(m.fetchCaRoot, opts, clientset, nil)
 		go nc.Run(stopCh)
 		go util.PatchCertLoop(features.InjectionWebhookConfigName.Get(), webhookName, m.caBundlePath, clientset, stopCh)
 		valicationWebhookController := util.CreateValidationWebhookController(clientset, dynamicClient, webhookConfigName,

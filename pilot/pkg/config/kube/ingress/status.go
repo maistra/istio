@@ -37,6 +37,7 @@ import (
 	controller2 "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/istio/pkg/listwatch"
 	queue2 "istio.io/istio/pkg/queue"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 
 	"istio.io/pkg/log"
 )
@@ -70,6 +71,7 @@ func (s *StatusSyncer) Run(stopCh <-chan struct{}) {
 // NewStatusSyncer creates a new instance
 func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 	client kubernetes.Interface,
+	mrc meshcontroller.MemberRollController,
 	options controller2.Options) (*StatusSyncer, error) {
 
 	// we need to use the defined ingress class to allow multiple leaders
@@ -81,6 +83,12 @@ func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
 
+	if mrc == nil {
+		log.Infof("Status Syncer watching namespaces %q for Ingresses", watchedNamespaceList)
+	} else {
+		log.Infof("Status Syncer watching Member Roll list %s for Ingress namespaces", options.MemberRollName)
+	}
+
 	mlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
 		return &cache.ListWatch{
 			ListFunc: func(opts metaV1.ListOptions) (runtime.Object, error) {
@@ -91,6 +99,10 @@ func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 			},
 		}
 	})
+
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
 
 	informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})

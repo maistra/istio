@@ -42,6 +42,7 @@ import (
 	controller2 "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/queue"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 )
 
 // controller is a collection of synchronized resource watchers.
@@ -109,8 +110,12 @@ func knownCrdsWithRetry(client *Client) map[string]struct{} {
 
 // NewController creates a new Kubernetes controller for CRDs
 // Use "" for namespace to listen for all namespace changes
-func NewController(client *Client, options controller2.Options) model.ConfigStoreCache {
-	log.Infof("CRD controller watching namespaces %q", options.WatchedNamespaces)
+func NewController(client *Client, mrc meshcontroller.MemberRollController, options controller2.Options) model.ConfigStoreCache {
+	if mrc == nil {
+		log.Infof("CRD controller watching namespaces %q", options.WatchedNamespaces)
+	} else {
+		log.Infof("CRD controller watching Member Roll list %s", options.MemberRollName)
+	}
 
 	// The queue requires a time duration for a retry delay after a handler error
 	out := &controller{
@@ -127,7 +132,7 @@ func NewController(client *Client, options controller2.Options) model.ConfigStor
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
 		name := fmt.Sprintf("%s.%s", s.Resource().Plural(), s.Resource().Group())
 		if _, f := known[name]; f {
-			out.addInformer(s, watchedNamespaceList, options.ResyncPeriod)
+			out.addInformer(s, watchedNamespaceList, options.ResyncPeriod, mrc)
 		} else {
 			log.Warnf("Skipping CRD %v as it is not present", s.String())
 		}
@@ -136,7 +141,7 @@ func NewController(client *Client, options controller2.Options) model.ConfigStor
 	return out
 }
 
-func (c *controller) addInformer(schema collection.Schema, namespaces []string, resyncPeriod time.Duration) {
+func (c *controller) addInformer(schema collection.Schema, namespaces []string, resyncPeriod time.Duration, mrc meshcontroller.MemberRollController) {
 	kind := schema.Resource().GroupVersionKind()
 	schemaType := crd.SupportedTypes[kind]
 	c.kinds[kind] = c.newCacheHandler(schema, schemaType.Object.DeepCopyObject(), kind.Kind, resyncPeriod,
@@ -180,6 +185,7 @@ func (c *controller) addInformer(schema collection.Schema, namespaces []string, 
 			}
 		},
 		namespaces,
+		mrc,
 	)
 }
 
@@ -221,9 +227,13 @@ func (c *controller) newCacheHandler(
 	otype string,
 	resyncPeriod time.Duration,
 	lwf func(string) cache.ListerWatcher,
-	namespaces []string) *cacheHandler {
+	namespaces []string,
+	mrc meshcontroller.MemberRollController) *cacheHandler {
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, lwf)
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
 
 	// TODO: finer-grained index (perf)
 	informer := cache.NewSharedIndexInformer(

@@ -31,6 +31,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 	"istio.io/istio/pkg/listwatch"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 )
 
 // PodCache is an eventually consistent pod cache
@@ -49,7 +50,7 @@ type PodCache struct {
 	c *Controller
 }
 
-func newPodCache(c *Controller, options Options) *PodCache {
+func newPodCache(c *Controller, mrc meshcontroller.MemberRollController, options Options) *PodCache {
 	namespaces := strings.Split(options.WatchedNamespaces, ",")
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {
@@ -62,6 +63,10 @@ func newPodCache(c *Controller, options Options) *PodCache {
 			},
 		}
 	})
+
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
 
 	informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})

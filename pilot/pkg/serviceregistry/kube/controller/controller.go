@@ -55,6 +55,7 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/listwatch"
 	"istio.io/istio/pkg/queue"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 )
 
 const (
@@ -119,6 +120,7 @@ type Options struct {
 	// locality (reading it from nodes requires cluster-level privileges, while pods require a controller to copy the
 	// node's AZ labels to the pods)
 	PodLocalitySource string
+	MemberRollName    string
 	ResyncPeriod      time.Duration
 	DomainSuffix      string
 
@@ -235,11 +237,19 @@ type PodLocalitySource interface {
 
 // NewController creates a new Kubernetes controller
 // Created by bootstrap and multicluster (see secretcontroler).
-func NewController(client kubernetes.Interface, metadataClient metadata.Interface, options Options) *Controller {
+func NewController(client kubernetes.Interface, metadataClient metadata.Interface, mrc meshcontroller.MemberRollController, options Options) *Controller {
 	log.Infof("Service controller watching namespace %q for services, endpoints, nodes and pods, refresh %s",
 		options.WatchedNamespaces, options.ResyncPeriod)
 
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
+
+	if mrc == nil {
+		log.Infof("Service controller watching namespace list %q for services, endpoints, nodes and pods, refresh %s",
+			watchedNamespaceList, options.ResyncPeriod)
+	} else {
+		log.Infof("Service controller watching Member Roll list %s for services, endpoints, nodes and pods",
+			options.MemberRollName)
+	}
 
 	// The queue requires a time duration for a retry delay after a handler error
 	c := &Controller{
@@ -268,15 +278,19 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 		}
 	})
 
+	if mrc != nil {
+		mrc.Register(svcMlw)
+	}
+
 	c.services = cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	registerHandlers(c.services, c.queue, "Services", c.onServiceEvent)
 
 	switch options.EndpointMode {
 	case EndpointsOnly:
-		c.endpoints = newEndpointsController(c, options)
+		c.endpoints = newEndpointsController(c, mrc, options)
 	case EndpointSliceOnly:
-		c.endpoints = newEndpointSliceController(c, options)
+		c.endpoints = newEndpointSliceController(c, mrc, options)
 	}
 
 	if options.PodLocalitySource == podLocalitySourcePod {
@@ -297,7 +311,7 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 		func(options *metav1.ListOptions) {})
 	registerHandlers(c.filteredNodeInformer, c.queue, "Nodes", c.onNodeEvent)
 
-	c.pods = newPodCache(c, options)
+	c.pods = newPodCache(c, mrc, options)
 	registerHandlers(c.pods.informer, c.queue, "Pods", c.pods.onEvent)
 
 	return c

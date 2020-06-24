@@ -34,7 +34,7 @@ func TestNamespaceController(t *testing.T) {
 	testdata := map[string]string{"key": "value"}
 	nc := NewNamespaceController(func() map[string]string {
 		return testdata
-	}, Options{}, client)
+	}, Options{}, client, nil)
 
 	stop := make(chan struct{})
 	nc.Run(stop)

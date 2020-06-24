@@ -113,9 +113,9 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 	if hasKubeRegistry(args.Service.Registries) && meshConfig.IngressControllerMode != meshconfig.MeshConfig_OFF {
 		// Wrap the config controller with a cache.
 		s.ConfigStores = append(s.ConfigStores,
-			ingress.NewController(s.kubeClient, meshConfig, args.Config.ControllerOptions))
+			ingress.NewController(s.kubeClient, s.mrc, meshConfig, args.Config.ControllerOptions))
 
-		ingressSyncer, err := ingress.NewStatusSyncer(meshConfig, s.kubeClient, args.Config.ControllerOptions)
+		ingressSyncer, err := ingress.NewStatusSyncer(meshConfig, s.kubeClient, s.mrc, args.Config.ControllerOptions)
 		if err != nil {
 			log.Warnf("Disabled ingress status syncer due to %v", err)
 		} else {
@@ -406,7 +406,7 @@ func (s *Server) makeKubeConfigController(args *PilotArgs) (model.ConfigStoreCac
 		return nil, multierror.Prefix(err, "failed to open a config client.")
 	}
 
-	return controller.NewController(configClient, args.Config.ControllerOptions), nil
+	return controller.NewController(configClient, s.mrc, args.Config.ControllerOptions), nil
 }
 
 func (s *Server) makeFileMonitor(fileDir string, configController model.ConfigStore) error {

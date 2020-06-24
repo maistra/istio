@@ -34,6 +34,7 @@ import (
 
 	"istio.io/istio/pkg/listwatch"
 	"istio.io/istio/pkg/queue"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	certutil "istio.io/istio/security/pkg/util"
 )
 
@@ -65,7 +66,7 @@ type NamespaceController struct {
 }
 
 // NewNamespaceController returns a pointer to a newly constructed NamespaceController instance.
-func NewNamespaceController(data func() map[string]string, options Options, kubeClient kubernetes.Interface) *NamespaceController {
+func NewNamespaceController(data func() map[string]string, options Options, kubeClient kubernetes.Interface, mrc meshcontroller.MemberRollController) *NamespaceController {
 	c := &NamespaceController{
 		getData: data,
 		client:  kubeClient.CoreV1(),
@@ -86,6 +87,10 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 			},
 		}
 	})
+
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
 
 	configmapInformer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})

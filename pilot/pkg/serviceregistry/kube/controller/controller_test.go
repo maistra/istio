@@ -157,7 +157,7 @@ func newFakeControllerWithOptions(opts fakeControllerOptions) (*Controller, *Fak
 	metaV1.AddMetaToScheme(scheme)
 	metadataClient := metafake.NewSimpleMetadataClient(scheme)
 
-	c := NewController(clientSet, metadataClient, Options{
+	c := NewController(clientSet, metadataClient, nil, Options{
 		WatchedNamespaces: opts.watchedNamespaces, // default is all namespaces
 		ResyncPeriod:      resync,
 		DomainSuffix:      domainSuffix,

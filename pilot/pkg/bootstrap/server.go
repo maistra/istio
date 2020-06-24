@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"sync"
@@ -29,6 +30,7 @@ import (
 
 	"istio.io/istio/pilot/pkg/status"
 
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/metadata"
@@ -37,6 +39,7 @@ import (
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/hashicorp/go-multierror"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -64,6 +67,7 @@ import (
 	istiokeepalive "istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/inject"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/istio/security/pkg/pki/ca"
 )
@@ -113,6 +117,8 @@ type Server struct {
 	configController model.ConfigStoreCache
 	kubeClient       kubernetes.Interface
 	metadataClient   metadata.Interface
+
+	mrc meshcontroller.MemberRollController
 
 	startFuncs       []startFunc
 	multicluster     *kubecontroller.Multicluster
@@ -170,12 +176,20 @@ func NewServer(args *PilotArgs) (*Server, error) {
 		mux:            http.NewServeMux(),
 	}
 
-	if args.Config.ControllerOptions.WatchedNamespaces != "" {
-		// Add the control-plane namespace to the list of watched namespaces.
-		args.Config.ControllerOptions.WatchedNamespaces = fmt.Sprintf("%s,%s",
-			args.Config.ControllerOptions.WatchedNamespaces,
-			args.Namespace,
-		)
+	if args.Config.ControllerOptions.WatchedNamespaces == "" {
+		appNamespace := os.Getenv("APP_NAMESPACE")
+		if appNamespace == "" {
+			appNamespace = meta_v1.NamespaceAll
+		}
+		args.Config.ControllerOptions.WatchedNamespaces = appNamespace
+	}
+
+	if args.Config.ControllerOptions.MemberRollName != "" {
+		if args.Namespace != "" {
+			args.Config.ControllerOptions.WatchedNamespaces = args.Namespace
+		} else {
+			args.Config.ControllerOptions.WatchedNamespaces = constants.IstioSystemNamespace
+		}
 	}
 
 	prometheus.EnableHandlingTimeHistogram()
@@ -183,6 +197,9 @@ func NewServer(args *PilotArgs) (*Server, error) {
 	// Apply the arguments to the configuration.
 	if err := s.initKubeClient(args); err != nil {
 		return nil, fmt.Errorf("error initializing kube client: %v", err)
+	}
+	if err := s.initMemberRollController(args); err != nil {
+		return nil, fmt.Errorf("service mesh client: %v", err)
 	}
 	fileWatcher := filewatcher.NewWatcher()
 	if err := s.initMeshConfiguration(args, fileWatcher); err != nil {
@@ -312,7 +329,7 @@ func NewServer(args *PilotArgs) (*Server, error) {
 					NewLeaderElection(args.Namespace, args.PodName, leaderelection.NamespaceController, s.kubeClient).
 					AddRunFunction(func(stop <-chan struct{}) {
 						log.Infof("Starting namespace controller")
-						nc := kubecontroller.NewNamespaceController(fetchData, args.Config.ControllerOptions, s.kubeClient)
+						nc := kubecontroller.NewNamespaceController(fetchData, args.Config.ControllerOptions, s.kubeClient, s.mrc)
 						nc.Run(stop)
 					}).
 					Run(stop)
@@ -430,6 +447,21 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 		if err != nil {
 			return fmt.Errorf("failed creating kube metadata client: %v", err)
 		}
+	}
+
+	return nil
+}
+
+// initMemberRollController creates the service mesh client if running in an k8s environment.
+func (s *Server) initMemberRollController(args *PilotArgs) error {
+	if hasKubeRegistry(args.Service.Registries) && args.Config.FileDir == "" && args.Config.ControllerOptions.MemberRollName != "" {
+		mrc, err := meshcontroller.NewMemberRollControllerFromConfigFile(args.Config.KubeConfig, args.Namespace,
+			args.Config.ControllerOptions.MemberRollName, args.Config.ControllerOptions.ResyncPeriod)
+		if err != nil {
+			return multierror.Prefix(err, "Could not create MemberRollController.")
+		}
+		s.mrc = mrc
+		s.mrc.Start(make(chan struct{}))
 	}
 
 	return nil

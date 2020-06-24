@@ -240,7 +240,7 @@ func TestPodCacheEvents(t *testing.T) {
 	defer c.Stop()
 
 	ns := "default"
-	podCache := newPodCache(c, Options{WatchedNamespaces: ns})
+	podCache := newPodCache(c, nil, Options{WatchedNamespaces: ns})
 
 	f := podCache.onEvent
 
