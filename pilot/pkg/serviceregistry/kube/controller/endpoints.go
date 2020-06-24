@@ -32,6 +32,7 @@ import (
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/listwatch"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 )
 
 type endpointsController struct {
@@ -40,7 +41,7 @@ type endpointsController struct {
 
 var _ kubeEndpointsController = &endpointsController{}
 
-func newEndpointsController(c *Controller, options Options) *endpointsController {
+func newEndpointsController(c *Controller, mrc meshcontroller.MemberRollController, options Options) *endpointsController {
 	namespaces := strings.Split(options.WatchedNamespaces, ",")
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {
@@ -53,6 +54,10 @@ func newEndpointsController(c *Controller, options Options) *endpointsController
 			},
 		}
 	})
+
+	if mrc != nil {
+		mrc.Register(mlw)
+	}
 
 	informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
