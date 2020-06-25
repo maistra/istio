@@ -73,6 +73,10 @@ func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
 				}
 			})
 
+			if p.mrc != nil {
+				p.mrc.Register(mlw)
+			}
+
 			informer := cache.NewSharedIndexInformer(mlw, &unstructured.Unstructured{}, p.resyncPeriod,
 				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 

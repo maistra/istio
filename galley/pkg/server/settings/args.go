@@ -32,6 +32,7 @@ import (
 	"istio.io/istio/pkg/config/schema/snapshots"
 	"istio.io/istio/pkg/keepalive"
 	"istio.io/istio/pkg/mcp/creds"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/webhooks/validation/controller"
 	"istio.io/istio/pkg/webhooks/validation/server"
 )
@@ -166,6 +167,8 @@ type Args struct { // nolint:maligned
 
 	Snapshots       []string
 	TriggerSnapshot string
+
+	MemberRollController meshcontroller.MemberRollController
 }
 
 // DefaultArgs allocates an Args struct initialized with Galley's default configuration.

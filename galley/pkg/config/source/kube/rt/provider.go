@@ -27,10 +27,11 @@ import (
 
 	"istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/pkg/config/schema/resource"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 )
 
 var (
-	defaultProvider = NewProvider(nil, metav1.NamespaceAll, 0)
+	defaultProvider = NewProvider(nil, metav1.NamespaceAll, 0, nil)
 )
 
 // DefaultProvider returns a default provider that has no K8s connectivity enabled.
@@ -49,14 +50,17 @@ type Provider struct {
 
 	informers        informers.SharedInformerFactory
 	dynamicInterface dynamic.Interface
+
+	mrc meshcontroller.MemberRollController
 }
 
 // NewProvider returns a new instance of Provider.
-func NewProvider(interfaces kube.Interfaces, namespaces string, resyncPeriod time.Duration) *Provider {
+func NewProvider(interfaces kube.Interfaces, namespaces string, resyncPeriod time.Duration, mrc meshcontroller.MemberRollController) *Provider {
 	p := &Provider{
 		resyncPeriod: resyncPeriod,
 		interfaces:   interfaces,
 		namespaces:   strings.Split(namespaces, ","),
+		mrc:          mrc,
 	}
 
 	p.initKnownAdapters()
