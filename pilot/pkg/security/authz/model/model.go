@@ -45,6 +45,8 @@ const (
 	attrConnSNI          = "connection.sni"              // server name indication, e.g. "www.example.com".
 	attrEnvoyFilter      = "experimental.envoy.filters." // an experimental attribute for checking Envoy Metadata directly.
 
+	attrRequestRegexHeader = "request.regex.headers" // header name is surrounded by brackets, e.g. "request.headers.regex[User-Agent]".
+
 	// Internal names used to generate corresponding Envoy matcher.
 	methodHeader = ":method"
 	pathMatcher  = "path-matcher"
@@ -109,6 +111,8 @@ func New(r *authzpb.Rule, isIstioVersionGE15 bool) (*Model, error) {
 			basePrincipal.insertAt(last, requestPresenterGenerator{}, k, when.Values, when.NotValues)
 		case strings.HasPrefix(k, attrRequestHeader):
 			basePrincipal.insertAt(last, requestHeaderGenerator{}, k, when.Values, when.NotValues)
+		case strings.HasPrefix(k, attrRequestRegexHeader):
+			basePrincipal.insertAt(last, requestRegexHeaderGenerator{}, k, when.Values, when.NotValues)
 		case strings.HasPrefix(k, attrRequestClaims):
 			basePrincipal.insertAt(last, requestClaimGenerator{}, k, when.Values, when.NotValues)
 		default:

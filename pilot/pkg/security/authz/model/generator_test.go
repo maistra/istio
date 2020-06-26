@@ -201,6 +201,18 @@ func TestGenerator(t *testing.T) {
           name: x-foo`),
 		},
 		{
+			name:  "requestRegexHeaderGenerator",
+			g:     requestRegexHeaderGenerator{},
+			key:   "request.regex.headers[x-foo]",
+			value: "foo-[0-9]",
+			want: yamlPrincipal(t, `
+         header:
+          name: x-foo
+          safeRegexMatch:
+            googleRe2: {}
+            regex: foo-[0-9]`),
+		},
+		{
 			name:  "requestClaimGenerator",
 			g:     requestClaimGenerator{},
 			key:   "request.auth.claims[bar]",
@@ -262,12 +274,12 @@ func TestGenerator(t *testing.T) {
 			if _, ok := tc.want.(*rbacpb.Permission); ok {
 				got, err = tc.g.permission(tc.key, tc.value, tc.forTCP)
 				if err != nil {
-					t.Errorf("both permission and principal returned error")
+					t.Errorf("both permission and principal returned error: %v", err)
 				}
 			} else {
 				got, err = tc.g.principal(tc.key, tc.value, tc.forTCP)
 				if err != nil {
-					t.Errorf("both permission and principal returned error")
+					t.Errorf("both permission and principal returned error: %v", err)
 				}
 			}
 			if !reflect.DeepEqual(got, tc.want) {
