@@ -29,6 +29,7 @@ import (
 	"istio.io/istio/mixer/pkg/adapter"
 	"istio.io/istio/mixer/pkg/runtime/monitoring"
 	"istio.io/istio/pkg/listwatch"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/log"
 	"istio.io/pkg/pool"
 )
@@ -39,10 +40,11 @@ type env struct {
 	monitoringCtx    context.Context
 	daemons, workers *int64
 	namespaces       *[]string
+	mrc              meshcontroller.MemberRollController
 }
 
 // NewEnv returns a new environment instance.
-func NewEnv(cfgID int64, name string, gp *pool.GoroutinePool, namespaces []string) adapter.Env {
+func NewEnv(cfgID int64, name string, gp *pool.GoroutinePool, mrc meshcontroller.MemberRollController, namespaces []string) adapter.Env {
 	ctx := context.Background()
 	var err error
 	if ctx, err = tag.New(ctx, tag.Insert(monitoring.HandlerTag, name)); err != nil {
@@ -55,6 +57,7 @@ func NewEnv(cfgID int64, name string, gp *pool.GoroutinePool, namespaces []strin
 		daemons:       new(int64),
 		workers:       new(int64),
 		namespaces:    &namespaces,
+		mrc:           mrc,
 	}
 }
 
@@ -150,5 +153,8 @@ func (e env) NewInformer(
 	indexers cache.Indexers) cache.SharedIndexInformer {
 
 	mlw := listwatch.MultiNamespaceListerWatcher(*e.namespaces, listerWatcher)
+	if e.mrc != nil {
+		e.mrc.Register(mlw)
+	}
 	return cache.NewSharedIndexInformer(mlw, objType, duration, indexers)
 }

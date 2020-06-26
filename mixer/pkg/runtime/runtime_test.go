@@ -50,6 +50,7 @@ func TestRuntime_Basic(t *testing.T) {
 		egp,
 		hgp,
 		true,
+		nil,
 		[]string{metav1.NamespaceAll},
 	)
 
@@ -98,6 +99,7 @@ func TestRuntime_ErrorDuringWatch(t *testing.T) {
 		egp,
 		hgp,
 		true,
+		nil,
 		[]string{metav1.NamespaceAll},
 	)
 
@@ -119,6 +121,7 @@ func TestRuntime_OnConfigChange(t *testing.T) {
 		egp,
 		hgp,
 		true,
+		nil,
 		[]string{metav1.NamespaceAll},
 	)
 
@@ -197,6 +200,7 @@ func TestRuntime_InFlightRequestsDuringConfigChange(t *testing.T) {
 		egp,
 		hgp,
 		true,
+		nil,
 		[]string{metav1.NamespaceAll},
 	)
 

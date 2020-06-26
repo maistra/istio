@@ -34,7 +34,7 @@ func TestEnv(t *testing.T) {
 		o := log.DefaultOptions()
 		_ = log.Configure(o)
 
-		e := NewEnv(0, "Foo", gp, []string{metav1.NamespaceAll})
+		e := NewEnv(0, "Foo", gp, nil, []string{metav1.NamespaceAll})
 		log := e.Logger()
 		log.Infof("Test%s", "ing")
 		log.Warningf("Test%s", "ing")

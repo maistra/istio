@@ -180,7 +180,7 @@ func NewNoSessionServer(addr string) (Server, error) {
 	s := &nosessionServer{
 		listener: listener,
 		builder:  listInf.NewBuilder(),
-		env:      handler.NewEnv(0, "list-backend-nosession", pool.NewGoroutinePool(5, false), []string{""}),
+		env:      handler.NewEnv(0, "list-backend-nosession", pool.NewGoroutinePool(5, false), nil, []string{""}),
 		rawcfg:   []byte{},
 	}
 	fmt.Printf("listening on :%v\n", s.listener.Addr())

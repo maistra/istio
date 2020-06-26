@@ -117,6 +117,15 @@ type Args struct {
 	WatchedNamespaces string
 
 	LoadSheddingOptions loadshedding.Options
+
+	// The name of the ServiceMeshMemberRoll resource
+	MemberRollName string
+
+	// The namespace of the ServiceMeshMemberRoll resource
+	MemberRollNamespace string
+
+	// The resync period for the ServiceMeshMemberRoll resource
+	MemberRollResync time.Duration
 }
 
 // DefaultArgs allocates an Args struct initialized with Mixer's default configuration.
@@ -194,6 +203,9 @@ func (a *Args) String() string {
 	fmt.Fprintln(buf, "ConfigDefaultNamespace: ", a.ConfigDefaultNamespace)
 	fmt.Fprintln(buf, "ConfigWaitTimeout: ", a.ConfigWaitTimeout)
 	fmt.Fprintln(buf, "WatchedNamespaces: ", a.WatchedNamespaces)
+	fmt.Fprintln(buf, "MemberRollName: ", a.MemberRollName)
+	fmt.Fprintln(buf, "MemberRollNamespace: ", a.MemberRollNamespace)
+	fmt.Fprintln(buf, "MemberRollResync: ", a.MemberRollResync)
 	fmt.Fprintf(buf, "LoggingOptions: %#v\n", *a.LoggingOptions)
 	fmt.Fprintf(buf, "TracingOptions: %#v\n", *a.TracingOptions)
 	fmt.Fprintf(buf, "IntrospectionOptions: %#v\n", *a.IntrospectionOptions)

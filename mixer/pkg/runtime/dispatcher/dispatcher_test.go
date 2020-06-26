@@ -1004,7 +1004,7 @@ func TestDispatcher(t *testing.T) {
 			cfg := data.JoinConfigs(tst.config...)
 
 			s, _ := config.GetSnapshotForTest(templates, adapters, data.ServiceConfig, cfg)
-			h := handler.NewTable(handler.Empty(), s, pool.NewGoroutinePool(1, false), []string{metav1.NamespaceAll})
+			h := handler.NewTable(handler.Empty(), s, pool.NewGoroutinePool(1, false), nil, []string{metav1.NamespaceAll})
 
 			r := routing.BuildTable(h, s, "istio-system", true)
 			_ = dispatcher.ChangeRoute(r)

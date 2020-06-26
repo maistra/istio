@@ -26,6 +26,7 @@ import (
 	"istio.io/istio/mixer/pkg/runtime/handler"
 	"istio.io/istio/mixer/pkg/runtime/routing"
 	"istio.io/istio/mixer/pkg/template"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/log"
 	"istio.io/pkg/pool"
 	"istio.io/pkg/probe"
@@ -54,6 +55,8 @@ type Runtime struct {
 
 	*probe.Probe
 
+	mrc meshcontroller.MemberRollController
+
 	namespaces []string
 
 	stateLock            sync.Mutex
@@ -70,6 +73,7 @@ func New(
 	executorPool *pool.GoroutinePool,
 	handlerPool *pool.GoroutinePool,
 	enableTracing bool,
+	mrc meshcontroller.MemberRollController,
 	namespaces []string) *Runtime {
 
 	// Ignoring the errors for bad configuration that has already made it to the store.
@@ -85,6 +89,7 @@ func New(
 		Probe:                  probe.NewProbe(),
 		store:                  s,
 		namespaces:             namespaces,
+		mrc:                    mrc,
 	}
 
 	// Make sure we have a stable state.
@@ -160,7 +165,7 @@ func (c *Runtime) processNewConfig() {
 
 	oldHandlers := c.handlers
 
-	newHandlers := handler.NewTable(oldHandlers, newSnapshot, c.handlerPool, c.namespaces)
+	newHandlers := handler.NewTable(oldHandlers, newSnapshot, c.handlerPool, c.mrc, c.namespaces)
 
 	newRoutes := routing.BuildTable(
 		newHandlers, newSnapshot, c.defaultConfigNamespace, log.DebugEnabled())
