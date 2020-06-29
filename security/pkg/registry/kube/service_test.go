@@ -79,7 +79,7 @@ func TestServiceController(t *testing.T) {
 		reg := &registry.IdentityRegistry{
 			Map: make(map[string]string),
 		}
-		controller := NewServiceController(client.CoreV1(), []string{"test-ns"}, reg)
+		controller := NewServiceController(client.CoreV1(), []string{"test-ns"}, reg, nil)
 
 		if c.toAdd != nil {
 			controller.serviceAdded(c.toAdd)

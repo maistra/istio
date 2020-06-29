@@ -36,4 +36,7 @@ const (
 
 	// DefaultWorkloadCertTTL is the default TTL of issued workload certificates.
 	DefaultWorkloadCertTTL = 24 * time.Hour
+
+	// DefaultMemberRollResyncPeriod is the default resync period for the member roll informer.
+	DefaultMemberRollResyncPeriod = 10 * time.Minute
 )

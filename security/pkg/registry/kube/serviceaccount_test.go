@@ -189,7 +189,7 @@ func TestServiceAccountController(t *testing.T) {
 		reg := &registry.IdentityRegistry{
 			Map: make(map[string]string),
 		}
-		controller := NewServiceAccountController(client.CoreV1(), []string{"test-ns"}, reg)
+		controller := NewServiceAccountController(client.CoreV1(), []string{"test-ns"}, reg, nil)
 
 		for _, svcAcc := range c.toAdd {
 			controller.serviceAccountAdded(svcAcc)
@@ -218,7 +218,7 @@ func TestServiceAccountControllerWithMissedDelete(t *testing.T) {
 	reg := &registry.IdentityRegistry{
 		Map: make(map[string]string),
 	}
-	controller := NewServiceAccountController(client.CoreV1(), []string{"test-ns"}, reg)
+	controller := NewServiceAccountController(client.CoreV1(), []string{"test-ns"}, reg, nil)
 
 	for _, svcAcc := range missedSA {
 		controller.serviceAccountDeleted(svcAcc) // should not panic

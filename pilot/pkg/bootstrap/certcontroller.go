@@ -86,7 +86,7 @@ func (s *Server) initCertController(args *PilotArgs) error {
 	// If services are empty, the certificate controller will do nothing.
 	s.certController, err = chiron.NewWebhookController(defaultCertGracePeriodRatio, defaultMinCertGracePeriod,
 		k8sClient.CoreV1(), k8sClient.AdmissionregistrationV1beta1(), k8sClient.CertificatesV1beta1(),
-		defaultCACertPath, secretNames, dnsNames, namespaces)
+		defaultCACertPath, secretNames, dnsNames, namespaces, s.mrc)
 	if err != nil {
 		return fmt.Errorf("failed to create certificate controller: %v", err)
 	}
