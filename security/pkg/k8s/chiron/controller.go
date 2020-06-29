@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pkg/listwatch"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/security/pkg/pki/ca"
 	"istio.io/istio/security/pkg/pki/util"
 	certutil "istio.io/istio/security/pkg/util"
@@ -94,13 +95,15 @@ type WebhookController struct {
 	// Length of the grace period for the certificate rotation.
 	gracePeriodRatio float32
 	certUtil         certutil.CertUtil
+
+	mrc meshcontroller.MemberRollController
 }
 
 // NewWebhookController returns a pointer to a newly constructed WebhookController instance.
 func NewWebhookController(gracePeriodRatio float32, minGracePeriod time.Duration,
 	core corev1.CoreV1Interface, admission admissionv1.AdmissionregistrationV1beta1Interface,
 	certClient certclient.CertificatesV1beta1Interface, k8sCaCertFile string,
-	secretNames, dnsNames, serviceNamespaces []string) (*WebhookController, error) {
+	secretNames, dnsNames, serviceNamespaces []string, mrc meshcontroller.MemberRollController) (*WebhookController, error) {
 	if gracePeriodRatio < 0 || gracePeriodRatio > 1 {
 		return nil, fmt.Errorf("grace period ratio %f should be within [0, 1]", gracePeriodRatio)
 	}
@@ -135,6 +138,7 @@ func NewWebhookController(gracePeriodRatio float32, minGracePeriod time.Duration
 		dnsNames:          dnsNames,
 		serviceNamespaces: serviceNamespaces,
 		certUtil:          certutil.NewCertUtil(int(gracePeriodRatio * 100)),
+		mrc:               mrc,
 	}
 
 	// read CA cert at the beginning of launching the controller.
@@ -158,6 +162,11 @@ func NewWebhookController(gracePeriodRatio float32, minGracePeriod time.Duration
 				},
 			}
 		})
+
+		if mrc != nil {
+			mrc.Register(scrtLW)
+		}
+
 		// The certificate rotation is handled by scrtUpdated().
 		c.scrtStore, c.scrtController =
 			cache.NewInformer(scrtLW, &v1.Secret{}, secretResyncPeriod, cache.ResourceEventHandlerFuncs{

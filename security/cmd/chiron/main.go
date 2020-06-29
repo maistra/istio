@@ -26,6 +26,7 @@ import (
 
 	istiocmd "istio.io/istio/pkg/cmd"
 	"istio.io/istio/pkg/kube"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/security/pkg/cmd"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/pkg/collateral"
@@ -90,6 +91,11 @@ type cliOptions struct {
 
 	// Whether enable the certificate controller
 	enableController bool
+
+	// Member Roll resource name
+	memberRollName         string
+	memberRollNamespace    string
+	memberRollResyncPeriod time.Duration
 }
 
 func init() {
@@ -125,7 +131,16 @@ func init() {
 			"must be consistent with the secret-names parameter.")
 	flags.StringSliceVar(&opts.serviceNamespaces, "namespaces", []string{"istio-system", "istio-system"},
 		"The namespaces of the services (delimited by comma) for which Chiron manage certs; "+
-			"must be consistent with the secret-names parameter.")
+			"must be consistent with the secret-names parameter."+
+			"The Service Mesh Member Roll namespace discovery takes precedence over this configuration.")
+
+	// OpenShift ServiceMesh options
+	flags.StringVar(&opts.memberRollName, "member-roll-name", "",
+		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
+	flags.StringVar(&opts.memberRollNamespace, "member-roll-namespace", "",
+		"The namespace of the ServiceMeshMemberRoll resource.")
+	flags.DurationVar(&opts.memberRollResyncPeriod, "member-roll-resync-period",
+		cmd.DefaultMemberRollResyncPeriod, "The resync period for member roll informer.")
 
 	rootCmd.AddCommand(version.CobraCommand())
 	rootCmd.AddCommand(collateral.CobraCommand(rootCmd, &doc.GenManHeader{
@@ -164,9 +179,21 @@ func runWebhookController() {
 
 	dnsNames := strings.Split(opts.dnsNames, ";")
 
+	var mrc meshcontroller.MemberRollController
+
+	if opts.memberRollName != "" {
+		mrc, err = meshcontroller.NewMemberRollControllerFromConfigFile(
+			opts.kubeConfigFile, opts.memberRollNamespace,
+			opts.memberRollName, opts.memberRollResyncPeriod)
+		if err != nil {
+			log.Fatalf("Could not create MemberRollController: %v", err)
+		}
+		mrc.Start(stopCh)
+	}
+
 	wc, err := chiron.NewWebhookController(opts.certGracePeriodRatio, opts.certMinGracePeriod,
 		k8sClient.CoreV1(), k8sClient.AdmissionregistrationV1beta1(), k8sClient.CertificatesV1beta1(),
-		opts.k8sCaCertFile, opts.secretNames, dnsNames, opts.serviceNamespaces)
+		opts.k8sCaCertFile, opts.secretNames, dnsNames, opts.serviceNamespaces, mrc)
 
 	if err != nil {
 		log.Errorf("failed to create certificate controller: %v", err)

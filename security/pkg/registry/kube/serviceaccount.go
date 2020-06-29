@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pkg/listwatch"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/security/pkg/registry"
 	"istio.io/pkg/log"
 )
@@ -48,7 +49,7 @@ type ServiceAccountController struct {
 }
 
 // NewServiceAccountController returns a new ServiceAccountController
-func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry) *ServiceAccountController {
+func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry, mrc meshcontroller.MemberRollController) *ServiceAccountController {
 	c := &ServiceAccountController{
 		core: core,
 		reg:  reg,
@@ -64,6 +65,10 @@ func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []strin
 			},
 		}
 	})
+
+	if mrc != nil {
+		mrc.Register(LW)
+	}
 
 	_, c.controller = cache.NewInformer(LW, &v1.ServiceAccount{}, time.Minute, cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.serviceAccountAdded,

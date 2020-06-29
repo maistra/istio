@@ -24,6 +24,7 @@ import (
 	"istio.io/istio/security/pkg/registry"
 	"istio.io/pkg/log"
 
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -48,7 +49,7 @@ type ServiceController struct {
 }
 
 // NewServiceController returns a new ServiceController
-func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry) *ServiceController {
+func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry, mrc meshcontroller.MemberRollController) *ServiceController {
 	c := &ServiceController{
 		core: core,
 		reg:  reg,
@@ -64,6 +65,10 @@ func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg 
 			},
 		}
 	})
+
+	if mrc != nil {
+		mrc.Register(LW)
+	}
 
 	handler := cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.serviceAdded,
