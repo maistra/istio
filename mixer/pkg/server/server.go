@@ -22,12 +22,12 @@ import (
 	"strings"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
+	"github.com/hashicorp/go-multierror"
 	ot "github.com/opentracing/opentracing-go"
 	oprometheus "github.com/prometheus/client_golang/prometheus"
 	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/stats/view"
 	"google.golang.org/grpc"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	mixerpb "istio.io/api/mixer/v1"
@@ -42,6 +42,7 @@ import (
 	runtimeconfig "istio.io/istio/mixer/pkg/runtime/config"
 	"istio.io/istio/mixer/pkg/runtime/dispatcher"
 	"istio.io/istio/mixer/pkg/template"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/tracing"
 	"istio.io/pkg/ctrlz"
 	"istio.io/pkg/log"
@@ -69,6 +70,9 @@ type Server struct {
 	readinessProbe probe.Controller
 	*probe.Probe
 	configStore store.Store
+
+	mrc     meshcontroller.MemberRollController
+	mrcStop chan struct{}
 }
 
 type listenFunc func(network string, address string) (net.Listener, error)
@@ -78,6 +82,7 @@ type patchTable struct {
 	newRuntime func(s store.Store, templates map[string]*template.Info, adapters map[string]*adapter.Info,
 		defaultConfigNamespace string, executorPool *pool.GoroutinePool,
 		handlerPool *pool.GoroutinePool, enableTracing bool,
+		mrc meshcontroller.MemberRollController,
 		namespaces []string) *runtime.Runtime
 	configTracing func(serviceName string, options *tracing.Options) (io.Closer, error)
 	startMonitor  func(port uint16, enableProfiling bool, lf listenFunc) (*monitor, error)
@@ -211,11 +216,17 @@ func newServer(a *Args, p *patchTable) (server *Server, err error) {
 
 	var namespaces []string
 
-	if a.WatchedNamespaces != "" {
-		namespaces = strings.Split(a.WatchedNamespaces, ",")
-		namespaces = append(namespaces, a.ConfigDefaultNamespace)
+	if a.MemberRollName != "" {
+		mrc, err := meshcontroller.NewMemberRollControllerFromConfigFile(a.ConfigStoreURL, a.MemberRollNamespace, a.MemberRollName, a.MemberRollResync)
+		if err != nil {
+			_ = s.Close()
+			return nil, multierror.Prefix(err, "Could not create MemberRollController.")
+		}
+		s.mrcStop = make(chan struct{})
+		s.mrc = mrc
+		mrc.Start(s.mrcStop)
 	} else {
-		namespaces = []string{metav1.NamespaceAll}
+		namespaces = []string{""}
 	}
 
 	// block wait for the config store to sync
@@ -226,7 +237,7 @@ func newServer(a *Args, p *patchTable) (server *Server, err error) {
 	s.configStore = st
 	log.Info("Starting runtime config watch...")
 	rt := p.newRuntime(st, templateMap, adapterMap, a.ConfigDefaultNamespace,
-		s.gp, s.adapterGP, a.TracingOptions.TracingEnabled(), namespaces)
+		s.gp, s.adapterGP, a.TracingOptions.TracingEnabled(), s.mrc, namespaces)
 
 	if err = p.runtimeListen(rt); err != nil {
 		return nil, fmt.Errorf("unable to listen: %v", err)
@@ -326,6 +337,11 @@ func (s *Server) Close() error {
 	if s.shutdown != nil {
 		s.server.GracefulStop()
 		_ = s.Wait()
+	}
+
+	if s.mrc != nil {
+		close(s.mrcStop)
+		s.mrc = nil
 	}
 
 	if s.controlZ != nil {
