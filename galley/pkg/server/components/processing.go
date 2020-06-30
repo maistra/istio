@@ -326,7 +326,7 @@ func (p *Processing) createSourceAndStatusUpdater(schemas collection.Schemas) (
 			Schemas:           schemas,
 			StatusController:  statusCtl,
 		}
-		s := apiserver.New(o)
+		s := apiserver.New(p.args.MemberRollController, o)
 		src = s
 		updater = s
 	}

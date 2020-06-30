@@ -30,6 +30,7 @@ import (
 	"istio.io/istio/pkg/config/event"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/resource"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 )
 
 var (
@@ -78,17 +79,20 @@ type Source struct { // nolint:maligned
 	watchers map[collection.Name]*watcher
 
 	statusCtl status.Controller
+
+	mrc meshcontroller.MemberRollController
 }
 
 var _ event.Source = &Source{}
 var _ snapshotter.StatusUpdater = &Source{}
 
 // New returns a new kube.Source.
-func New(o Options) *Source {
+func New(mrc meshcontroller.MemberRollController, o Options) *Source {
 	s := &Source{
 		options:   o,
 		handlers:  &event.Handlers{},
 		statusCtl: o.StatusController,
+		mrc:       mrc,
 	}
 
 	return s
@@ -125,7 +129,7 @@ func (s *Source) Start() {
 
 	// Start the CRD listener. When the listener is fully-synced, the listening of actual resources will start.
 	scope.Source.Infof("Beginning CRD Discovery, to figure out resources that are available...")
-	s.provider = rt.NewProvider(s.options.Client, s.options.WatchedNamespaces, s.options.ResyncPeriod)
+	s.provider = rt.NewProvider(s.options.Client, s.options.WatchedNamespaces, s.options.ResyncPeriod, s.mrc)
 	a := s.provider.GetAdapter(crdKubeResource.Resource())
 	s.crdWatcher = newWatcher(crdKubeResource, a, s.statusCtl)
 	s.crdWatcher.dispatch(event.HandlerFromFn(s.onCrdEvent))

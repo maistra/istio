@@ -426,7 +426,7 @@ func newOrFail(t *testing.T, ifaces kube.Interfaces, r collection.Schemas, sc st
 		Client:           ifaces,
 		StatusController: sc,
 	}
-	s := apiserver.New(o)
+	s := apiserver.New(nil, o)
 	if s == nil {
 		t.Fatal("Expected non nil source")
 	}

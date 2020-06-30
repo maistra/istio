@@ -109,7 +109,7 @@ func (w *watcher) dispatch(h event.Handler) {
 func (w *watcher) handleEvent(c event.Kind, obj interface{}) {
 	object, ok := obj.(metav1.Object)
 	if !ok {
-		if obj = tombstone.RecoverResource(obj); object != nil {
+		if object = tombstone.RecoverResource(obj); object == nil {
 			// Tombstone recovery failed.
 			scope.Source.Warnf("Unable to extract object for event: %v", obj)
 			return

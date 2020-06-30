@@ -67,6 +67,10 @@ func (p *Provider) initKnownAdapters() {
 						}
 					})
 
+				if p.mrc != nil {
+					p.mrc.Register(mlw)
+				}
+
 				informer := cache.NewSharedIndexInformer(mlw, &v1.Service{}, p.resyncPeriod,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
@@ -172,6 +176,10 @@ func (p *Provider) initKnownAdapters() {
 						}
 					})
 
+				if p.mrc != nil {
+					p.mrc.Register(mlw)
+				}
+
 				informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, p.resyncPeriod,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
@@ -217,6 +225,10 @@ func (p *Provider) initKnownAdapters() {
 						}
 					})
 
+				if p.mrc != nil {
+					p.mrc.Register(mlw)
+				}
+
 				informer := cache.NewSharedIndexInformer(mlw, &v1.Secret{}, p.resyncPeriod,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
@@ -260,6 +272,10 @@ func (p *Provider) initKnownAdapters() {
 							},
 						}
 					})
+
+				if p.mrc != nil {
+					p.mrc.Register(mlw)
+				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, p.resyncPeriod,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
@@ -316,6 +332,10 @@ func (p *Provider) initKnownAdapters() {
 							},
 						}
 					})
+
+				if p.mrc != nil {
+					p.mrc.Register(mlw)
+				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, p.resyncPeriod,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
@@ -400,6 +420,10 @@ func (p *Provider) initKnownAdapters() {
 						}
 					})
 
+				if p.mrc != nil {
+					p.mrc.Register(mlw)
+				}
+
 				informer := cache.NewSharedIndexInformer(mlw, &appsv1.Deployment{}, p.resyncPeriod,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
@@ -442,6 +466,10 @@ func (p *Provider) initKnownAdapters() {
 							},
 						}
 					})
+
+				if p.mrc != nil {
+					p.mrc.Register(mlw)
+				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, p.resyncPeriod,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})

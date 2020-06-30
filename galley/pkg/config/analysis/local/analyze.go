@@ -286,7 +286,7 @@ func (sa *SourceAnalyzer) AddRunningKubeSource(k kube.Interfaces) {
 		}
 	}
 
-	src := apiserverNew(apiserver.Options{
+	src := apiserverNew(nil, apiserver.Options{
 		Client:  k,
 		Schemas: sa.kubeResources,
 	})
