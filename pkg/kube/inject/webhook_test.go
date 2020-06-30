@@ -625,6 +625,11 @@ func TestWebhookInject(t *testing.T) {
 			templateFile: "TestWebhookInject_injectorAnnotations_template.yaml",
 		},
 		{
+			inputFile:    "TestWebhookInject_podRedirectAnnot.yaml",
+			wantFile:     "TestWebhookInject_podRedirectAnnot.patch",
+			templateFile: "TestWebhookInject_podRedirectAnnot_template.yaml",
+		},
+		{
 			inputFile: "TestWebhookInject_mtls_not_ready.yaml",
 			wantFile:  "TestWebhookInject_mtls_not_ready.patch",
 		},
@@ -858,6 +863,7 @@ func createTestWebhook(t testing.TB, config *Config, values string) (*Webhook, f
 		sidecarTemplateVersion: "unit-test-fake-version",
 		meshConfig:             &m,
 		valuesConfig:           values,
+		injectPodRedirectAnnot: true,
 	}, cleanup
 }
 
