@@ -28,15 +28,17 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"istio.io/api/label"
+
 	"istio.io/api/operator/v1alpha1"
+	"istio.io/pkg/version"
+
 	valuesv1alpha1 "istio.io/istio/operator/pkg/apis/istio/v1alpha1"
 	"istio.io/istio/operator/pkg/name"
 	"istio.io/istio/operator/pkg/object"
 	"istio.io/istio/operator/pkg/util"
 	"istio.io/istio/operator/pkg/util/clog"
 	"istio.io/istio/operator/pkg/util/progress"
-	"istio.io/istio/pilot/pkg/model"
-	"istio.io/pkg/version"
 )
 
 // HelmReconciler reconciles resources rendered by a set of helm charts.
@@ -181,11 +183,7 @@ func (h *HelmReconciler) processRecursive(manifests name.ManifestMap) *v1alpha1.
 
 // Delete resources associated with the custom resource instance
 func (h *HelmReconciler) Delete() error {
-	manifestMap, err := h.RenderCharts()
-	if err != nil {
-		return err
-	}
-	return h.Prune(manifestMap, true)
+	return h.Prune(nil, true)
 }
 
 // SetStatusBegin updates the status field on the IstioOperator instance before reconciling.
@@ -278,10 +276,15 @@ func (h *HelmReconciler) getCoreOwnerLabels() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	crNamespace, err := h.getCRNamespace()
+	if err != nil {
+		return nil, err
+	}
 	labels := make(map[string]string)
 
 	labels[operatorLabelStr] = operatorReconcileStr
-	labels[owningResourceKey] = crName
+	labels[OwningResourceName] = crName
+	labels[OwningResourceNamespace] = crNamespace
 	labels[istioVersionLabelStr] = version.Info.Version
 
 	return labels, nil
@@ -302,10 +305,10 @@ func (h *HelmReconciler) addComponentLabels(coreLabels map[string]string, compon
 		if revision == "" {
 			revision = "default"
 		}
-		labels[model.RevisionLabel] = revision
+		labels[label.IstioRev] = revision
 	}
 
-	labels[istioComponentLabelStr] = componentName
+	labels[IstioComponentLabelStr] = componentName
 
 	return labels
 }
@@ -370,7 +373,7 @@ func (h *HelmReconciler) getCRNamespace() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return objAccessor.GetName(), nil
+	return objAccessor.GetNamespace(), nil
 }
 
 // getClient returns the kubernetes client associated with this HelmReconciler
