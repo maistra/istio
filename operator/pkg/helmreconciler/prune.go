@@ -30,14 +30,6 @@ import (
 	"istio.io/istio/operator/pkg/util"
 )
 
-const (
-	// MetadataNamespace is the namespace for mesh metadata (labels, annotations)
-	MetadataNamespace = "install.operator.istio.io"
-
-	// OwnerNameKey represents the name of the owner to which the resource relates
-	OwnerNameKey = MetadataNamespace + "/owner-name"
-)
-
 var (
 	// ordered by which types should be deleted, first to last
 	namespacedResources = []schema.GroupVersionKind{
@@ -105,12 +97,12 @@ func (h *HelmReconciler) runForAllTypes(callback func(labels map[string]string, 
 		// First, we collect all objects for the provided GVK
 		objects := &unstructured.UnstructuredList{}
 		objects.SetGroupVersionKind(gvk)
-		componentRequirement, err := klabels.NewRequirement(istioComponentLabelStr, selection.Exists, nil)
+		componentRequirement, err := klabels.NewRequirement(IstioComponentLabelStr, selection.Exists, nil)
 		if err != nil {
 			return err
 		}
 		selector = selector.Add(*componentRequirement)
-		if err := h.client.List(context.TODO(), objects, client.MatchingLabelsSelector{Selector: selector}, client.InNamespace(h.iop.Namespace)); err != nil {
+		if err := h.client.List(context.TODO(), objects, client.MatchingLabelsSelector{Selector: selector}); err != nil {
 			// we only want to retrieve resources clusters
 			scope.Warnf("retrieving resources to prune type %s: %s not found", gvk.String(), err)
 			continue

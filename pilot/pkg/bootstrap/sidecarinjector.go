@@ -22,8 +22,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 
 	"istio.io/istio/pilot/pkg/features"
-
-	"istio.io/istio/pkg/util"
+	"istio.io/istio/pkg/webhooks"
 
 	"istio.io/istio/pkg/kube/inject"
 	"istio.io/pkg/log"
@@ -79,7 +78,7 @@ func (s *Server) initSidecarInjector(args *PilotArgs) error {
 			if args.TLSOptions.CaCertFile != "" {
 				caBundlePath = args.TLSOptions.CaCertFile
 			}
-			util.PatchCertLoop(features.InjectionWebhookConfigName.Get(), webhookName, caBundlePath, s.kubeClient, stop)
+			webhooks.PatchCertLoop(features.InjectionWebhookConfigName.Get(), webhookName, caBundlePath, s.kubeClient, stop)
 			return nil
 		})
 	}

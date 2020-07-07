@@ -31,6 +31,8 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/howeyc/fsnotify"
 
+	"istio.io/api/label"
+
 	"istio.io/api/annotation"
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/cmd/pilot-agent/status"
@@ -225,6 +227,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	var mux *http.ServeMux
 	if p.Mux != nil {
 		p.Mux.HandleFunc("/inject", wh.serveInject)
+		p.Mux.HandleFunc("/inject/", wh.serveInject)
 		mux = p.Mux
 	} else {
 		wh.server = &http.Server{
@@ -234,6 +237,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		}
 		mux = http.NewServeMux()
 		mux.HandleFunc("/inject", wh.serveInject)
+		mux.HandleFunc("/inject/", wh.serveInject)
 		wh.server.Handler = mux
 	}
 
@@ -621,9 +625,9 @@ func createPatch(pod *corev1.Pod, prevStatus *SidecarInjectionStatus, revision s
 
 	canonicalSvc, canonicalRev := extractCanonicalServiceLabels(pod.Labels, workloadName)
 	patch = append(patch, addLabels(pod.Labels, map[string]string{
-		model.TLSModeLabelName:                       model.IstioMutualTLSModeLabel,
+		label.TLSMode:                                model.IstioMutualTLSModeLabel,
 		model.IstioCanonicalServiceLabelName:         canonicalSvc,
-		model.RevisionLabel:                          revision,
+		label.IstioRev:                               revision,
 		model.IstioCanonicalServiceRevisionLabelName: canonicalRev})...)
 
 	if rewrite {
@@ -734,7 +738,7 @@ func toAdmissionResponse(err error) *v1beta1.AdmissionResponse {
 	return &v1beta1.AdmissionResponse{Result: &metav1.Status{Message: err.Error()}}
 }
 
-func (wh *Webhook) inject(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
+func (wh *Webhook) inject(ar *v1beta1.AdmissionReview, path string) *v1beta1.AdmissionResponse {
 	req := ar.Request
 	var pod corev1.Pod
 	if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
@@ -846,7 +850,7 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionRespons
 		proxyUID = &uid
 	}
 
-	spec, iStatus, err := InjectionData(wh.Config.Template, wh.valuesConfig, wh.sidecarTemplateVersion, typeMetadata, deployMeta, &pod.Spec, &pod.ObjectMeta, wh.meshConfig, *proxyUID) // nolint: lll
+	spec, iStatus, err := InjectionData(wh.Config.Template, wh.valuesConfig, wh.sidecarTemplateVersion, typeMetadata, deployMeta, &pod.Spec, &pod.ObjectMeta, wh.meshConfig, path, *proxyUID) // nolint: lll
 	if err != nil {
 		handleError(fmt.Sprintf("Injection data: err=%v spec=%v\n", err, iStatus))
 		return toAdmissionResponse(err)
@@ -1013,13 +1017,19 @@ func (wh *Webhook) serveInject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	path := ""
+	if r.URL != nil {
+		path = r.URL.Path
+	}
+
 	var reviewResponse *v1beta1.AdmissionResponse
 	ar := v1beta1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &ar); err != nil {
 		handleError(fmt.Sprintf("Could not decode body: %v", err))
 		reviewResponse = toAdmissionResponse(err)
 	} else {
-		reviewResponse = wh.inject(&ar)
+		log.Debugf("AdmissionRequest for path=%s\n", path)
+		reviewResponse = wh.inject(&ar, path)
 	}
 
 	response := v1beta1.AdmissionReview{}
