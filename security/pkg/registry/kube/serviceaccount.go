@@ -49,7 +49,8 @@ type ServiceAccountController struct {
 }
 
 // NewServiceAccountController returns a new ServiceAccountController
-func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry, mrc meshcontroller.MemberRollController) *ServiceAccountController {
+func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry,
+	mrc meshcontroller.MemberRollController) *ServiceAccountController {
 	c := &ServiceAccountController{
 		core: core,
 		reg:  reg,
