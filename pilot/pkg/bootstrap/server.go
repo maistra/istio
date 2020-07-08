@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"path"
 	"strconv"
 	"sync"
@@ -46,6 +45,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"istio.io/pkg/ctrlz"
+	"istio.io/pkg/env"
 	"istio.io/pkg/filewatcher"
 	"istio.io/pkg/log"
 	"istio.io/pkg/version"
@@ -177,7 +177,7 @@ func NewServer(args *PilotArgs) (*Server, error) {
 	}
 
 	if args.Config.ControllerOptions.WatchedNamespaces == "" {
-		appNamespace := os.Getenv("APP_NAMESPACE")
+		appNamespace := env.RegisterStringVar("APP_NAMESPACE", "", "").Get()
 		if appNamespace == "" {
 			appNamespace = meta_v1.NamespaceAll
 		}

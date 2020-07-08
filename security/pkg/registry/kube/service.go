@@ -21,10 +21,10 @@ import (
 
 	"istio.io/api/annotation"
 	"istio.io/istio/pkg/listwatch"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/security/pkg/registry"
 	"istio.io/pkg/log"
 
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

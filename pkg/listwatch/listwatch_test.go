@@ -456,7 +456,7 @@ func TestMultiWatchDoesNotDeadlock(t *testing.T) {
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if namespace == "4" {
-					return nil, errors.New("Some error occurred")
+					return nil, errors.New("some error occurred")
 				}
 				w := watch.NewFake()
 				ws[namespace] = w
