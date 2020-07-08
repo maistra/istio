@@ -108,8 +108,7 @@ func incrementEvent(kind, event string) {
 }
 
 const (
-	podLocalitySourceNode = "node"
-	podLocalitySourcePod  = "pod"
+	podLocalitySourcePod = "pod"
 )
 
 // Options stores the configurable attributes of a Controller.
@@ -684,8 +683,8 @@ type podLocalitySource struct {
 }
 
 func (p *podLocalitySource) GetPodLocality(pod *v1.Pod) string {
-	region, _ := pod.Labels[NodeRegionLabel]
-	zone, _ := pod.Labels[NodeZoneLabel]
+	region := pod.Labels[NodeRegionLabel]
+	zone := pod.Labels[NodeZoneLabel]
 	if region == "" && zone == "" {
 		return ""
 	}

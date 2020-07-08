@@ -476,8 +476,10 @@ func TestController_getPodAZ_FromPod(t *testing.T) {
 		{
 			name: "should return correct az for given address",
 			pods: map[string]*coreV1.Pod{
-				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{NodeZoneLabel: "zone1", NodeRegionLabel: "region1", "app": "prod-app"}, map[string]string{}),
-				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{NodeZoneLabel: "zone2", NodeRegionLabel: "region2", "app": "prod-app"}, map[string]string{}),
+				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{NodeZoneLabel: "zone1", NodeRegionLabel: "region1", "app": "prod-app"},
+					map[string]string{}),
+				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{NodeZoneLabel: "zone2", NodeRegionLabel: "region2", "app": "prod-app"},
+					map[string]string{}),
 			},
 			wantAZ: map[string]string{
 				"pod1": "region1/zone1",
