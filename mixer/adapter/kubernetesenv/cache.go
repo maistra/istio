@@ -172,24 +172,23 @@ func (c *controllerImpl) Workload(pod *v1.Pod) workload {
 
 func (c *controllerImpl) rootController(obj *metav1.ObjectMeta) (metav1.OwnerReference, bool) {
 	for _, ref := range obj.OwnerReferences {
-		if *ref.Controller {
-			switch ref.Kind {
-			case "ReplicaSet":
-				indexer := c.rs.GetIndexer()
-				if rs, found := c.objectMeta(indexer, key(obj.Namespace, ref.Name)); found {
-					if rootRef, ok := c.rootController(rs); ok {
-						return rootRef, true
-					}
-				}
-			case "ReplicationController":
-				indexer := c.rc.GetIndexer()
-				if rc, found := c.objectMeta(indexer, key(obj.Namespace, ref.Name)); found {
-					if rootRef, ok := c.rootController(rc); ok {
-						return rootRef, true
-					}
+		switch ref.Kind {
+		case "ReplicaSet":
+			indexer := c.rs.GetIndexer()
+			if rs, found := c.objectMeta(indexer, key(obj.Namespace, ref.Name)); found {
+				if rootRef, ok := c.rootController(rs); ok {
+					return rootRef, true
 				}
 			}
-
+		case "ReplicationController":
+			indexer := c.rc.GetIndexer()
+			if rc, found := c.objectMeta(indexer, key(obj.Namespace, ref.Name)); found {
+				if rootRef, ok := c.rootController(rc); ok {
+					return rootRef, true
+				}
+			}
+		}
+		if (ref.Controller != nil && *ref.Controller) {
 			return ref, true
 		}
 	}

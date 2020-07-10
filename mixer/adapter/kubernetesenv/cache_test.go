@@ -90,6 +90,28 @@ func TestClusterInfoCache_Workload_ReplicationController(t *testing.T) {
 				}},
 			},
 		},
+		&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-pod2",
+				OwnerReferences: []metav1.OwnerReference{{
+					Kind:       "ReplicationController",
+					Name:       "test-rc2",
+				}},
+			},
+			Status: v1.PodStatus{PodIP: "10.1.10.2"},
+		},
+		&v1.ReplicationController{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-rc2",
+				OwnerReferences: []metav1.OwnerReference{{
+					Controller: &controller,
+					Kind:       "DeploymentConfig",
+					Name:       "test-dc2",
+				}},
+			},
+		},
 	)
 
 	tests := []struct {
@@ -98,6 +120,7 @@ func TestClusterInfoCache_Workload_ReplicationController(t *testing.T) {
 		workload string
 	}{
 		{"Workload from ReplicationController", "default/test-pod", "test-dc"},
+		{"Workload from ReplicationController with nil Controller", "default/test-pod2", "test-dc2"},
 	}
 
 	for _, v := range tests {
