@@ -17,9 +17,10 @@
 package v1
 
 import (
+	rest "k8s.io/client-go/rest"
+
 	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	"istio.io/istio/pkg/servicemesh/client/clientset/versioned/scheme"
-	rest "k8s.io/client-go/rest"
 )
 
 type MaistraV1Interface interface {

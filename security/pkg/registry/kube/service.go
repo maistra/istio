@@ -24,13 +24,14 @@ import (
 	"istio.io/istio/security/pkg/registry"
 	"istio.io/pkg/log"
 
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
+
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
 )
 
 // ServiceController monitors the service definition changes in a namespace. If a
