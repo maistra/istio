@@ -22,7 +22,7 @@ SHELL := /bin/bash -o pipefail
 VERSION ?= 1.6-dev
 
 # Base version of Istio image to use
-BASE_VERSION ?= 1.6-dev.4
+BASE_VERSION ?= 1.6-dev.5
 
 export GO111MODULE ?= on
 export GOPROXY ?= https://proxy.golang.org
@@ -357,7 +357,7 @@ refresh-goldens:
 
 update-golden: refresh-goldens
 
-gen: go-gen mirror-licenses format update-crds operator-proto sync-configs-from-istiod gen-kustomize update-golden
+gen: mod-download-go go-gen mirror-licenses format update-crds operator-proto sync-configs-from-istiod gen-kustomize update-golden
 
 check-no-modify:
 	@bin/check_no_modify.sh
