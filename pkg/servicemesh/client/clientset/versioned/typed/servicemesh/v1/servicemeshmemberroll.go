@@ -20,12 +20,13 @@ import (
 	"context"
 	"time"
 
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
-	scheme "istio.io/istio/pkg/servicemesh/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
+
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	scheme "istio.io/istio/pkg/servicemesh/client/clientset/versioned/scheme"
 )
 
 // ServiceMeshMemberRollsGetter has a method to return a ServiceMeshMemberRollInterface.
