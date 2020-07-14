@@ -165,7 +165,7 @@ function setup_kind_cluster() {
     exit 1
   fi
 
-  KUBECONFIG="$(kind get kubeconfig-path --name="${NAME}")"
+  KUBECONFIG="$(kind get kubeconfig --name="${NAME}")"
   export KUBECONFIG
 
   kubectl apply -f ./prow/config/metrics
