@@ -91,7 +91,7 @@ test.integration.%.local: | $(JUNIT_REPORT)
 	2>&1 | tee >($(JUNIT_REPORT) > $(JUNIT_UNIT_TEST_XML))
 
 # TODO: Exclude examples and qualification since they are very flaky.
-TEST_PACKAGES = $(shell go list ./tests/integration/... | grep -v /qualification | grep -v /examples)
+TEST_PACKAGES = $(shell go list ./tests/integration/... | grep -v /qualification | grep -v /examples | grep -v /istioio)
 
 # Generate presubmit integration test targets for each component in kubernetes environment
 test.integration.%.kube.presubmit: istioctl | $(JUNIT_REPORT)

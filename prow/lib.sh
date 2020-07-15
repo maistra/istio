@@ -64,7 +64,7 @@ function kind_load_images() {
   for i in {1..3}; do
     # Archived local images and load it into KinD's docker daemon
     # Kubernetes in KinD can only access local images from its docker daemon.
-    docker images "${HUB}/*:${TAG}" --format '{{.Repository}}:{{.Tag}}' | xargs -n1 kind --loglevel debug --name "${NAME}" load docker-image && break
+    docker images "${HUB}/*:${TAG}" --format '{{.Repository}}:{{.Tag}}' | xargs -n1 kind -v9 --name "${NAME}" load docker-image && break
     echo "Attempt ${i} to load images failed, retrying in 5s..."
     sleep 5
 	done
@@ -73,7 +73,7 @@ function kind_load_images() {
   # We should still load non-variant images as well for things like `app` which do not use variants
   if [[ "${VARIANT:-}" != "" ]]; then
     for i in {1..3}; do
-      docker images "${HUB}/*:${TAG}-${VARIANT}" --format '{{.Repository}}:{{.Tag}}' | xargs -n1 kind --loglevel debug --name "${NAME}" load docker-image && break
+      docker images "${HUB}/*:${TAG}-${VARIANT}" --format '{{.Repository}}:{{.Tag}}' | xargs -n1 kind -v9 --name "${NAME}" load docker-image && break
       echo "Attempt ${i} to load images failed, retrying in 5s..."
       sleep 5
     done
@@ -122,10 +122,10 @@ function setup_e2e_cluster() {
 function cleanup_kind_cluster() {
   NAME="${1}"
   echo "Test exited with exit code $?."
-  kind export logs --name "${NAME}" "${ARTIFACTS}/kind" --loglevel debug || true
+  kind export logs --name "${NAME}" "${ARTIFACTS}/kind" -v9 || true
   if [[ -z "${SKIP_CLEANUP:-}" ]]; then
     echo "Cleaning up kind cluster"
-    kind delete cluster --name "${NAME}" --loglevel debug || true
+    kind delete cluster --name "${NAME}" -v9 || true
   fi
 }
 
@@ -160,13 +160,10 @@ function setup_kind_cluster() {
   fi
 
   # Create KinD cluster
-  if ! (kind create cluster --name="${NAME}" --config "${CONFIG}" --loglevel debug --retain --image "${IMAGE}" --wait=60s); then
+  if ! (kind create cluster --name="${NAME}" --config "${CONFIG}" -v9 --retain --image "${IMAGE}" --wait=60s); then
     echo "Could not setup KinD environment. Something wrong with KinD setup. Exporting logs."
     exit 1
   fi
-
-  KUBECONFIG="$(kind get kubeconfig-path --name="${NAME}")"
-  export KUBECONFIG
 
   kubectl apply -f ./prow/config/metrics
 }
