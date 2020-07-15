@@ -770,6 +770,11 @@ func TestHelmInject(t *testing.T) {
 			inputFile: "hello-mtls-not-ready.yaml",
 			wantFile:  "hello-mtls-not-ready.yaml.injected",
 		},
+		{
+			// Verifies that the maistra env annotation is honoured.
+			inputFile: "maistra_env_annotations.yaml",
+			wantFile:  "maistra_env_annotations.yaml.injected",
+		},
 	}
 
 	for ci, c := range cases {
