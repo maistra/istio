@@ -521,6 +521,68 @@ func TestOutboundListenerForHeadlessServices(t *testing.T) {
 	}
 }
 
+func TestOutboundListenerForUnsupportedHeadlessServices(t *testing.T) {
+	_ = os.Setenv("PILOT_ENABLE_FALLTHROUGH_ROUTE", "false")
+
+	defer func() { _ = os.Unsetenv("PILOT_ENABLE_FALLTHROUGH_ROUTE") }()
+
+	unsupportedSvc1 := buildServiceWithNamespacePort("mysql-server-mtls.mysql0.svc.cluster.local", "mysql0", 4567, protocol.Unsupported, tnow)
+	unsupportedSvc1.Attributes.ServiceRegistry = string(serviceregistry.KubernetesRegistry)
+	unsupportedSvc1.Resolution = model.Passthrough
+
+	unsupportedSvc2 := buildServiceWithNamespacePort("mysql-server-mtls.mysql1.svc.cluster.local", "mysql1", 4567, protocol.Unsupported, tnow)
+	unsupportedSvc2.Attributes.ServiceRegistry = string(serviceregistry.KubernetesRegistry)
+	unsupportedSvc2.Resolution = model.Passthrough
+	unsupportedServices := []*model.Service{unsupportedSvc1, unsupportedSvc2}
+
+	p := &fakePlugin{}
+	tests := []struct {
+		name                      string
+		instances                 []*model.ServiceInstance
+		port                      uint32
+		numListenersOnServicePort int
+	}{
+		{
+			name: "Create a listener per unsupported instance",
+			instances: []*model.ServiceInstance{
+				buildServiceInstance(unsupportedServices[0], "10.10.10.10"),
+				buildServiceInstance(unsupportedServices[1], "11.11.11.11"),
+			},
+			port: 4567,
+			numListenersOnServicePort: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configgen := NewConfigGenerator([]plugin.Plugin{p})
+
+			env := buildListenerEnv(unsupportedServices)
+			serviceDiscovery := new(fakes.ServiceDiscovery)
+			serviceDiscovery.ServicesReturns(unsupportedServices, nil)
+			serviceDiscovery.InstancesByPortReturns(tt.instances, nil)
+			env.ServiceDiscovery = serviceDiscovery
+			if err := env.PushContext.InitContext(&env, nil, nil); err != nil {
+				t.Errorf("Failed to initialize push context: %v", err)
+			}
+
+			proxy.SidecarScope = model.DefaultSidecarScopeForNamespace(env.PushContext, "not-default")
+			proxy.ServiceInstances = proxyInstances
+
+			listeners := configgen.buildSidecarOutboundListeners(&env, &proxy, env.PushContext)
+			listenersToCheck := make([]*xdsapi.Listener, 0)
+			for _, l := range listeners {
+				if l.Address.GetSocketAddress().GetPortValue() == tt.port {
+					listenersToCheck = append(listenersToCheck, l)
+				}
+			}
+
+			if len(listenersToCheck) != tt.numListenersOnServicePort {
+				t.Errorf("Expected %d listeners on service port %d, got %d", tt.numListenersOnServicePort, tt.port, len(listenersToCheck))
+			}
+		})
+	}
+}
+
 func TestInboundListenerConfig_HTTP(t *testing.T) {
 	for _, p := range []*model.Proxy{&proxy, &proxyHTTP10} {
 		// Add a service and verify it's config
@@ -1637,6 +1699,10 @@ func buildService(hostname string, ip string, protocol protocol.Instance, creati
 }
 
 func buildServiceWithPort(hostname string, port int, protocol protocol.Instance, creationTime time.Time) *model.Service {
+	return buildServiceWithNamespacePort(hostname, "default", port, protocol, creationTime)
+}
+
+func buildServiceWithNamespacePort(hostname, namespace string, port int, protocol protocol.Instance, creationTime time.Time) *model.Service {
 	return &model.Service{
 		CreationTime: creationTime,
 		Hostname:     host.Name(hostname),
@@ -1651,7 +1717,7 @@ func buildServiceWithPort(hostname string, port int, protocol protocol.Instance,
 		},
 		Resolution: model.Passthrough,
 		Attributes: model.ServiceAttributes{
-			Namespace: "default",
+			Namespace: namespace,
 		},
 	}
 }
