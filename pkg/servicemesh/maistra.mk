@@ -50,3 +50,11 @@ maistra-gen-k8s-client:
 	@$(lister_gen) --input-dirs $(kube_api_packages) --output-package $(kube_listers_package) -h $(kube_go_header_text)
 	@$(informer_gen) --input-dirs $(kube_api_packages) --versioned-clientset-package $(kube_clientset_package)/$(kube_clientset_name) --listers-package $(kube_listers_package) --output-package $(kube_informers_package) -h $(kube_go_header_text)
 	@$(move_generated)
+
+.PHONY: vendor
+vendor:
+	@echo "updating vendor"
+	@go mod vendor
+	@echo "done updating vendor"
+
+gen: vendor
