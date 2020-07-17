@@ -17,6 +17,7 @@ package v1alpha1
 import (
 	"crypto/sha1"
 	"fmt"
+	tls_features "istio.io/istio/pkg/features"
 
 	auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
 	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -335,6 +336,10 @@ func (a v1alpha1PolicyApplier) InboundFilterChain(sdsUdsPath string, meta *model
 			// include "istio", which would interfere with negotiation of the underlying
 			// protocol, e.g. HTTP/2.
 			AlpnProtocols: util.ALPNHttp,
+			TlsParams: &auth.TlsParameters{
+				TlsMinimumProtocolVersion: tls_features.TlsMinProtocolVersion.Get(),
+				TlsMaximumProtocolVersion: tls_features.TlsMaxProtocolVersion.Get(),
+			},
 		},
 		RequireClientCertificate: protovalue.BoolTrue,
 	}
