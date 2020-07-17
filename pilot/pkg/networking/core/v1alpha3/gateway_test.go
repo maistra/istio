@@ -15,6 +15,7 @@
 package v1alpha3
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
@@ -37,6 +38,24 @@ import (
 )
 
 func TestBuildGatewayListenerTlsContext(t *testing.T) {
+	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{})
+}
+
+func TestTlsProtocolVersionBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+	})
+}
+
+func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParameters) {
 	testCases := []struct {
 		name                  string
 		server                *networking.Server
@@ -55,6 +74,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: false,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
@@ -95,6 +115,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			sdsPath:               "unix:/var/run/sds/uds_path",
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -174,6 +195,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: true,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
@@ -205,6 +227,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: true,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -247,6 +270,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: true,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -293,6 +317,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: false,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
@@ -325,6 +350,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: true,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
@@ -360,6 +386,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: true,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -430,6 +457,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: true,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -500,6 +528,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			enableIngressSdsAgent: true,
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -580,6 +609,24 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 }
 
 func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	runTestCreateGatewayHTTPFilterChainOpts(t, &auth.TlsParameters{})
+}
+
+func TestTlsProtocolVersionCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestCreateGatewayHTTPFilterChainOpts(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+	})
+}
+
+func runTestCreateGatewayHTTPFilterChainOpts(t *testing.T, tlsParam *auth.TlsParameters) {
 	testCases := []struct {
 		name      string
 		node      *pilot_model.Proxy
@@ -637,6 +684,7 @@ func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
 				tlsContext: &auth.DownstreamTlsContext{
 					RequireClientCertificate: proto.BoolTrue,
 					CommonTlsContext: &auth.CommonTlsContext{
+						TlsParams: tlsParam,
 						TlsCertificates: []*auth.TlsCertificate{
 							{
 								CertificateChain: &core.DataSource{
@@ -699,6 +747,7 @@ func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
 				tlsContext: &auth.DownstreamTlsContext{
 					RequireClientCertificate: proto.BoolTrue,
 					CommonTlsContext: &auth.CommonTlsContext{
+						TlsParams: tlsParam,
 						TlsCertificates: []*auth.TlsCertificate{
 							{
 								CertificateChain: &core.DataSource{
@@ -761,6 +810,7 @@ func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
 				tlsContext: &auth.DownstreamTlsContext{
 					RequireClientCertificate: proto.BoolTrue,
 					CommonTlsContext: &auth.CommonTlsContext{
+						TlsParams: tlsParam,
 						TlsCertificates: []*auth.TlsCertificate{
 							{
 								CertificateChain: &core.DataSource{

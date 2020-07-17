@@ -738,8 +738,27 @@ func TestBuildAuthNFilter(t *testing.T) {
 }
 
 func TestOnInboundFilterChains(t *testing.T) {
+	runTestOnInboundFilterChains(t, &auth.TlsParameters{})
+}
+
+func TestTlsProtocolVersionOnInboundFilterChains(t *testing.T) {
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestOnInboundFilterChains(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+	})
+}
+
+func runTestOnInboundFilterChains(t *testing.T, tlsParam *auth.TlsParameters) {
 	tlsContext := &auth.DownstreamTlsContext{
 		CommonTlsContext: &auth.CommonTlsContext{
+			TlsParams: tlsParam,
 			TlsCertificates: []*auth.TlsCertificate{
 				{
 					CertificateChain: &core.DataSource{
@@ -882,6 +901,7 @@ func TestOnInboundFilterChains(t *testing.T) {
 				{
 					TLSContext: &auth.DownstreamTlsContext{
 						CommonTlsContext: &auth.CommonTlsContext{
+							TlsParams: tlsParam,
 							TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 								constructSDSConfig(authn_model.SDSDefaultResourceName, "/tmp/sdsuds.sock"),
 							},
@@ -921,6 +941,7 @@ func TestOnInboundFilterChains(t *testing.T) {
 				{
 					TLSContext: &auth.DownstreamTlsContext{
 						CommonTlsContext: &auth.CommonTlsContext{
+							TlsParams: tlsParam,
 							TlsCertificates: []*auth.TlsCertificate{
 								{
 									CertificateChain: &core.DataSource{

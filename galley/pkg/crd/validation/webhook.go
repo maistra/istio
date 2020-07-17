@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	tls_features "istio.io/istio/pkg/features"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -282,7 +283,11 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	}
 
 	// mtls disabled because apiserver webhook cert usage is still TBD.
-	wh.server.TLSConfig = &tls.Config{GetCertificate: wh.getCert}
+	wh.server.TLSConfig = &tls.Config{
+		GetCertificate: wh.getCert,
+		MinVersion: tls_features.GetGoTlsProtocolVersion(tls_features.TlsMinProtocolVersion.Get()),
+		MaxVersion: tls_features.GetGoTlsProtocolVersion(tls_features.TlsMaxProtocolVersion.Get()),
+	}
 	h := http.NewServeMux()
 	h.HandleFunc("/admitpilot", wh.serveAdmitPilot)
 	h.HandleFunc("/admitmixer", wh.serveAdmitMixer)

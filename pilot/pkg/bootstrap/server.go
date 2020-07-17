@@ -20,6 +20,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	tls_features "istio.io/istio/pkg/features"
 	"net"
 	"net/http"
 	"net/url"
@@ -1295,6 +1296,8 @@ func (s *Server) initSecureGrpcServer(options *istiokeepalive.Options) error {
 			NextProtos: []string{"h2", "http/1.1"},
 			ClientAuth: tls.RequireAndVerifyClientCert,
 			ClientCAs:  caCertPool,
+			MinVersion: tls_features.GetGoTlsProtocolVersion(tls_features.TlsMinProtocolVersion.Get()),
+			MaxVersion: tls_features.GetGoTlsProtocolVersion(tls_features.TlsMaxProtocolVersion.Get()),
 		},
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.ProtoMajor == 2 && strings.HasPrefix(
