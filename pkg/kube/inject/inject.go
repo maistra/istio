@@ -584,6 +584,7 @@ func InjectionData(sidecarTemplate, valuesConfig, version string, typeMetadata *
 		"directory":           directory,
 		"contains":            flippedContains,
 		"toLower":             strings.ToLower,
+		"appendMultusNetwork": appendMultusNetwork,
 	}
 
 	// Need to use FuncMap and SidecarTemplateData context
@@ -988,6 +989,19 @@ func getAnnotation(meta metav1.ObjectMeta, name string, defaultValue interface{}
 		value = fmt.Sprint(defaultValue)
 	}
 	return value
+}
+
+func appendMultusNetwork(existingValue, istioCniNetwork string) string {
+	if existingValue == "" {
+		return istioCniNetwork
+	}
+	i := strings.LastIndex(existingValue, "]")
+	isJSON := i != -1
+	if isJSON {
+		return existingValue[0:i] + fmt.Sprintf(`, {"name": "%s"}`, istioCniNetwork) + existingValue[i:]
+	} else {
+		return existingValue + ", " + istioCniNetwork
+	}
 }
 
 func excludeInboundPort(port interface{}, excludedInboundPorts string) string {
