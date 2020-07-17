@@ -135,6 +135,19 @@ func TestIntoResourceFile(t *testing.T) {
 			enableCni:                    true,
 			istioCniNetwork:              "istio-cni-network",
 		},
+		// verify cni network (JSON)
+		{
+			in:                           "hello.yaml.cni_network_json",
+			want:                         "hello.yaml.cni_network_json.injected",
+			includeIPRanges:              DefaultIncludeIPRanges,
+			includeInboundPorts:          DefaultIncludeInboundPorts,
+			statusPort:                   DefaultStatusPort,
+			readinessInitialDelaySeconds: DefaultReadinessInitialDelaySeconds,
+			readinessPeriodSeconds:       DefaultReadinessPeriodSeconds,
+			readinessFailureThreshold:    DefaultReadinessFailureThreshold,
+			enableCni:                    true,
+			istioCniNetwork:              "istio-cni-network",
+		},
 		//verifies that the sidecar will not be injected again for an injected yaml
 		{
 			in:                           "hello.yaml.injected",
@@ -920,6 +933,61 @@ func TestSkipUDPPorts(t *testing.T) {
 				t.Fatalf("unexpect ports result for case %d: expect %v, got %v", i, expectPorts, ports)
 			}
 		}
+	}
+}
+
+func TestAppendMultusNetwork(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "empty",
+			in:   "",
+			want: "istio-cni",
+		},
+		{
+			name: "flat-single",
+			in:   "macvlan-conf-1",
+			want: "macvlan-conf-1, istio-cni",
+		},
+		{
+			name: "flat-multiple",
+			in:   "macvlan-conf-1, macvlan-conf-2",
+			want: "macvlan-conf-1, macvlan-conf-2, istio-cni",
+		},
+		{
+			name: "json-single",
+			in:   `[{"name": "macvlan-conf-1"}]`,
+			want: `[{"name": "macvlan-conf-1"}, {"name": "istio-cni"}]`,
+		},
+		{
+			name: "json-multiple",
+			in:   `[{"name": "macvlan-conf-1"}, {"name": "macvlan-conf-2"}]`,
+			want: `[{"name": "macvlan-conf-1"}, {"name": "macvlan-conf-2"}, {"name": "istio-cni"}]`,
+		},
+		{
+			name: "json-multiline",
+			in: `[
+                   {"name": "macvlan-conf-1"},
+                   {"name": "macvlan-conf-2"}
+                   ]`,
+			want: `[
+                   {"name": "macvlan-conf-1"},
+                   {"name": "macvlan-conf-2"}
+                   , {"name": "istio-cni"}]`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actual := appendMultusNetwork(tc.in, "istio-cni")
+			if actual != tc.want {
+				t.Fatalf("Unexpected result.\nExpected:\n%v\nActual:\n%v", tc.want, actual)
+			}
+		})
 	}
 }
 
