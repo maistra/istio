@@ -71,8 +71,8 @@ ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_DIR}/envoy_bootstrap_v2.json: ${ISTIO_ENVOY_BOOTS
 	cp ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_PATH} ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_DIR}/envoy_bootstrap_v2.json
 
 # rule for wasm extensions.
-$(ISTIO_ENVOY_LINUX_RELEASE_DIR)/stats-filter.wasm: init
-$(ISTIO_ENVOY_LINUX_RELEASE_DIR)/metadata-exchange-filter.wasm: init
+#$(ISTIO_ENVOY_LINUX_RELEASE_DIR)/stats-filter.wasm: init
+#$(ISTIO_ENVOY_LINUX_RELEASE_DIR)/metadata-exchange-filter.wasm: init
 
 # Default proxy image.
 docker.proxyv2: BUILD_PRE=&& chmod 755 envoy pilot-agent
