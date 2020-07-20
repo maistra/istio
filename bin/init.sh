@@ -208,8 +208,7 @@ else
   ISTIO_ENVOY_NATIVE_PATH=${ISTIO_ENVOY_LINUX_RELEASE_PATH}
 fi
 
-# Donwload WebAssembly plugin files
-# BAVERY_TODO: Re-enable WASM in Maistra-1475
+# Because we separate Istio and proxy builds, we don't need to have these files
 #WASM_RELEASE_DIR=${ISTIO_ENVOY_LINUX_RELEASE_DIR}
 #for plugin in stats metadata_exchange
 #do
