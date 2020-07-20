@@ -209,12 +209,13 @@ else
 fi
 
 # Donwload WebAssembly plugin files
-WASM_RELEASE_DIR=${ISTIO_ENVOY_LINUX_RELEASE_DIR}
-for plugin in stats metadata_exchange
-do
-  FILTER_WASM_URL="${ISTIO_ENVOY_BASE_URL}/${plugin}-${ISTIO_ENVOY_VERSION}.wasm"
-  download_wasm_if_necessary "${FILTER_WASM_URL}" "${WASM_RELEASE_DIR}"/"${plugin//_/-}"-filter.wasm
-done
+# BAVERY_TODO: Re-enable WASM in Maistra-1475
+#WASM_RELEASE_DIR=${ISTIO_ENVOY_LINUX_RELEASE_DIR}
+#for plugin in stats metadata_exchange
+#do
+#  FILTER_WASM_URL="${ISTIO_ENVOY_BASE_URL}/${plugin}-${ISTIO_ENVOY_VERSION}.wasm"
+#  download_wasm_if_necessary "${FILTER_WASM_URL}" "${WASM_RELEASE_DIR}"/"${plugin//_/-}"-filter.wasm
+#done
 
 # Copy native envoy binary to ISTIO_OUT
 echo "Copying ${ISTIO_ENVOY_NATIVE_PATH} to ${ISTIO_OUT}/envoy"
