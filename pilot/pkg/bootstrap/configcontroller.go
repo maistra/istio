@@ -36,6 +36,7 @@ import (
 	"istio.io/istio/pilot/pkg/config/kube/crdclient"
 	"istio.io/istio/pilot/pkg/config/kube/gateway"
 	"istio.io/istio/pilot/pkg/config/kube/ingress"
+	"istio.io/istio/pilot/pkg/config/kube/ior"
 	"istio.io/istio/pilot/pkg/config/memory"
 	configmonitor "istio.io/istio/pilot/pkg/config/monitor"
 	"istio.io/istio/pilot/pkg/features"
@@ -122,6 +123,10 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 
 	// Create the config store.
 	s.environment.IstioConfigStore = model.MakeIstioStore(s.configController)
+
+	if features.EnableIOR {
+		ior.Register(s.kubeClient, s.configController, args.Namespace)
+	}
 
 	// Defer starting the controller until after the service is created.
 	s.addStartFunc(func(stop <-chan struct{}) error {
