@@ -201,8 +201,8 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	// mtls disabled because apiserver webhook cert usage is still TBD.
 	wh.server.TLSConfig = &tls.Config{
 		GetCertificate: wh.getCert,
-		MinVersion: tls_features.GetGoTlsProtocolVersion(tls_features.TlsMinProtocolVersion.Get()),
-		MaxVersion: tls_features.GetGoTlsProtocolVersion(tls_features.TlsMaxProtocolVersion.Get()),
+		MinVersion: tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+		MaxVersion: tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
 	}
 	h := http.NewServeMux()
 	h.HandleFunc("/inject", wh.serveInject)

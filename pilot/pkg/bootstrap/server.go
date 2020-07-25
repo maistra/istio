@@ -1296,8 +1296,8 @@ func (s *Server) initSecureGrpcServer(options *istiokeepalive.Options) error {
 			NextProtos: []string{"h2", "http/1.1"},
 			ClientAuth: tls.RequireAndVerifyClientCert,
 			ClientCAs:  caCertPool,
-			MinVersion: tls_features.GetGoTlsProtocolVersion(tls_features.TlsMinProtocolVersion.Get()),
-			MaxVersion: tls_features.GetGoTlsProtocolVersion(tls_features.TlsMaxProtocolVersion.Get()),
+			MinVersion: tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+			MaxVersion: tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
 		},
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.ProtoMajor == 2 && strings.HasPrefix(
