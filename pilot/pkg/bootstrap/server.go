@@ -1293,11 +1293,12 @@ func (s *Server) initSecureGrpcServer(options *istiokeepalive.Options) error {
 				// privacy
 				return nil
 			},
-			NextProtos: []string{"h2", "http/1.1"},
-			ClientAuth: tls.RequireAndVerifyClientCert,
-			ClientCAs:  caCertPool,
-			MinVersion: tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
-			MaxVersion: tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+			NextProtos:   []string{"h2", "http/1.1"},
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    caCertPool,
+			MinVersion:   tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+			MaxVersion:   tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+			CipherSuites: tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
 		},
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.ProtoMajor == 2 && strings.HasPrefix(
