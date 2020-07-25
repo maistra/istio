@@ -20,22 +20,22 @@ var (
 	)
 )
 
-type tlsProtocolVersionVar struct {
+type TlsProtocolVersionVar struct {
 	env.StringVar
 }
 
-func RegisterTlsProtocolVersionVar(name string, defaultValue string, description string) tlsProtocolVersionVar {
+func RegisterTlsProtocolVersionVar(name string, defaultValue string, description string) TlsProtocolVersionVar {
 	v := env.RegisterStringVar(name, defaultValue, description)
-	return tlsProtocolVersionVar{v}
+	return TlsProtocolVersionVar{v}
 }
 
-func (v tlsProtocolVersionVar) Get() auth.TlsParameters_TlsProtocol {
+func (v *TlsProtocolVersionVar) Get() auth.TlsParameters_TlsProtocol {
 	version, _ := v.Lookup()
 	return auth.TlsParameters_TlsProtocol(auth.TlsParameters_TlsProtocol_value[version])
 }
 
-func GetGoTlsProtocolVersion(tlsVersion auth.TlsParameters_TlsProtocol) uint16 {
-	switch tlsVersion {
+func (v TlsProtocolVersionVar) GetGoTlsProtocolVersion() uint16 {
+	switch v.Get() {
 	case auth.TlsParameters_TLSv1_0:
 		return tls.VersionTLS10
 	case auth.TlsParameters_TLSv1_1:
