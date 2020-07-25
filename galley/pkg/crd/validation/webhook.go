@@ -285,8 +285,9 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	// mtls disabled because apiserver webhook cert usage is still TBD.
 	wh.server.TLSConfig = &tls.Config{
 		GetCertificate: wh.getCert,
-		MinVersion: tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
-		MaxVersion: tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+		MinVersion:     tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+		MaxVersion:     tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+		CipherSuites:   tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
 	}
 	h := http.NewServeMux()
 	h.HandleFunc("/admitpilot", wh.serveAdmitPilot)
