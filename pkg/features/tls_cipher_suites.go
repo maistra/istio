@@ -168,7 +168,8 @@ func (v *TlsCipherSuitesVar) initCipherSuites() {
 	if v.cipherSuites == nil {
 		cipherSuitesParam, _ := v.Lookup()
 		cipherSuites := []string{}
-		goCipherSuites := []uint16{}
+		goCipherSuites := []string{}
+		goCipherSuiteIds := []uint16{}
 		if cipherSuitesParam != "" {
 			cipherSuitesSlice := strings.Split(cipherSuitesParam, ",")
 			for _, cipherSuiteParam := range cipherSuitesSlice {
@@ -177,15 +178,17 @@ func (v *TlsCipherSuitesVar) initCipherSuites() {
 				goCipherSuite := goCipherSuiteIdMap[trimmed]
 				if cipherSuite != "" && goCipherSuite != 0 {
 					cipherSuites = append(cipherSuites, cipherSuite)
-					goCipherSuites = append(goCipherSuites, goCipherSuite)
+					goCipherSuites = append(goCipherSuites, trimmed)
+					goCipherSuiteIds = append(goCipherSuiteIds, goCipherSuite)
 				} else {
 					log.Warnf("Cipher %v is not supported, this entry will be ignored", trimmed)
 				}
 			}
 		}
 		v.cipherSuites = cipherSuites
-		v.goCipherSuites = goCipherSuites
-		log.Infof("Cipher suites are %v", v.cipherSuites)
+		v.goCipherSuites = goCipherSuiteIds
+		log.Infof("Go Cipher suites are %v", goCipherSuites)
+		log.Infof("OpenSSL Cipher suites are %v", v.cipherSuites)
 	}
 }
 
