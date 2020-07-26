@@ -89,6 +89,24 @@ func TestTlsCipherSuitesProtocolVersionBuildGatewayListenerTlsContext(t *testing
 	})
 }
 
+func TestTlsCipherSuitesEcdhCurvesBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangEcdhCurves, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.TlsEcdhCurves.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		_ = os.Unsetenv("TLS_ECDH_CURVES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.TlsEcdhCurves.Reset()
+	}()
+	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+		EcdhCurves: tls_features.SupportedOpenSSLEcdhCurves,
+	})
+}
+
 func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParameters) {
 	testCases := []struct {
 		name                  string
@@ -689,6 +707,24 @@ func TestTlsCipherSuitesProtocolVersionCreateGatewayHTTPFilterChainOpts(t *testi
 		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
 		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
 		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTlsCipherSuitesEcdhCurvesCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangEcdhCurves, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.TlsEcdhCurves.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		_ = os.Unsetenv("TLS_ECDH_CURVES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.TlsEcdhCurves.Reset()
+	}()
+	runTestCreateGatewayHTTPFilterChainOpts(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+		EcdhCurves: tls_features.SupportedOpenSSLEcdhCurves,
 	})
 }
 

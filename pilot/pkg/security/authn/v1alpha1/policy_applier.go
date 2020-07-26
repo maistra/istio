@@ -340,6 +340,7 @@ func (a v1alpha1PolicyApplier) InboundFilterChain(sdsUdsPath string, meta *model
 				TlsMinimumProtocolVersion: tls_features.TlsMinProtocolVersion.Get(),
 				TlsMaximumProtocolVersion: tls_features.TlsMaxProtocolVersion.Get(),
 				CipherSuites:              tls_features.TlsCipherSuites.Get(),
+				EcdhCurves:                tls_features.TlsEcdhCurves.Get(),
 			},
 		},
 		RequireClientCertificate: protovalue.BoolTrue,
