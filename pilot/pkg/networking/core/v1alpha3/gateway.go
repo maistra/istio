@@ -441,6 +441,7 @@ func buildGatewayListenerTLSContext(
 				TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion, tls_features.TlsMinProtocolVersion.Get()),
 				TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion, tls_features.TlsMaxProtocolVersion.Get()),
 				CipherSuites:              tls_features.TlsCipherSuites.Get(),
+				EcdhCurves:                tls_features.TlsEcdhCurves.Get(),
 			},
 		},
 	}

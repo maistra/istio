@@ -104,6 +104,10 @@ spec:
           - name: TLS_CIPHER_SUITES
             value: {{ .Values.global.tls.cipherSuites }}
 {{- end }}
+{{- if .Values.global.tls.ecdhCurves }}
+          - name: TLS_ECDH_CURVES
+            value: {{ .Values.global.tls.ecdhCurves }}
+{{- end }}
 {{- end }}
           volumeMounts:
           - name: certs

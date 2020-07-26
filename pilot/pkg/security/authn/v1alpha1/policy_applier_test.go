@@ -789,6 +789,25 @@ func TestTlsCipherSuitesProtocolVersionOnInboundFilterChains(t *testing.T) {
 	})
 }
 
+
+func TestTlsCipherSuitesEcdhCurvesOnInboundFilterChains(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangEcdhCurves, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.TlsEcdhCurves.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		_ = os.Unsetenv("TLS_ECDH_CURVES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.TlsEcdhCurves.Reset()
+	}()
+	runTestOnInboundFilterChains(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+		EcdhCurves: tls_features.SupportedOpenSSLEcdhCurves,
+	})
+}
+
 func runTestOnInboundFilterChains(t *testing.T, tlsParam *auth.TlsParameters) {
 	tlsContext := &auth.DownstreamTlsContext{
 		CommonTlsContext: &auth.CommonTlsContext{
