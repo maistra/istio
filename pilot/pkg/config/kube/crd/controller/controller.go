@@ -144,6 +144,7 @@ func NewController(client *Client, mrc meshcontroller.MemberRollController, opti
 func (c *controller) addInformer(schema collection.Schema, namespaces []string, resyncPeriod time.Duration, mrc meshcontroller.MemberRollController) {
 	kind := schema.Resource().GroupVersionKind()
 	schemaType := crd.SupportedTypes[kind]
+	log.Infof("Creating cache handler for %s", kind)
 	c.kinds[kind] = c.newCacheHandler(schema, schemaType.Object.DeepCopyObject(), kind.Kind, resyncPeriod,
 		func(namespace string) cache.ListerWatcher {
 			return &cache.ListWatch{

@@ -36,7 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/metadata"
@@ -194,7 +193,7 @@ type Controller struct {
 	// Used to watch node accessible from remote cluster.
 	// In multi-cluster(shared control plane multi-networks) scenario, ingress gateway service can be of nodePort type.
 	// With this, we can populate mesh's gateway address with the node ips.
-	filteredNodeInformer cache.SharedIndexInformer
+	//filteredNodeInformer cache.SharedIndexInformer
 	pods                 *PodCache
 	metrics              model.Metrics
 	networksWatcher      mesh.NetworksWatcher
@@ -293,8 +292,10 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 	}
 
 	if options.PodLocalitySource == podLocalitySourcePod {
+		log.Infof("Using Pod Labels as source for locality information")
 		c.podLocalitySource = &podLocalitySource{}
 	} else {
+		log.Infof("Using Node as source for locality information")
 		// This is for getting the pod to node mapping, so that we can get the pod's locality.
 		metadataSharedInformer := metadatainformer.NewSharedInformerFactory(metadataClient, options.ResyncPeriod)
 		nodeResource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
@@ -304,11 +305,12 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 		}
 	}
 
+	// XXX: we don't support this
 	// This is for getting the node IPs of a selected set of nodes
-	c.filteredNodeInformer = coreinformers.NewFilteredNodeInformer(client, options.ResyncPeriod,
-		cache.Indexers{},
-		func(options *metav1.ListOptions) {})
-	registerHandlers(c.filteredNodeInformer, c.queue, "Nodes", c.onNodeEvent)
+	// c.filteredNodeInformer = coreinformers.NewFilteredNodeInformer(client, options.ResyncPeriod,
+	// 	cache.Indexers{},
+	// 	func(options *metav1.ListOptions) {})
+	// registerHandlers(c.filteredNodeInformer, c.queue, "Nodes", c.onNodeEvent)
 
 	c.pods = newPodCache(c, mrc, options)
 	registerHandlers(c.pods.informer, c.queue, "Pods", c.pods.onEvent)
@@ -516,7 +518,7 @@ func (c *Controller) HasSynced() bool {
 	if !c.services.HasSynced() ||
 		!c.endpoints.HasSynced() ||
 		!c.pods.informer.HasSynced() ||
-		!c.filteredNodeInformer.HasSynced() ||
+		//!c.filteredNodeInformer.HasSynced() ||
 		!c.podLocalitySource.HasSynced() {
 		return false
 	}
@@ -537,11 +539,11 @@ func (c *Controller) Run(stop <-chan struct{}) {
 
 	go c.services.Run(stop)
 	go c.pods.informer.Run(stop)
-	go c.filteredNodeInformer.Run(stop)
+	//go c.filteredNodeInformer.Run(stop)
 	go c.podLocalitySource.Run(stop)
 
 	// To avoid endpoints without labels or ports, wait for sync.
-	cache.WaitForCacheSync(stop, c.filteredNodeInformer.HasSynced,
+	cache.WaitForCacheSync(stop,
 		c.podLocalitySource.HasSynced, c.pods.informer.HasSynced,
 		c.services.HasSynced)
 

@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	informer "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -76,7 +75,7 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
 
-	mlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
+	configmapmlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
 		return &cache.ListWatch{
 			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 				opts.LabelSelector = fields.SelectorFromSet(configMapLabel).String()
@@ -90,10 +89,10 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 	})
 
 	if mrc != nil {
-		mrc.Register(mlw)
+		mrc.Register(configmapmlw)
 	}
 
-	configmapInformer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, options.ResyncPeriod,
+	configmapInformer := cache.NewSharedIndexInformer(configmapmlw, &v1.ConfigMap{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 	configmapInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -132,7 +131,21 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 	})
 	c.configMapController = configmapInformer
 
-	namespaceInformer := informer.NewNamespaceInformer(kubeClient, options.ResyncPeriod, cache.Indexers{})
+	namespacemlw := listwatch.MultiNamespaceListerWatcher(watchedNamespaceList, func(namespace string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+				opts.LabelSelector = fields.SelectorFromSet(configMapLabel).String()
+				return kubeClient.CoreV1().Namespaces().List(context.TODO(), opts)
+			},
+			WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+				opts.LabelSelector = fields.SelectorFromSet(configMapLabel).String()
+				return kubeClient.CoreV1().Namespaces().Watch(context.TODO(), opts)
+			},
+		}
+	})
+
+	namespaceInformer := cache.NewSharedIndexInformer(namespacemlw, &v1.Namespace{}, options.ResyncPeriod, cache.Indexers{})
+	//namespaceInformer := informer.NewNamespaceInformer(kubeClient, options.ResyncPeriod, cache.Indexers{})
 	namespaceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			c.queue.Push(func() error {
