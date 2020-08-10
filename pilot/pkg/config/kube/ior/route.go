@@ -92,6 +92,7 @@ func (r *route) syncGatewaysAndRoutes() error {
 
 	for _, cfg := range configs {
 		gateway := cfg.Spec.(*networking.Gateway)
+		annotations := cfg.ConfigMeta.Annotations
 		iorLog.Debugf("Found Gateway: %s/%s", cfg.Namespace, cfg.Name)
 
 		for _, server := range gateway.Servers {
@@ -100,7 +101,7 @@ func (r *route) syncGatewaysAndRoutes() error {
 				if ok {
 					r.editRoute(host)
 				} else {
-					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server.Tls != nil))
+					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server.Tls != nil, annotations))
 				}
 
 			}
@@ -159,7 +160,7 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
-func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway, originalHost string, tls bool) error {
+func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway, originalHost string, tls bool, originalAnnotations map[string]string) error {
 	var wildcard = v1.WildcardPolicyNone
 	actualHost := originalHost
 
@@ -189,6 +190,19 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 		return err
 	}
 
+	//Propagate annotations to allow for openshift-acme
+	//https://github.com/tnozicka/openshift-acme
+	annotations := map[string]string{
+		originalHostAnnotation: originalHost,
+	}
+	for keyName, keyValue := range originalAnnotations {
+		// avoid propagating kubectl config
+		if !strings.HasPrefix(keyName, "kubectl.kubernetes.io") {
+			// otherwise add to route annotation
+			annotations[keyName] = keyValue
+		}
+	}
+
 	nr, err := r.client.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("%s-%s-", metadata.Namespace, metadata.Name),
@@ -197,9 +211,7 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 				gatewayNamespaceLabel: metadata.Namespace,
 				gatewayNameLabel:      metadata.Name,
 			},
-			Annotations: map[string]string{
-				originalHostAnnotation: originalHost,
-			},
+			Annotations: annotations,
 		},
 		Spec: v1.RouteSpec{
 			Host: actualHost,
