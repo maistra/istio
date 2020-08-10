@@ -160,7 +160,8 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
-func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway, originalHost string, tls bool, originalAnnotations map[string]string) error {
+func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway,
+	originalHost string, tls bool, originalAnnotations map[string]string) error {
 	var wildcard = v1.WildcardPolicyNone
 	actualHost := originalHost
 
