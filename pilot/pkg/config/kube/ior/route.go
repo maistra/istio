@@ -92,7 +92,6 @@ func (r *route) syncGatewaysAndRoutes() error {
 
 	for _, cfg := range configs {
 		gateway := cfg.Spec.(*networking.Gateway)
-		annotations := cfg.ConfigMeta.Annotations
 		iorLog.Debugf("Found Gateway: %s/%s", cfg.Namespace, cfg.Name)
 
 		for _, server := range gateway.Servers {
@@ -101,7 +100,7 @@ func (r *route) syncGatewaysAndRoutes() error {
 				if ok {
 					r.editRoute(host)
 				} else {
-					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server.Tls != nil, annotations))
+					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server.Tls != nil))
 				}
 
 			}
@@ -160,8 +159,7 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
-func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway,
-	originalHost string, tls bool, originalAnnotations map[string]string) error {
+func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway, originalHost string, tls bool) error {
 	var wildcard = v1.WildcardPolicyNone
 	actualHost := originalHost
 
@@ -194,7 +192,7 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 	annotations := map[string]string{
 		originalHostAnnotation: originalHost,
 	}
-	for keyName, keyValue := range originalAnnotations {
+	for keyName, keyValue := range metadata.Annotations {
 		if !strings.HasPrefix(keyName, "kubectl.kubernetes.io") {
 			annotations[keyName] = keyValue
 		}
