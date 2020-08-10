@@ -190,15 +190,11 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 		return err
 	}
 
-	//Propagate annotations to allow for openshift-acme
-	//https://github.com/tnozicka/openshift-acme
 	annotations := map[string]string{
 		originalHostAnnotation: originalHost,
 	}
 	for keyName, keyValue := range originalAnnotations {
-		// avoid propagating kubectl config
 		if !strings.HasPrefix(keyName, "kubectl.kubernetes.io") {
-			// otherwise add to route annotation
 			annotations[keyName] = keyValue
 		}
 	}
