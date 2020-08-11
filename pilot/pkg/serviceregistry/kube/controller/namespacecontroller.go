@@ -18,12 +18,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	informer "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -63,6 +65,15 @@ type NamespaceController struct {
 	namespaceController cache.Controller
 	// Controller and store for ConfigMap objects
 	configMapController cache.Controller
+
+	// if this is true, we don't create a K8s controller, but only react on namespace changes
+	// coming from the MRC
+	usesMemberRollController bool
+
+	// only used if usesMemberRollController is true
+	started    bool
+	mutex      sync.Mutex
+	namespaces sets.String
 }
 
 // NewNamespaceController returns a pointer to a newly constructed NamespaceController instance.
@@ -88,10 +99,6 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 			},
 		}
 	})
-
-	if mrc != nil {
-		mrc.Register(mlw)
-	}
 
 	configmapInformer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
@@ -132,6 +139,13 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 	})
 	c.configMapController = configmapInformer
 
+	if mrc != nil {
+		mrc.Register(mlw)
+		mrc.Register(c)
+		c.usesMemberRollController = true
+		return c
+	}
+
 	namespaceInformer := informer.NewNamespaceInformer(kubeClient, options.ResyncPeriod, cache.Indexers{})
 	namespaceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -152,6 +166,19 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 
 // Run starts the NamespaceController until a value is sent to stopCh.
 func (nc *NamespaceController) Run(stopCh <-chan struct{}) {
+	if nc.usesMemberRollController {
+		nc.mutex.Lock()
+		nc.started = true
+		nc.mutex.Unlock()
+		go func() {
+			<-stopCh
+			nc.mutex.Lock()
+			nc.started = false
+			nc.mutex.Unlock()
+		}()
+		log.Infof("Namespace controller (MRC) started")
+		return
+	}
 	go nc.namespaceController.Run(stopCh)
 	go nc.configMapController.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, nc.namespaceController.HasSynced, nc.configMapController.HasSynced)
@@ -192,4 +219,17 @@ func (nc *NamespaceController) configMapChange(obj interface{}) error {
 		}
 	}
 	return nil
+}
+
+func (nc *NamespaceController) UpdateNamespaces(namespaces []string) {
+	nc.mutex.Lock()
+	defer nc.mutex.Unlock()
+	namespaceSet := sets.NewString(namespaces...)
+	for _, ns := range namespaceSet.Difference(nc.namespaces).List() {
+		err := nc.insertDataForNamespace(ns)
+		if err != nil {
+			log.Errorf("Failed to create configMap in namespace %s: %s", ns, err)
+		}
+	}
+	nc.namespaces = namespaceSet
 }
