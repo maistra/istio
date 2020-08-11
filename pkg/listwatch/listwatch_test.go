@@ -53,7 +53,8 @@ func setupMultiWatch(t *testing.T, namespaces []string, rvs map[string]string) (
 		t.Fatalf("failed to invoke List: %v", err)
 	}
 
-	if err := mlw.newMultiWatch(rvs, metav1.ListOptions{}); err != nil {
+	mlw.resourceVersions = rvs
+	if err := mlw.newMultiWatch(metav1.ListOptions{}); err != nil {
 		t.Fatalf("failed to create new multiWatch: %v", err)
 	}
 	return ws, mlw
@@ -215,7 +216,8 @@ func TestRacyMultiWatch(t *testing.T) {
 		return
 	}
 
-	if err := mlw.newMultiWatch(rsv, metav1.ListOptions{}); err != nil {
+	mlw.resourceVersions = rsv
+	if err := mlw.newMultiWatch(metav1.ListOptions{}); err != nil {
 		t.Error(err)
 		return
 	}
