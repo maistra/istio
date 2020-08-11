@@ -22,6 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	"istio.io/pkg/log"
 )
 
 // InsertDataToConfigMap inserts a data to a configmap in a namespace.
@@ -33,7 +35,12 @@ import (
 func InsertDataToConfigMap(client corev1.ConfigMapsGetter, meta metav1.ObjectMeta, data map[string]string) error {
 	configmap, err := client.ConfigMaps(meta.Namespace).Get(context.TODO(), meta.Name, metav1.GetOptions{})
 	if err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("error when getting configmap %v: %v", meta.Name, err)
+		if errors.IsForbidden(err) {
+			// we don't have access
+			log.Errorf("no permissions to get configmap in namespace %s", meta.Namespace)
+			return nil
+		}
+	return fmt.Errorf("error when getting configmap %v: %v", meta.Name, err)
 	}
 	if errors.IsNotFound(err) {
 		// Create a new ConfigMap.
@@ -42,6 +49,11 @@ func InsertDataToConfigMap(client corev1.ConfigMapsGetter, meta metav1.ObjectMet
 			Data:       data,
 		}
 		if _, err = client.ConfigMaps(meta.Namespace).Create(context.TODO(), configmap, metav1.CreateOptions{}); err != nil {
+			if errors.IsForbidden(err) {
+				// we don't have access
+				log.Errorf("no permissions to create configmap in namespace %s", meta.Namespace)
+				return nil
+			}
 			return fmt.Errorf("error when creating configmap %v: %v", meta.Name, err)
 		}
 	} else {
