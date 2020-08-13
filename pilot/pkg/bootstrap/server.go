@@ -329,7 +329,7 @@ func NewServer(args *PilotArgs) (*Server, error) {
 					NewLeaderElection(args.Namespace, args.PodName, leaderelection.NamespaceController, s.kubeClient).
 					AddRunFunction(func(stop <-chan struct{}) {
 						log.Infof("Starting namespace controller")
-						nc := kubecontroller.NewNamespaceController(fetchData, args.Config.ControllerOptions, s.kubeClient, s.mrc)
+						nc := kubecontroller.NewNamespaceController(fetchData, args.Config.ControllerOptions, s.kubeClient, s.mrc, args.Namespace)
 						nc.Run(stop)
 					}).
 					Run(stop)

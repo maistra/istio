@@ -139,7 +139,7 @@ func (m *Multicluster) AddMemberCluster(clientset kubernetes.Interface, metadata
 	}
 	webhookConfigName := strings.ReplaceAll(validationWebhookConfigNameTemplate, validationWebhookConfigNameTemplateVar, m.secretNamespace)
 	if m.fetchCaRoot != nil {
-		nc := NewNamespaceController(m.fetchCaRoot, opts, clientset, nil)
+		nc := NewNamespaceController(m.fetchCaRoot, opts, clientset, nil, "")
 		go nc.Run(stopCh)
 		go webhooks.PatchCertLoop(features.InjectionWebhookConfigName.Get(), webhookName, m.caBundlePath, clientset, stopCh)
 		valicationWebhookController := webhooks.CreateValidationWebhookController(clientset, dynamicClient, webhookConfigName,

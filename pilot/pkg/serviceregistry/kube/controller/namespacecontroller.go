@@ -71,18 +71,20 @@ type NamespaceController struct {
 	usesMemberRollController bool
 
 	// only used if usesMemberRollController is true
-	started    bool
-	mutex      sync.Mutex
-	namespaces sets.String
+	started               bool
+	controlPlaneNamespace string
+	mutex                 sync.Mutex
+	namespaces            sets.String
 }
 
 // NewNamespaceController returns a pointer to a newly constructed NamespaceController instance.
 func NewNamespaceController(data func() map[string]string, options Options, kubeClient kubernetes.Interface,
-	mrc meshcontroller.MemberRollController) *NamespaceController {
+	mrc meshcontroller.MemberRollController, controlPlaneNamespace string) *NamespaceController {
 	c := &NamespaceController{
-		getData: data,
-		client:  kubeClient.CoreV1(),
-		queue:   queue.NewQueue(time.Second),
+		getData:               data,
+		client:                kubeClient.CoreV1(),
+		queue:                 queue.NewQueue(time.Second),
+		controlPlaneNamespace: controlPlaneNamespace,
 	}
 
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
@@ -168,14 +170,20 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 func (nc *NamespaceController) Run(stopCh <-chan struct{}) {
 	if nc.usesMemberRollController {
 		nc.mutex.Lock()
+		defer nc.mutex.Unlock()
+		if nc.started {
+			return
+		}
+
 		nc.started = true
-		nc.mutex.Unlock()
 		go func() {
 			<-stopCh
 			nc.mutex.Lock()
 			nc.started = false
 			nc.mutex.Unlock()
 		}()
+		// initial push of control plane namespace
+		nc.updateNamespacesInternal([]string{nc.controlPlaneNamespace})
 		log.Infof("Namespace controller (MRC) started")
 		return
 	}
@@ -224,6 +232,10 @@ func (nc *NamespaceController) configMapChange(obj interface{}) error {
 func (nc *NamespaceController) UpdateNamespaces(namespaces []string) {
 	nc.mutex.Lock()
 	defer nc.mutex.Unlock()
+	nc.updateNamespacesInternal(namespaces)
+}
+
+func (nc *NamespaceController) updateNamespacesInternal(namespaces []string) {
 	namespaceSet := sets.NewString(namespaces...)
 	for _, ns := range namespaceSet.Difference(nc.namespaces).List() {
 		err := nc.insertDataForNamespace(ns)
