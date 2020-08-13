@@ -85,8 +85,6 @@ type PilotArgs struct {
 	ForceStop bool
 	// Optional TLS configuration
 	TLSOptions TLSOptions
-
-	InjectPodRedirectAnnot bool
 }
 
 // DiscoveryServiceOptions contains options for create a new discovery
