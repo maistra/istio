@@ -18,8 +18,6 @@
 package listwatch
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -30,6 +28,10 @@ import (
 
 	"istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/log"
+)
+
+var (
+	scope = log.RegisterScope("mlw", "mlw", 0)
 )
 
 type NamespaceListerWatcher interface {
@@ -63,26 +65,29 @@ type listerWatcher struct {
 }
 
 type multiListerWatcher struct {
-	namespaces []string
-	f          func(string) cache.ListerWatcher
-	state      listerWatcherState
-	result     chan watch.Event
-	stopped    chan struct{}
-	wg         *sync.WaitGroup
-	lwMap      map[string]*listerWatcher
-	lock       sync.Mutex
+	namespaces       []string
+	f                func(string) cache.ListerWatcher
+	state            listerWatcherState
+	result           chan watch.Event
+	stopped          chan struct{}
+	wg               *sync.WaitGroup
+	lwMap            map[string]*listerWatcher
+	lock             sync.Mutex
+	resourceVersions map[string]string
 }
 
 func newMultiListerWatcher(namespaces []string, f func(string) cache.ListerWatcher) *multiListerWatcher {
 	return &multiListerWatcher{
-		namespaces: append(namespaces[:0:0], namespaces...),
-		f:          f,
-		state:      created,
+		namespaces:       append(namespaces[:0:0], namespaces...),
+		f:                f,
+		state:            created,
+		resourceVersions: make(map[string]string, len(namespaces)),
 	}
 }
 
 // Update the set of namespaces being tracked
 func (mlw *multiListerWatcher) UpdateNamespaces(namespaces []string) {
+	scope.Debugf("Namespaces updated: %s", namespaces)
 	mlw.lock.Lock()
 	defer mlw.lock.Unlock()
 
@@ -124,8 +129,7 @@ func (mlw *multiListerWatcher) reportError(message string) {
 // a single result.
 func (mlw *multiListerWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
 	l := metav1.List{}
-	var resourceVersions []string
-
+	scope.Debugf("List() called with ResourceVersion '%s'", options.ResourceVersion)
 	mlw.lock.Lock()
 	defer mlw.lock.Unlock()
 
@@ -140,6 +144,7 @@ func (mlw *multiListerWatcher) List(options metav1.ListOptions) (runtime.Object,
 	for _, n := range mlw.namespaces {
 		lws := &listerWatcher{lw: mlw.f(n)}
 		mlw.lwMap[n] = lws
+		scope.Debugf("-> List() dispatched with ResourceVersion '%s' in namespace %s", options.ResourceVersion, n)
 		list, err := lws.lw.List(options)
 		if err != nil {
 			return nil, err
@@ -155,11 +160,13 @@ func (mlw *multiListerWatcher) List(options metav1.ListOptions) (runtime.Object,
 		for _, item := range items {
 			l.Items = append(l.Items, runtime.RawExtension{Object: item.DeepCopyObject()})
 		}
-		resourceVersions = append(resourceVersions, fmt.Sprintf("%s=%s", n, metaObj.GetResourceVersion()))
+		scope.Debugf("-> Storing ResourceVersion '%s' for namespace %s", metaObj.GetResourceVersion(), n)
+		mlw.resourceVersions[n] = metaObj.GetResourceVersion()
 	}
-	// Combine the resource versions so that the composite Watch method can
-	// distribute appropriate versions to each underlying Watch func.
-	l.ListMeta.ResourceVersion = strings.Join(resourceVersions, "/")
+	// set ResourceVersion to 0
+	// after timeout, the reflector will List() again using this ResourceVersion
+	// using "0" makes sure we're getting the latest from the cache
+	l.ListMeta.ResourceVersion = "0"
 
 	return &l, nil
 }
@@ -168,32 +175,16 @@ func (mlw *multiListerWatcher) List(options metav1.ListOptions) (runtime.Object,
 // It returns a watch.Interface that combines the output from the
 // watch.Interface of every cache.ListerWatcher into a single result chan.
 func (mlw *multiListerWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
-	resourceVersions := make(map[string]string)
-
-	// Allow resource versions to be "".
-	if options.ResourceVersion != "" {
-		rvs := strings.Split(options.ResourceVersion, "/")
-		for _, nrv := range rvs {
-			equalsIndex := strings.IndexByte(nrv, '=')
-			if equalsIndex == -1 {
-				log.Infof("Received unexpected resource version %s", nrv)
-			} else {
-				namespace := nrv[:equalsIndex]
-				resourceVersion := nrv[equalsIndex+1:]
-				resourceVersions[namespace] = resourceVersion
-			}
-		}
-	}
-	if err := mlw.newMultiWatch(resourceVersions, options); err != nil {
+	scope.Debugf("Watch() called with ResourceVersion '%s'", options.ResourceVersion)
+	if err := mlw.newMultiWatch(options); err != nil {
 		return nil, err
 	}
 	return mlw, nil
 }
 
 // newMultiWatch returns a new multiWatch or an error if one of the underlying
-// Watch funcs errored. The length of []cache.ListerWatcher and []string must
-// match.
-func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string, options metav1.ListOptions) error {
+// Watch funcs errored.
+func (mlw *multiListerWatcher) newMultiWatch(options metav1.ListOptions) error {
 	mlw.lock.Lock()
 	defer mlw.lock.Unlock()
 
@@ -219,7 +210,11 @@ func (mlw *multiListerWatcher) newMultiWatch(resourceVersions map[string]string,
 
 	for n, lws := range mlw.lwMap {
 		o := options.DeepCopy()
-		o.ResourceVersion = resourceVersions[n]
+		// if we have a stored resourceVersion, use that as starting point
+		if mlw.resourceVersions[n] != "" {
+			o.ResourceVersion = mlw.resourceVersions[n]
+		}
+		scope.Debugf("-> Watch() dispatched with ResourceVersion '%s' in namespace %s", o.ResourceVersion, n)
 		w, err := lws.lw.Watch(*o)
 		if err != nil {
 			return err
