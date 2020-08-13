@@ -764,20 +764,6 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview, path string) *v1beta1.Adm
 		}
 	}
 
-	// due to bug https://github.com/kubernetes/kubernetes/issues/57923,
-	// k8s sa jwt token volume mount file is only accessible to root user, not istio-proxy(the user that istio proxy runs as).
-	// workaround by https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
-	if wh.meshConfig.SdsUdsPath != "" {
-		var grp = int64(1337)
-		if pod.Spec.SecurityContext == nil {
-			pod.Spec.SecurityContext = &corev1.PodSecurityContext{
-				FSGroup: &grp,
-			}
-		} else {
-			pod.Spec.SecurityContext.FSGroup = &grp
-		}
-	}
-
 	// try to capture more useful namespace/name info for deployments, etc.
 	// TODO(dougreid): expand to enable lookup of OWNERs recursively a la kubernetesenv
 	deployMeta := pod.ObjectMeta.DeepCopy()
@@ -819,6 +805,7 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview, path string) *v1beta1.Adm
 		deployMeta.Name = pod.Name
 	}
 
+	var proxyGID *int64
 	proxyUID, err := getProxyUID(pod)
 	if err != nil {
 		log.Infof("Could not get proxyUID from annotation: %v", err)
@@ -827,12 +814,19 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview, path string) *v1beta1.Adm
 		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
 			uid := uint64(*pod.Spec.SecurityContext.RunAsUser) + 1
 			proxyUID = &uid
+			gid := *pod.Spec.SecurityContext.RunAsUser
+			// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
+			proxyGID = &gid
 		}
 		for _, c := range pod.Spec.Containers {
 			if c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
 				uid := uint64(*c.SecurityContext.RunAsUser) + 1
+				gid := *c.SecurityContext.RunAsUser
 				if proxyUID == nil || uid > *proxyUID {
 					proxyUID = &uid
+				}
+				if proxyGID == nil {
+					proxyGID = &gid
 				}
 			}
 		}
@@ -840,6 +834,23 @@ func (wh *Webhook) inject(ar *v1beta1.AdmissionReview, path string) *v1beta1.Adm
 	if proxyUID == nil {
 		uid := DefaultSidecarProxyUID
 		proxyUID = &uid
+	}
+	if proxyGID == nil {
+		gid := int64(DefaultSidecarProxyUID)
+		proxyGID = &gid
+	}
+
+	// due to bug https://github.com/kubernetes/kubernetes/issues/57923,
+	// k8s sa jwt token volume mount file is only accessible to root user, not istio-proxy(the user that istio proxy runs as).
+	// workaround by https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
+	if wh.meshConfig.SdsUdsPath != "" {
+		if pod.Spec.SecurityContext == nil {
+			pod.Spec.SecurityContext = &corev1.PodSecurityContext{
+				FSGroup: proxyGID,
+			}
+		} else {
+			pod.Spec.SecurityContext.FSGroup = proxyGID
+		}
 	}
 
 	spec, iStatus, err := InjectionData(wh.Config.Template, wh.valuesConfig, wh.sidecarTemplateVersion, typeMetadata, deployMeta, &pod.Spec, &pod.ObjectMeta, wh.meshConfig, path, *proxyUID) // nolint: lll
