@@ -44,7 +44,7 @@ type MemberRollListener interface {
 }
 
 type MemberRollController interface {
-	Register(listener MemberRollListener)
+	Register(listener MemberRollListener, name string)
 	Start(stop chan struct{})
 }
 
@@ -85,8 +85,8 @@ func (smmrc *serviceMeshMemberRollController) Start(stop chan struct{}) {
 	}
 }
 
-func (smmrc *serviceMeshMemberRollController) Register(listener MemberRollListener) {
-	smmrc.informer.AddEventHandler(smmrc.newServiceMeshMemberRollListener(listener))
+func (smmrc *serviceMeshMemberRollController) Register(listener MemberRollListener, name string) {
+	smmrc.informer.AddEventHandler(smmrc.newServiceMeshMemberRollListener(listener, name))
 }
 
 func (smmrc *serviceMeshMemberRollController) getNamespaces(namespaces []string) []string {
@@ -105,18 +105,22 @@ func (smmrc *serviceMeshMemberRollController) getNamespaces(namespaces []string)
 	return result
 }
 
-func (smmrc *serviceMeshMemberRollController) newServiceMeshMemberRollListener(listener MemberRollListener) cache.ResourceEventHandler {
-	return &serviceMeshMemberRollListener{
+func (smmrc *serviceMeshMemberRollController) newServiceMeshMemberRollListener(listener MemberRollListener, name string) cache.ResourceEventHandler {
+	handler := &serviceMeshMemberRollListener{
 		smmrc:             smmrc,
 		listener:          listener,
-		currentNamespaces: smmrc.getNamespaces(nil),
+		currentNamespaces: nil,
+		name:              name,
 	}
+	handler.updateNamespaces("add", smmrc.memberRollName, smmrc.getNamespaces(nil))
+	return handler
 }
 
 type serviceMeshMemberRollListener struct {
 	smmrc             *serviceMeshMemberRollController
 	listener          MemberRollListener
 	currentNamespaces []string
+	name              string
 }
 
 func (smmrl *serviceMeshMemberRollListener) checkEquality(lhs, rhs []string) bool {
@@ -142,7 +146,7 @@ func (smmrl *serviceMeshMemberRollListener) updateNamespaces(operation string, m
 		sort.Strings(namespaces)
 		if !smmrl.checkEquality(smmrl.currentNamespaces, namespaces) {
 			smmrl.currentNamespaces = namespaces
-			log.Infof("ServiceMeshMemberRoll %v %s, namespaces now %q", memberRollName, operation, smmrl.currentNamespaces)
+			log.Infof("ServiceMeshMemberRoll %v %s, namespaces for listener %s now %q", memberRollName, operation, smmrl.name, smmrl.currentNamespaces)
 			smmrl.listener.UpdateNamespaces(smmrl.currentNamespaces)
 		}
 	}

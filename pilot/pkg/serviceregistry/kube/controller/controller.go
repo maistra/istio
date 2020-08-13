@@ -278,7 +278,7 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 	})
 
 	if mrc != nil {
-		mrc.Register(svcMlw)
+		mrc.Register(svcMlw, "pilot-service")
 	}
 
 	c.services = cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, options.ResyncPeriod,

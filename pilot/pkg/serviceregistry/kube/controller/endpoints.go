@@ -56,7 +56,7 @@ func newEndpointsController(c *Controller, mrc meshcontroller.MemberRollControll
 	})
 
 	if mrc != nil {
-		mrc.Register(mlw)
+		mrc.Register(mlw, "pilot-endpoints")
 	}
 
 	informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, options.ResyncPeriod,
