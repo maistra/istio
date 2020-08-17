@@ -189,6 +189,15 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 		return err
 	}
 
+	annotations := map[string]string{
+		originalHostAnnotation: originalHost,
+	}
+	for keyName, keyValue := range metadata.Annotations {
+		if !strings.HasPrefix(keyName, "kubectl.kubernetes.io") {
+			annotations[keyName] = keyValue
+		}
+	}
+
 	nr, err := r.client.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("%s-%s-", metadata.Namespace, metadata.Name),
@@ -197,9 +206,7 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 				gatewayNamespaceLabel: metadata.Namespace,
 				gatewayNameLabel:      metadata.Name,
 			},
-			Annotations: map[string]string{
-				originalHostAnnotation: originalHost,
-			},
+			Annotations: annotations,
 		},
 		Spec: v1.RouteSpec{
 			Host: actualHost,
