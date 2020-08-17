@@ -74,7 +74,7 @@ func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
 			})
 
 			if p.mrc != nil {
-				p.mrc.Register(mlw)
+				p.mrc.Register(mlw, fmt.Sprintf("galley-%s", r.GroupVersionKind().String()))
 			}
 
 			informer := cache.NewSharedIndexInformer(mlw, &unstructured.Unstructured{}, p.resyncPeriod,

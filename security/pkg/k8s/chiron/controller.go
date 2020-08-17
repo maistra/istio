@@ -164,7 +164,7 @@ func NewWebhookController(gracePeriodRatio float32, minGracePeriod time.Duration
 		})
 
 		if mrc != nil {
-			mrc.Register(scrtLW)
+			mrc.Register(scrtLW, "chiron-secret")
 		}
 
 		// The certificate rotation is handled by scrtUpdated().

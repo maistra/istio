@@ -65,7 +65,7 @@ func newPodCache(c *Controller, mrc meshcontroller.MemberRollController, options
 	})
 
 	if mrc != nil {
-		mrc.Register(mlw)
+		mrc.Register(mlw, "pilot-pod")
 	}
 
 	informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, options.ResyncPeriod,

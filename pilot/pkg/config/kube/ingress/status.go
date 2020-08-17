@@ -101,7 +101,7 @@ func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 	})
 
 	if mrc != nil {
-		mrc.Register(mlw)
+		mrc.Register(mlw, "pilot-ingress-status")
 	}
 
 	informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, options.ResyncPeriod,

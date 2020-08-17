@@ -154,7 +154,7 @@ func (e env) NewInformer(
 
 	mlw := listwatch.MultiNamespaceListerWatcher(*e.namespaces, listerWatcher)
 	if e.mrc != nil {
-		e.mrc.Register(mlw)
+		e.mrc.Register(mlw, "mixer-env")
 	}
 	return cache.NewSharedIndexInformer(mlw, objType, duration, indexers)
 }

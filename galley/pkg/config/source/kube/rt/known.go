@@ -68,7 +68,7 @@ func (p *Provider) initKnownAdapters() {
 					})
 
 				if p.mrc != nil {
-					p.mrc.Register(mlw)
+					p.mrc.Register(mlw, "galley-service")
 				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1.Service{}, p.resyncPeriod,
@@ -177,7 +177,7 @@ func (p *Provider) initKnownAdapters() {
 					})
 
 				if p.mrc != nil {
-					p.mrc.Register(mlw)
+					p.mrc.Register(mlw, "galley-pods")
 				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, p.resyncPeriod,
@@ -226,7 +226,7 @@ func (p *Provider) initKnownAdapters() {
 					})
 
 				if p.mrc != nil {
-					p.mrc.Register(mlw)
+					p.mrc.Register(mlw, "galley-secrets")
 				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1.Secret{}, p.resyncPeriod,
@@ -274,7 +274,7 @@ func (p *Provider) initKnownAdapters() {
 					})
 
 				if p.mrc != nil {
-					p.mrc.Register(mlw)
+					p.mrc.Register(mlw, "galley-endpoints")
 				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, p.resyncPeriod,
@@ -334,7 +334,7 @@ func (p *Provider) initKnownAdapters() {
 					})
 
 				if p.mrc != nil {
-					p.mrc.Register(mlw)
+					p.mrc.Register(mlw, "galley-ingresses")
 				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, p.resyncPeriod,
@@ -421,7 +421,7 @@ func (p *Provider) initKnownAdapters() {
 					})
 
 				if p.mrc != nil {
-					p.mrc.Register(mlw)
+					p.mrc.Register(mlw, "galley-deployments")
 				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &appsv1.Deployment{}, p.resyncPeriod,
@@ -468,7 +468,7 @@ func (p *Provider) initKnownAdapters() {
 					})
 
 				if p.mrc != nil {
-					p.mrc.Register(mlw)
+					p.mrc.Register(mlw, "galley-configmaps")
 				}
 
 				informer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, p.resyncPeriod,

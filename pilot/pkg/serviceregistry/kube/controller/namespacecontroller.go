@@ -66,9 +66,9 @@ type NamespaceController struct {
 	// Controller and store for ConfigMap objects
 	configMapController cache.Controller
 
-	// if this is true, we don't create a K8s controller, but only react on namespace changes
+	// if this is not null, we don't create a K8s controller, but only react on namespace changes
 	// coming from the MRC
-	usesMemberRollController bool
+	mrc meshcontroller.MemberRollController
 
 	// only used if usesMemberRollController is true
 	started    bool
@@ -140,9 +140,8 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 	c.configMapController = configmapInformer
 
 	if mrc != nil {
-		mrc.Register(mlw)
-		mrc.Register(c)
-		c.usesMemberRollController = true
+		mrc.Register(mlw, "pilot-configmap")
+		c.mrc = mrc
 		return c
 	}
 
@@ -166,22 +165,28 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 
 // Run starts the NamespaceController until a value is sent to stopCh.
 func (nc *NamespaceController) Run(stopCh <-chan struct{}) {
-	if nc.usesMemberRollController {
+	var syncs []cache.InformerSynced
+	if nc.mrc != nil {
 		nc.mutex.Lock()
 		nc.started = true
 		nc.mutex.Unlock()
+
+		log.Infof("Namespace controller (MRC) started")
+		nc.mrc.Register(nc, "pilot-namespace")
+
 		go func() {
 			<-stopCh
 			nc.mutex.Lock()
 			nc.started = false
 			nc.mutex.Unlock()
 		}()
-		log.Infof("Namespace controller (MRC) started")
-		return
+	} else {
+		go nc.namespaceController.Run(stopCh)
+		syncs = append(syncs, nc.namespaceController.HasSynced)
 	}
-	go nc.namespaceController.Run(stopCh)
 	go nc.configMapController.Run(stopCh)
-	cache.WaitForCacheSync(stopCh, nc.namespaceController.HasSynced, nc.configMapController.HasSynced)
+	syncs = append(syncs, nc.configMapController.HasSynced)
+	cache.WaitForCacheSync(stopCh, syncs...)
 	log.Infof("Namespace controller started")
 	go nc.queue.Run(stopCh)
 }
