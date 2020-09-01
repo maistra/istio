@@ -153,7 +153,7 @@ func NewController(client kubernetes.Interface, mrc meshcontroller.MemberRollCon
 	})
 
 	if mrc != nil {
-		mrc.Register(mlw)
+		mrc.Register(mlw, "pilot-ingress-controller")
 	}
 
 	informer := cache.NewSharedIndexInformer(mlw, &ingress.Ingress{}, options.ResyncPeriod,

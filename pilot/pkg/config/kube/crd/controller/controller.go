@@ -232,7 +232,7 @@ func (c *controller) newCacheHandler(
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, lwf)
 	if mrc != nil {
-		mrc.Register(mlw)
+		mrc.Register(mlw, fmt.Sprintf("pilot-cache-%s", otype))
 	}
 
 	// TODO: finer-grained index (perf)

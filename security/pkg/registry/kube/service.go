@@ -68,7 +68,7 @@ func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg 
 	})
 
 	if mrc != nil {
-		mrc.Register(LW)
+		mrc.Register(LW, "security-namespaces")
 	}
 
 	handler := cache.ResourceEventHandlerFuncs{

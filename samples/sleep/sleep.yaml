@@ -44,6 +44,8 @@ spec:
       app: sleep
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
       labels:
         app: sleep
     spec:

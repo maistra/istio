@@ -60,7 +60,7 @@ func newEndpointSliceController(c *Controller, mrc meshcontroller.MemberRollCont
 	})
 
 	if mrc != nil {
-		mrc.Register(mlw)
+		mrc.Register(mlw, "pilot-endpointslice")
 	}
 
 	informer := cache.NewSharedIndexInformer(mlw, &discoveryv1alpha1.EndpointSlice{}, options.ResyncPeriod,

@@ -863,7 +863,6 @@ func createTestWebhook(t testing.TB, config *Config, values string) (*Webhook, f
 		sidecarTemplateVersion: "unit-test-fake-version",
 		meshConfig:             &m,
 		valuesConfig:           values,
-		injectPodRedirectAnnot: true,
 	}, cleanup
 }
 

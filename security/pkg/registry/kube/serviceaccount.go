@@ -68,7 +68,7 @@ func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []strin
 	})
 
 	if mrc != nil {
-		mrc.Register(LW)
+		mrc.Register(LW, "security-serviceaccounts")
 	}
 
 	_, c.controller = cache.NewInformer(LW, &v1.ServiceAccount{}, time.Minute, cache.ResourceEventHandlerFuncs{
