@@ -240,16 +240,6 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 		}
 	}
 
-	// ior.pilot.maistra.io/TLSTerminationType = {VAL}
-	//   Allowed Values: {TLSTerminationEdge, TLSTerminationPassthrough, TLSTerminationReencrypt}
-
-	// ior.pilot.maistra.io/InsecureEdgeTerminationPolicyType = {VAL}
-	//   Allowed Values: {InsecureEdgeTerminationPolicyNone, InsecureEdgeTerminationPolicyAllow, InsecureEdgeTerminationPolicyRedirect}
-
-	// ior.pilot.maistra.io/TLSCertificateSecret = {VAL}
-	//   Allowed Values: {ANY} Will corrispond to a Secret in the secrets API Controller
-	//   Expected Secret Properties Expected: Certificate, Key, CACertificate, DestinationCACertificate
-
 	serviceNamespace, serviceName, err := r.findService(gateway)
 	if err != nil {
 		return err
