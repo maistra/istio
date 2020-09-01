@@ -100,7 +100,7 @@ func (r *route) syncGatewaysAndRoutes() error {
 				if ok {
 					r.editRoute(host)
 				} else {
-					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server.Tls != nil))
+					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server))
 				}
 
 			}
@@ -159,7 +159,11 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
-func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway, originalHost string, tls bool) error {
+const tlsTerminationTypeKEY = "ior.pilot.maistra.io/TLSTerminationType"
+const insecureEdgeTerminationPolicyTypeKEY = "ior.pilot.maistra.io/InsecureEdgeTerminationPolicyType"
+const tlsCertificateSecretKEY = "ior.pilot.maistra.io/TLSCertificateSecret"
+
+func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway, originalHost string, server *networking.Server) error {
 	var wildcard = v1.WildcardPolicyNone
 	actualHost := originalHost
 
@@ -179,10 +183,72 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 
 	var tlsConfig *v1.TLSConfig
 	targetPort := "http2"
-	if tls {
-		tlsConfig = &v1.TLSConfig{Termination: v1.TLSTerminationPassthrough}
-		targetPort = "https"
+
+	//Check for TLSTerminationType Key
+	if val, ok := metadata.Annotations[tlsTerminationTypeKEY]; ok {
+		switch val {
+		case "TLSTerminationEdge":
+			tlsConfig.Termination = v1.TLSTerminationEdge
+			targetPort = "http2"
+		case "TLSTerminationPassthrough":
+			tlsConfig.Termination = v1.TLSTerminationPassthrough
+			targetPort = "https"
+		case "TLSTerminationReencrypt":
+			tlsConfig.Termination = v1.TLSTerminationReencrypt
+			targetPort = "https"
+		}
+	} else {
+		//Otherwise Default behavior
+		if server.Tls != nil {
+			tlsConfig = &v1.TLSConfig{Termination: v1.TLSTerminationPassthrough}
+			targetPort = "https"
+		}
 	}
+
+	//Check for InsecureEdgeTerminationPolicyType Key
+	if val, ok := metadata.Annotations[insecureEdgeTerminationPolicyTypeKEY]; ok {
+		switch val {
+		case "InsecureEdgeTerminationPolicyNone":
+			tlsConfig.InsecureEdgeTerminationPolicy = v1.InsecureEdgeTerminationPolicyNone
+		case "InsecureEdgeTerminationPolicyAllow":
+			tlsConfig.InsecureEdgeTerminationPolicy = v1.InsecureEdgeTerminationPolicyAllow
+		case "InsecureEdgeTerminationPolicyRedirect":
+			tlsConfig.InsecureEdgeTerminationPolicy = v1.InsecureEdgeTerminationPolicyRedirect
+		}
+	}
+
+	//Check for TLSCertificateSecret Key
+	if val, ok := metadata.Annotations[tlsCertificateSecretKEY]; ok {
+		secrets, err := r.kubeClient.CoreV1().Secrets(metadata.Namespace).List(context.TODO(), metav1.ListOptions{LabelSelector: val})
+		if err != nil {
+			iorLog.Debugf("Failed to Get certificate Secret with the name %s :: err: %s", val, err)
+		} else {
+			if len(secrets.Items) > 0 {
+				if sval, sok := secrets.Items[0].Data["Certificate"]; sok {
+					tlsConfig.Certificate = string(sval)
+				}
+				if sval, sok := secrets.Items[0].Data["Key"]; sok {
+					tlsConfig.Key = string(sval)
+				}
+				if sval, sok := secrets.Items[0].Data["CACertificate"]; sok {
+					tlsConfig.CACertificate = string(sval)
+				}
+				if sval, sok := secrets.Items[0].Data["DestinationCACertificate"]; sok {
+					tlsConfig.DestinationCACertificate = string(sval)
+				}
+			}
+		}
+	}
+
+	// ior.pilot.maistra.io/TLSTerminationType = {VAL}
+	//   Allowed Values: {TLSTerminationEdge, TLSTerminationPassthrough, TLSTerminationReencrypt}
+
+	// ior.pilot.maistra.io/InsecureEdgeTerminationPolicyType = {VAL}
+	//   Allowed Values: {InsecureEdgeTerminationPolicyNone, InsecureEdgeTerminationPolicyAllow, InsecureEdgeTerminationPolicyRedirect}
+
+	// ior.pilot.maistra.io/TLSCertificateSecret = {VAL}
+	//   Allowed Values: {ANY} Will corrispond to a Secret in the secrets API Controller
+	//   Expected Secret Properties Expected: Certificate, Key, CACertificate, DestinationCACertificate
 
 	serviceNamespace, serviceName, err := r.findService(gateway)
 	if err != nil {
