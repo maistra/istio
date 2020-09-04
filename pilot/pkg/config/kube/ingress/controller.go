@@ -49,7 +49,7 @@ import (
 	"istio.io/istio/pkg/config/schema/resource"
 	"istio.io/istio/pkg/listwatch"
 	"istio.io/istio/pkg/queue"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 // In 1.0, the Gateway is defined in the namespace where the actual controller runs, and needs to be managed by

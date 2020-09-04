@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pkg/listwatch"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/istio/security/pkg/registry"
 	"istio.io/pkg/log"
 )

@@ -25,7 +25,7 @@ import (
 	"istio.io/istio/mixer/pkg/runtime/config"
 	"istio.io/istio/mixer/pkg/runtime/monitoring"
 	"istio.io/istio/mixer/pkg/runtime/safecall"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/pkg/log"
 	"istio.io/pkg/pool"
 )

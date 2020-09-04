@@ -27,7 +27,7 @@ import (
 
 	"istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/pkg/config/schema/resource"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 var (

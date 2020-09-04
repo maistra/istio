@@ -32,7 +32,7 @@ import (
 	"istio.io/istio/pkg/config/schema/snapshots"
 	"istio.io/istio/pkg/keepalive"
 	"istio.io/istio/pkg/mcp/creds"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/istio/pkg/webhooks/validation/controller"
 	"istio.io/istio/pkg/webhooks/validation/server"
 )

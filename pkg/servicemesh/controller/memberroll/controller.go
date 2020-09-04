@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package controller
+package memberroll
 
 import (
 	"fmt"
@@ -25,9 +25,9 @@ import (
 
 	"istio.io/istio/pkg/kube"
 	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
-	"istio.io/istio/pkg/servicemesh/client/clientset/versioned"
-	versioned_v1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
-	"istio.io/istio/pkg/servicemesh/client/informers/externalversions"
+	"istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned"
+	versioned_v1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
+	"istio.io/istio/pkg/servicemesh/client/v1/informers/externalversions"
 	"istio.io/pkg/log"
 )
 

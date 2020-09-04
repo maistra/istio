@@ -42,7 +42,7 @@ import (
 	runtimeconfig "istio.io/istio/mixer/pkg/runtime/config"
 	"istio.io/istio/mixer/pkg/runtime/dispatcher"
 	"istio.io/istio/mixer/pkg/template"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/istio/pkg/tracing"
 	"istio.io/pkg/ctrlz"
 	"istio.io/pkg/log"
