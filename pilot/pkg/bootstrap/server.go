@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +68,7 @@ import (
 	istiokeepalive "istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/inject"
+	"istio.io/istio/pkg/servicemesh/controller/extension"
 	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 
 	"istio.io/istio/security/pkg/k8s/chiron"
@@ -201,6 +203,11 @@ func NewServer(args *PilotArgs) (*Server, error) {
 	}
 	if err := s.initMemberRollController(args); err != nil {
 		return nil, fmt.Errorf("service mesh client: %v", err)
+	}
+	if features.EnableMaistraExtensionSupport {
+		if err := s.initExtensionController(args); err != nil {
+			return nil, fmt.Errorf("extension client: %v", err)
+		}
 	}
 	fileWatcher := filewatcher.NewWatcher()
 	if err := s.initMeshConfiguration(args, fileWatcher); err != nil {
@@ -463,6 +470,21 @@ func (s *Server) initMemberRollController(args *PilotArgs) error {
 		}
 		s.mrc = mrc
 		s.mrc.Start(make(chan struct{}))
+	}
+
+	return nil
+}
+
+// initMemberRollController creates the service mesh client if running in an k8s environment.
+func (s *Server) initExtensionController(args *PilotArgs) error {
+	if hasKubeRegistry(args.Service.Registries) && args.Config.FileDir == "" {
+		ec, err := extension.NewExtensionControllerFromConfigFile(args.Config.KubeConfig, strings.Split(args.Config.ControllerOptions.WatchedNamespaces, ","),
+			s.mrc, args.Config.ControllerOptions.ResyncPeriod)
+		if err != nil {
+			return multierror.Prefix(err, "Could not create ExtensionController.")
+		}
+		s.environment.ExtensionStore = ec
+		s.environment.ExtensionStore.Start(make(chan struct{}))
 	}
 
 	return nil
@@ -836,6 +858,20 @@ func (s *Server) initEventHandlers() error {
 
 			s.configController.RegisterEventHandler(schema.Resource().GroupVersionKind(), configHandler)
 		}
+	}
+
+	if s.environment.ExtensionStore != nil {
+		s.environment.ExtensionStore.RegisterEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				s.EnvoyXdsServer.Push(&model.PushRequest{Full: true})
+			},
+			DeleteFunc: func(obj interface{}) {
+				s.EnvoyXdsServer.Push(&model.PushRequest{Full: true})
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				s.EnvoyXdsServer.Push(&model.PushRequest{Full: true})
+			},
+		})
 	}
 
 	return nil
