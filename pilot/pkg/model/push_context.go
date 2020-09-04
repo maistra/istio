@@ -1505,6 +1505,9 @@ func (ps *PushContext) EnvoyFilters(proxy *Proxy) *EnvoyFilterWrapper {
 
 // pre computes extensions per namespace
 func (ps *PushContext) initExtensions(env *Environment) error {
+	if env == nil || env.ExtensionStore == nil {
+		return nil
+	}
 	ps.extensionsByNamespace = map[string][]*maistramodel.ExtensionWrapper{}
 	for _, extension := range env.ExtensionStore.GetExtensions() {
 		if ps.extensionsByNamespace[extension.Namespace] == nil {
