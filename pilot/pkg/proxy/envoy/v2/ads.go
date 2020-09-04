@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 
 	istiolog "istio.io/pkg/log"
 
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/networking/util"
 	v3 "istio.io/istio/pilot/pkg/proxy/envoy/v3"
@@ -315,10 +317,26 @@ func (s *DiscoveryServer) handleTypeURL(typeURL string, requestedType *string) e
 	return nil
 }
 
+func isTransientError(discReq *xdsapi.DiscoveryRequest) bool {
+	if discReq.ErrorDetail == nil {
+		return false
+	}
+	if strings.Contains(discReq.ErrorDetail.GetMessage(), "Failed to load WASM code (fetching)") ||
+		strings.Contains(discReq.ErrorDetail.GetMessage(), "Failed to load WASM code (fetch in progress)") {
+		return true
+	}
+	return false
+}
+
 func (s *DiscoveryServer) handleLds(con *XdsConnection, discReq *xdsapi.DiscoveryRequest) error {
 	if con.LDSWatch {
-		// Already received a cluster watch request, this is an ACK
-		if discReq.ErrorDetail != nil {
+		// This is a workaround for the issue that the proxy might need time to fetch WASM filters,
+		// resulting in an initial ACK error. To solve the issue, we're pushing LDS again until the
+		// code has been fetched by the proxy.
+		if features.EnableMaistraExtensionSupport && isTransientError(discReq) {
+			return s.pushLds(con, s.globalPushContext(), versionInfo())
+		} else if discReq.ErrorDetail != nil {
+			// Already received a cluster watch request, this is an ACK
 			errCode := codes.Code(discReq.ErrorDetail.Code)
 			adsLog.Warnf("ADS:LDS: ACK ERROR %s %s:%s", con.ConID, errCode.String(), discReq.ErrorDetail.GetMessage())
 			incrementXDSRejects(ldsReject, con.node.ID, errCode.String())
