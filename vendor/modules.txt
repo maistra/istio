@@ -802,7 +802,7 @@ istio.io/api/type/v1beta1
 # istio.io/gogo-genproto v0.0.0-20191029161641-f7d19ec0141d
 istio.io/gogo-genproto/googleapis/google/api
 istio.io/gogo-genproto/googleapis/google/rpc
-# istio.io/operator v0.0.0-20200418162406-5f8ecc70a0f4
+# istio.io/operator v0.0.0-20200504203717-fec36de576e3
 istio.io/operator/cmd/mesh
 istio.io/operator/pkg/apis/istio/v1alpha1
 istio.io/operator/pkg/apis/istio/v1alpha2
