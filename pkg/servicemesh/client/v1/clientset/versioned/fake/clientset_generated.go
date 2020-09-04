@@ -17,14 +17,15 @@
 package fake
 
 import (
-	clientset "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned"
-	maistrav1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
-	fakemaistrav1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/testing"
+
+	clientset "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned"
+	maistrav1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
+	fakemaistrav1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1/fake"
 )
 
 // NewSimpleClientset returns a clientset that will respond with the provided objects.

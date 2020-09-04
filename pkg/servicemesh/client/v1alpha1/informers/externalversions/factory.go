@@ -21,13 +21,14 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
-	internalinterfaces "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/internalinterfaces"
-	servicemesh "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/servicemesh"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
+
+	versioned "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
+	internalinterfaces "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/internalinterfaces"
+	servicemesh "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/servicemesh"
 )
 
 // SharedInformerOption defines the functional option type for SharedInformerFactory.

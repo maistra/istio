@@ -20,14 +20,15 @@ import (
 	"context"
 	time "time"
 
-	servicemeshv1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
-	versioned "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned"
-	internalinterfaces "istio.io/istio/pkg/servicemesh/client/v1/informers/externalversions/internalinterfaces"
-	v1 "istio.io/istio/pkg/servicemesh/client/v1/listers/servicemesh/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
+
+	servicemeshv1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	versioned "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned"
+	internalinterfaces "istio.io/istio/pkg/servicemesh/client/v1/informers/externalversions/internalinterfaces"
+	v1 "istio.io/istio/pkg/servicemesh/client/v1/listers/servicemesh/v1"
 )
 
 // ServiceMeshMemberRollInformer provides access to a shared informer and lister for

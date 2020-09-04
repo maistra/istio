@@ -20,14 +20,15 @@ import (
 	"context"
 	time "time"
 
-	servicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	versioned "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
-	internalinterfaces "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/internalinterfaces"
-	v1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/listers/servicemesh/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
+
+	servicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	versioned "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
+	internalinterfaces "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/internalinterfaces"
+	v1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/listers/servicemesh/v1alpha1"
 )
 
 // ServiceMeshExtensionInformer provides access to a shared informer and lister for

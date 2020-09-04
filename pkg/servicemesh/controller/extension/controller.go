@@ -20,11 +20,12 @@ import (
 	"sync"
 	"time"
 
-	controller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+
+	controller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/listwatch"
