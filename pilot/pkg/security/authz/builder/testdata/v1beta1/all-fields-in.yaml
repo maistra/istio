@@ -24,6 +24,8 @@ spec:
       when:
         - key: "request.headers[X-header]"
           values: ["header", "header-prefix-*", "*-suffix-header", "*"]
+        - key: "request.regex.headers[X-header-regex]"
+          values: ["some.*value"]
         - key: "source.ip"
           values: ["10.10.10.10", "192.168.10.0/24"]
         - key: "source.namespace"
