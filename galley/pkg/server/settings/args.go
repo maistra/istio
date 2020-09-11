@@ -168,7 +168,7 @@ type Args struct { // nolint:maligned
 	Snapshots       []string
 	TriggerSnapshot string
 
-	MemberRollController meshcontroller.MemberRollController
+	MemberRollController meshcontroller.Controller
 }
 
 // DefaultArgs allocates an Args struct initialized with Galley's default configuration.

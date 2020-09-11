@@ -51,11 +51,11 @@ type Provider struct {
 	informers        informers.SharedInformerFactory
 	dynamicInterface dynamic.Interface
 
-	mrc meshcontroller.MemberRollController
+	mrc meshcontroller.Controller
 }
 
 // NewProvider returns a new instance of Provider.
-func NewProvider(interfaces kube.Interfaces, namespaces string, resyncPeriod time.Duration, mrc meshcontroller.MemberRollController) *Provider {
+func NewProvider(interfaces kube.Interfaces, namespaces string, resyncPeriod time.Duration, mrc meshcontroller.Controller) *Provider {
 	p := &Provider{
 		resyncPeriod: resyncPeriod,
 		interfaces:   interfaces,

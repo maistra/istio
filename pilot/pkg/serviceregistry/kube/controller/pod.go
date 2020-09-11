@@ -50,7 +50,7 @@ type PodCache struct {
 	c *Controller
 }
 
-func newPodCache(c *Controller, mrc meshcontroller.MemberRollController, options Options) *PodCache {
+func newPodCache(c *Controller, mrc meshcontroller.Controller, options Options) *PodCache {
 	namespaces := strings.Split(options.WatchedNamespaces, ",")
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {

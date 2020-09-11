@@ -39,16 +39,16 @@ type serviceMeshMemberRollController struct {
 	lock           sync.Mutex
 }
 
-type MemberRollListener interface {
+type Listener interface {
 	UpdateNamespaces(namespaces []string)
 }
 
-type MemberRollController interface {
-	Register(listener MemberRollListener, name string)
+type Controller interface {
+	Register(listener Listener, name string)
 	Start(stop chan struct{})
 }
 
-func NewMemberRollControllerFromConfigFile(kubeConfig string, namespace string, memberRollName string, resync time.Duration) (MemberRollController, error) {
+func NewControllerFromConfigFile(kubeConfig string, namespace string, memberRollName string, resync time.Duration) (Controller, error) {
 	config, err := kube.BuildClientConfig(kubeConfig, "")
 	if err != nil {
 		fmt.Printf("Could not create k8s config: %v", err)
@@ -85,8 +85,8 @@ func (smmrc *serviceMeshMemberRollController) Start(stop chan struct{}) {
 	}
 }
 
-func (smmrc *serviceMeshMemberRollController) Register(listener MemberRollListener, name string) {
-	smmrc.informer.AddEventHandler(smmrc.newServiceMeshMemberRollListener(listener, name))
+func (smmrc *serviceMeshMemberRollController) Register(listener Listener, name string) {
+	smmrc.informer.AddEventHandler(smmrc.newserviceMeshMemberRollListener(listener, name))
 }
 
 func (smmrc *serviceMeshMemberRollController) getNamespaces(namespaces []string) []string {
@@ -105,7 +105,7 @@ func (smmrc *serviceMeshMemberRollController) getNamespaces(namespaces []string)
 	return result
 }
 
-func (smmrc *serviceMeshMemberRollController) newServiceMeshMemberRollListener(listener MemberRollListener, name string) cache.ResourceEventHandler {
+func (smmrc *serviceMeshMemberRollController) newserviceMeshMemberRollListener(listener Listener, name string) cache.ResourceEventHandler {
 	handler := &serviceMeshMemberRollListener{
 		smmrc:             smmrc,
 		listener:          listener,
@@ -118,7 +118,7 @@ func (smmrc *serviceMeshMemberRollController) newServiceMeshMemberRollListener(l
 
 type serviceMeshMemberRollListener struct {
 	smmrc             *serviceMeshMemberRollController
-	listener          MemberRollListener
+	listener          Listener
 	currentNamespaces []string
 	name              string
 }

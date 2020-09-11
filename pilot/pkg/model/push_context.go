@@ -1527,7 +1527,7 @@ func (ps *PushContext) Extensions(proxy *Proxy) map[v1alpha1.FilterPhase][]*mais
 	if proxy == nil {
 		return nil
 	}
-	matchedExtensions := make(map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper, 0)
+	matchedExtensions := make(map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper)
 	// First get all the extension configs from the config root namespace
 	// and then add the ones from proxy's own namespace
 	if ps.Mesh.RootNamespace != "" {

@@ -80,14 +80,14 @@ type Source struct { // nolint:maligned
 
 	statusCtl status.Controller
 
-	mrc meshcontroller.MemberRollController
+	mrc meshcontroller.Controller
 }
 
 var _ event.Source = &Source{}
 var _ snapshotter.StatusUpdater = &Source{}
 
 // New returns a new kube.Source.
-func New(mrc meshcontroller.MemberRollController, o Options) *Source {
+func New(mrc meshcontroller.Controller, o Options) *Source {
 	s := &Source{
 		options:   o,
 		handlers:  &event.Handlers{},

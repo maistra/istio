@@ -123,7 +123,7 @@ func ingressClassSupported(client kubernetes.Interface) bool {
 }
 
 // NewController creates a new Kubernetes controller
-func NewController(client kubernetes.Interface, mrc meshcontroller.MemberRollController, mesh *meshconfig.MeshConfig,
+func NewController(client kubernetes.Interface, mrc meshcontroller.Controller, mesh *meshconfig.MeshConfig,
 	options kubecontroller.Options) model.ConfigStoreCache {
 
 	// queue requires a time duration for a retry delay after a handler error

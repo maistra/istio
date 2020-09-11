@@ -50,7 +50,7 @@ type ServiceController struct {
 }
 
 // NewServiceController returns a new ServiceController
-func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry, mrc meshcontroller.MemberRollController) *ServiceController {
+func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry, mrc meshcontroller.Controller) *ServiceController {
 	c := &ServiceController{
 		core: core,
 		reg:  reg,

@@ -252,7 +252,7 @@ func TestResourceFiltering(t *testing.T) {
 	prevApiserverNew := apiserverNew
 	defer func() { apiserverNew = prevApiserverNew }()
 	var recordedOptions apiserver.Options
-	apiserverNew = func(_ meshcontroller.MemberRollController, o apiserver.Options) *apiserver.Source {
+	apiserverNew = func(_ meshcontroller.Controller, o apiserver.Options) *apiserver.Source {
 		recordedOptions = o
 		return nil
 	}

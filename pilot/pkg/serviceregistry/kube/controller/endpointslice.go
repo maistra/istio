@@ -45,7 +45,7 @@ type endpointSliceController struct {
 
 var _ kubeEndpointsController = &endpointSliceController{}
 
-func newEndpointSliceController(c *Controller, mrc meshcontroller.MemberRollController, options Options) *endpointSliceController {
+func newEndpointSliceController(c *Controller, mrc meshcontroller.Controller, options Options) *endpointSliceController {
 	namespaces := strings.Split(options.WatchedNamespaces, ",")
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {

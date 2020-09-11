@@ -179,10 +179,10 @@ func runWebhookController() {
 
 	dnsNames := strings.Split(opts.dnsNames, ";")
 
-	var mrc meshcontroller.MemberRollController
+	var mrc meshcontroller.Controller
 
 	if opts.memberRollName != "" {
-		mrc, err = meshcontroller.NewMemberRollControllerFromConfigFile(
+		mrc, err = meshcontroller.NewControllerFromConfigFile(
 			opts.kubeConfigFile, opts.memberRollNamespace,
 			opts.memberRollName, opts.memberRollResyncPeriod)
 		if err != nil {

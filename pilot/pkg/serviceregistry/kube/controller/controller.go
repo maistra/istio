@@ -236,7 +236,7 @@ type PodLocalitySource interface {
 
 // NewController creates a new Kubernetes controller
 // Created by bootstrap and multicluster (see secretcontroler).
-func NewController(client kubernetes.Interface, metadataClient metadata.Interface, mrc meshcontroller.MemberRollController, options Options) *Controller {
+func NewController(client kubernetes.Interface, metadataClient metadata.Interface, mrc meshcontroller.Controller, options Options) *Controller {
 	log.Infof("Service controller watching namespace %q for services, endpoints, nodes and pods, refresh %s",
 		options.WatchedNamespaces, options.ResyncPeriod)
 

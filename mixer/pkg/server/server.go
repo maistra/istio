@@ -42,7 +42,7 @@ import (
 	runtimeconfig "istio.io/istio/mixer/pkg/runtime/config"
 	"istio.io/istio/mixer/pkg/runtime/dispatcher"
 	"istio.io/istio/mixer/pkg/template"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
+	"istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/istio/pkg/tracing"
 	"istio.io/pkg/ctrlz"
 	"istio.io/pkg/log"
@@ -71,7 +71,7 @@ type Server struct {
 	*probe.Probe
 	configStore store.Store
 
-	mrc     meshcontroller.MemberRollController
+	mrc     memberroll.Controller
 	mrcStop chan struct{}
 }
 
@@ -82,7 +82,7 @@ type patchTable struct {
 	newRuntime func(s store.Store, templates map[string]*template.Info, adapters map[string]*adapter.Info,
 		defaultConfigNamespace string, executorPool *pool.GoroutinePool,
 		handlerPool *pool.GoroutinePool, enableTracing bool,
-		mrc meshcontroller.MemberRollController,
+		mrc memberroll.Controller,
 		namespaces []string) *runtime.Runtime
 	configTracing func(serviceName string, options *tracing.Options) (io.Closer, error)
 	startMonitor  func(port uint16, enableProfiling bool, lf listenFunc) (*monitor, error)
@@ -217,7 +217,7 @@ func newServer(a *Args, p *patchTable) (server *Server, err error) {
 	var namespaces []string
 
 	if a.MemberRollName != "" {
-		mrc, err := meshcontroller.NewMemberRollControllerFromConfigFile(a.ConfigStoreURL, a.MemberRollNamespace, a.MemberRollName, a.MemberRollResync)
+		mrc, err := memberroll.NewControllerFromConfigFile(a.ConfigStoreURL, a.MemberRollNamespace, a.MemberRollName, a.MemberRollResync)
 		if err != nil {
 			_ = s.Close()
 			return nil, multierror.Prefix(err, "Could not create MemberRollController.")

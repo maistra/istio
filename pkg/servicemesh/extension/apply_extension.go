@@ -62,12 +62,10 @@ func ApplyListenerPatches(
 
 	for fcIndex, fc := range listener.FilterChains {
 		//copy extensions map
-		extensions := make(map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper, 0)
+		extensions := make(map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper)
 		for k, v := range extensionsMap {
 			extensions[k] = []*maistramodel.ExtensionWrapper{}
-			for _, ext := range v {
-				extensions[k] = append(extensions[k], ext)
-			}
+			extensions[k] = append(extensions[k], v...)
 		}
 		if !patchAll {
 			isRelevant := false
@@ -153,13 +151,13 @@ func ApplyListenerListPatches(
 
 func popAppend(list []*hcm_filter.HttpFilter, filterMap map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper, phase v1alpha1.FilterPhase) []*hcm_filter.HttpFilter {
 	for _, ext := range filterMap[phase] {
-		list = append(list, toEnvoyHttpFilter(ext))
+		list = append(list, toEnvoyHTTPFilter(ext))
 	}
 	filterMap[phase] = []*maistramodel.ExtensionWrapper{}
 	return list
 }
 
-func toEnvoyHttpFilter(extension *maistramodel.ExtensionWrapper) *hcm_filter.HttpFilter {
+func toEnvoyHTTPFilter(extension *maistramodel.ExtensionWrapper) *hcm_filter.HttpFilter {
 	return &hcm_filter.HttpFilter{
 		Name: "envoy.filters.http.wasm",
 		ConfigType: &hcm_filter.HttpFilter_Config{

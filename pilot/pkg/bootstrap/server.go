@@ -69,7 +69,7 @@ import (
 	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/inject"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
+	"istio.io/istio/pkg/servicemesh/controller/memberroll"
 
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/istio/security/pkg/pki/ca"
@@ -121,7 +121,7 @@ type Server struct {
 	kubeClient       kubernetes.Interface
 	metadataClient   metadata.Interface
 
-	mrc meshcontroller.MemberRollController
+	mrc memberroll.Controller
 
 	startFuncs       []startFunc
 	multicluster     *kubecontroller.Multicluster
@@ -463,7 +463,7 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 // initMemberRollController creates the service mesh client if running in an k8s environment.
 func (s *Server) initMemberRollController(args *PilotArgs) error {
 	if hasKubeRegistry(args.Service.Registries) && args.Config.FileDir == "" && args.Config.ControllerOptions.MemberRollName != "" {
-		mrc, err := meshcontroller.NewMemberRollControllerFromConfigFile(args.Config.KubeConfig, args.Namespace,
+		mrc, err := memberroll.NewControllerFromConfigFile(args.Config.KubeConfig, args.Namespace,
 			args.Config.ControllerOptions.MemberRollName, args.Config.ControllerOptions.ResyncPeriod)
 		if err != nil {
 			return multierror.Prefix(err, "Could not create MemberRollController.")
@@ -478,7 +478,7 @@ func (s *Server) initMemberRollController(args *PilotArgs) error {
 // initMemberRollController creates the service mesh client if running in an k8s environment.
 func (s *Server) initExtensionController(args *PilotArgs) error {
 	if hasKubeRegistry(args.Service.Registries) && args.Config.FileDir == "" {
-		ec, err := extension.NewExtensionControllerFromConfigFile(args.Config.KubeConfig, strings.Split(args.Config.ControllerOptions.WatchedNamespaces, ","),
+		ec, err := extension.NewControllerFromConfigFile(args.Config.KubeConfig, strings.Split(args.Config.ControllerOptions.WatchedNamespaces, ","),
 			s.mrc, args.Config.ControllerOptions.ResyncPeriod)
 		if err != nil {
 			return multierror.Prefix(err, "Could not create ExtensionController.")

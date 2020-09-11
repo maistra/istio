@@ -55,7 +55,7 @@ type Runtime struct {
 
 	*probe.Probe
 
-	mrc meshcontroller.MemberRollController
+	mrc meshcontroller.Controller
 
 	namespaces []string
 
@@ -73,7 +73,7 @@ func New(
 	executorPool *pool.GoroutinePool,
 	handlerPool *pool.GoroutinePool,
 	enableTracing bool,
-	mrc meshcontroller.MemberRollController,
+	mrc meshcontroller.Controller,
 	namespaces []string) *Runtime {
 
 	// Ignoring the errors for bad configuration that has already made it to the store.

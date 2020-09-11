@@ -56,7 +56,7 @@ type Environment struct {
 	IstioConfigStore
 
 	// Config interface for listing maistra-specific configuration
-	ExtensionStore extension.ExtensionController
+	ExtensionStore extension.Controller
 
 	// Watcher is the watcher for the mesh config (to be merged into the config store)
 	mesh.Watcher

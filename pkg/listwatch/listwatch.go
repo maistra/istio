@@ -37,7 +37,7 @@ var (
 
 type NamespaceListerWatcher interface {
 	cache.ListerWatcher
-	controller.MemberRollListener
+	controller.Listener
 }
 
 // MultiNamespaceListerWatcher takes a list of namespaces and a
