@@ -22,21 +22,24 @@ import (
 type ServiceMeshExtensionSpec struct {
 	Image            string           `json:"image,omitempty"`
 	WorkloadSelector WorkloadSelector `json:"workloadSelector,omitempty"`
-	Phase            FilterPhase      `json:"phase,required"`
-	Priority         int              `json:"priority,omitempty"`
+	Phase            *FilterPhase     `json:"phase,required"`
+	Priority         *int             `json:"priority,omitempty"`
 	Config           string           `json:"config,omitempty"`
 }
 
 // ServiceMeshExtensionStatus defines the observed state of ServiceMeshExtension
 type ServiceMeshExtensionStatus struct {
-	ServiceMeshExtensionSpec `json:"inline"`
-	Deployment               DeploymentStatus `json:"deployment,omitempty"`
+	Phase              FilterPhase      `json:"phase,omitempty"`
+	Priority           int              `json:"priority,omitempty"`
+	ObservedGeneration int64            `json:"observedGeneration,omitempty"`
+	Deployment         DeploymentStatus `json:"deployment,omitempty"`
 }
 
 type DeploymentStatus struct {
-	Ready  bool   `json:"ready,omitempty"`
-	SHA256 string `json:"sha256,omitempty"`
-	URL    string `json:"url,omitempty"`
+	Ready           bool   `json:"ready,omitempty"`
+	ContainerSHA256 string `json:"containerSha256,omitempty"`
+	SHA256          string `json:"sha256,omitempty"`
+	URL             string `json:"url,omitempty"`
 }
 
 // WorkloadSelector is used to match workloads based on pod labels

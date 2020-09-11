@@ -1513,8 +1513,10 @@ func (ps *PushContext) initExtensions(env *Environment) error {
 		if ps.extensionsByNamespace[extension.Namespace] == nil {
 			ps.extensionsByNamespace[extension.Namespace] = []*maistramodel.ExtensionWrapper{}
 		}
-		wrapper := maistramodel.ToWrapper(extension)
-		ps.extensionsByNamespace[extension.Namespace] = append(ps.extensionsByNamespace[extension.Namespace], wrapper)
+		if extension.Status.Deployment.Ready {
+			wrapper := maistramodel.ToWrapper(extension)
+			ps.extensionsByNamespace[extension.Namespace] = append(ps.extensionsByNamespace[extension.Namespace], wrapper)
+		}
 	}
 
 	return nil

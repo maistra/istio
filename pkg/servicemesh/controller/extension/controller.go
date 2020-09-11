@@ -86,7 +86,7 @@ func NewExtensionControllerFromConfigFile(kubeConfig string, namespaces []string
 				extension, ok := obj.(*v1alpha1.ServiceMeshExtension)
 				if ok && extension != nil {
 					store[extension.Namespace+"/"+extension.Name] = extension.DeepCopy()
-					log.Warnf("Added resource %s/%s", extension.Namespace, extension.Name)
+					log.Infof("Added extension %s/%s", extension.Namespace, extension.Name)
 
 				}
 			},
@@ -94,7 +94,7 @@ func NewExtensionControllerFromConfigFile(kubeConfig string, namespaces []string
 				extension, ok := cur.(*v1alpha1.ServiceMeshExtension)
 				if ok && extension != nil {
 					store[extension.Namespace+"/"+extension.Name] = extension.DeepCopy()
-					log.Warnf("Updated resource %s/%s", extension.Namespace, extension.Name)
+					log.Infof("Updated extension %s/%s", extension.Namespace, extension.Name)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -112,7 +112,7 @@ func NewExtensionControllerFromConfigFile(kubeConfig string, namespaces []string
 					}
 				}
 				store[extension.Namespace+"/"+extension.Name] = nil
-				log.Warnf("Deleted resource %s/%s", extension.Namespace, extension.Name)
+				log.Infof("Deleted extension %s/%s", extension.Namespace, extension.Name)
 			},
 		})
 
@@ -123,7 +123,6 @@ func NewExtensionControllerFromConfigFile(kubeConfig string, namespaces []string
 }
 
 func (ec *serviceMeshExtensionController) GetExtensions() []*v1alpha1.ServiceMeshExtension {
-	fmt.Printf("in store: %v", ec.store)
 	ret := []*v1alpha1.ServiceMeshExtension{}
 	for _, v := range ec.store {
 		ret = append(ret, v.DeepCopy())

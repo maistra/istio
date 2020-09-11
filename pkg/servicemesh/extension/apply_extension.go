@@ -32,13 +32,13 @@ import (
 )
 
 const (
-	defaultCacheCluster = "outbound|80||nginx.default.svc.cluster.local"
+	DefaultCacheCluster = "outbound|80||mec.istio-system.svc.cluster.local"
 	defaultRuntime      = "envoy.wasm.runtime.v8"
 )
 
 var (
 	// CacheCluster is the Envoy cluster that is used to retrieve WASM filters from
-	CacheCluster = defaultCacheCluster
+	CacheCluster = ""
 	// Runtime sets the WASM runtime to use for extensions
 	Runtime = defaultRuntime
 )
