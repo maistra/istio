@@ -22,7 +22,7 @@ import (
 type ServiceMeshExtensionSpec struct {
 	Image            string           `json:"image,omitempty"`
 	WorkloadSelector WorkloadSelector `json:"workloadSelector,omitempty"`
-	Phase            *FilterPhase     `json:"phase,required"`
+	Phase            *FilterPhase     `json:"phase"`
 	Priority         *int             `json:"priority,omitempty"`
 	Config           string           `json:"config,omitempty"`
 }
@@ -44,7 +44,7 @@ type DeploymentStatus struct {
 
 // WorkloadSelector is used to match workloads based on pod labels
 type WorkloadSelector struct {
-	Labels map[string]string `json:"labels,required"`
+	Labels map[string]string `json:"labels"`
 }
 
 // FilterPhase defines point of injection of Envoy filter
