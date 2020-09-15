@@ -65,3 +65,7 @@ vendor:
 	@echo "done updating vendor"
 
 gen: vendor
+
+.PHONY: mec
+mec: build
+BINARIES += ./mec/cmd/mec
