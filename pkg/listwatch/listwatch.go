@@ -26,7 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"istio.io/istio/pkg/servicemesh/controller"
+	controller "istio.io/istio/pkg/servicemesh/controller/memberroll"
+
 	"istio.io/pkg/log"
 )
 
@@ -36,7 +37,7 @@ var (
 
 type NamespaceListerWatcher interface {
 	cache.ListerWatcher
-	controller.MemberRollListener
+	controller.Listener
 }
 
 // MultiNamespaceListerWatcher takes a list of namespaces and a

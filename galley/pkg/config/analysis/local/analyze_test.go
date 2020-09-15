@@ -39,7 +39,7 @@ import (
 	"istio.io/istio/pkg/config/resource"
 	"istio.io/istio/pkg/config/schema"
 	"istio.io/istio/pkg/config/schema/collection"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 type testAnalyzer struct {
@@ -252,7 +252,7 @@ func TestResourceFiltering(t *testing.T) {
 	prevApiserverNew := apiserverNew
 	defer func() { apiserverNew = prevApiserverNew }()
 	var recordedOptions apiserver.Options
-	apiserverNew = func(_ meshcontroller.MemberRollController, o apiserver.Options) *apiserver.Source {
+	apiserverNew = func(_ meshcontroller.Controller, o apiserver.Options) *apiserver.Source {
 		recordedOptions = o
 		return nil
 	}

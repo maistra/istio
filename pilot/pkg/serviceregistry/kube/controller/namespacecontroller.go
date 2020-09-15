@@ -36,7 +36,7 @@ import (
 
 	"istio.io/istio/pkg/listwatch"
 	"istio.io/istio/pkg/queue"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	certutil "istio.io/istio/security/pkg/util"
 )
 
@@ -68,7 +68,7 @@ type NamespaceController struct {
 
 	// if this is not null, we don't create a K8s controller, but only react on namespace changes
 	// coming from the MRC
-	mrc meshcontroller.MemberRollController
+	mrc meshcontroller.Controller
 
 	// only used if usesMemberRollController is true
 	started    bool
@@ -78,7 +78,7 @@ type NamespaceController struct {
 
 // NewNamespaceController returns a pointer to a newly constructed NamespaceController instance.
 func NewNamespaceController(data func() map[string]string, options Options, kubeClient kubernetes.Interface,
-	mrc meshcontroller.MemberRollController) *NamespaceController {
+	mrc meshcontroller.Controller) *NamespaceController {
 	c := &NamespaceController{
 		getData: data,
 		client:  kubeClient.CoreV1(),

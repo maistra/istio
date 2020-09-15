@@ -31,7 +31,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 	"istio.io/istio/pkg/listwatch"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 // PodCache is an eventually consistent pod cache
@@ -50,7 +50,7 @@ type PodCache struct {
 	c *Controller
 }
 
-func newPodCache(c *Controller, mrc meshcontroller.MemberRollController, options Options) *PodCache {
+func newPodCache(c *Controller, mrc meshcontroller.Controller, options Options) *PodCache {
 	namespaces := strings.Split(options.WatchedNamespaces, ",")
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {

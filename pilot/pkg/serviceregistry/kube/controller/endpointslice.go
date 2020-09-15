@@ -35,7 +35,7 @@ import (
 	"istio.io/istio/pkg/config/host"
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/listwatch"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 type endpointSliceController struct {
@@ -45,7 +45,7 @@ type endpointSliceController struct {
 
 var _ kubeEndpointsController = &endpointSliceController{}
 
-func newEndpointSliceController(c *Controller, mrc meshcontroller.MemberRollController, options Options) *endpointSliceController {
+func newEndpointSliceController(c *Controller, mrc meshcontroller.Controller, options Options) *endpointSliceController {
 	namespaces := strings.Split(options.WatchedNamespaces, ",")
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, func(namespace string) cache.ListerWatcher {

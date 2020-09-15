@@ -42,7 +42,7 @@ import (
 	controller2 "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/queue"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 // controller is a collection of synchronized resource watchers.
@@ -110,7 +110,7 @@ func knownCrdsWithRetry(client *Client) map[string]struct{} {
 
 // NewController creates a new Kubernetes controller for CRDs
 // Use "" for namespace to listen for all namespace changes
-func NewController(client *Client, mrc meshcontroller.MemberRollController, options controller2.Options) model.ConfigStoreCache {
+func NewController(client *Client, mrc meshcontroller.Controller, options controller2.Options) model.ConfigStoreCache {
 	if mrc == nil {
 		log.Infof("CRD controller watching namespaces %q", options.WatchedNamespaces)
 	} else {
@@ -141,7 +141,7 @@ func NewController(client *Client, mrc meshcontroller.MemberRollController, opti
 	return out
 }
 
-func (c *controller) addInformer(schema collection.Schema, namespaces []string, resyncPeriod time.Duration, mrc meshcontroller.MemberRollController) {
+func (c *controller) addInformer(schema collection.Schema, namespaces []string, resyncPeriod time.Duration, mrc meshcontroller.Controller) {
 	kind := schema.Resource().GroupVersionKind()
 	schemaType := crd.SupportedTypes[kind]
 	c.kinds[kind] = c.newCacheHandler(schema, schemaType.Object.DeepCopyObject(), kind.Kind, resyncPeriod,
@@ -228,7 +228,7 @@ func (c *controller) newCacheHandler(
 	resyncPeriod time.Duration,
 	lwf func(string) cache.ListerWatcher,
 	namespaces []string,
-	mrc meshcontroller.MemberRollController) *cacheHandler {
+	mrc meshcontroller.Controller) *cacheHandler {
 
 	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, lwf)
 	if mrc != nil {

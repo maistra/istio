@@ -29,7 +29,7 @@ import (
 	"istio.io/istio/mixer/pkg/adapter"
 	"istio.io/istio/mixer/pkg/runtime/monitoring"
 	"istio.io/istio/pkg/listwatch"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/pkg/log"
 	"istio.io/pkg/pool"
 )
@@ -40,11 +40,11 @@ type env struct {
 	monitoringCtx    context.Context
 	daemons, workers *int64
 	namespaces       *[]string
-	mrc              meshcontroller.MemberRollController
+	mrc              meshcontroller.Controller
 }
 
 // NewEnv returns a new environment instance.
-func NewEnv(cfgID int64, name string, gp *pool.GoroutinePool, mrc meshcontroller.MemberRollController, namespaces []string) adapter.Env {
+func NewEnv(cfgID int64, name string, gp *pool.GoroutinePool, mrc meshcontroller.Controller, namespaces []string) adapter.Env {
 	ctx := context.Background()
 	var err error
 	if ctx, err = tag.New(ctx, tag.Insert(monitoring.HandlerTag, name)); err != nil {

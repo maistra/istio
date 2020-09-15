@@ -30,7 +30,7 @@ import (
 	"istio.io/istio/pkg/config/event"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/resource"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 var (
@@ -80,14 +80,14 @@ type Source struct { // nolint:maligned
 
 	statusCtl status.Controller
 
-	mrc meshcontroller.MemberRollController
+	mrc meshcontroller.Controller
 }
 
 var _ event.Source = &Source{}
 var _ snapshotter.StatusUpdater = &Source{}
 
 // New returns a new kube.Source.
-func New(mrc meshcontroller.MemberRollController, o Options) *Source {
+func New(mrc meshcontroller.Controller, o Options) *Source {
 	s := &Source{
 		options:   o,
 		handlers:  &event.Handlers{},

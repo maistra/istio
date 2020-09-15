@@ -26,7 +26,7 @@ import (
 
 	istiocmd "istio.io/istio/pkg/cmd"
 	"istio.io/istio/pkg/kube"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/istio/security/pkg/cmd"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/pkg/collateral"
@@ -179,10 +179,10 @@ func runWebhookController() {
 
 	dnsNames := strings.Split(opts.dnsNames, ";")
 
-	var mrc meshcontroller.MemberRollController
+	var mrc meshcontroller.Controller
 
 	if opts.memberRollName != "" {
-		mrc, err = meshcontroller.NewMemberRollControllerFromConfigFile(
+		mrc, err = meshcontroller.NewControllerFromConfigFile(
 			opts.kubeConfigFile, opts.memberRollNamespace,
 			opts.memberRollName, opts.memberRollResyncPeriod)
 		if err != nil {

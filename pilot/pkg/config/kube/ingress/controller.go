@@ -49,7 +49,7 @@ import (
 	"istio.io/istio/pkg/config/schema/resource"
 	"istio.io/istio/pkg/listwatch"
 	"istio.io/istio/pkg/queue"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 // In 1.0, the Gateway is defined in the namespace where the actual controller runs, and needs to be managed by
@@ -123,7 +123,7 @@ func ingressClassSupported(client kubernetes.Interface) bool {
 }
 
 // NewController creates a new Kubernetes controller
-func NewController(client kubernetes.Interface, mrc meshcontroller.MemberRollController, mesh *meshconfig.MeshConfig,
+func NewController(client kubernetes.Interface, mrc meshcontroller.Controller, mesh *meshconfig.MeshConfig,
 	options kubecontroller.Options) model.ConfigStoreCache {
 
 	// queue requires a time duration for a retry delay after a handler error

@@ -32,6 +32,7 @@ import (
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pkg/cmd"
+	"istio.io/istio/pkg/servicemesh/extension"
 	"istio.io/istio/pkg/spiffe"
 )
 
@@ -152,6 +153,8 @@ func init() {
 		"node", "Specify where the controller should obtain the Pod's zone and region from (the pod's node or the pod itself)")
 	discoveryCmd.PersistentFlags().StringVarP(&serverArgs.Config.ControllerOptions.MemberRollName, "memberRollName", "", "",
 		"The name of the ServiceMeshMemberRoll resource.  If specified the server will monitor this resource to discover the application namespaces.")
+	discoveryCmd.PersistentFlags().StringVar(&extension.CacheCluster, "cacheCluster", extension.DefaultCacheCluster,
+		"Cluster pointing to Extension Cache component. This is used in proxies to retrieve WASM filters.")
 	discoveryCmd.PersistentFlags().DurationVar(&serverArgs.Config.ControllerOptions.ResyncPeriod, "resync", 60*time.Second,
 		"Controller resync interval")
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.Config.ControllerOptions.DomainSuffix, "domain", "cluster.local",

@@ -75,7 +75,7 @@ func getFilterConfig(filter *listener.Filter, out proto.Message) error {
 	return nil
 }
 
-func getHTTPConnectionManager(filter *listener.Filter) *hcm_filter.HttpConnectionManager {
+func GetHTTPConnectionManager(filter *listener.Filter) *hcm_filter.HttpConnectionManager {
 	cm := &hcm_filter.HttpConnectionManager{}
 	if err := getFilterConfig(filter, cm); err != nil {
 		log.Errorf("failed to get HTTP connection manager config: %s", err)
@@ -119,7 +119,7 @@ func ParseListener(listener *v2.Listener) *ParsedListener {
 		for _, filter := range fc.Filters {
 			switch filter.Name {
 			case "envoy.http_connection_manager":
-				if cm := getHTTPConnectionManager(filter); cm != nil {
+				if cm := GetHTTPConnectionManager(filter); cm != nil {
 					for _, httpFilter := range cm.GetHttpFilters() {
 						switch httpFilter.GetName() {
 						case "istio_authn":
