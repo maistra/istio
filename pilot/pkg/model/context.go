@@ -37,6 +37,7 @@ import (
 	"istio.io/istio/pkg/config/host"
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/mesh"
+	"istio.io/istio/pkg/servicemesh/controller/extension"
 )
 
 const (
@@ -53,6 +54,9 @@ type Environment struct {
 
 	// Config interface for listing routing rules
 	IstioConfigStore
+
+	// Config interface for listing maistra-specific configuration
+	ExtensionStore extension.Controller
 
 	// Watcher is the watcher for the mesh config (to be merged into the config store)
 	mesh.Watcher

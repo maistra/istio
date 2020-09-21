@@ -337,4 +337,7 @@ var (
 
 	EnableIOR = env.RegisterBoolVar("ENABLE_IOR", false,
 		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
+
+	EnableMaistraExtensionSupport = env.RegisterBoolVar("ENABLE_MAISTRA_EXTENSIONS", false,
+		"If enabled, pilot, will watch ServiceMeshExtension resources and apply them to filter chains of its proxies").Get()
 )

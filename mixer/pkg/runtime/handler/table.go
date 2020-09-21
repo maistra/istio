@@ -25,7 +25,7 @@ import (
 	"istio.io/istio/mixer/pkg/runtime/config"
 	"istio.io/istio/mixer/pkg/runtime/monitoring"
 	"istio.io/istio/mixer/pkg/runtime/safecall"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/pkg/log"
 	"istio.io/pkg/pool"
 )
@@ -65,7 +65,7 @@ type Entry struct {
 
 // NewTable returns a new table, based on the given config snapshot. The table will re-use existing handlers as much as
 // possible from the old table.
-func NewTable(old *Table, snapshot *config.Snapshot, gp *pool.GoroutinePool, mrc meshcontroller.MemberRollController, namespaces []string) *Table {
+func NewTable(old *Table, snapshot *config.Snapshot, gp *pool.GoroutinePool, mrc meshcontroller.Controller, namespaces []string) *Table {
 	// Find all handlers, as referenced by instances, and associate to handlers.
 	instancesByHandler := config.GetInstancesGroupedByHandlers(snapshot)
 	instancesByHandlerDynamic := config.GetInstancesGroupedByHandlersDynamic(snapshot)

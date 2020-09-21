@@ -31,7 +31,7 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 // ServiceController monitors the service definition changes in a namespace. If a
@@ -50,7 +50,7 @@ type ServiceController struct {
 }
 
 // NewServiceController returns a new ServiceController
-func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry, mrc meshcontroller.MemberRollController) *ServiceController {
+func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg registry.Registry, mrc meshcontroller.Controller) *ServiceController {
 	c := &ServiceController{
 		core: core,
 		reg:  reg,

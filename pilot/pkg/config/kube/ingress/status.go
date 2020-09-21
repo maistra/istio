@@ -37,7 +37,7 @@ import (
 	controller2 "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/istio/pkg/listwatch"
 	queue2 "istio.io/istio/pkg/queue"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 
 	"istio.io/pkg/log"
 )
@@ -71,7 +71,7 @@ func (s *StatusSyncer) Run(stopCh <-chan struct{}) {
 // NewStatusSyncer creates a new instance
 func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 	client kubernetes.Interface,
-	mrc meshcontroller.MemberRollController,
+	mrc meshcontroller.Controller,
 	options controller2.Options) (*StatusSyncer, error) {
 
 	// we need to use the defined ingress class to allow multiple leaders

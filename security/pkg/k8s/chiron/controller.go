@@ -36,7 +36,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pkg/listwatch"
-	meshcontroller "istio.io/istio/pkg/servicemesh/controller"
+	meshcontroller "istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/istio/security/pkg/pki/ca"
 	"istio.io/istio/security/pkg/pki/util"
 	certutil "istio.io/istio/security/pkg/util"
@@ -96,14 +96,14 @@ type WebhookController struct {
 	gracePeriodRatio float32
 	certUtil         certutil.CertUtil
 
-	mrc meshcontroller.MemberRollController
+	mrc meshcontroller.Controller
 }
 
 // NewWebhookController returns a pointer to a newly constructed WebhookController instance.
 func NewWebhookController(gracePeriodRatio float32, minGracePeriod time.Duration,
 	core corev1.CoreV1Interface, admission admissionv1.AdmissionregistrationV1beta1Interface,
 	certClient certclient.CertificatesV1beta1Interface, k8sCaCertFile string,
-	secretNames, dnsNames, serviceNamespaces []string, mrc meshcontroller.MemberRollController) (*WebhookController, error) {
+	secretNames, dnsNames, serviceNamespaces []string, mrc meshcontroller.Controller) (*WebhookController, error) {
 	if gracePeriodRatio < 0 || gracePeriodRatio > 1 {
 		return nil, fmt.Errorf("grace period ratio %f should be within [0, 1]", gracePeriodRatio)
 	}
