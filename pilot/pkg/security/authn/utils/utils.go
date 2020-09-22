@@ -52,10 +52,10 @@ func BuildInboundFilterChain(mTLSMode model.MutualTLSMode, sdsUdsPath string, no
 				// transfer can take place between sidecars for TCP with mTLS.
 				AlpnProtocols: util.ALPNDownstream,
 				TlsParams: &auth.TlsParameters{
-					TlsMinimumProtocolVersion: tls_features.TlsMinProtocolVersion.Get(),
-					TlsMaximumProtocolVersion: tls_features.TlsMaxProtocolVersion.Get(),
-					CipherSuites:              tls_features.TlsCipherSuites.Get(),
-					EcdhCurves:                tls_features.TlsEcdhCurves.Get(),
+					TlsMinimumProtocolVersion: tls_features.TLSMinProtocolVersion.Get(),
+					TlsMaximumProtocolVersion: tls_features.TLSMaxProtocolVersion.Get(),
+					CipherSuites:              tls_features.TLSCipherSuites.Get(),
+					EcdhCurves:                tls_features.TLSECDHCurves.Get(),
 				},
 			},
 			RequireClientCertificate: protovalue.BoolTrue,
@@ -77,10 +77,10 @@ func BuildInboundFilterChain(mTLSMode model.MutualTLSMode, sdsUdsPath string, no
 				// protocol, e.g. HTTP/2.
 				AlpnProtocols: util.ALPNHttp,
 				TlsParams: &auth.TlsParameters{
-					TlsMinimumProtocolVersion: tls_features.TlsMinProtocolVersion.Get(),
-					TlsMaximumProtocolVersion: tls_features.TlsMaxProtocolVersion.Get(),
-					CipherSuites:              tls_features.TlsCipherSuites.Get(),
-					EcdhCurves:                tls_features.TlsEcdhCurves.Get(),
+					TlsMinimumProtocolVersion: tls_features.TLSMinProtocolVersion.Get(),
+					TlsMaximumProtocolVersion: tls_features.TLSMaxProtocolVersion.Get(),
+					CipherSuites:              tls_features.TLSCipherSuites.Get(),
+					EcdhCurves:                tls_features.TLSECDHCurves.Get(),
 				},
 			},
 			RequireClientCertificate: protovalue.BoolTrue,

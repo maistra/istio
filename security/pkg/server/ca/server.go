@@ -299,10 +299,10 @@ func (s *Server) createTLSServerOption() grpc.ServerOption {
 			}
 			return s.certificate, nil
 		},
-		MinVersion:       tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
-		MaxVersion:       tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
-		CipherSuites:     tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
-		CurvePreferences: tls_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
+		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 	}
 	return grpc.Creds(credentials.NewTLS(config))
 }

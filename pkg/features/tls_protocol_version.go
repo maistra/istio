@@ -23,34 +23,34 @@ import (
 )
 
 var (
-	TlsMinProtocolVersion = RegisterTlsProtocolVersionVar(
+	TLSMinProtocolVersion = RegisterTLSProtocolVersionVar(
 		"TLS_MIN_PROTOCOL_VERSION",
 		auth.TlsParameters_TLS_AUTO.String(),
 		"The default minimum TLS protocol version",
 	)
 
-	TlsMaxProtocolVersion = RegisterTlsProtocolVersionVar(
+	TLSMaxProtocolVersion = RegisterTLSProtocolVersionVar(
 		"TLS_MAX_PROTOCOL_VERSION",
 		auth.TlsParameters_TLS_AUTO.String(),
 		"The default maximum TLS protocol version",
 	)
 )
 
-type TlsProtocolVersionVar struct {
+type TLSProtocolVersionVar struct {
 	env.StringVar
 }
 
-func RegisterTlsProtocolVersionVar(name string, defaultValue string, description string) TlsProtocolVersionVar {
+func RegisterTLSProtocolVersionVar(name string, defaultValue string, description string) TLSProtocolVersionVar {
 	v := env.RegisterStringVar(name, defaultValue, description)
-	return TlsProtocolVersionVar{v}
+	return TLSProtocolVersionVar{v}
 }
 
-func (v *TlsProtocolVersionVar) Get() auth.TlsParameters_TlsProtocol {
+func (v *TLSProtocolVersionVar) Get() auth.TlsParameters_TlsProtocol {
 	version, _ := v.Lookup()
 	return auth.TlsParameters_TlsProtocol(auth.TlsParameters_TlsProtocol_value[version])
 }
 
-func (v TlsProtocolVersionVar) GetGoTlsProtocolVersion() uint16 {
+func (v TLSProtocolVersionVar) GetGoTLSProtocolVersion() uint16 {
 	switch v.Get() {
 	case auth.TlsParameters_TLSv1_0:
 		return tls.VersionTLS10

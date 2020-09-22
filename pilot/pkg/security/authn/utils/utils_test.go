@@ -39,7 +39,7 @@ func TestBuildInboundFilterChain(t *testing.T) {
 	runTestBuildInboundFilterChain(t, &auth.TlsParameters{})
 }
 
-func TestTlsProtocolVersionBuildInboundFilterChain(t *testing.T) {
+func TestTLSProtocolVersionBuildInboundFilterChain(t *testing.T) {
 	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
 	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
 
@@ -53,28 +53,28 @@ func TestTlsProtocolVersionBuildInboundFilterChain(t *testing.T) {
 	})
 }
 
-func TestTlsCipherSuitesBuildInboundFilterChain(t *testing.T) {
+func TestTLSCipherSuitesBuildInboundFilterChain(t *testing.T) {
 	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
-	tls_features.TlsCipherSuites.Reset()
+	tls_features.TLSCipherSuites.Reset()
 
 	defer func() {
 		_ = os.Unsetenv("TLS_CIPHER_SUITES")
-		tls_features.TlsCipherSuites.Reset()
+		tls_features.TLSCipherSuites.Reset()
 	}()
 	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
 		CipherSuites: tls_features.SupportedOpenSSLCiphers,
 	})
 }
 
-func TestTlsCipherSuitesProtocolVersionBuildInboundFilterChain(t *testing.T) {
+func TestTLSCipherSuitesProtocolVersionBuildInboundFilterChain(t *testing.T) {
 	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
-	tls_features.TlsCipherSuites.Reset()
+	tls_features.TLSCipherSuites.Reset()
 	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
 	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
 
 	defer func() {
 		_ = os.Unsetenv("TLS_CIPHER_SUITES")
-		tls_features.TlsCipherSuites.Reset()
+		tls_features.TLSCipherSuites.Reset()
 		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
 		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
 	}()
@@ -85,21 +85,21 @@ func TestTlsCipherSuitesProtocolVersionBuildInboundFilterChain(t *testing.T) {
 	})
 }
 
-func TestTlsCipherSuitesEcdhCurvesBuildInboundFilterChain(t *testing.T) {
+func TestTLSCipherSuitesEcdhCurvesBuildInboundFilterChain(t *testing.T) {
 	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
-	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangEcdhCurves, ", "))
-	tls_features.TlsCipherSuites.Reset()
-	tls_features.TlsEcdhCurves.Reset()
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangECDHCurves, ", "))
+	tls_features.TLSCipherSuites.Reset()
+	tls_features.TLSECDHCurves.Reset()
 
 	defer func() {
 		_ = os.Unsetenv("TLS_CIPHER_SUITES")
 		_ = os.Unsetenv("TLS_ECDH_CURVES")
-		tls_features.TlsCipherSuites.Reset()
-		tls_features.TlsEcdhCurves.Reset()
+		tls_features.TLSCipherSuites.Reset()
+		tls_features.TLSECDHCurves.Reset()
 	}()
 	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
 		CipherSuites: tls_features.SupportedOpenSSLCiphers,
-		EcdhCurves:   tls_features.SupportedOpenSSLEcdhCurves,
+		EcdhCurves:   tls_features.SupportedOpenSSLECDHCurves,
 	})
 }
 

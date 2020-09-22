@@ -430,10 +430,10 @@ func buildGatewayListenerTLSContext(
 		CommonTlsContext: &auth.CommonTlsContext{
 			AlpnProtocols: util.ALPNHttp,
 			TlsParams: &auth.TlsParameters{
-				TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion, tls_features.TlsMinProtocolVersion.Get()),
-				TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion, tls_features.TlsMaxProtocolVersion.Get()),
-				CipherSuites:              tls_features.TlsCipherSuites.Get(),
-				EcdhCurves:                tls_features.TlsEcdhCurves.Get(),
+				TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion, tls_features.TLSMinProtocolVersion.Get()),
+				TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion, tls_features.TLSMaxProtocolVersion.Get()),
+				CipherSuites:              tls_features.TLSCipherSuites.Get(),
+				EcdhCurves:                tls_features.TLSECDHCurves.Get(),
 			},
 		},
 	}

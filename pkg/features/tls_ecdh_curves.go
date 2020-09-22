@@ -31,20 +31,20 @@ const (
 	GoX25519    = "X25519"
 
 	// OpenSSL ECDH Curves
-	OpenSSL_P_256  = "P-256"
-	OpenSSL_P_384  = "P-384"
-	OpenSSL_P_521  = "P-521"
-	OpenSSL_X25519 = "X25519"
+	OpenSSL_P_256  = "P-256"  //nolint
+	OpenSSL_P_384  = "P-384"  //nolint
+	OpenSSL_P_521  = "P-521"  //nolint
+	OpenSSL_X25519 = "X25519" //nolint
 )
 
-var SupportedGolangEcdhCurves = []string{
+var SupportedGolangECDHCurves = []string{
 	GoCurveP256,
 	GoCurveP384,
 	GoCurveP521,
 	GoX25519,
 }
 
-var SupportedOpenSSLEcdhCurves = []string{
+var SupportedOpenSSLECDHCurves = []string{
 	OpenSSL_P_256,
 	OpenSSL_P_384,
 	OpenSSL_P_521,
@@ -52,7 +52,7 @@ var SupportedOpenSSLEcdhCurves = []string{
 }
 
 // Map of go ECDH Curve names to OpenSSL ECDH Curve names
-var opensslEcdhCurvesMap = map[string]string{
+var opensslECDHCurvesMap = map[string]string{
 	GoCurveP256: OpenSSL_P_256,
 	GoCurveP384: OpenSSL_P_384,
 	GoCurveP521: OpenSSL_P_521,
@@ -60,7 +60,7 @@ var opensslEcdhCurvesMap = map[string]string{
 }
 
 // Map of go ECDH Curve names to go ECDH Curve ids
-var goEcdhCurveIdMap = map[string]tls.CurveID{
+var goECDHCurveIDMap = map[string]tls.CurveID{
 	GoCurveP256: tls.CurveP256,
 	GoCurveP384: tls.CurveP384,
 	GoCurveP521: tls.CurveP521,
@@ -68,7 +68,7 @@ var goEcdhCurveIdMap = map[string]tls.CurveID{
 }
 
 var (
-	TlsEcdhCurves = RegisterTlsEcdhCurvesVar(
+	TLSECDHCurves = RegisterTLSECDHCurvesVar(
 		"TLS_ECDH_CURVES",
 		"",
 		"The allowable TLS Elliptic Curves",
@@ -77,76 +77,74 @@ var (
 	eclock = &sync.Mutex{}
 )
 
-type TlsEcdhCurvesVar struct {
+type TLSECDHCurvesVar struct {
 	env.StringVar
 	ecdhCurves   []string
-	goEcdhCurves []tls.CurveID
+	goECDHCurves []tls.CurveID
 }
 
-func RegisterTlsEcdhCurvesVar(name string, defaultValue string, description string) TlsEcdhCurvesVar {
+func RegisterTLSECDHCurvesVar(name string, defaultValue string, description string) TLSECDHCurvesVar {
 	v := env.RegisterStringVar(name, defaultValue, description)
-	return TlsEcdhCurvesVar{v, nil, nil}
+	return TLSECDHCurvesVar{v, nil, nil}
 }
 
-func (v *TlsEcdhCurvesVar) initEcdhCurves() {
+func (v *TLSECDHCurvesVar) initECDHCurves() {
 	eclock.Lock()
 	defer eclock.Unlock()
 	if v.ecdhCurves == nil {
 		ecdhCurvesParam, _ := v.Lookup()
 		ecdhCurves := []string{}
-		goEcdhCurves := []string{}
-		goEcdhCurveIds := []tls.CurveID{}
+		goECDHCurves := []string{}
+		goECDHCurveIDs := []tls.CurveID{}
 		if ecdhCurvesParam != "" {
 			ecdhCurvesSlice := strings.Split(ecdhCurvesParam, ",")
 			for _, cipherSuiteParam := range ecdhCurvesSlice {
 				trimmed := strings.Trim(cipherSuiteParam, " ")
-				ecdhCurve := opensslEcdhCurvesMap[trimmed]
-				goEcdhCurve := goEcdhCurveIdMap[trimmed]
-				if ecdhCurve != "" && goEcdhCurve != 0 {
+				ecdhCurve := opensslECDHCurvesMap[trimmed]
+				goECDHCurve := goECDHCurveIDMap[trimmed]
+				if ecdhCurve != "" && goECDHCurve != 0 {
 					ecdhCurves = append(ecdhCurves, ecdhCurve)
-					goEcdhCurves = append(goEcdhCurves, trimmed)
-					goEcdhCurveIds = append(goEcdhCurveIds, goEcdhCurve)
+					goECDHCurves = append(goECDHCurves, trimmed)
+					goECDHCurveIDs = append(goECDHCurveIDs, goECDHCurve)
 				} else {
 					log.Warnf("ECDH Curve %v is not supported, this entry will be ignored", trimmed)
 				}
 			}
 		}
 		v.ecdhCurves = ecdhCurves
-		v.goEcdhCurves = goEcdhCurveIds
-		log.Infof("Go ECDH Curves are %v", goEcdhCurves)
+		v.goECDHCurves = goECDHCurveIDs
+		log.Infof("Go ECDH Curves are %v", goECDHCurves)
 		log.Infof("OpenSSL ECDH Curves are %v", v.ecdhCurves)
 	}
 }
 
-func (v *TlsEcdhCurvesVar) Reset() {
+func (v *TLSECDHCurvesVar) Reset() {
 	lock.Lock()
 	defer lock.Unlock()
 	v.ecdhCurves = nil
-	v.goEcdhCurves = nil
+	v.goECDHCurves = nil
 }
 
-func (v *TlsEcdhCurvesVar) Get() []string {
+func (v *TLSECDHCurvesVar) Get() []string {
 	if v.ecdhCurves == nil {
-		v.initEcdhCurves()
+		v.initECDHCurves()
 	}
 	if len(v.ecdhCurves) == 0 {
 		return nil
-	} else {
-		result := make([]string, len(v.ecdhCurves))
-		copy(result, v.ecdhCurves)
-		return result
 	}
+	result := make([]string, len(v.ecdhCurves))
+	copy(result, v.ecdhCurves)
+	return result
 }
 
-func (v *TlsEcdhCurvesVar) GetGoTlsEcdhCurves() []tls.CurveID {
-	if v.goEcdhCurves == nil {
-		v.initEcdhCurves()
+func (v *TLSECDHCurvesVar) GetGoTLSECDHCurves() []tls.CurveID {
+	if v.goECDHCurves == nil {
+		v.initECDHCurves()
 	}
-	if len(v.goEcdhCurves) == 0 {
+	if len(v.goECDHCurves) == 0 {
 		return nil
-	} else {
-		result := make([]tls.CurveID, len(v.goEcdhCurves))
-		copy(result, v.goEcdhCurves)
-		return result
 	}
+	result := make([]tls.CurveID, len(v.goECDHCurves))
+	copy(result, v.goECDHCurves)
+	return result
 }

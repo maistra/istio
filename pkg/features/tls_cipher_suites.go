@@ -25,45 +25,45 @@ import (
 
 const (
 	// golang ciphers
-	TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256   = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
-	TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 = "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
-	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256         = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-	TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256       = "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
-	TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384         = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
-	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384       = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
-	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256         = "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
-	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA            = "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"
-	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256       = "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256"
-	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA          = "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA"
-	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA            = "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"
-	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA          = "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA"
-	TLS_RSA_WITH_AES_128_GCM_SHA256               = "TLS_RSA_WITH_AES_128_GCM_SHA256"
-	TLS_RSA_WITH_AES_256_GCM_SHA384               = "TLS_RSA_WITH_AES_256_GCM_SHA384"
-	TLS_RSA_WITH_AES_128_CBC_SHA256               = "TLS_RSA_WITH_AES_128_CBC_SHA256"
-	TLS_RSA_WITH_AES_128_CBC_SHA                  = "TLS_RSA_WITH_AES_128_CBC_SHA"
-	TLS_RSA_WITH_AES_256_CBC_SHA                  = "TLS_RSA_WITH_AES_256_CBC_SHA"
-	TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA           = "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"
-	TLS_RSA_WITH_3DES_EDE_CBC_SHA                 = "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
+	TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256   = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"   //nolint
+	TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 = "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256" //nolint
+	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256         = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"         //nolint
+	TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256       = "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"       //nolint
+	TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384         = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"         //nolint
+	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384       = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"       //nolint
+	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256         = "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"         //nolint
+	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA            = "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"            //nolint
+	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256       = "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256"       //nolint
+	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA          = "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA"          //nolint
+	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA            = "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"            //nolint
+	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA          = "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA"          //nolint
+	TLS_RSA_WITH_AES_128_GCM_SHA256               = "TLS_RSA_WITH_AES_128_GCM_SHA256"               //nolint
+	TLS_RSA_WITH_AES_256_GCM_SHA384               = "TLS_RSA_WITH_AES_256_GCM_SHA384"               //nolint
+	TLS_RSA_WITH_AES_128_CBC_SHA256               = "TLS_RSA_WITH_AES_128_CBC_SHA256"               //nolint
+	TLS_RSA_WITH_AES_128_CBC_SHA                  = "TLS_RSA_WITH_AES_128_CBC_SHA"                  //nolint
+	TLS_RSA_WITH_AES_256_CBC_SHA                  = "TLS_RSA_WITH_AES_256_CBC_SHA"                  //nolint
+	TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA           = "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"           //nolint
+	TLS_RSA_WITH_3DES_EDE_CBC_SHA                 = "TLS_RSA_WITH_3DES_EDE_CBC_SHA"                 //nolint
 	// OpenSSL ciphers
-	ECDHE_RSA_CHACHA20_POLY1305   = "ECDHE-RSA-CHACHA20-POLY1305"
-	ECDHE_ECDSA_CHACHA20_POLY1305 = "ECDHE-ECDSA-CHACHA20-POLY1305"
-	ECDHE_RSA_AES128_GCM_SHA256   = "ECDHE-RSA-AES128-GCM-SHA256"
-	ECDHE_ECDSA_AES128_GCM_SHA256 = "ECDHE-ECDSA-AES128-GCM-SHA256"
-	ECDHE_RSA_AES256_GCM_SHA384   = "ECDHE-RSA-AES256-GCM-SHA384"
-	ECDHE_ECDSA_AES256_GCM_SHA384 = "ECDHE-ECDSA-AES256-GCM-SHA384"
-	ECDHE_RSA_AES128_SHA256       = "ECDHE-RSA-AES128-SHA256"
-	ECDHE_RSA_AES128_SHA          = "ECDHE-RSA-AES128-SHA"
-	ECDHE_ECDSA_AES128_SHA256     = "ECDHE-ECDSA-AES128-SHA256"
-	ECDHE_ECDSA_AES128_SHA        = "ECDHE-ECDSA-AES128-SHA"
-	ECDHE_RSA_AES256_SHA          = "ECDHE-RSA-AES256-SHA"
-	ECDHE_ECDSA_AES256_SHA        = "ECDHE-ECDSA-AES256-SHA"
-	AES128_GCM_SHA256             = "AES128-GCM-SHA256"
-	AES256_GCM_SHA384             = "AES256-GCM-SHA384"
-	AES128_SHA256                 = "AES128-SHA256"
-	AES128_SHA                    = "AES128-SHA"
-	AES256_SHA                    = "AES256-SHA"
-	ECDHE_RSA_DES_CBC3_SHA        = "ECDHE-RSA-DES-CBC3-SHA"
-	DES_CBC3_SHA                  = "DES-CBC3-SHA"
+	ECDHE_RSA_CHACHA20_POLY1305   = "ECDHE-RSA-CHACHA20-POLY1305"   //nolint
+	ECDHE_ECDSA_CHACHA20_POLY1305 = "ECDHE-ECDSA-CHACHA20-POLY1305" //nolint
+	ECDHE_RSA_AES128_GCM_SHA256   = "ECDHE-RSA-AES128-GCM-SHA256"   //nolint
+	ECDHE_ECDSA_AES128_GCM_SHA256 = "ECDHE-ECDSA-AES128-GCM-SHA256" //nolint
+	ECDHE_RSA_AES256_GCM_SHA384   = "ECDHE-RSA-AES256-GCM-SHA384"   //nolint
+	ECDHE_ECDSA_AES256_GCM_SHA384 = "ECDHE-ECDSA-AES256-GCM-SHA384" //nolint
+	ECDHE_RSA_AES128_SHA256       = "ECDHE-RSA-AES128-SHA256"       //nolint
+	ECDHE_RSA_AES128_SHA          = "ECDHE-RSA-AES128-SHA"          //nolint
+	ECDHE_ECDSA_AES128_SHA256     = "ECDHE-ECDSA-AES128-SHA256"     //nolint
+	ECDHE_ECDSA_AES128_SHA        = "ECDHE-ECDSA-AES128-SHA"        //nolint
+	ECDHE_RSA_AES256_SHA          = "ECDHE-RSA-AES256-SHA"          //nolint
+	ECDHE_ECDSA_AES256_SHA        = "ECDHE-ECDSA-AES256-SHA"        //nolint
+	AES128_GCM_SHA256             = "AES128-GCM-SHA256"             //nolint
+	AES256_GCM_SHA384             = "AES256-GCM-SHA384"             //nolint
+	AES128_SHA256                 = "AES128-SHA256"                 //nolint
+	AES128_SHA                    = "AES128-SHA"                    //nolint
+	AES256_SHA                    = "AES256-SHA"                    //nolint
+	ECDHE_RSA_DES_CBC3_SHA        = "ECDHE-RSA-DES-CBC3-SHA"        //nolint
+	DES_CBC3_SHA                  = "DES-CBC3-SHA"                  //nolint
 )
 
 var SupportedGolangCiphers = []string{
@@ -134,7 +134,7 @@ var opensslCipherSuiteMap = map[string]string{
 }
 
 //// Map of go cipher suite names to go cipher suite ids
-var goCipherSuiteIdMap = map[string]uint16{
+var goCipherSuiteIDMap = map[string]uint16{
 	TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256:   tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 	TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256: tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:         tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -157,7 +157,7 @@ var goCipherSuiteIdMap = map[string]uint16{
 }
 
 var (
-	TlsCipherSuites = RegisterTlsCipherSuitesVar(
+	TLSCipherSuites = RegisterTLSCipherSuitesVar(
 		"TLS_CIPHER_SUITES",
 		"",
 		"The allowable TLS Cipher suites",
@@ -166,18 +166,18 @@ var (
 	lock = &sync.Mutex{}
 )
 
-type TlsCipherSuitesVar struct {
+type TLSCipherSuitesVar struct {
 	env.StringVar
 	cipherSuites   []string
 	goCipherSuites []uint16
 }
 
-func RegisterTlsCipherSuitesVar(name string, defaultValue string, description string) TlsCipherSuitesVar {
+func RegisterTLSCipherSuitesVar(name string, defaultValue string, description string) TLSCipherSuitesVar {
 	v := env.RegisterStringVar(name, defaultValue, description)
-	return TlsCipherSuitesVar{v, nil, nil}
+	return TLSCipherSuitesVar{v, nil, nil}
 }
 
-func (v *TlsCipherSuitesVar) initCipherSuites() {
+func (v *TLSCipherSuitesVar) initCipherSuites() {
 	lock.Lock()
 	defer lock.Unlock()
 	if v.cipherSuites == nil {
@@ -190,7 +190,7 @@ func (v *TlsCipherSuitesVar) initCipherSuites() {
 			for _, cipherSuiteParam := range cipherSuitesSlice {
 				trimmed := strings.Trim(cipherSuiteParam, " ")
 				cipherSuite := opensslCipherSuiteMap[trimmed]
-				goCipherSuite := goCipherSuiteIdMap[trimmed]
+				goCipherSuite := goCipherSuiteIDMap[trimmed]
 				if cipherSuite != "" && goCipherSuite != 0 {
 					cipherSuites = append(cipherSuites, cipherSuite)
 					goCipherSuites = append(goCipherSuites, trimmed)
@@ -207,35 +207,33 @@ func (v *TlsCipherSuitesVar) initCipherSuites() {
 	}
 }
 
-func (v *TlsCipherSuitesVar) Reset() {
+func (v *TLSCipherSuitesVar) Reset() {
 	lock.Lock()
 	defer lock.Unlock()
 	v.cipherSuites = nil
 	v.goCipherSuites = nil
 }
 
-func (v *TlsCipherSuitesVar) Get() []string {
+func (v *TLSCipherSuitesVar) Get() []string {
 	if v.cipherSuites == nil {
 		v.initCipherSuites()
 	}
 	if len(v.cipherSuites) == 0 {
 		return nil
-	} else {
-		result := make([]string, len(v.cipherSuites))
-		copy(result, v.cipherSuites)
-		return result
 	}
+	result := make([]string, len(v.cipherSuites))
+	copy(result, v.cipherSuites)
+	return result
 }
 
-func (v *TlsCipherSuitesVar) GetGoTlsCipherSuites() []uint16 {
+func (v *TLSCipherSuitesVar) GetGoTLSCipherSuites() []uint16 {
 	if v.goCipherSuites == nil {
 		v.initCipherSuites()
 	}
 	if len(v.goCipherSuites) == 0 {
 		return nil
-	} else {
-		result := make([]uint16, len(v.goCipherSuites))
-		copy(result, v.goCipherSuites)
-		return result
 	}
+	result := make([]uint16, len(v.goCipherSuites))
+	copy(result, v.goCipherSuites)
+	return result
 }

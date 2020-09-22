@@ -631,10 +631,10 @@ func (s *Server) initDNSTLSListener(dns string, tlsOptions TLSOptions) error {
 		Certificates:     []tls.Certificate{certP},
 		ClientAuth:       tls.NoClientCert,
 		ClientCAs:        cp,
-		MinVersion:       tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
-		MaxVersion:       tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
-		CipherSuites:     tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
-		CurvePreferences: tls_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
+		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 	}
 
 	// create secure grpc listener
@@ -678,10 +678,10 @@ func (s *Server) initSecureGrpcServer(port string, keepalive *istiokeepalive.Opt
 		Certificates:     []tls.Certificate{certP},
 		ClientAuth:       tls.VerifyClientCertIfGiven,
 		ClientCAs:        cp,
-		MinVersion:       tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
-		MaxVersion:       tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
-		CipherSuites:     tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
-		CurvePreferences: tls_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
+		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 	}
 
 	tlsCreds := credentials.NewTLS(cfg)
