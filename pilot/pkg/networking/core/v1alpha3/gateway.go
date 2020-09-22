@@ -41,6 +41,7 @@ import (
 	"istio.io/istio/pkg/config/gateway"
 	"istio.io/istio/pkg/config/host"
 	"istio.io/istio/pkg/config/protocol"
+	tls_features "istio.io/istio/pkg/features"
 	"istio.io/istio/pkg/proto"
 )
 
@@ -428,6 +429,12 @@ func buildGatewayListenerTLSContext(
 	tls := &auth.DownstreamTlsContext{
 		CommonTlsContext: &auth.CommonTlsContext{
 			AlpnProtocols: util.ALPNHttp,
+			TlsParams: &auth.TlsParameters{
+				TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion, tls_features.TlsMinProtocolVersion.Get()),
+				TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion, tls_features.TlsMaxProtocolVersion.Get()),
+				CipherSuites:              tls_features.TlsCipherSuites.Get(),
+				EcdhCurves:                tls_features.TlsEcdhCurves.Get(),
+			},
 		},
 	}
 
@@ -478,25 +485,20 @@ func buildGatewayListenerTLSContext(
 	}
 
 	// Set TLS parameters if they are non-default
-	if len(server.Tls.CipherSuites) > 0 ||
-		server.Tls.MinProtocolVersion != networking.ServerTLSSettings_TLS_AUTO ||
-		server.Tls.MaxProtocolVersion != networking.ServerTLSSettings_TLS_AUTO {
-
-		tls.CommonTlsContext.TlsParams = &auth.TlsParameters{
-			TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion),
-			TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion),
-			CipherSuites:              server.Tls.CipherSuites,
-		}
+	if len(server.Tls.CipherSuites) > 0 {
+		tls.CommonTlsContext.TlsParams.CipherSuites = server.Tls.CipherSuites
 	}
 
 	return tls
 }
 
-func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol) auth.TlsParameters_TlsProtocol {
+func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol, defaultTLSProtocol auth.TlsParameters_TlsProtocol) auth.TlsParameters_TlsProtocol {
 	out := auth.TlsParameters_TlsProtocol(in) // There should be a one-to-one enum mapping
-	if out < auth.TlsParameters_TLS_AUTO || out > auth.TlsParameters_TLSv1_3 {
-		log.Warnf("was not able to map TLS protocol to Envoy TLS protocol")
-		return auth.TlsParameters_TLS_AUTO
+	if out <= auth.TlsParameters_TLS_AUTO || out > auth.TlsParameters_TLSv1_3 {
+		if out != auth.TlsParameters_TLS_AUTO {
+			log.Warnf("was not able to map TLS protocol to Envoy TLS protocol")
+		}
+		return defaultTLSProtocol
 	}
 	return out
 }

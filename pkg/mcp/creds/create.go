@@ -18,6 +18,8 @@ import (
 	"crypto/tls"
 
 	"google.golang.org/grpc/credentials"
+
+	tls_features "istio.io/istio/pkg/features"
 )
 
 // CreateForClient creates TransportCredentials for MCP clients.
@@ -53,6 +55,10 @@ func CreateForServer(watcher CertificateWatcher) credentials.TransportCredential
 			c := watcher.Get()
 			return &c, nil
 		},
+		MinVersion:       tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+		MaxVersion:       tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+		CipherSuites:     tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
+		CurvePreferences: tls_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
 	}
 
 	return credentials.NewTLS(&config)

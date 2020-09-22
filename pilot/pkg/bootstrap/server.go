@@ -64,6 +64,7 @@ import (
 	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/dns"
+	tls_features "istio.io/istio/pkg/features"
 	"istio.io/istio/pkg/jwt"
 	istiokeepalive "istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
@@ -627,9 +628,13 @@ func (s *Server) initDNSTLSListener(dns string, tlsOptions TLSOptions) error {
 	// TODO: check if client certs can be used with coredns or others.
 	// If yes - we may require or optionally use them
 	cfg := &tls.Config{
-		Certificates: []tls.Certificate{certP},
-		ClientAuth:   tls.NoClientCert,
-		ClientCAs:    cp,
+		Certificates:     []tls.Certificate{certP},
+		ClientAuth:       tls.NoClientCert,
+		ClientCAs:        cp,
+		MinVersion:       tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+		MaxVersion:       tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+		CipherSuites:     tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
+		CurvePreferences: tls_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
 	}
 
 	// create secure grpc listener
@@ -670,9 +675,13 @@ func (s *Server) initSecureGrpcServer(port string, keepalive *istiokeepalive.Opt
 	cp.AppendCertsFromPEM(rootCertBytes)
 
 	cfg := &tls.Config{
-		Certificates: []tls.Certificate{certP},
-		ClientAuth:   tls.VerifyClientCertIfGiven,
-		ClientCAs:    cp,
+		Certificates:     []tls.Certificate{certP},
+		ClientAuth:       tls.VerifyClientCertIfGiven,
+		ClientCAs:        cp,
+		MinVersion:       tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+		MaxVersion:       tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+		CipherSuites:     tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
+		CurvePreferences: tls_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
 	}
 
 	tlsCreds := credentials.NewTLS(cfg)

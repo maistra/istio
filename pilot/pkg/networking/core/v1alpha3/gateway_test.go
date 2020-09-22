@@ -15,8 +15,10 @@
 package v1alpha3
 
 import (
+	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
@@ -36,10 +38,79 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
+	tls_features "istio.io/istio/pkg/features"
 	"istio.io/istio/pkg/proto"
 )
 
 func TestBuildGatewayListenerTlsContext(t *testing.T) {
+	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{})
+}
+
+func TestTlsProtocolVersionBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+	})
+}
+
+func TestTlsCipherSuitesBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TlsCipherSuites.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+	}()
+	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTlsCipherSuitesProtocolVersionBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+		CipherSuites:              tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTlsCipherSuitesEcdhCurvesBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangEcdhCurves, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.TlsEcdhCurves.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		_ = os.Unsetenv("TLS_ECDH_CURVES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.TlsEcdhCurves.Reset()
+	}()
+	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+		EcdhCurves:   tls_features.SupportedOpenSSLEcdhCurves,
+	})
+}
+
+func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParameters) {
 	testCases := []struct {
 		name    string
 		server  *networking.Server
@@ -56,6 +127,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
@@ -95,6 +167,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			sdsPath: "unix:/var/run/sds/uds_path",
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -153,6 +226,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
@@ -183,6 +257,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -224,6 +299,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -269,6 +345,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
@@ -300,6 +377,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
@@ -334,6 +412,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -403,6 +482,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -472,6 +552,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams:     tlsParam,
 					AlpnProtocols: util.ALPNHttp,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
@@ -551,6 +632,74 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 }
 
 func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	runTestCreateGatewayHTTPFilterChainOpts(t, &auth.TlsParameters{})
+}
+
+func TestTlsProtocolVersionCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestCreateGatewayHTTPFilterChainOpts(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+	})
+}
+
+func TestTlsCipherSuitesCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TlsCipherSuites.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+	}()
+	runTestCreateGatewayHTTPFilterChainOpts(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTlsCipherSuitesProtocolVersionCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestCreateGatewayHTTPFilterChainOpts(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+		CipherSuites:              tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTlsCipherSuitesEcdhCurvesCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangEcdhCurves, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.TlsEcdhCurves.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		_ = os.Unsetenv("TLS_ECDH_CURVES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.TlsEcdhCurves.Reset()
+	}()
+	runTestCreateGatewayHTTPFilterChainOpts(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+		EcdhCurves:   tls_features.SupportedOpenSSLEcdhCurves,
+	})
+}
+
+func runTestCreateGatewayHTTPFilterChainOpts(t *testing.T, tlsParam *auth.TlsParameters) {
 	testCases := []struct {
 		name        string
 		node        *pilot_model.Proxy
@@ -611,6 +760,7 @@ func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
 				tlsContext: &auth.DownstreamTlsContext{
 					RequireClientCertificate: proto.BoolTrue,
 					CommonTlsContext: &auth.CommonTlsContext{
+						TlsParams: tlsParam,
 						TlsCertificates: []*auth.TlsCertificate{
 							{
 								CertificateChain: &core.DataSource{
@@ -674,6 +824,7 @@ func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
 				tlsContext: &auth.DownstreamTlsContext{
 					RequireClientCertificate: proto.BoolTrue,
 					CommonTlsContext: &auth.CommonTlsContext{
+						TlsParams: tlsParam,
 						TlsCertificates: []*auth.TlsCertificate{
 							{
 								CertificateChain: &core.DataSource{
@@ -737,6 +888,7 @@ func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
 				tlsContext: &auth.DownstreamTlsContext{
 					RequireClientCertificate: proto.BoolTrue,
 					CommonTlsContext: &auth.CommonTlsContext{
+						TlsParams: tlsParam,
 						TlsCertificates: []*auth.TlsCertificate{
 							{
 								CertificateChain: &core.DataSource{
@@ -839,6 +991,7 @@ func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
 				tlsContext: &auth.DownstreamTlsContext{
 					RequireClientCertificate: proto.BoolTrue,
 					CommonTlsContext: &auth.CommonTlsContext{
+						TlsParams: tlsParam,
 						TlsCertificates: []*auth.TlsCertificate{
 							{
 								CertificateChain: &core.DataSource{

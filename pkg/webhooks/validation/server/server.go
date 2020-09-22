@@ -43,6 +43,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
+	tls_features "istio.io/istio/pkg/features"
 )
 
 var scope = log.RegisterScope("validationServer", "validation webhook server", 0)
@@ -223,7 +224,13 @@ func New(p Options) (*Webhook, error) {
 	}
 
 	// mtls disabled because apiserver webhook cert usage is still TBD.
-	wh.server.TLSConfig = &tls.Config{GetCertificate: wh.getCert}
+	wh.server.TLSConfig = &tls.Config{
+		GetCertificate:   wh.getCert,
+		MinVersion:       tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+		MaxVersion:       tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+		CipherSuites:     tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
+		CurvePreferences: tls_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
+	}
 	h := http.NewServeMux()
 	h.HandleFunc(HTTPSHandlerReadyPath, wh.serveReady)
 	h.HandleFunc("/validate", wh.serveValidate)
