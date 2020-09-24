@@ -38,6 +38,7 @@ import (
 	"istio.io/istio/pilot/cmd/pilot-agent/status"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/mesh"
+	tls_features "istio.io/istio/pkg/features"
 
 	"istio.io/pkg/log"
 
@@ -225,7 +226,13 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		wh.server = &http.Server{
 			Addr: fmt.Sprintf(":%v", p.Port),
 			// mtls disabled because apiserver webhook cert usage is still TBD.
-			TLSConfig: &tls.Config{GetCertificate: wh.getCert},
+			TLSConfig: &tls.Config{
+				GetCertificate:   wh.getCert,
+				MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+				MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+				CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+				CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
+			},
 		}
 		mux = http.NewServeMux()
 		mux.HandleFunc("/inject", wh.serveInject)

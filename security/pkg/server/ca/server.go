@@ -31,6 +31,7 @@ import (
 
 	"istio.io/pkg/log"
 
+	tls_features "istio.io/istio/pkg/features"
 	caerror "istio.io/istio/security/pkg/pki/error"
 	"istio.io/istio/security/pkg/pki/util"
 	"istio.io/istio/security/pkg/registry"
@@ -298,6 +299,10 @@ func (s *Server) createTLSServerOption() grpc.ServerOption {
 			}
 			return s.certificate, nil
 		},
+		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 	}
 	return grpc.Creds(credentials.NewTLS(config))
 }

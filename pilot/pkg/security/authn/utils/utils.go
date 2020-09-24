@@ -26,6 +26,7 @@ import (
 	"istio.io/istio/pilot/pkg/networking"
 	"istio.io/istio/pilot/pkg/networking/util"
 	authn_model "istio.io/istio/pilot/pkg/security/model"
+	tls_features "istio.io/istio/pkg/features"
 	protovalue "istio.io/istio/pkg/proto"
 )
 
@@ -50,6 +51,12 @@ func BuildInboundFilterChain(mTLSMode model.MutualTLSMode, sdsUdsPath string, no
 				// expect the same from server. This  is so that secure metadata exchange
 				// transfer can take place between sidecars for TCP with mTLS.
 				AlpnProtocols: util.ALPNDownstream,
+				TlsParams: &auth.TlsParameters{
+					TlsMinimumProtocolVersion: tls_features.TLSMinProtocolVersion.Get(),
+					TlsMaximumProtocolVersion: tls_features.TLSMaxProtocolVersion.Get(),
+					CipherSuites:              tls_features.TLSCipherSuites.Get(),
+					EcdhCurves:                tls_features.TLSECDHCurves.Get(),
+				},
 			},
 			RequireClientCertificate: protovalue.BoolTrue,
 		}
@@ -69,6 +76,12 @@ func BuildInboundFilterChain(mTLSMode model.MutualTLSMode, sdsUdsPath string, no
 				// include "istio", which would interfere with negotiation of the underlying
 				// protocol, e.g. HTTP/2.
 				AlpnProtocols: util.ALPNHttp,
+				TlsParams: &auth.TlsParameters{
+					TlsMinimumProtocolVersion: tls_features.TLSMinProtocolVersion.Get(),
+					TlsMaximumProtocolVersion: tls_features.TLSMaxProtocolVersion.Get(),
+					CipherSuites:              tls_features.TLSCipherSuites.Get(),
+					EcdhCurves:                tls_features.TLSECDHCurves.Get(),
+				},
 			},
 			RequireClientCertificate: protovalue.BoolTrue,
 		}

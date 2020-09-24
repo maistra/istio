@@ -15,7 +15,9 @@
 package utils
 
 import (
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -29,10 +31,79 @@ import (
 	"istio.io/istio/pilot/pkg/networking"
 	"istio.io/istio/pilot/pkg/networking/util"
 	authn_model "istio.io/istio/pilot/pkg/security/model"
+	tls_features "istio.io/istio/pkg/features"
 	protovalue "istio.io/istio/pkg/proto"
 )
 
 func TestBuildInboundFilterChain(t *testing.T) {
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{})
+}
+
+func TestTLSProtocolVersionBuildInboundFilterChain(t *testing.T) {
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+	})
+}
+
+func TestTLSCipherSuitesBuildInboundFilterChain(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TLSCipherSuites.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TLSCipherSuites.Reset()
+	}()
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTLSCipherSuitesProtocolVersionBuildInboundFilterChain(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TLSCipherSuites.Reset()
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TLSCipherSuites.Reset()
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+		CipherSuites:              tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTLSCipherSuitesEcdhCurvesBuildInboundFilterChain(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangECDHCurves, ", "))
+	tls_features.TLSCipherSuites.Reset()
+	tls_features.TLSECDHCurves.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		_ = os.Unsetenv("TLS_ECDH_CURVES")
+		tls_features.TLSCipherSuites.Reset()
+		tls_features.TLSECDHCurves.Reset()
+	}()
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+		EcdhCurves:   tls_features.SupportedOpenSSLECDHCurves,
+	})
+}
+
+func runTestBuildInboundFilterChain(t *testing.T, tlsParam *auth.TlsParameters) {
 	tlsContext := func(alpnProtocols []string) *auth.DownstreamTlsContext {
 		return &auth.DownstreamTlsContext{
 			CommonTlsContext: &auth.CommonTlsContext{
@@ -60,6 +131,7 @@ func TestBuildInboundFilterChain(t *testing.T) {
 					},
 				},
 				AlpnProtocols: alpnProtocols,
+				TlsParams:     tlsParam,
 			},
 			RequireClientCertificate: protovalue.BoolTrue,
 		}
@@ -202,6 +274,7 @@ func TestBuildInboundFilterChain(t *testing.T) {
 								},
 							},
 							AlpnProtocols: []string{"h2", "http/1.1"},
+							TlsParams:     tlsParam,
 						},
 						RequireClientCertificate: protovalue.BoolTrue,
 					},
@@ -266,6 +339,7 @@ func TestBuildInboundFilterChain(t *testing.T) {
 								},
 							},
 							AlpnProtocols: []string{"h2", "http/1.1"},
+							TlsParams:     tlsParam,
 						},
 						RequireClientCertificate: protovalue.BoolTrue,
 					},
@@ -277,7 +351,11 @@ func TestBuildInboundFilterChain(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := BuildInboundFilterChain(tt.args.mTLSMode, tt.args.sdsUdsPath, tt.args.node, tt.args.listenerProtocol); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("BuildInboundFilterChain() = %v, want %v", spew.Sdump(got), spew.Sdump(tt.want))
-				t.Logf("got:\n%v\n", got[0].TLSContext.CommonTlsContext.TlsCertificateSdsSecretConfigs[0])
+				if len(got[0].TLSContext.CommonTlsContext.TlsCertificateSdsSecretConfigs) > 0 {
+					t.Logf("got:\n%v\n", got[0].TLSContext.CommonTlsContext.TlsCertificateSdsSecretConfigs[0])
+				} else {
+					t.Logf("no secrets returned, got: \n%v\n", got[0].TLSContext.CommonTlsContext)
+				}
 			}
 		})
 	}

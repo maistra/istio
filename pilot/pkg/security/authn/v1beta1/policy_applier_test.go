@@ -17,6 +17,7 @@ package v1beta1
 import (
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,6 +41,7 @@ import (
 	"istio.io/istio/pilot/pkg/model/test"
 	"istio.io/istio/pilot/pkg/networking"
 	pilotutil "istio.io/istio/pilot/pkg/networking/util"
+	tls_features "istio.io/istio/pkg/features"
 	protovalue "istio.io/istio/pkg/proto"
 	authn_alpha "istio.io/istio/security/proto/authentication/v1alpha1"
 	authn_filter "istio.io/istio/security/proto/envoy/config/filter/http/authn/v2alpha1"
@@ -1210,9 +1212,78 @@ func TestAuthnFilterConfig(t *testing.T) {
 }
 
 func TestOnInboundFilterChain(t *testing.T) {
+	runTestOnInboundFilterChains(t, &envoy_auth.TlsParameters{})
+}
+
+func TestTLSProtocolVersionOnInboundFilterChains(t *testing.T) {
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestOnInboundFilterChains(t, &envoy_auth.TlsParameters{
+		TlsMinimumProtocolVersion: envoy_auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: envoy_auth.TlsParameters_TLSv1_3,
+	})
+}
+
+func TestTLSCipherSuitesOnInboundFilterChains(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TLSCipherSuites.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TLSCipherSuites.Reset()
+	}()
+	runTestOnInboundFilterChains(t, &envoy_auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTLSCipherSuitesProtocolVersionOnInboundFilterChains(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TLSCipherSuites.Reset()
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TLSCipherSuites.Reset()
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestOnInboundFilterChains(t, &envoy_auth.TlsParameters{
+		TlsMinimumProtocolVersion: envoy_auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: envoy_auth.TlsParameters_TLSv1_3,
+		CipherSuites:              tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTLSCipherSuitesEcdhCurvesOnInboundFilterChains(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangECDHCurves, ", "))
+	tls_features.TLSCipherSuites.Reset()
+	tls_features.TLSECDHCurves.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		_ = os.Unsetenv("TLS_ECDH_CURVES")
+		tls_features.TLSCipherSuites.Reset()
+		tls_features.TLSECDHCurves.Reset()
+	}()
+	runTestOnInboundFilterChains(t, &envoy_auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+		EcdhCurves:   tls_features.SupportedOpenSSLECDHCurves,
+	})
+}
+
+func runTestOnInboundFilterChains(t *testing.T, tlsParam *envoy_auth.TlsParameters) {
 	now := time.Now()
 	tlsContext := &envoy_auth.DownstreamTlsContext{
 		CommonTlsContext: &envoy_auth.CommonTlsContext{
+			TlsParams: tlsParam,
 			TlsCertificates: []*envoy_auth.TlsCertificate{
 				{
 					CertificateChain: &core.DataSource{

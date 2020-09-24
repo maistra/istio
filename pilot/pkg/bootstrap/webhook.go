@@ -27,6 +27,7 @@ import (
 	"istio.io/pkg/log"
 
 	"istio.io/istio/pilot/pkg/features"
+	tls_features "istio.io/istio/pkg/features"
 	"istio.io/istio/pkg/webhooks/validation/server"
 )
 
@@ -55,7 +56,11 @@ func (s *Server) initHTTPSWebhookServer(args *PilotArgs) error {
 		Addr:    args.DiscoveryOptions.HTTPSAddr,
 		Handler: s.httpsMux,
 		TLSConfig: &tls.Config{
-			GetCertificate: s.getWebhookCertificate,
+			GetCertificate:   s.getWebhookCertificate,
+			MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+			MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+			CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+			CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 		},
 	}
 
