@@ -149,6 +149,8 @@ func init() {
 	if err := discoveryCmd.PersistentFlags().MarkDeprecated("appNamespace", "please use ${APP_NAMESPACE} environment variable instead"); err != nil {
 		panic(err)
 	}
+	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.Config.ControllerOptions.EnableNodePortGateways, "enableNodePortGateways",
+		true, "Whether to watch nodes and advertise their addresses as endpoints for gateways with NodePort services")
 	discoveryCmd.PersistentFlags().StringVarP(&serverArgs.Config.ControllerOptions.PodLocalitySource, "podLocalitySource", "",
 		"node", "Specify where the controller should obtain the Pod's zone and region from (the pod's node or the pod itself)")
 	discoveryCmd.PersistentFlags().StringVarP(&serverArgs.Config.ControllerOptions.MemberRollName, "memberRollName", "", "",
