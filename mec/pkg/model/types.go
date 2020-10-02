@@ -45,11 +45,10 @@ const (
 )
 
 func (i *ImageRef) String() string {
-	tag := i.Tag
 	if i.SHA256 != "" {
-		tag = fmt.Sprintf("sha256:%s", i.SHA256)
+		return fmt.Sprintf("%s/%s@sha256:%s", i.Hub, i.Repository, i.SHA256)
 	}
-	return fmt.Sprintf("%s/%s:%s", i.Hub, i.Repository, tag)
+	return fmt.Sprintf("%s/%s:%s", i.Hub, i.Repository, i.Tag)
 }
 
 func StringToImageRef(ref string) *ImageRef {

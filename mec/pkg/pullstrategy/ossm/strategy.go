@@ -102,11 +102,11 @@ func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) 
 	if image.SHA256 == "" {
 		return nil, fmt.Errorf("getImage() only works for pinned images")
 	}
-	imageID, err := podman.GetImageID(image.String())
+	imageID, err := podman.GetImageID(image.SHA256)
 	if err != nil {
 		return nil, err
 	} else if imageID == "" {
-		return nil, fmt.Errorf("failed to read imageID from podman CLI")
+		return nil, nil
 	}
 	manifest, err := extractManifest(imageID)
 	if err != nil {
@@ -130,17 +130,37 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error)
 		if errors.IsNotFound(err) {
 			createdIsi, err := p.createImageStreamImport(image)
 			if err != nil {
-				log.Errorf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
+				log.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
 				continue
 			}
 			log.Infof("Created ImageStreamImport %s", createdIsi.Name)
 		}
 		if err != nil {
-			log.Errorf("failed to Get() ImageStream: %s, attempt %d", err, attempt)
+			log.Warnf("failed to Get() ImageStream: %s, attempt %d", err, attempt)
+			continue
+		}
+		if imageStream != nil {
+			for _, tag := range imageStream.Spec.Tags {
+				if tag.From.Name == image.String() {
+					break
+				}
+			}
+			createdIsi, err := p.createImageStreamImport(image)
+			if err != nil {
+				log.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
+				continue
+			}
+			log.Infof("Created ImageStreamImport %s", createdIsi.Name)
 		}
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	for _, condition := range imageStream.Status.Tags[0].Conditions {
+		if condition.Status == corev1.ConditionFalse {
+			return nil, fmt.Errorf("failed to pull image: %s", condition.Message)
+		}
 	}
 
 	// TODO implement importing always when ImagePullPolicy == Always

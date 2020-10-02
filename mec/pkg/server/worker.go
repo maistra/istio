@@ -88,8 +88,15 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		imageRef.SHA256 = extension.Status.Deployment.ContainerSHA256
 	}
 
-	img, err := w.pullStrategy.GetImage(imageRef)
-	if err != nil {
+	var img model.Image
+	var err error
+	if imageRef.SHA256 != "" {
+		img, err = w.pullStrategy.GetImage(imageRef)
+		if err != nil {
+			log.Errorf("Failed to check whether image is already present: %s", err)
+		}
+	}
+	if img == nil {
 		log.Infof("Image %s not present. Pulling", imageRef.String())
 		img, err = w.pullStrategy.PullImage(imageRef)
 		if err != nil {
