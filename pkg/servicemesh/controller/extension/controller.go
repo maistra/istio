@@ -108,7 +108,7 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 						return
 					}
 				}
-				store[extension.Namespace+"/"+extension.Name] = nil
+				delete(store, extension.Namespace+"/"+extension.Name)
 				log.Infof("Deleted extension %s/%s", extension.Namespace, extension.Name)
 			},
 		})
