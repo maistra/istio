@@ -146,6 +146,12 @@ type Options struct {
 
 	//CABundlePath defines the caBundle path for istiod Server
 	CABundlePath string
+
+	// EnableNodePortGateways determines whether the controller will watch node
+	// objects for changes and maintain a map of their addresses.  This is used
+	// to allow gateways to advertise the node IP addresses as their endpoints,
+	// but requires istiod have cluster read permissions on nodes.
+	EnableNodePortGateways bool
 }
 
 // EndpointMode decides what source to use to get endpoint information
@@ -304,11 +310,13 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 		}
 	}
 
-	// This is for getting the node IPs of a selected set of nodes
-	c.filteredNodeInformer = coreinformers.NewFilteredNodeInformer(client, options.ResyncPeriod,
-		cache.Indexers{},
-		func(options *metav1.ListOptions) {})
-	registerHandlers(c.filteredNodeInformer, c.queue, "Nodes", c.onNodeEvent)
+	if options.EnableNodePortGateways {
+		// This is for getting the node IPs of a selected set of nodes
+		c.filteredNodeInformer = coreinformers.NewFilteredNodeInformer(client, options.ResyncPeriod,
+			cache.Indexers{},
+			func(options *metav1.ListOptions) {})
+		registerHandlers(c.filteredNodeInformer, c.queue, "Nodes", c.onNodeEvent)
+	}
 
 	c.pods = newPodCache(c, mrc, options)
 	registerHandlers(c.pods.informer, c.queue, "Pods", c.pods.onEvent)
@@ -516,7 +524,7 @@ func (c *Controller) HasSynced() bool {
 	if !c.services.HasSynced() ||
 		!c.endpoints.HasSynced() ||
 		!c.pods.informer.HasSynced() ||
-		!c.filteredNodeInformer.HasSynced() ||
+		(c.filteredNodeInformer != nil && !c.filteredNodeInformer.HasSynced()) ||
 		!c.podLocalitySource.HasSynced() {
 		return false
 	}
@@ -537,13 +545,18 @@ func (c *Controller) Run(stop <-chan struct{}) {
 
 	go c.services.Run(stop)
 	go c.pods.informer.Run(stop)
-	go c.filteredNodeInformer.Run(stop)
 	go c.podLocalitySource.Run(stop)
 
 	// To avoid endpoints without labels or ports, wait for sync.
-	cache.WaitForCacheSync(stop, c.filteredNodeInformer.HasSynced,
+	cache.WaitForCacheSync(stop,
 		c.podLocalitySource.HasSynced, c.pods.informer.HasSynced,
 		c.services.HasSynced)
+
+	// The node informer is handled separately because it may be disabled.
+	if c.filteredNodeInformer != nil {
+		go c.filteredNodeInformer.Run(stop)
+		cache.WaitForCacheSync(stop, c.filteredNodeInformer.HasSynced)
+	}
 
 	go c.endpoints.Run(stop)
 
