@@ -1,7 +1,7 @@
 FROM centos:8
 
 RUN dnf -y upgrade --refresh && \
-    dnf -y install iptables iproute && \
+    dnf -y install iptables iproute openssl && \
     dnf -y clean all
 
 # Copy Envoy bootstrap templates used by pilot-agent
