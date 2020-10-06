@@ -24,16 +24,6 @@ type IstioConfigStore struct {
 	authorizationPoliciesReturnsOnCall map[int]struct {
 		result1 []model.Config
 	}
-	ClusterRbacConfigStub        func() *model.Config
-	clusterRbacConfigMutex       sync.RWMutex
-	clusterRbacConfigArgsForCall []struct {
-	}
-	clusterRbacConfigReturns struct {
-		result1 *model.Config
-	}
-	clusterRbacConfigReturnsOnCall map[int]struct {
-		result1 *model.Config
-	}
 	CreateStub        func(model.Config) (string, error)
 	createMutex       sync.RWMutex
 	createArgsForCall []struct {
@@ -280,58 +270,6 @@ func (fake *IstioConfigStore) AuthorizationPoliciesReturnsOnCall(i int, result1 
 	}
 	fake.authorizationPoliciesReturnsOnCall[i] = struct {
 		result1 []model.Config
-	}{result1}
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfig() *model.Config {
-	fake.clusterRbacConfigMutex.Lock()
-	ret, specificReturn := fake.clusterRbacConfigReturnsOnCall[len(fake.clusterRbacConfigArgsForCall)]
-	fake.clusterRbacConfigArgsForCall = append(fake.clusterRbacConfigArgsForCall, struct {
-	}{})
-	fake.recordInvocation("ClusterRbacConfig", []interface{}{})
-	fake.clusterRbacConfigMutex.Unlock()
-	if fake.ClusterRbacConfigStub != nil {
-		return fake.ClusterRbacConfigStub()
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	fakeReturns := fake.clusterRbacConfigReturns
-	return fakeReturns.result1
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfigCallCount() int {
-	fake.clusterRbacConfigMutex.RLock()
-	defer fake.clusterRbacConfigMutex.RUnlock()
-	return len(fake.clusterRbacConfigArgsForCall)
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfigCalls(stub func() *model.Config) {
-	fake.clusterRbacConfigMutex.Lock()
-	defer fake.clusterRbacConfigMutex.Unlock()
-	fake.ClusterRbacConfigStub = stub
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfigReturns(result1 *model.Config) {
-	fake.clusterRbacConfigMutex.Lock()
-	defer fake.clusterRbacConfigMutex.Unlock()
-	fake.ClusterRbacConfigStub = nil
-	fake.clusterRbacConfigReturns = struct {
-		result1 *model.Config
-	}{result1}
-}
-
-func (fake *IstioConfigStore) ClusterRbacConfigReturnsOnCall(i int, result1 *model.Config) {
-	fake.clusterRbacConfigMutex.Lock()
-	defer fake.clusterRbacConfigMutex.Unlock()
-	fake.ClusterRbacConfigStub = nil
-	if fake.clusterRbacConfigReturnsOnCall == nil {
-		fake.clusterRbacConfigReturnsOnCall = make(map[int]struct {
-			result1 *model.Config
-		})
-	}
-	fake.clusterRbacConfigReturnsOnCall[i] = struct {
-		result1 *model.Config
 	}{result1}
 }
 
@@ -1278,8 +1216,6 @@ func (fake *IstioConfigStore) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.authorizationPoliciesMutex.RLock()
 	defer fake.authorizationPoliciesMutex.RUnlock()
-	fake.clusterRbacConfigMutex.RLock()
-	defer fake.clusterRbacConfigMutex.RUnlock()
 	fake.createMutex.RLock()
 	defer fake.createMutex.RUnlock()
 	fake.deleteMutex.RLock()
