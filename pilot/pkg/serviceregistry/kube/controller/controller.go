@@ -152,6 +152,8 @@ type Options struct {
 	// to allow gateways to advertise the node IP addresses as their endpoints,
 	// but requires istiod have cluster read permissions on nodes.
 	EnableNodePortGateways bool
+
+	EnableCRDScan bool
 }
 
 // EndpointMode decides what source to use to get endpoint information

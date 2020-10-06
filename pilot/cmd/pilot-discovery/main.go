@@ -167,6 +167,8 @@ func init() {
 		"The domain serves to identify the system with spiffe")
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.Service.Consul.ServerURL, "consulserverURL", "",
 		"URL for the Consul server")
+	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.Config.ControllerOptions.EnableCRDScan, "enableCRDScan", true,
+		"Whether to scan CRDs at startup")
 
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.DiscoveryOptions.HTTPAddr, "httpAddr", ":8080",
