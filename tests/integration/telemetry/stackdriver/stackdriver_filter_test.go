@@ -186,7 +186,7 @@ func TestMain(m *testing.M) {
 		Label(label.CustomSetup).
 		SetupOnEnv(environment.Kube, istio.Setup(getIstioInstance(), setupConfig)).
 		Setup(testSetup).
-		Run()
+		Skip("https://issues.redhat.com/browse/MAISTRA-1910")
 }
 
 func setupConfig(cfg *istio.Config) {
