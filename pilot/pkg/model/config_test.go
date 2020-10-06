@@ -477,15 +477,6 @@ func TestRbacConfig(t *testing.T) {
 	}
 }
 
-func TestClusterRbacConfig(t *testing.T) {
-	store := model.MakeIstioStore(memory.Make(collections.Pilot))
-	addRbacConfigToStore(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().Kind(), constants.DefaultRbacConfigName, "", store, t)
-	rbacConfig := store.ClusterRbacConfig()
-	if rbacConfig.Name != constants.DefaultRbacConfigName {
-		t.Errorf("model.ClusterRbacConfig: expecting %s, but got %s", constants.DefaultRbacConfigName, rbacConfig.Name)
-	}
-}
-
 func TestAuthorizationPolicies(t *testing.T) {
 	store := model.MakeIstioStore(memory.Make(collections.Pilot))
 	addRbacConfigToStore(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Kind(), "policy1", "istio-system", store, t)
@@ -540,10 +531,6 @@ func addRbacConfigToStore(kind, name, namespace string, store model.IstioConfigS
 	case collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Kind():
 		group = collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Group()
 		version = collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Version()
-		value = &rbacproto.RbacConfig{Mode: rbacproto.RbacConfig_ON}
-	case collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().Kind():
-		group = collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().Group()
-		version = collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().Version()
 		value = &rbacproto.RbacConfig{Mode: rbacproto.RbacConfig_ON}
 	default:
 		panic("Unknown kind: " + kind)

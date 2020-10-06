@@ -424,7 +424,6 @@ func CheckIstioConfigTypes(store model.ConfigStore, namespace string, t *testing
 		{"ServiceRole", configName, collections.IstioRbacV1Alpha1Serviceroles, ExampleServiceRole},
 		{"ServiceRoleBinding", configName, collections.IstioRbacV1Alpha1Servicerolebindings, ExampleServiceRoleBinding},
 		{"RbacConfig", constants.DefaultRbacConfigName, collections.IstioRbacV1Alpha1Rbacconfigs, ExampleRbacConfig},
-		{"ClusterRbacConfig", constants.DefaultRbacConfigName, collections.IstioRbacV1Alpha1Clusterrbacconfigs, ExampleRbacConfig},
 		{"AuthorizationPolicy", configName, collections.IstioSecurityV1Beta1Authorizationpolicies, ExampleAuthorizationPolicy},
 	}
 
