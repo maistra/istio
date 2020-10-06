@@ -144,7 +144,6 @@ func PushTypeFor(proxy *model.Proxy, pushEv *XdsEvent) map[XdsType]bool {
 			case collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(),
 				collections.IstioRbacV1Alpha1Servicerolebindings.Resource().GroupVersionKind(),
 				collections.IstioRbacV1Alpha1Rbacconfigs.Resource().GroupVersionKind(),
-				collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(),
 				collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
 				collections.IstioSecurityV1Beta1Requestauthentications.Resource().GroupVersionKind():
 				out[LDS] = true
@@ -192,7 +191,6 @@ func PushTypeFor(proxy *model.Proxy, pushEv *XdsEvent) map[XdsType]bool {
 			case collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(),
 				collections.IstioRbacV1Alpha1Servicerolebindings.Resource().GroupVersionKind(),
 				collections.IstioRbacV1Alpha1Rbacconfigs.Resource().GroupVersionKind(),
-				collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(),
 				collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
 				collections.IstioSecurityV1Beta1Requestauthentications.Resource().GroupVersionKind():
 				out[LDS] = true

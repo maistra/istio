@@ -284,9 +284,6 @@ type IstioConfigStore interface {
 	// RbacConfig selects the RbacConfig of name DefaultRbacConfigName.
 	RbacConfig() *Config
 
-	// ClusterRbacConfig selects the ClusterRbacConfig of name DefaultRbacConfigName.
-	ClusterRbacConfig() *Config
-
 	// AuthorizationPolicies selects AuthorizationPolicies in the specified namespace.
 	AuthorizationPolicies(namespace string) []Config
 }
@@ -608,19 +605,6 @@ func (store *istioConfigStore) ServiceRoleBindings(namespace string) []Config {
 	}
 
 	return bindings
-}
-
-func (store *istioConfigStore) ClusterRbacConfig() *Config {
-	clusterRbacConfig, err := store.List(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(), "")
-	if err != nil {
-		log.Errorf("failed to get ClusterRbacConfig: %v", err)
-	}
-	for _, rc := range clusterRbacConfig {
-		if rc.Name == constants.DefaultRbacConfigName {
-			return &rc
-		}
-	}
-	return nil
 }
 
 func (store *istioConfigStore) RbacConfig() *Config {

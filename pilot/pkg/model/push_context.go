@@ -920,7 +920,6 @@ func (ps *PushContext) updateContext(
 			envoyFiltersChanged = true
 		case collections.IstioRbacV1Alpha1Servicerolebindings.Resource().GroupVersionKind(),
 			collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(),
-			collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(),
 			collections.IstioRbacV1Alpha1Rbacconfigs.Resource().GroupVersionKind(),
 			collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind():
 			authzChanged = true
