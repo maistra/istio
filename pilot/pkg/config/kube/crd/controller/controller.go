@@ -126,9 +126,17 @@ func NewController(client *Client, mrc meshcontroller.Controller, options contro
 
 	watchedNamespaceList := strings.Split(options.WatchedNamespaces, ",")
 
-	known := knownCrdsWithRetry(client)
+	var known map[string]struct{}
+	if options.EnableCRDScan {
+		known = knownCrdsWithRetry(client)
+	}
 	// add stores for CRD kinds
 	for _, s := range client.Schemas().All() {
+		// if CRD scan is disabled, just add informers for all known types
+		if !options.EnableCRDScan {
+			out.addInformer(s, watchedNamespaceList, options.ResyncPeriod, mrc)
+			continue
+		}
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
 		name := fmt.Sprintf("%s.%s", s.Resource().Plural(), s.Resource().Group())
 		if _, f := known[name]; f {
