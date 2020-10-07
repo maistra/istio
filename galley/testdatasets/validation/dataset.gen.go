@@ -45,8 +45,6 @@
 // dataset/networking-v1beta-VirtualService-valid.yaml
 // dataset/networking-v1beta-WorkloadEntry-invalid.yaml
 // dataset/networking-v1beta-WorkloadEntry-valid.yaml
-// dataset/rbac-v1alpha1-ClusterRbacConfig-invalid.yaml
-// dataset/rbac-v1alpha1-ClusterRbacConfig-valid.yaml
 // dataset/rbac-v1alpha1-RBacConfig-invalid.yaml
 // dataset/rbac-v1alpha1-RBacConfig-valid.yaml
 // dataset/rbac-v1alpha1-ServiceRole-invalid.yaml
@@ -1536,54 +1534,6 @@ func datasetNetworkingV1betaWorkloadentryValidYaml() (*asset, error) {
 	return a, nil
 }
 
-var _datasetRbacV1alpha1ClusterrbacconfigInvalidYaml = []byte(`apiVersion: "rbac.istio.io/v1alpha1"
-kind: ClusterRbacConfig
-metadata:
-  name: default
-spec:
-  mode: 'ON_WITH_EXCLUSION'
-`)
-
-func datasetRbacV1alpha1ClusterrbacconfigInvalidYamlBytes() ([]byte, error) {
-	return _datasetRbacV1alpha1ClusterrbacconfigInvalidYaml, nil
-}
-
-func datasetRbacV1alpha1ClusterrbacconfigInvalidYaml() (*asset, error) {
-	bytes, err := datasetRbacV1alpha1ClusterrbacconfigInvalidYamlBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	info := bindataFileInfo{name: "dataset/rbac-v1alpha1-ClusterRbacConfig-invalid.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info}
-	return a, nil
-}
-
-var _datasetRbacV1alpha1ClusterrbacconfigValidYaml = []byte(`apiVersion: "rbac.istio.io/v1alpha1"
-kind: ClusterRbacConfig
-metadata:
-  name: default
-spec:
-  mode: 'ON_WITH_INCLUSION'
-  inclusion:
-    services: ["mongodb.default.svc.cluster.local"]
-`)
-
-func datasetRbacV1alpha1ClusterrbacconfigValidYamlBytes() ([]byte, error) {
-	return _datasetRbacV1alpha1ClusterrbacconfigValidYaml, nil
-}
-
-func datasetRbacV1alpha1ClusterrbacconfigValidYaml() (*asset, error) {
-	bytes, err := datasetRbacV1alpha1ClusterrbacconfigValidYamlBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	info := bindataFileInfo{name: "dataset/rbac-v1alpha1-ClusterRbacConfig-valid.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info}
-	return a, nil
-}
-
 var _datasetRbacV1alpha1RbacconfigInvalidYaml = []byte(`apiVersion: "rbac.istio.io/v1alpha1"
 kind: RbacConfig
 metadata:
@@ -2023,8 +1973,6 @@ var _bindata = map[string]func() (*asset, error){
 	"dataset/networking-v1beta-VirtualService-valid.yaml":            datasetNetworkingV1betaVirtualserviceValidYaml,
 	"dataset/networking-v1beta-WorkloadEntry-invalid.yaml":           datasetNetworkingV1betaWorkloadentryInvalidYaml,
 	"dataset/networking-v1beta-WorkloadEntry-valid.yaml":             datasetNetworkingV1betaWorkloadentryValidYaml,
-	"dataset/rbac-v1alpha1-ClusterRbacConfig-invalid.yaml":           datasetRbacV1alpha1ClusterrbacconfigInvalidYaml,
-	"dataset/rbac-v1alpha1-ClusterRbacConfig-valid.yaml":             datasetRbacV1alpha1ClusterrbacconfigValidYaml,
 	"dataset/rbac-v1alpha1-RBacConfig-invalid.yaml":                  datasetRbacV1alpha1RbacconfigInvalidYaml,
 	"dataset/rbac-v1alpha1-RBacConfig-valid.yaml":                    datasetRbacV1alpha1RbacconfigValidYaml,
 	"dataset/rbac-v1alpha1-ServiceRole-invalid.yaml":                 datasetRbacV1alpha1ServiceroleInvalidYaml,
@@ -2126,8 +2074,6 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"networking-v1beta-VirtualService-valid.yaml":            &bintree{datasetNetworkingV1betaVirtualserviceValidYaml, map[string]*bintree{}},
 		"networking-v1beta-WorkloadEntry-invalid.yaml":           &bintree{datasetNetworkingV1betaWorkloadentryInvalidYaml, map[string]*bintree{}},
 		"networking-v1beta-WorkloadEntry-valid.yaml":             &bintree{datasetNetworkingV1betaWorkloadentryValidYaml, map[string]*bintree{}},
-		"rbac-v1alpha1-ClusterRbacConfig-invalid.yaml":           &bintree{datasetRbacV1alpha1ClusterrbacconfigInvalidYaml, map[string]*bintree{}},
-		"rbac-v1alpha1-ClusterRbacConfig-valid.yaml":             &bintree{datasetRbacV1alpha1ClusterrbacconfigValidYaml, map[string]*bintree{}},
 		"rbac-v1alpha1-RBacConfig-invalid.yaml":                  &bintree{datasetRbacV1alpha1RbacconfigInvalidYaml, map[string]*bintree{}},
 		"rbac-v1alpha1-RBacConfig-valid.yaml":                    &bintree{datasetRbacV1alpha1RbacconfigValidYaml, map[string]*bintree{}},
 		"rbac-v1alpha1-ServiceRole-invalid.yaml":                 &bintree{datasetRbacV1alpha1ServiceroleInvalidYaml, map[string]*bintree{}},
