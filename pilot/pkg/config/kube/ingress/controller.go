@@ -160,7 +160,7 @@ func NewController(client kubernetes.Interface, mrc meshcontroller.Controller, m
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 	var classes *v1beta1.IngressClassInformer
-	if ingressClassSupported(client) {
+	if options.EnableIngressClassName && ingressClassSupported(client) {
 		sharedInformers := informers.NewSharedInformerFactory(client, options.ResyncPeriod)
 		i := sharedInformers.Networking().V1beta1().IngressClasses()
 		classes = &i

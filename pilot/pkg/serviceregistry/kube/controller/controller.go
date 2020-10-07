@@ -153,7 +153,17 @@ type Options struct {
 	// but requires istiod have cluster read permissions on nodes.
 	EnableNodePortGateways bool
 
+  // EnableCRDScan determines whether the controller will list all CRDs
+  // present in the cluster, and subsequently only create watches on those
+  // that are. If this is set to false, all CRDs defined in the schema must be
+  // present for istiod to function.
 	EnableCRDScan bool
+
+  // EnableIngressClassName determines whether the controller will support
+	// processing Kubernetes Ingress resources that use the new (as of 1.18)
+	// `ingressClassName` in their spec, or if it will only check the deprecated
+	// `kubernetes.io/ingress.class` annotation.
+	EnableIngressClassName bool
 }
 
 // EndpointMode decides what source to use to get endpoint information
