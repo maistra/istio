@@ -209,20 +209,28 @@ func (c *controller) checkReadyForEvents(curr interface{}) error {
 }
 
 func (c *controller) tryLedgerPut(obj interface{}, schema collection.Schema) {
-	iobj := obj.(crd.IstioObject)
+	iobj, err := castToIstioObject(obj)
+	if err != nil {
+		scope.Errorf("Failed to cast to crd.IstioObject in ledger put: %v", err)
+		return
+	}
 	om := iobj.GetObjectMeta()
 	key := model.Key(schema.Resource().Kind(), om.Name, om.Namespace)
-	_, err := c.client.configLedger.Put(key, om.ResourceVersion)
+	_, err = c.client.configLedger.Put(key, om.ResourceVersion)
 	if err != nil {
 		scope.Errorf("Failed to update %s in ledger, status will be out of date.", key)
 	}
 }
 
 func (c *controller) tryLedgerDelete(obj interface{}, schema collection.Schema) {
-	iobj := obj.(crd.IstioObject)
+	iobj, err := castToIstioObject(obj)
+	if err != nil {
+		scope.Errorf("Failed to cast to crd.IstioObject in ledger delete: %v", err)
+		return
+	}
 	om := iobj.GetObjectMeta()
 	key := model.Key(schema.Resource().Kind(), om.Name, om.Namespace)
-	err := c.GetLedger().Delete(key)
+	err = c.GetLedger().Delete(key)
 	if err != nil {
 		scope.Errorf("Failed to delete %s in ledger, status will be out of date.", key)
 	}
@@ -315,8 +323,8 @@ func (h *cacheHandler) onEvent(old, curr interface{}, event model.Event) error {
 
 	ok := false
 
-	if currItem, ok = curr.(crd.IstioObject); !ok {
-		log.Warnf("New Object can not be converted to Istio Object %v", curr)
+	if currItem, err = castToIstioObject(curr); err != nil {
+		log.Warnf("New Object can not be converted to Istio Object %v: %v", curr, err)
 		return nil
 	}
 	if currConfig, err = crd.ConvertObject(h.schema, currItem, h.c.client.domainSuffix); err != nil {
@@ -482,4 +490,19 @@ func (c *controller) List(typ resource.GroupVersionKind, namespace string) ([]mo
 		}
 	}
 	return out, nil
+}
+
+func castToIstioObject(obj interface{}) (crd.IstioObject, error) {
+	iobj, ok := obj.(crd.IstioObject)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return nil, fmt.Errorf("couldn't get object from tombstone %#v", obj)
+		}
+		iobj, ok = tombstone.Obj.(crd.IstioObject)
+		if !ok {
+			return nil, fmt.Errorf("tombstone contained object that is not a object %#v", obj)
+		}
+	}
+	return iobj, nil
 }
