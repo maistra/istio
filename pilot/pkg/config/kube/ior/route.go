@@ -35,18 +35,14 @@ import (
 )
 
 const (
-	maistraPrefix          = "maistra.io/"
-	generatedByLabel       = maistraPrefix + "generated-by"
-	generatedByValue       = "ior"
-	originalHostAnnotation = maistraPrefix + "original-host"
-	gatewayNameLabel       = maistraPrefix + "gateway-name"
-	gatewayNamespaceLabel  = maistraPrefix + "gateway-namespace"
+	maistraPrefix               = "maistra.io/"
+	generatedByLabel            = maistraPrefix + "generated-by"
+	generatedByValue            = "ior"
+	originalHostAnnotation      = maistraPrefix + "original-host"
+	gatewayNameLabel            = maistraPrefix + "gateway-name"
+	gatewayNamespaceLabel       = maistraPrefix + "gateway-namespace"
+	gatewayResourceVersionLabel = maistraPrefix + "gateway-resourceVersion"
 )
-
-type syncedRoute struct {
-	route *v1.Route
-	valid bool
-}
 
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
@@ -54,7 +50,6 @@ type route struct {
 	client         *routev1.RouteV1Client
 	kubeClient     kubernetes.Interface
 	store          model.ConfigStoreCache
-	routes         map[string]*syncedRoute
 }
 
 // newRoute returns a new instance of Route object
@@ -70,25 +65,32 @@ func newRoute(kubeClient kubernetes.Interface, store model.ConfigStoreCache, pil
 	r.pilotNamespace = pilotNamespace
 	r.store = store
 
-	err = r.initRoutes()
-	if err != nil {
-		return nil, err
-	}
-
 	return r, nil
 }
 
 func (r *route) syncGatewaysAndRoutes() error {
-	for _, sRoute := range r.routes {
-		sRoute.valid = false
-	}
-
 	configs, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
 	if err != nil {
-		return fmt.Errorf("could not get the initial list of Gateways: %s", err)
+		return fmt.Errorf("could not get list of Gateways: %s", err)
+	}
+
+	routes, err := r.client.Routes(r.pilotNamespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
+	})
+	if err != nil {
+		return fmt.Errorf("could not get list of Routes: %s", err)
 	}
 
 	var result *multierror.Error
+	routesMap := make(map[string]*v1.Route, len(routes.Items))
+	for _, route := range routes.Items {
+		_, err := findConfig(configs, route.Labels[gatewayNameLabel], route.Labels[gatewayNamespaceLabel], route.Labels[gatewayResourceVersionLabel])
+		if err != nil {
+			result = multierror.Append(r.deleteRoute(&route))
+		} else {
+			routesMap[getHost(route)] = &route
+		}
+	}
 
 	for _, cfg := range configs {
 		gateway := cfg.Spec.(*networking.Gateway)
@@ -96,20 +98,12 @@ func (r *route) syncGatewaysAndRoutes() error {
 
 		for _, server := range gateway.Servers {
 			for _, host := range server.Hosts {
-				_, ok := r.routes[host]
-				if ok {
-					r.editRoute(host)
-				} else {
+				_, ok := routesMap[host]
+				if !ok {
 					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server.Tls != nil))
 				}
 
 			}
-		}
-	}
-
-	for _, sRoute := range r.routes {
-		if !sRoute.valid {
-			result = multierror.Append(result, r.deleteRoute(sRoute.route))
 		}
 	}
 
@@ -123,34 +117,10 @@ func getHost(route v1.Route) string {
 	return route.Spec.Host
 }
 
-func (r *route) initRoutes() error {
-	routes, err := r.client.Routes(r.pilotNamespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
-	})
-	if err != nil {
-		return fmt.Errorf("error getting routes: %v", err)
-	}
-
-	r.routes = make(map[string]*syncedRoute, len(routes.Items))
-	for _, route := range routes.Items {
-		localRoute := route
-		r.routes[getHost(localRoute)] = &syncedRoute{
-			route: &localRoute,
-		}
-	}
-	return nil
-}
-
-func (r *route) editRoute(host string) {
-	iorLog.Debugf("Editing route for hostname %s", host)
-	r.routes[host].valid = true
-}
-
 func (r *route) deleteRoute(route *v1.Route) error {
 	var immediate int64
 	host := getHost(*route)
 	err := r.client.Routes(r.pilotNamespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
-	delete(r.routes, host)
 	if err != nil {
 		return fmt.Errorf("error deleting route %s/%s: %s", route.ObjectMeta.Namespace, route.ObjectMeta.Name, err)
 	}
@@ -202,9 +172,10 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("%s-%s-", metadata.Namespace, metadata.Name),
 			Labels: map[string]string{
-				generatedByLabel:      generatedByValue,
-				gatewayNamespaceLabel: metadata.Namespace,
-				gatewayNameLabel:      metadata.Name,
+				generatedByLabel:            generatedByValue,
+				gatewayNamespaceLabel:       metadata.Namespace,
+				gatewayNameLabel:            metadata.Name,
+				gatewayResourceVersionLabel: metadata.ResourceVersion,
 			},
 			Annotations: annotations,
 		},
@@ -232,11 +203,6 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 		nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
 		nr.Spec.Host,
 		metadata.Namespace, metadata.Name)
-
-	r.routes[originalHost] = &syncedRoute{
-		route: nr,
-		valid: true,
-	}
 
 	return nil
 }
@@ -293,4 +259,13 @@ func (r *route) findService(gateway *networking.Gateway) (string, string, error)
 
 	return "", "", fmt.Errorf("could not find a service that matches the gateway selector `%s'. Namespaces where we looked at: %v",
 		gwSelector.String(), namespaces)
+}
+
+func findConfig(list []model.Config, name, namespace, resourceVersion string) (model.Config, error) {
+	for _, item := range list {
+		if item.Name == name && item.Namespace == namespace && item.ResourceVersion == resourceVersion {
+			return item, nil
+		}
+	}
+	return model.Config{}, fmt.Errorf("config not found")
 }
