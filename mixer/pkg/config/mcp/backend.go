@@ -37,6 +37,7 @@ import (
 	"istio.io/istio/pkg/mcp/creds"
 	"istio.io/istio/pkg/mcp/monitoring"
 	"istio.io/istio/pkg/mcp/sink"
+	"istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 var scope = log.RegisterScope("mcp", "Mixer MCP client stack", 0)
@@ -53,7 +54,7 @@ const (
 // Do not use 'init()' for automatic registration; linker will drop
 // the whole module because it looks unused.
 func Register(builders map[string]store.Builder) {
-	var builder store.Builder = func(u *url.URL, _ *kubeSchema.GroupVersion, credOptions *creds.Options, _ []string) (
+	var builder store.Builder = func(u *url.URL, _ *kubeSchema.GroupVersion, credOptions *creds.Options, _ memberroll.Controller, _ []string) (
 		store.Backend, error) {
 		return newStore(u, credOptions, nil)
 	}

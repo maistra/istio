@@ -33,6 +33,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/mixer/pkg/config/store"
+	"istio.io/istio/pkg/listwatch"
+	"istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/pkg/log"
 	"istio.io/pkg/probe"
 )
@@ -65,7 +67,7 @@ type listerWatcherBuilderInterface interface {
 // Store offers store.StoreBackend interface through kubernetes custom resource definitions.
 type Store struct {
 	conf            *rest.Config
-	ns              map[string]bool
+	ns              []string
 	retryTimeout    time.Duration
 	donec           chan struct{}
 	apiGroupVersion string
@@ -95,6 +97,8 @@ type Store struct {
 	// criticalkinds are the kinds that are critical for mixer function and must be ready
 	// for store initialization.
 	criticalKinds []string
+
+	mrc memberroll.Controller
 }
 
 var _ store.Backend = new(Store)
@@ -135,16 +139,27 @@ func (s *Store) checkAndCreateCaches(
 			res.Group = ConfigAPIGroup
 			res.Version = ConfigAPIVersion
 			cl := lwBuilder.build(res)
-			informer := cache.NewSharedInformer(
-				&cache.ListWatch{
+			mlw := listwatch.MultiNamespaceListerWatcher(s.ns, func(namespace string) cache.ListerWatcher {
+				return &cache.ListWatch{
 					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+						if ncl, ok := cl.(dynamic.NamespaceableResourceInterface); ok {
+							return ncl.Namespace(namespace).List(context.TODO(), options)
+						}
 						return cl.List(context.TODO(), options)
 					},
 					WatchFunc: func(options metav1.ListOptions) (w watch.Interface, err error) {
+						if ncl, ok := cl.(dynamic.NamespaceableResourceInterface); ok {
+							return ncl.Namespace(namespace).Watch(context.TODO(), options)
+						}
 						return cl.Watch(context.TODO(), options)
 					},
-				},
-				&unstructured.Unstructured{}, 0)
+				}
+			})
+			if s.mrc != nil {
+				s.mrc.Register(mlw, fmt.Sprintf("mixer-cache-%s", res.Kind))
+			}
+
+			informer := cache.NewSharedInformer(mlw, &unstructured.Unstructured{}, 0)
 			s.caches[res.Kind] = informer.GetStore()
 			s.informers[res.Kind] = informer
 			delete(kindsSet, res.Kind)
@@ -275,9 +290,6 @@ func (s *Store) Watch() (<-chan store.BackendEvent, error) {
 
 // Get implements store.Backend interface.
 func (s *Store) Get(key store.Key) (*store.BackEndResource, error) {
-	if s.ns != nil && !s.ns[key.Namespace] {
-		return nil, store.ErrNotFound
-	}
 	s.cacheMutex.RLock()
 	c, ok := s.caches[key.Kind]
 	s.cacheMutex.RUnlock()
@@ -321,9 +333,6 @@ func (s *Store) List() map[store.Key]*store.BackEndResource {
 		for _, obj := range c.List() {
 			uns := obj.(*unstructured.Unstructured)
 			key := store.Key{Kind: kind, Name: uns.GetName(), Namespace: uns.GetNamespace()}
-			if s.ns != nil && !s.ns[key.Namespace] {
-				continue
-			}
 			result[key] = ToBackEndResource(uns)
 		}
 	}
@@ -356,24 +365,18 @@ func (s *Store) dispatch(ev store.BackendEvent) {
 // OnAdd implements cache.ResourceEventHandler interface.
 func (s *Store) OnAdd(obj interface{}) {
 	ev := toEvent(store.Update, obj)
-	if s.ns == nil || s.ns[ev.Key.Namespace] {
-		s.dispatch(ev)
-	}
+	s.dispatch(ev)
 }
 
 // OnUpdate implements cache.ResourceEventHandler interface.
 func (s *Store) OnUpdate(oldObj, newObj interface{}) {
 	ev := toEvent(store.Update, newObj)
-	if s.ns == nil || s.ns[ev.Key.Namespace] {
-		s.dispatch(ev)
-	}
+	s.dispatch(ev)
 }
 
 // OnDelete implements cache.ResourceEventHandler interface.
 func (s *Store) OnDelete(obj interface{}) {
 	ev := toEvent(store.Delete, obj)
 	ev.Value = nil
-	if s.ns == nil || s.ns[ev.Key.Namespace] {
-		s.dispatch(ev)
-	}
+	s.dispatch(ev)
 }

@@ -26,6 +26,7 @@ import (
 
 	cfg "istio.io/api/policy/v1beta1"
 	"istio.io/istio/pkg/mcp/creds"
+	"istio.io/istio/pkg/servicemesh/controller/memberroll"
 )
 
 type testStore struct {
@@ -80,7 +81,7 @@ func newTestBackend() *testStore {
 
 func registerTestStore(builders map[string]Builder) {
 	// nolint: unparam
-	var builder Builder = func(_ *url.URL, _ *schema.GroupVersion, _ *creds.Options, _ []string) (Backend, error) {
+	var builder Builder = func(_ *url.URL, _ *schema.GroupVersion, _ *creds.Options, _ memberroll.Controller, _ []string) (Backend, error) {
 		return newTestBackend(), nil
 	}
 	builders["test"] = builder
@@ -228,7 +229,7 @@ func TestRegistry(t *testing.T) {
 		{"://", false},
 		{"test://", true},
 	} {
-		_, err := r.NewStore(c.u, groupVersion, nil, []string{})
+		_, err := r.NewStore(c.u, groupVersion, nil, nil, []string{})
 		ok := err == nil
 		if ok != c.ok {
 			t.Errorf("Want %v, Got %v, Err %v", c.ok, ok, err)
