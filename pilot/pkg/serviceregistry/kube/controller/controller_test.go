@@ -478,34 +478,34 @@ func TestController_getPodAZ_FromPod(t *testing.T) {
 			pods: map[string]*coreV1.Pod{
 				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{NodeZoneLabel: "zone1", NodeRegionLabel: "region1", "app": "prod-app"},
 					map[string]string{}),
-				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{NodeZoneLabel: "zone2", NodeRegionLabel: "region2", "app": "prod-app"},
+				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{NodeZoneLabelGA: "zone2", NodeRegionLabelGA: "region2", "app": "prod-app"},
 					map[string]string{}),
 			},
 			wantAZ: map[string]string{
-				"pod1": "region1/zone1",
-				"pod2": "region2/zone2",
+				"pod1": "region1/zone1/",
+				"pod2": "region2/zone2/",
 			},
 		},
 		{
 			name: "should return correct az if node has only region label",
 			pods: map[string]*coreV1.Pod{
 				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{"app": "prod-app", NodeRegionLabel: "region1"}, map[string]string{}),
-				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app", NodeRegionLabel: "region2"}, map[string]string{}),
+				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app", NodeRegionLabelGA: "region2"}, map[string]string{}),
 			},
 			wantAZ: map[string]string{
-				"pod1": "region1/",
-				"pod2": "region2/",
+				"pod1": "region1//",
+				"pod2": "region2//",
 			},
 		},
 		{
 			name: "should return correct az if node has only zone label",
 			pods: map[string]*coreV1.Pod{
 				"pod1": generatePod("128.0.1.1", "pod1", "nsA", "", "node1", map[string]string{"app": "prod-app", NodeZoneLabel: "zone1"}, map[string]string{}),
-				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app", NodeZoneLabel: "zone2"}, map[string]string{}),
+				"pod2": generatePod("128.0.1.2", "pod2", "nsB", "", "node2", map[string]string{"app": "prod-app", NodeZoneLabelGA: "zone2"}, map[string]string{}),
 			},
 			wantAZ: map[string]string{
-				"pod1": "/zone1",
-				"pod2": "/zone2",
+				"pod1": "/zone1/",
+				"pod2": "/zone2/",
 			},
 		},
 		{
