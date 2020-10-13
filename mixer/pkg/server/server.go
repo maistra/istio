@@ -179,6 +179,21 @@ func newServer(a *Args, p *patchTable) (server *Server, err error) {
 		return nil, fmt.Errorf("unable to listen: %v", err)
 	}
 
+	var namespaces []string
+
+	if a.MemberRollName != "" {
+		mrc, err := memberroll.NewControllerFromConfigFile(a.ConfigStoreURL, a.MemberRollNamespace, a.MemberRollName, a.MemberRollResync)
+		if err != nil {
+			_ = s.Close()
+			return nil, multierror.Prefix(err, "Could not create MemberRollController.")
+		}
+		s.mrcStop = make(chan struct{})
+		s.mrc = mrc
+		mrc.Start(s.mrcStop)
+	} else {
+		namespaces = []string{""}
+	}
+
 	st := a.ConfigStore
 	if st == nil {
 		configStoreURL := a.ConfigStoreURL
@@ -188,7 +203,7 @@ func newServer(a *Args, p *patchTable) (server *Server, err error) {
 
 		reg := store.NewRegistry(config.StoreInventory()...)
 		groupVersion := &schema.GroupVersion{Group: crd.ConfigAPIGroup, Version: crd.ConfigAPIVersion}
-		if st, err = reg.NewStore(configStoreURL, groupVersion, a.CredentialOptions, runtimeconfig.CriticalKinds()); err != nil {
+		if st, err = reg.NewStore(configStoreURL, groupVersion, a.CredentialOptions, s.mrc, runtimeconfig.CriticalKinds()); err != nil {
 			return nil, fmt.Errorf("unable to connect to the configuration server: %v", err)
 		}
 	}
@@ -212,21 +227,6 @@ func newServer(a *Args, p *patchTable) (server *Server, err error) {
 
 	if err := st.Init(kinds); err != nil {
 		return nil, fmt.Errorf("unable to initialize config store: %v", err)
-	}
-
-	var namespaces []string
-
-	if a.MemberRollName != "" {
-		mrc, err := memberroll.NewControllerFromConfigFile(a.ConfigStoreURL, a.MemberRollNamespace, a.MemberRollName, a.MemberRollResync)
-		if err != nil {
-			_ = s.Close()
-			return nil, multierror.Prefix(err, "Could not create MemberRollController.")
-		}
-		s.mrcStop = make(chan struct{})
-		s.mrc = mrc
-		mrc.Start(s.mrcStop)
-	} else {
-		namespaces = []string{""}
 	}
 
 	// block wait for the config store to sync
@@ -351,6 +351,11 @@ func (s *Server) Close() error {
 	if s.configStore != nil {
 		s.configStore.Stop()
 		s.configStore = nil
+	}
+
+	if s.mrcStop != nil {
+		close(s.mrcStop)
+		s.mrcStop = nil
 	}
 
 	if s.checkCache != nil {
