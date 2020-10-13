@@ -20,6 +20,7 @@ import (
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collections"
+	"istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/pkg/log"
 
 	"k8s.io/client-go/kubernetes"
@@ -28,7 +29,7 @@ import (
 var iorLog = log.RegisterScope("ior", "IOR logging", 0)
 
 // Register configures IOR component to respond to Gateway creations and removals
-func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNamespace string) {
+func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNamespace string, mrc memberroll.Controller) {
 	iorLog.Info("Registering IOR component")
 
 	if !isRouteSupported(client) {
@@ -36,7 +37,7 @@ func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNa
 		return
 	}
 
-	r, err := newRoute(client, store, pilotNamespace)
+	r, err := newRoute(client, store, pilotNamespace, mrc)
 	if err != nil {
 		iorLog.Errora(err)
 		return
@@ -44,17 +45,19 @@ func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNa
 
 	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
 	store.RegisterEventHandler(kind, func(_, curr model.Config, event model.Event) {
-		_, ok := curr.Spec.(*networking.Gateway)
-		if !ok {
-			iorLog.Errorf("could not decode object as Gateway. Object = %v", curr)
-			return
-		}
+		// encapsulate in goroutine to not slow down processing because of waiting for mutex
+		go func() {
+			_, ok := curr.Spec.(*networking.Gateway)
+			if !ok {
+				iorLog.Errorf("could not decode object as Gateway. Object = %v", curr)
+				return
+			}
 
-		iorLog.Debugf("Event %v arrived. Object: %v", event, curr)
-		if err := r.syncGatewaysAndRoutes(); err != nil {
-			iorLog.Errora(err)
-		}
-
+			iorLog.Debugf("Event %v arrived. Object: %v", event, curr)
+			if err := r.syncGatewaysAndRoutes(); err != nil {
+				iorLog.Errora(err)
+			}
+		}()
 	})
 }
 
