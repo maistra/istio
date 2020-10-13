@@ -17,6 +17,7 @@ package ior
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/go-multierror"
 	v1 "github.com/openshift/api/route/v1"
@@ -32,6 +33,7 @@ import (
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
+	"istio.io/istio/pkg/servicemesh/controller"
 )
 
 const (
@@ -50,10 +52,15 @@ type route struct {
 	client         *routev1.RouteV1Client
 	kubeClient     kubernetes.Interface
 	store          model.ConfigStoreCache
+
+	// memberroll functionality
+	mrc           controller.MemberRollController
+	namespaceLock sync.Mutex
+	namespaces    []string
 }
 
 // newRoute returns a new instance of Route object
-func newRoute(kubeClient kubernetes.Interface, store model.ConfigStoreCache, pilotNamespace string) (*route, error) {
+func newRoute(kubeClient kubernetes.Interface, store model.ConfigStoreCache, pilotNamespace string, mrc controller.MemberRollController) (*route, error) {
 	r := &route{}
 
 	err := r.initClient()
@@ -64,26 +71,46 @@ func newRoute(kubeClient kubernetes.Interface, store model.ConfigStoreCache, pil
 	r.kubeClient = kubeClient
 	r.pilotNamespace = pilotNamespace
 	r.store = store
+	r.mrc = mrc
+	r.namespaces = []string{pilotNamespace}
+
+	if r.mrc != nil {
+		r.mrc.Register(r, "ior")
+	}
 
 	return r, nil
 }
 
+func (r *route) SetNamespaces(namespaces ...string) {
+	r.namespaceLock.Lock()
+	defer r.namespaceLock.Unlock()
+	r.namespaces = namespaces
+}
+
 func (r *route) syncGatewaysAndRoutes() error {
+	r.namespaceLock.Lock()
+	defer r.namespaceLock.Unlock()
+
 	configs, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
 	if err != nil {
 		return fmt.Errorf("could not get list of Gateways: %s", err)
 	}
 
-	routes, err := r.client.Routes(r.pilotNamespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
-	})
-	if err != nil {
-		return fmt.Errorf("could not get list of Routes: %s", err)
+	var routes []v1.Route
+
+	for _, ns := range r.namespaces {
+		routeList, err := r.client.Routes(ns).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
+		})
+		if err != nil {
+			return fmt.Errorf("could not get list of Routes in namespace %s: %s", ns, err)
+		}
+		routes = append(routes, routeList.Items...)
 	}
 
 	var result *multierror.Error
-	routesMap := make(map[string]*v1.Route, len(routes.Items))
-	for _, route := range routes.Items {
+	routesMap := make(map[string]*v1.Route, len(routes))
+	for _, route := range routes {
 		_, err := findConfig(configs, route.Labels[gatewayNameLabel], route.Labels[gatewayNamespaceLabel], route.Labels[gatewayResourceVersionLabel])
 		if err != nil {
 			result = multierror.Append(r.deleteRoute(&route))
@@ -120,7 +147,7 @@ func getHost(route v1.Route) string {
 func (r *route) deleteRoute(route *v1.Route) error {
 	var immediate int64
 	host := getHost(*route)
-	err := r.client.Routes(r.pilotNamespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
+	err := r.client.Routes(route.Namespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
 	if err != nil {
 		return fmt.Errorf("error deleting route %s/%s: %s", route.ObjectMeta.Namespace, route.ObjectMeta.Name, err)
 	}
@@ -129,6 +156,7 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
+// must be called with lock held
 func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, originalHost string, tls bool) error {
 	var wildcard = v1.WildcardPolicyNone
 	actualHost := originalHost
@@ -225,23 +253,21 @@ func (r *route) initClient() error {
 
 // findService tries to find a service that matches with the given gateway selector, in the given namespaces
 // Returns the namespace and service name that is a match, or an error
+// must be called with lock held
 func (r *route) findService(gateway *networking.Gateway) (string, string, error) {
 	gwSelector := labels.SelectorFromSet(gateway.Selector)
 
-	// FIXME: Should we look for ingress gateway pod/service in all mesh members instead of just in the control plane namespace?
-	namespaces := []string{r.pilotNamespace}
-
-	for _, ns := range namespaces {
+	for _, ns := range r.namespaces {
 		// Get the list of pods that match the gateway selector
 		podList, err := r.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{LabelSelector: gwSelector.String()})
-		if err != nil { // FIXME: check for NotFound
-			return "", "", fmt.Errorf("could not get the list of pods: %v", err)
+		if err != nil {
+			return "", "", fmt.Errorf("could not get the list of pods in namespace %s: %v", ns, err)
 		}
 
 		// Get the list of services in this namespace
 		svcList, err := r.kubeClient.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
-		if err != nil { // FIXME: check for NotFound
-			return "", "", fmt.Errorf("could not get the list of services: %v", err)
+		if err != nil {
+			return "", "", fmt.Errorf("could not get the list of services in namespace %s: %v", ns, err)
 		}
 
 		// Look for a service whose selector matches the pod labels
@@ -258,7 +284,7 @@ func (r *route) findService(gateway *networking.Gateway) (string, string, error)
 	}
 
 	return "", "", fmt.Errorf("could not find a service that matches the gateway selector `%s'. Namespaces where we looked at: %v",
-		gwSelector.String(), namespaces)
+		gwSelector.String(), r.namespaces)
 }
 
 func findConfig(list []config.Config, name, namespace, resourceVersion string) (config.Config, error) {

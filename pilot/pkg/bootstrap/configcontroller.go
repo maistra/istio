@@ -125,7 +125,7 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 	s.environment.IstioConfigStore = model.MakeIstioStore(s.configController)
 
 	if features.EnableIOR {
-		ior.Register(s.kubeClient, s.configController, args.Namespace)
+		ior.Register(s.kubeClient, s.configController, args.Namespace, s.kubeClient.GetMemberRoll())
 	}
 
 	// Defer starting the controller until after the service is created.
