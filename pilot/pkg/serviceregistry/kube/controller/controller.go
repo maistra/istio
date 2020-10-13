@@ -708,13 +708,15 @@ type podLocalitySource struct {
 }
 
 func (p *podLocalitySource) GetPodLocality(pod *v1.Pod) string {
-	region := pod.Labels[NodeRegionLabel]
-	zone := pod.Labels[NodeZoneLabel]
-	if region == "" && zone == "" {
+	region := getLabelValue(pod, NodeRegionLabel, NodeRegionLabelGA)
+	zone := getLabelValue(pod, NodeZoneLabel, NodeZoneLabelGA)
+	subzone := getLabelValue(pod, IstioSubzoneLabel, "")
+
+	if region == "" && zone == "" && subzone == "" {
 		return ""
 	}
 
-	return fmt.Sprintf("%v/%v", region, zone)
+	return region + "/" + zone + "/" + subzone // Format: "%s/%s/%s"
 }
 
 func (p *podLocalitySource) HasSynced() bool {
