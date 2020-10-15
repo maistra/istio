@@ -124,6 +124,10 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 				}
 			}
 			c.queue.Push(func() error {
+				// if the ConfigMap Delete event comes as part of the removal of the namespace, just ignore it
+				if mrc != nil && !c.namespaces.Has(cm.Namespace) {
+					return nil
+				}
 				ns, err := kubeClient.CoreV1().Namespaces().Get(context.TODO(), cm.Namespace, metav1.GetOptions{})
 				if err != nil {
 					return err
