@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"istio.io/istio/pkg/mcp/creds"
+	"istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/pkg/log"
 	"istio.io/pkg/probe"
 )
@@ -270,7 +271,7 @@ func WithBackend(b Backend) Store {
 }
 
 // Builder is the type of function to build a Backend.
-type Builder func(u *url.URL, gv *schema.GroupVersion, credOptions *creds.Options, ck []string) (Backend, error)
+type Builder func(u *url.URL, gv *schema.GroupVersion, credOptions *creds.Options, mrc memberroll.Controller, ck []string) (Backend, error)
 
 // RegisterFunc is the type to register a builder for URL scheme.
 type RegisterFunc func(map[string]Builder)
@@ -301,6 +302,7 @@ func (r *Registry) NewStore(
 	configURL string,
 	groupVersion *schema.GroupVersion,
 	credOptions *creds.Options,
+	mrc memberroll.Controller,
 	criticalKinds []string) (Store, error) {
 	u, err := url.Parse(configURL)
 
@@ -314,7 +316,7 @@ func (r *Registry) NewStore(
 		b = newFsStore(u.Path)
 	default:
 		if builder, ok := r.builders[u.Scheme]; ok {
-			b, err = builder(u, groupVersion, credOptions, criticalKinds)
+			b, err = builder(u, groupVersion, credOptions, mrc, criticalKinds)
 			if err != nil {
 				return nil, err
 			}

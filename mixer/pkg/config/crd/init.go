@@ -30,6 +30,7 @@ import (
 
 	"istio.io/istio/mixer/pkg/config/store"
 	"istio.io/istio/pkg/mcp/creds"
+	"istio.io/istio/pkg/servicemesh/controller/memberroll"
 	"istio.io/pkg/log"
 	"istio.io/pkg/probe"
 )
@@ -60,7 +61,7 @@ func (b *dynamicListerWatcherBuilder) build(res metav1.APIResource) dynamic.Reso
 }
 
 // NewStore creates a new Store instance.
-func NewStore(u *url.URL, gv *schema.GroupVersion, _ *creds.Options, ck []string) (store.Backend, error) {
+func NewStore(u *url.URL, gv *schema.GroupVersion, _ *creds.Options, mrc memberroll.Controller, ck []string) (store.Backend, error) {
 	kubeconfig := u.Path
 	namespaces := u.Query().Get("ns")
 	retryTimeout := crdRetryTimeout
@@ -87,12 +88,8 @@ func NewStore(u *url.URL, gv *schema.GroupVersion, _ *creds.Options, ck []string
 		Probe:                probe.NewProbe(),
 		apiGroupVersion:      gv.String(),
 		criticalKinds:        ck,
-	}
-	if len(namespaces) > 0 {
-		s.ns = map[string]bool{}
-		for _, n := range strings.Split(namespaces, ",") {
-			s.ns[n] = true
-		}
+		mrc:                  mrc,
+		ns:                   strings.Split(namespaces, ","),
 	}
 	return s, nil
 }

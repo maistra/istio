@@ -64,7 +64,22 @@ func createFakeDiscovery(_ *rest.Config) (discovery.DiscoveryInterface, error) {
 type dummyListerWatcherBuilder struct {
 	mu       sync.RWMutex
 	data     map[store.Key]*unstructured.Unstructured
-	watchers map[string]*watch.RaceFreeFakeWatcher
+	watchers map[string]map[string]*watch.RaceFreeFakeWatcher
+}
+
+func (f *fakeDynamicResource) Namespace(ns string) dynamic.ResourceInterface {
+	ret := *f
+	ret.ns = ns
+	f.d.mu.Lock()
+	defer f.d.mu.Unlock()
+	if w, ok := f.d.watchers[f.res.Kind][ns]; ok {
+		ret.w = w
+	} else {
+		w = watch.NewRaceFreeFake()
+		f.d.watchers[f.res.Kind][ns] = w
+		ret.w = w
+	}
+	return &ret
 }
 
 func (f *fakeDynamicResource) List(ctx context.Context, opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
@@ -72,7 +87,9 @@ func (f *fakeDynamicResource) List(ctx context.Context, opts metav1.ListOptions)
 	f.d.mu.RLock()
 	for k, v := range f.d.data {
 		if k.Kind == f.res.Kind {
-			list.Items = append(list.Items, *v)
+			if f.ns == "" || v.GetNamespace() == f.ns {
+				list.Items = append(list.Items, *v)
+			}
 		}
 	}
 	f.d.mu.RUnlock()
@@ -85,15 +102,17 @@ func (f *fakeDynamicResource) Watch(ctx context.Context, opts metav1.ListOptions
 
 type fakeDynamicResource struct {
 	d *dummyListerWatcherBuilder
-	dynamic.ResourceInterface
+	dynamic.NamespaceableResourceInterface
 	w   watch.Interface
 	res metav1.APIResource
+	ns  string
 }
 
 func (d *dummyListerWatcherBuilder) build(res metav1.APIResource) dynamic.ResourceInterface {
 	w := watch.NewRaceFreeFake()
 	d.mu.Lock()
-	d.watchers[res.Kind] = w
+	d.watchers[res.Kind] = make(map[string]*watch.RaceFreeFakeWatcher)
+	d.watchers[res.Kind][""] = w
 	d.mu.Unlock()
 
 	return &fakeDynamicResource{d: d, w: w, res: res}
@@ -112,9 +131,15 @@ func (d *dummyListerWatcherBuilder) put(key store.Key, spec map[string]interface
 	defer d.mu.Unlock()
 	_, existed := d.data[key]
 	d.data[key] = res
-	w, ok := d.watchers[key.Kind]
+	nsw, ok := d.watchers[key.Kind]
 	if !ok {
 		return nil
+	}
+	w, ok := nsw[key.Namespace]
+	if !ok {
+		if w, ok = nsw[""]; !ok {
+			return nil
+		}
 	}
 	if existed {
 		w.Modify(res)
@@ -132,9 +157,15 @@ func (d *dummyListerWatcherBuilder) delete(key store.Key) {
 		return
 	}
 	delete(d.data, key)
-	w, ok := d.watchers[key.Kind]
+	nsw, ok := d.watchers[key.Kind]
 	if !ok {
 		return
+	}
+	w, ok := nsw[key.Namespace]
+	if !ok {
+		if w, ok = nsw[""]; !ok {
+			return
+		}
 	}
 	w.Delete(value)
 }
@@ -144,7 +175,7 @@ func getTempClient() (*Store, string, *dummyListerWatcherBuilder) {
 
 	lw := &dummyListerWatcherBuilder{
 		data:     map[store.Key]*unstructured.Unstructured{},
-		watchers: map[string]*watch.RaceFreeFakeWatcher{},
+		watchers: map[string]map[string]*watch.RaceFreeFakeWatcher{},
 	}
 	client := &Store{
 		conf:             &rest.Config{},
@@ -156,6 +187,7 @@ func getTempClient() (*Store, string, *dummyListerWatcherBuilder) {
 		},
 		Probe:         probe.NewProbe(),
 		retryInterval: 1 * time.Millisecond,
+		ns:            []string{ns},
 	}
 	return client, ns, lw
 }
@@ -211,6 +243,9 @@ func TestStore(t *testing.T) {
 	if err = lw.put(k, h); err != nil {
 		t.Errorf("Got %v, Want nil", err)
 	}
+	if err = waitFor(wch, store.Update, k); err != nil {
+		t.Errorf("Got %v, Want nil", err)
+	}
 	h2, err = s.Get(k)
 	if err != nil {
 		t.Errorf("Got %v, Want nil", err)
@@ -248,7 +283,7 @@ func TestStoreWrongKind(t *testing.T) {
 func TestStoreNamespaces(t *testing.T) {
 	s, ns, lw := getTempClient()
 	otherNS := "other-namespace"
-	s.ns = map[string]bool{ns: true, otherNS: true}
+	s.ns = []string{ns, otherNS}
 	if err := s.Init([]string{"Action", "Handler"}); err != nil {
 		t.Fatal(err)
 	}
