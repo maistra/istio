@@ -75,7 +75,7 @@ metadata:
   name: mec
 rules:
 - apiGroups:
-  - extensions.maistra.io
+  - maistra.io
   resources:
   - servicemeshextensions
   - servicemeshextensions/status

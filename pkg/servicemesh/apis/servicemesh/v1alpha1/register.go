@@ -21,12 +21,12 @@ import (
 )
 
 var SchemeGroupVersion = schema.GroupVersion{
-	Group:   "extensions.maistra.io",
+	Group:   "maistra.io",
 	Version: "v1alpha1",
 }
 
 var InternalSchemeGroupVersion = schema.GroupVersion{
-	Group:   "extensions.maistra.io",
+	Group:   "maistra.io",
 	Version: runtime.APIVersionInternal,
 }
 
