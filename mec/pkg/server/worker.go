@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 
 	"github.com/google/uuid"
@@ -111,9 +112,10 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		containerImageChanged = true
 		// delete old file
 		if len(extension.Status.Deployment.URL) > len(w.baseURL) {
-			id := extension.Status.Deployment.URL[len(w.baseURL):]
-			filename := path.Join(w.serveDirectory, id)
-			os.Remove(filename)
+			filename := path.Join(w.serveDirectory, filepath.Base(extension.Status.Deployment.URL))
+			if err := os.Remove(filename); err != nil {
+				log.Errorf("failed to delete file %s: %v", filename, err)
+			}
 		}
 
 		wasmUUID, err := uuid.NewRandom()
@@ -122,7 +124,7 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		}
 		id = wasmUUID.String()
 	} else {
-		id = extension.Status.Deployment.URL[len(w.baseURL):]
+		id = filepath.Base(extension.Status.Deployment.URL)
 	}
 	filename := path.Join(w.serveDirectory, id)
 
@@ -140,7 +142,7 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	log.Infof("SHA256 is %s", sha)
 	extension.Status.Deployment.SHA256 = sha
 	extension.Status.Deployment.ContainerSHA256 = img.SHA256()
-	extension.Status.Deployment.URL = w.baseURL + "/" + id
+	extension.Status.Deployment.URL = path.Join(w.baseURL, id)
 	extension.Status.Deployment.Ready = true
 
 	manifest := img.GetManifest()
