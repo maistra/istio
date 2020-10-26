@@ -508,6 +508,7 @@ func InjectionData(sidecarTemplate, valuesConfig, version string, typeMetadata *
 		"directory":           directory,
 		"contains":            flippedContains,
 		"toLower":             strings.ToLower,
+		"appendMultusNetwork": appendMultusNetwork,
 	}
 
 	// Allows the template to use env variables from istiod.
@@ -738,7 +739,7 @@ func IntoObject(sidecarTemplate string, valuesConfig string, revision string, me
 		return out, nil
 	}
 
-	//skip injection for injected pods
+	// skip injection for injected pods
 	if len(podSpec.Containers) > 1 {
 		for _, c := range podSpec.Containers {
 			if c.Name == ProxyContainerName {
@@ -985,6 +986,18 @@ func getAnnotation(meta metav1.ObjectMeta, name string, defaultValue interface{}
 		value = fmt.Sprint(defaultValue)
 	}
 	return value
+}
+
+func appendMultusNetwork(existingValue, istioCniNetwork string) string {
+	if existingValue == "" {
+		return istioCniNetwork
+	}
+	i := strings.LastIndex(existingValue, "]")
+	isJSON := i != -1
+	if isJSON {
+		return existingValue[0:i] + fmt.Sprintf(`, {"name": "%s"}`, istioCniNetwork) + existingValue[i:]
+	}
+	return existingValue + ", " + istioCniNetwork
 }
 
 func excludeInboundPort(port interface{}, excludedInboundPorts string) string {
