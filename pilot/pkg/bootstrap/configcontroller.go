@@ -317,6 +317,7 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 	processingArgs.MeshConfigFile = args.Mesh.ConfigFile
 	processingArgs.EnableConfigAnalysis = true
 	processingArgs.MemberRollController = s.mrc
+	processingArgs.EnableCRDScan = args.Config.ControllerOptions.EnableCRDScan
 
 	processing := components.NewProcessing(processingArgs)
 
