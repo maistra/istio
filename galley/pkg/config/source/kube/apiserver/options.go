@@ -35,5 +35,5 @@ type Options struct {
 
 	WatchedNamespaces string
 
-	EnableCRDScan bool
+	DisableCRDScan bool
 }

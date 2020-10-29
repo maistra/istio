@@ -325,7 +325,7 @@ func (p *Processing) createSourceAndStatusUpdater(schemas collection.Schemas) (
 			ResyncPeriod:      p.args.ResyncPeriod,
 			Schemas:           schemas,
 			StatusController:  statusCtl,
-			EnableCRDScan:     p.args.EnableCRDScan,
+			DisableCRDScan:    p.args.DisableCRDScan,
 		}
 		s := apiserver.New(p.args.MemberRollController, o)
 		src = s

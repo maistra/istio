@@ -128,14 +128,7 @@ func (s *Source) Start() {
 	s.mu.Unlock()
 
 	s.provider = rt.NewProvider(s.options.Client, s.options.WatchedNamespaces, s.options.ResyncPeriod, s.mrc)
-	if s.options.EnableCRDScan {
-		// Start the CRD listener. When the listener is fully-synced, the listening of actual resources will start.
-		scope.Source.Infof("Beginning CRD Discovery, to figure out resources that are available...")
-		a := s.provider.GetAdapter(crdKubeResource.Resource())
-		s.crdWatcher = newWatcher(crdKubeResource, a, s.statusCtl)
-		s.crdWatcher.dispatch(event.HandlerFromFn(s.onCrdEvent))
-		s.crdWatcher.start()
-	} else {
+	if s.options.DisableCRDScan {
 		scope.Source.Infof("Starting listeners for all known types...")
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -144,6 +137,13 @@ func (s *Source) Start() {
 		}
 		s.startWatchers()
 		s.publishing = true
+	} else {
+		// Start the CRD listener. When the listener is fully-synced, the listening of actual resources will start.
+		scope.Source.Infof("Beginning CRD Discovery, to figure out resources that are available...")
+		a := s.provider.GetAdapter(crdKubeResource.Resource())
+		s.crdWatcher = newWatcher(crdKubeResource, a, s.statusCtl)
+		s.crdWatcher.dispatch(event.HandlerFromFn(s.onCrdEvent))
+		s.crdWatcher.start()
 	}
 }
 
