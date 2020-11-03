@@ -640,6 +640,226 @@ func (*fakeStore) GetResourceAtVersion(version string, key string) (resourceVers
 	return "not implemented", nil
 }
 
+func TestSetDestinationRuleMerging(t *testing.T) {
+	ps := NewPushContext()
+	ps.defaultDestinationRuleExportTo = map[visibility.Instance]bool{visibility.Public: true}
+	testhost := "httpbin.org"
+	destinationRuleNamespace1 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule1",
+			Namespace: "test",
+		},
+		Spec: &networking.DestinationRule{
+			Host: testhost,
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset1",
+				},
+				{
+					Name: "subset2",
+				},
+			},
+		},
+	}
+	destinationRuleNamespace2 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule2",
+			Namespace: "test",
+		},
+		Spec: &networking.DestinationRule{
+			Host: testhost,
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset3",
+				},
+				{
+					Name: "subset4",
+				},
+			},
+		},
+	}
+	ps.SetDestinationRules([]Config{destinationRuleNamespace1, destinationRuleNamespace2})
+	subsetsLocal := ps.namespaceLocalDestRules["test"].destRule[host.Name(testhost)].Spec.(*networking.DestinationRule).Subsets
+	subsetsExport := ps.namespaceExportedDestRules["test"].destRule[host.Name(testhost)].Spec.(*networking.DestinationRule).Subsets
+	if len(subsetsLocal) != 4 {
+		t.Errorf("want %d, but got %d", 4, len(subsetsLocal))
+	}
+
+	if len(subsetsExport) != 4 {
+		t.Errorf("want %d, but got %d", 4, len(subsetsExport))
+	}
+}
+
+func TestSetDestinationRuleWithExportTo(t *testing.T) {
+	ps := NewPushContext()
+	ps.Env.Mesh = &meshconfig.MeshConfig{RootNamespace: "istio-system"}
+	testhost := "httpbin.org"
+	destinationRuleNamespace1 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule1",
+			Namespace: "test1",
+		},
+		Spec: &networking.DestinationRule{
+			Host:     testhost,
+			ExportTo: []string{".", "ns1"},
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset1",
+				},
+				{
+					Name: "subset2",
+				},
+			},
+		},
+	}
+	destinationRuleNamespace2 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule2",
+			Namespace: "test2",
+		},
+		Spec: &networking.DestinationRule{
+			Host:     testhost,
+			ExportTo: []string{"test2", "ns1", "test1"},
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset3",
+				},
+				{
+					Name: "subset4",
+				},
+			},
+		},
+	}
+	destinationRuleNamespace3 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule3",
+			Namespace: "test3",
+		},
+		Spec: &networking.DestinationRule{
+			Host:     testhost,
+			ExportTo: []string{"test1", "test2", "*"},
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset5",
+				},
+				{
+					Name: "subset6",
+				},
+			},
+		},
+	}
+	destinationRuleRootNamespace := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule4",
+			Namespace: "istio-system",
+		},
+		Spec: &networking.DestinationRule{
+			Host: testhost,
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset7",
+				},
+				{
+					Name: "subset8",
+				},
+			},
+		},
+	}
+	destinationRuleRootNamespaceLocal := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule1",
+			Namespace: "istio-system",
+		},
+		Spec: &networking.DestinationRule{
+			Host:     testhost,
+			ExportTo: []string{"."},
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset9",
+				},
+				{
+					Name: "subset10",
+				},
+			},
+		},
+	}
+	ps.SetDestinationRules([]Config{destinationRuleNamespace1, destinationRuleNamespace2,
+		destinationRuleNamespace3, destinationRuleRootNamespace, destinationRuleRootNamespaceLocal})
+	cases := []struct {
+		proxyNs     string
+		serviceNs   string
+		wantSubsets []string
+	}{
+		{
+			proxyNs:     "test1",
+			serviceNs:   "test1",
+			wantSubsets: []string{"subset1", "subset2"},
+		},
+		{
+			proxyNs:     "test1",
+			serviceNs:   "test2",
+			wantSubsets: []string{"subset1", "subset2"},
+		},
+		{
+			proxyNs:     "test2",
+			serviceNs:   "test1",
+			wantSubsets: []string{"subset3", "subset4"},
+		},
+		{
+			proxyNs:     "test3",
+			serviceNs:   "test1",
+			wantSubsets: []string{"subset5", "subset6"},
+		},
+		{
+			proxyNs:     "ns1",
+			serviceNs:   "test1",
+			wantSubsets: []string{"subset1", "subset2"},
+		},
+		{
+			proxyNs:     "ns1",
+			serviceNs:   "random",
+			wantSubsets: []string{"subset7", "subset8"},
+		},
+		{
+			proxyNs:     "random",
+			serviceNs:   "random",
+			wantSubsets: []string{"subset7", "subset8"},
+		},
+		{
+			proxyNs:     "test3",
+			serviceNs:   "random",
+			wantSubsets: []string{"subset5", "subset6"},
+		},
+		{
+			proxyNs:     "istio-system",
+			serviceNs:   "random",
+			wantSubsets: []string{"subset9", "subset10"},
+		},
+		{
+			proxyNs:     "istio-system",
+			serviceNs:   "istio-system",
+			wantSubsets: []string{"subset9", "subset10"},
+		},
+	}
+	for _, tt := range cases {
+		t.Run(fmt.Sprintf("%s-%s", tt.proxyNs, tt.serviceNs), func(t *testing.T) {
+			destRuleConfig := ps.DestinationRule(&Proxy{ConfigNamespace: tt.proxyNs},
+				&Service{Hostname: host.Name(testhost), Attributes: ServiceAttributes{Namespace: tt.serviceNs}})
+			if destRuleConfig == nil {
+				t.Fatalf("proxy in %s namespace: dest rule is nil, expected subsets %+v", tt.proxyNs, tt.wantSubsets)
+			}
+			destRule := destRuleConfig.Spec.(*networking.DestinationRule)
+			var gotSubsets []string
+			for _, ss := range destRule.Subsets {
+				gotSubsets = append(gotSubsets, ss.Name)
+			}
+			if !reflect.DeepEqual(gotSubsets, tt.wantSubsets) {
+				t.Fatalf("want %+v, got %+v", tt.wantSubsets, gotSubsets)
+			}
+		})
+	}
+}
+
 func TestSetDestinationRule(t *testing.T) {
 	ps := NewPushContext()
 	ps.defaultDestinationRuleExportTo = map[visibility.Instance]bool{visibility.Public: true}
