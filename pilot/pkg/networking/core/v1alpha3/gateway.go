@@ -436,7 +436,7 @@ func buildGatewayListenerTLSContext(
 
 	tls := &auth.DownstreamTlsContext{
 		CommonTlsContext: &auth.CommonTlsContext{
-			AlpnProtocols: util.ALPNHttp,
+			AlpnProtocols: tls_features.ALPNProtocols.Get(),
 			TlsParams: &auth.TlsParameters{
 				TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion, tls_features.TlsMinProtocolVersion.Get()),
 				TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion, tls_features.TlsMaxProtocolVersion.Get()),

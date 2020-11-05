@@ -335,7 +335,7 @@ func (a v1alpha1PolicyApplier) InboundFilterChain(sdsUdsPath string, meta *model
 			// include "istio" for the secure traffic, but its TLSContext.ALPN must not
 			// include "istio", which would interfere with negotiation of the underlying
 			// protocol, e.g. HTTP/2.
-			AlpnProtocols: util.ALPNHttp,
+      AlpnProtocols: tls_features.ALPNProtocols.Get(),
 			TlsParams: &auth.TlsParameters{
 				TlsMinimumProtocolVersion: tls_features.TlsMinProtocolVersion.Get(),
 				TlsMaximumProtocolVersion: tls_features.TlsMaxProtocolVersion.Get(),

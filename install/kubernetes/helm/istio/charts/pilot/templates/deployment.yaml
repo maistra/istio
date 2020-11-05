@@ -130,6 +130,10 @@ spec:
           - name: TLS_ECDH_CURVES
             value: {{ .Values.global.tls.ecdhCurves }}
 {{- end }}
+{{- if .Values.global.tls.alpnProtocols }}
+          - name: ALPN_PROTOCOLS
+            value: {{ .Values.global.tls.alpnProtocols }}
+{{- end }}
 {{- end }}
           resources:
 {{- if .Values.resources }}

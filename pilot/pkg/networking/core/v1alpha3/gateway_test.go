@@ -43,6 +43,123 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 	runTestBuildGatewayListenerTlsContext(t, &auth.TlsParameters{})
 }
 
+func TestALPNHttp11OnlyBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.ALPNProtocols.Reset()
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+	_ = os.Setenv("ALPN_PROTOCOLS", util.ALPNH11Only[0])
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.ALPNProtocols.Reset()
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildGatewayListenerTlsContextEx(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	}, util.ALPNH11Only)
+}
+
+func TestALPNHttp2OnlyBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.ALPNProtocols.Reset()
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+	_ = os.Setenv("ALPN_PROTOCOLS", util.ALPNH2Only[0])
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.ALPNProtocols.Reset()
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildGatewayListenerTlsContextEx(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	}, util.ALPNH2Only)
+}
+
+func TestALPNHttpBuildGatewayListenerTlsContext(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.ALPNProtocols.Reset()
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+	_ = os.Setenv("ALPN_PROTOCOLS", strings.Join(util.ALPNHttp, ","))
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.ALPNProtocols.Reset()
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildGatewayListenerTlsContextEx(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	}, util.ALPNHttp)
+}
+
+func TestALPNHttp11OnlyCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("ALPN_PROTOCOLS", util.ALPNH11Only[0])
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.ALPNProtocols.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.ALPNProtocols.Reset()
+	}()
+
+	runTestCreateGatewayHTTPFilterChainOptsEx(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	}, util.ALPNH11Only)
+}
+
+func TestALPNHttp2OnlyCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("ALPN_PROTOCOLS", util.ALPNH2Only[0])
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.ALPNProtocols.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.ALPNProtocols.Reset()
+	}()
+
+	runTestCreateGatewayHTTPFilterChainOptsEx(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	}, util.ALPNH2Only)
+}
+
+func TestALPNHttpCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("ALPN_PROTOCOLS",  strings.Join(util.ALPNHttp, ","))
+	tls_features.TlsCipherSuites.Reset()
+	tls_features.ALPNProtocols.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TlsCipherSuites.Reset()
+		tls_features.ALPNProtocols.Reset()
+	}()
+
+	runTestCreateGatewayHTTPFilterChainOptsEx(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	}, util.ALPNHttp)
+}
+
 func TestTlsProtocolVersionBuildGatewayListenerTlsContext(t *testing.T) {
 	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
 	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
@@ -107,7 +224,12 @@ func TestTlsCipherSuitesEcdhCurvesBuildGatewayListenerTlsContext(t *testing.T) {
 	})
 }
 
+// Wrapper to handle alpn_protocol addition
 func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParameters) {
+	runTestBuildGatewayListenerTlsContextEx(t, tlsParam, util.ALPNHttp)
+}
+
+func runTestBuildGatewayListenerTlsContextEx(t *testing.T, tlsParam *auth.TlsParameters, alpn_protocol []string) {
 	testCases := []struct {
 		name                  string
 		server                *networking.Server
@@ -127,7 +249,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
 							CertificateChain: &core.DataSource{
@@ -168,7 +290,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
 							Name: "default",
@@ -248,7 +370,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
 							CertificateChain: &core.DataSource{
@@ -280,7 +402,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
 							Name: "ingress-sds-resource-name",
@@ -323,7 +445,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
 							Name: "ingress-sds-resource-name",
@@ -370,7 +492,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
 							CertificateChain: &core.DataSource{
@@ -403,7 +525,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificates: []*auth.TlsCertificate{
 						{
 							CertificateChain: &core.DataSource{
@@ -439,7 +561,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
 							Name: "ingress-sds-resource-name",
@@ -510,7 +632,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
 							Name: "ingress-sds-resource-name",
@@ -581,7 +703,7 @@ func runTestBuildGatewayListenerTlsContext(t *testing.T, tlsParam *auth.TlsParam
 			result: &auth.DownstreamTlsContext{
 				CommonTlsContext: &auth.CommonTlsContext{
 					TlsParams: tlsParam,
-					AlpnProtocols: util.ALPNHttp,
+					AlpnProtocols: alpn_protocol,
 					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
 						{
 							Name: "ingress-sds-resource-name",
@@ -728,7 +850,12 @@ func TestTlsCipherSuitesEcdhCurvesCreateGatewayHTTPFilterChainOpts(t *testing.T)
 	})
 }
 
+// Wrapper to handle alpn_protocol addition
 func runTestCreateGatewayHTTPFilterChainOpts(t *testing.T, tlsParam *auth.TlsParameters) {
+	runTestCreateGatewayHTTPFilterChainOptsEx(t, tlsParam, util.ALPNHttp);
+}
+
+func runTestCreateGatewayHTTPFilterChainOptsEx(t *testing.T, tlsParam *auth.TlsParameters, alpn_protocol []string) {
 	testCases := []struct {
 		name      string
 		node      *pilot_model.Proxy
@@ -810,7 +937,7 @@ func runTestCreateGatewayHTTPFilterChainOpts(t *testing.T, tlsParam *auth.TlsPar
 								},
 							},
 						},
-						AlpnProtocols: []string{"h2", "http/1.1"},
+						AlpnProtocols: alpn_protocol,
 					},
 				},
 				httpOpts: &httpListenerOpts{
@@ -873,7 +1000,7 @@ func runTestCreateGatewayHTTPFilterChainOpts(t *testing.T, tlsParam *auth.TlsPar
 								},
 							},
 						},
-						AlpnProtocols: []string{"h2", "http/1.1"},
+						AlpnProtocols: alpn_protocol,
 					},
 				},
 				httpOpts: &httpListenerOpts{
@@ -936,7 +1063,7 @@ func runTestCreateGatewayHTTPFilterChainOpts(t *testing.T, tlsParam *auth.TlsPar
 								},
 							},
 						},
-						AlpnProtocols: []string{"h2", "http/1.1"},
+						AlpnProtocols: alpn_protocol,
 					},
 				},
 				httpOpts: &httpListenerOpts{
