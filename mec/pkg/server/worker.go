@@ -53,25 +53,57 @@ type Worker struct {
 
 	pullStrategy model.ImagePullStrategy
 
-	config   *rest.Config
-	stopChan <-chan struct{}
-	Queue    chan ExtensionEvent
+	client       v1alpha1client.ServicemeshV1alpha1Interface
+	stopChan     <-chan struct{}
+	resultChan   chan workerResult
+	Queue        chan ExtensionEvent
+	enableLogger bool
 
 	mut sync.Mutex
 }
 
-func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseURL, serveDirectory string) *Worker {
+type workerResult struct {
+	successful bool
+	errors     []error
+	messages   []string
+}
+
+func (r *workerResult) Fail() {
+	r.successful = false
+}
+
+func (r *workerResult) AddMessage(msg string) {
+	r.messages = append(r.messages, msg)
+}
+
+func (r *workerResult) AddError(err error) {
+	r.errors = append(r.errors, err)
+}
+
+func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseURL, serveDirectory string) (*Worker, error) {
+	client, err := v1alpha1client.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client from config: %v", err)
+	}
+
 	return &Worker{
-		config:         config,
-		Queue:          make(chan ExtensionEvent),
+		client:         client,
+		Queue:          make(chan ExtensionEvent, 100),
+		resultChan:     make(chan workerResult, 100),
 		pullStrategy:   pullStrategy,
 		baseURL:        baseURL,
 		serveDirectory: serveDirectory,
-	}
+	}, nil
 }
 
 func (w *Worker) processEvent(event ExtensionEvent) {
+	result := workerResult{
+		errors:     []error{},
+		messages:   []string{},
+		successful: true,
+	}
 	extension := event.Extension
+	result.AddMessage("Processing " + extension.Namespace + "/" + extension.Name)
 
 	if event.Operation == ExtensionEventOperationDelete {
 		if len(extension.Status.Deployment.URL) > len(w.baseURL) {
@@ -83,9 +115,11 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	}
 	imageRef := model.StringToImageRef(extension.Spec.Image)
 
-	// don't overwrite a user-provided sha
-	if imageRef.SHA256 == "" {
-		imageRef.SHA256 = extension.Status.Deployment.ContainerSHA256
+	if imageRef == nil {
+		result.AddError(fmt.Errorf("failed to parse spec.image: '%s'", extension.Spec.Image))
+		result.Fail()
+		w.resultChan <- result
+		return
 	}
 
 	var img model.Image
@@ -93,14 +127,16 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	if imageRef.SHA256 != "" {
 		img, err = w.pullStrategy.GetImage(imageRef)
 		if err != nil {
-			log.Errorf("Failed to check whether image is already present: %s", err)
+			result.AddError(fmt.Errorf("failed to check whether image is already present: %s", err))
 		}
 	}
 	if img == nil {
-		log.Infof("Image %s not present. Pulling", imageRef.String())
+		result.AddMessage(fmt.Sprintf("Image %s not present. Pulling", imageRef.String()))
 		img, err = w.pullStrategy.PullImage(imageRef)
 		if err != nil {
-			log.Errorf("Error pulling image %s: %v", imageRef.String(), err)
+			result.AddError(fmt.Errorf("failed to pull image %s: %v", imageRef.String(), err))
+			result.Fail()
+			w.resultChan <- result
 			return
 		}
 	}
@@ -118,7 +154,10 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 
 		wasmUUID, err := uuid.NewRandom()
 		if err != nil {
-			log.Errorf("Error: %v", err)
+			result.AddError(fmt.Errorf("failed to generate new UUID: %v", err))
+			result.Fail()
+			w.resultChan <- result
+			return
 		}
 		id = wasmUUID.String()
 	} else {
@@ -129,15 +168,21 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		err = img.CopyWasmModule(filename)
 		if err != nil {
-			log.Errorf("Error: %v", err)
+			result.AddError(fmt.Errorf("failed to extract wasm module: %v", err))
+			result.Fail()
+			w.resultChan <- result
+			return
 		}
 	}
 
 	sha, err := generateSHA256(filename)
 	if err != nil {
-		log.Errorf("Error: %v", err)
+		result.AddError(fmt.Errorf("failed to generate sha256 of wasm module: %v", err))
+		result.Fail()
+		w.resultChan <- result
+		return
 	}
-	log.Infof("SHA256 is %s", sha)
+	result.AddMessage(fmt.Sprintf("WASM module SHA256 is %s", sha))
 	extension.Status.Deployment.SHA256 = sha
 	extension.Status.Deployment.ContainerSHA256 = img.SHA256()
 	extension.Status.Deployment.URL = w.baseURL + "/" + id
@@ -158,19 +203,17 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	}
 
 	if !containerImageChanged && extension.Generation > 0 && extension.Status.ObservedGeneration == extension.Generation {
-		log.Info("Skipping status update")
+		result.AddMessage("Skipping status update")
+		w.resultChan <- result
 		return
 	}
 	extension.Status.ObservedGeneration = extension.Generation
-
-	client, err := v1alpha1client.NewForConfig(w.config)
+	_, err = w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, v1.UpdateOptions{})
 	if err != nil {
-		log.Errorf("Error: %v", err)
+		result.AddError(fmt.Errorf("failed to update status of extension: %v", err))
+		result.Fail()
 	}
-	_, err = client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, v1.UpdateOptions{})
-	if err != nil {
-		log.Errorf("Error: %v", err)
-	}
+	w.resultChan <- result
 }
 
 func (w *Worker) Start(stopChan <-chan struct{}) {
@@ -188,11 +231,30 @@ func (w *Worker) Start(stopChan <-chan struct{}) {
 			case event := <-w.Queue:
 				w.processEvent(event)
 			case <-w.stopChan:
-				log.Info("Interrupt!")
+				log.Info("Stopping worker")
 				return
 			}
 		}
 	}()
+	if w.enableLogger {
+		go func() {
+			select {
+			case result := <-w.resultChan:
+				for _, msg := range result.messages {
+					log.Info(msg)
+				}
+				for _, err := range result.errors {
+					if !result.successful {
+						log.Errorf("%s", err)
+					} else {
+						log.Warnf("%s", err)
+					}
+				}
+			case <-w.stopChan:
+				return
+			}
+		}()
+	}
 }
 
 func generateSHA256(filename string) (string, error) {

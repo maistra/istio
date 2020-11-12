@@ -25,7 +25,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 
-	"istio.io/istio/mec/pkg/podman"
 	"istio.io/istio/mec/pkg/pullstrategy/ossm"
 	"istio.io/istio/mec/pkg/server"
 	"istio.io/istio/pkg/kube"
@@ -94,8 +93,11 @@ func createCommand(args []string) *cobra.Command {
 			if err != nil {
 				log.Errorf("Failed to create OSSMPullStrategy: %v", err)
 			}
-			w := server.NewWorker(config, p, baseURL, serveDirectory)
-
+			w, err := server.NewWorker(config, p, baseURL, serveDirectory)
+			if err != nil {
+				log.Errorf("Failed to create worker: %v", err)
+				return
+			}
 			ec.RegisterEventHandler(cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
 					w.Queue <- server.ExtensionEvent{
@@ -140,11 +142,12 @@ func createCommand(args []string) *cobra.Command {
 								log.Errorf("Error reading token file %s: %v", tokenPath, err)
 							}
 							token := strings.TrimSpace(string(tokenBytes))
-							output, err := podman.Login(token, registryURL)
+							output, err := p.Login(registryURL, token)
 							if err != nil {
 								log.Errorf("Error logging in to registry: %v", err)
+							} else {
+								log.Infof("%s", output)
 							}
-							log.Infof("%s", output)
 						case <-stopChan:
 							return
 						}

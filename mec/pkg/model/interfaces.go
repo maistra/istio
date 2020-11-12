@@ -19,6 +19,8 @@ type ImagePullStrategy interface {
 	PullImage(image *ImageRef) (Image, error)
 	// GetImage returns an image that has been pulled previously
 	GetImage(image *ImageRef) (Image, error)
+	// Login is used to provide credentials to the ImagePullStrategy
+	Login(registryURL, token string) (string, error)
 }
 
 type Image interface {

@@ -16,6 +16,7 @@ package ossm
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -40,8 +41,9 @@ const (
 )
 
 type ossmPullStrategy struct {
-	client    *imagev1client.ImageV1Client
+	client    imagev1client.ImageV1Interface
 	namespace string
+	podman    podman.Podman
 }
 
 func NewOSSMPullStrategy(config *rest.Config, namespace string) (model.ImagePullStrategy, error) {
@@ -54,13 +56,14 @@ func NewOSSMPullStrategy(config *rest.Config, namespace string) (model.ImagePull
 	return &ossmPullStrategy{
 		client:    cl,
 		namespace: namespace,
+		podman:    podman.NewPodman(),
 	}, nil
 }
 
-func (p *ossmPullStrategy) createImageStreamImport(image *model.ImageRef) (*imagev1.ImageStreamImport, error) {
+func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, image *model.ImageRef) (*imagev1.ImageStreamImport, error) {
 	isi := &imagev1.ImageStreamImport{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: imageStreamPrefix + image.Repository,
+			Name: imageStreamName,
 		},
 		Spec: imagev1.ImageStreamImportSpec{
 			Import: true,
@@ -90,11 +93,10 @@ func (p *ossmPullStrategy) createImageStreamImport(image *model.ImageRef) (*imag
 }
 
 type ossmImage struct {
-	model.Image
-
 	imageID  string
 	sha256   string
 	manifest *model.Manifest
+	podman   podman.Podman
 }
 
 func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) {
@@ -102,13 +104,13 @@ func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) 
 	if image.SHA256 == "" {
 		return nil, fmt.Errorf("getImage() only works for pinned images")
 	}
-	imageID, err := podman.GetImageID(image.SHA256)
+	imageID, err := p.podman.GetImageID(image.SHA256)
 	if err != nil {
 		return nil, err
 	} else if imageID == "" {
 		return nil, nil
 	}
-	manifest, err := extractManifest(imageID)
+	manifest, err := p.extractManifest(imageID)
 	if err != nil {
 		log.Errorf("failed to extract manifest from container image: %s", err)
 		return nil, err
@@ -117,6 +119,7 @@ func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) 
 		manifest: manifest,
 		imageID:  imageID,
 		sha256:   "sha256:" + image.SHA256,
+		podman:   p.podman,
 	}, nil
 
 }
@@ -125,38 +128,45 @@ func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) 
 func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error) {
 	var imageStream *imagev1.ImageStream
 	var err error
+	imageStreamName := getImageStreamName(image)
 	for attempt := 0; attempt < 2; attempt++ {
-		imageStream, err = p.client.ImageStreams(p.namespace).Get(context.TODO(), imageStreamPrefix+image.Repository, metav1.GetOptions{})
+		imageStream, err = p.client.ImageStreams(p.namespace).Get(context.TODO(), imageStreamName, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
-			createdIsi, err := p.createImageStreamImport(image)
+			createdIsi, err := p.createImageStreamImport(imageStreamName, image)
 			if err != nil {
 				log.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
 				continue
 			}
 			log.Infof("Created ImageStreamImport %s", createdIsi.Name)
-		}
-		if err != nil {
+			continue
+		} else if err != nil {
 			log.Warnf("failed to Get() ImageStream: %s, attempt %d", err, attempt)
 			continue
 		}
 		if imageStream != nil {
+			tagFound := false
 			for _, tag := range imageStream.Spec.Tags {
 				if tag.From.Name == image.String() {
+					tagFound = true
 					break
 				}
 			}
-			createdIsi, err := p.createImageStreamImport(image)
-			if err != nil {
-				log.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
-				continue
+			if !tagFound {
+				createdIsi, err := p.createImageStreamImport(imageStreamName, image)
+				if err != nil {
+					log.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
+					continue
+				}
+				log.Infof("Created ImageStreamImport %s", createdIsi.Name)
 			}
-			log.Infof("Created ImageStreamImport %s", createdIsi.Name)
 		}
 	}
 	if err != nil {
 		return nil, err
 	}
-
+	if len(imageStream.Status.Tags) == 0 || len(imageStream.Status.Tags[0].Items) == 0 || imageStream.Status.DockerImageRepository == "" {
+		return nil, fmt.Errorf("failed to pull Image: ImageStream has not processed image yet")
+	}
 	for _, condition := range imageStream.Status.Tags[0].Conditions {
 		if condition.Status == corev1.ConditionFalse {
 			return nil, fmt.Errorf("failed to pull image: %s", condition.Message)
@@ -167,13 +177,13 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error)
 	repo := imageStream.Status.DockerImageRepository
 	sha := imageStream.Status.Tags[0].Items[0].Image
 	log.Infof("Pulling container image %s", repo+"@"+sha)
-	imageID, err := podman.Pull(repo + "@" + sha)
+	imageID, err := p.podman.Pull(repo + "@" + sha)
 	if err != nil {
 		log.Errorf("failed to pull image: %s", err)
 		return nil, err
 	}
 	log.Infof("Pulled container image with ID %s", imageID)
-	manifest, err := extractManifest(imageID)
+	manifest, err := p.extractManifest(imageID)
 	if err != nil {
 		log.Errorf("failed to extract manifest from container image: %s", err)
 		return nil, err
@@ -182,11 +192,26 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error)
 		manifest: manifest,
 		imageID:  imageID,
 		sha256:   sha,
+		podman:   p.podman,
 	}, nil
 }
 
-func extractManifest(imageID string) (*model.Manifest, error) {
-	containerID, err := podman.Create(imageID)
+func (p *ossmPullStrategy) Login(registryURL, token string) (output string, err error) {
+	output, err = p.podman.Login(registryURL, token)
+	return output, err
+}
+
+func getImageStreamName(image *model.ImageRef) string {
+	reponame := image.Repository
+	if len(reponame) > 8 {
+		reponame = reponame[:8]
+	}
+	postfix := fmt.Sprintf("-%x", sha256.Sum256([]byte(image.String())))[:9]
+	return imageStreamPrefix + reponame + postfix
+}
+
+func (p *ossmPullStrategy) extractManifest(imageID string) (*model.Manifest, error) {
+	containerID, err := p.podman.Create(imageID)
 	if err != nil {
 		log.Errorf("failed to create an image: %s", err)
 		return nil, err
@@ -199,7 +224,7 @@ func extractManifest(imageID string) (*model.Manifest, error) {
 		return nil, fmt.Errorf("failed to create temp dir: %s", err)
 	}
 	manifestFile := path.Join(tmpDir, "manifest.yaml")
-	_, err = podman.Copy(containerID+":/manifest.yaml", manifestFile)
+	_, err = p.podman.Copy(containerID+":/manifest.yaml", manifestFile)
 	if err != nil {
 		log.Errorf("failed to copy an image: %s", err)
 		return nil, err
@@ -213,7 +238,7 @@ func extractManifest(imageID string) (*model.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal manifest.yaml: %s", err)
 	}
-	err = podman.RemoveContainer(containerID)
+	err = p.podman.RemoveContainer(containerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to remove container: %s", err)
 	}
@@ -222,17 +247,17 @@ func extractManifest(imageID string) (*model.Manifest, error) {
 }
 
 func (ref *ossmImage) CopyWasmModule(outputFile string) error {
-	containerID, err := podman.Create(ref.imageID)
+	containerID, err := ref.podman.Create(ref.imageID)
 	if err != nil {
 		return err
 	}
 	log.Infof("Created container with ID %s", containerID)
 	log.Infof("Extracting WASM module from container with ID %s", containerID)
-	_, err = podman.Copy(containerID+":/"+ref.manifest.Module, outputFile)
+	_, err = ref.podman.Copy(containerID+":/"+ref.manifest.Module, outputFile)
 	if err != nil {
 		return err
 	}
-	err = podman.RemoveContainer(containerID)
+	err = ref.podman.RemoveContainer(containerID)
 	if err != nil {
 		return err
 	}
