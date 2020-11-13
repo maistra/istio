@@ -19,8 +19,10 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -142,14 +144,25 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	}
 	var id string
 	containerImageChanged := false
+
+	if strings.HasPrefix(extension.Status.Deployment.URL, w.baseURL) {
+		url, err := url.Parse(extension.Status.Deployment.URL)
+		if err != nil {
+			result.AddError(fmt.Errorf("failed to parse status.deployment.url: %s", err))
+			result.Fail()
+			w.resultChan <- result
+		}
+		id = path.Base(url.Path)
+	}
+
 	if img.SHA256() != extension.Status.Deployment.ContainerSHA256 {
 		// if container sha changed, re-generate UUID
 		containerImageChanged = true
-		// delete old file
-		if len(extension.Status.Deployment.URL) > len(w.baseURL) {
-			id := extension.Status.Deployment.URL[len(w.baseURL):]
-			filename := path.Join(w.serveDirectory, id)
-			os.Remove(filename)
+		if id != "" {
+			err := os.Remove(path.Join(w.serveDirectory, id))
+			if err != nil {
+				result.AddError(fmt.Errorf("failed to delete existing wasm module: %s", err))
+			}
 		}
 
 		wasmUUID, err := uuid.NewRandom()
@@ -160,11 +173,9 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 			return
 		}
 		id = wasmUUID.String()
-	} else {
-		id = extension.Status.Deployment.URL[len(w.baseURL):]
 	}
-	filename := path.Join(w.serveDirectory, id)
 
+	filename := path.Join(w.serveDirectory, id)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		err = img.CopyWasmModule(filename)
 		if err != nil {
@@ -183,9 +194,24 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		return
 	}
 	result.AddMessage(fmt.Sprintf("WASM module SHA256 is %s", sha))
+
+	filePath, err := url.Parse(id)
+	if err != nil {
+		result.AddError(fmt.Errorf("failed to parse new UUID '%s' as URL path: %s", id, err))
+		result.Fail()
+		w.resultChan <- result
+
+	}
+	baseURL, err := url.Parse(w.baseURL)
+	if err != nil {
+		result.AddError(fmt.Errorf("failed to parse baseURL: %s", err))
+		result.Fail()
+		w.resultChan <- result
+	}
+
 	extension.Status.Deployment.SHA256 = sha
 	extension.Status.Deployment.ContainerSHA256 = img.SHA256()
-	extension.Status.Deployment.URL = w.baseURL + "/" + id
+	extension.Status.Deployment.URL = baseURL.ResolveReference(filePath).String()
 	extension.Status.Deployment.Ready = true
 
 	manifest := img.GetManifest()
