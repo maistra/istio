@@ -16,8 +16,11 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -34,6 +37,11 @@ import (
 
 const (
 	baseURL = "http://localhost:8080"
+)
+
+var (
+	oneHundred = 100
+	twoHundred = 200
 )
 
 func TestWorker(t *testing.T) {
@@ -117,6 +125,59 @@ func TestWorker(t *testing.T) {
 				ObservedGeneration: 2,
 			},
 		},
+		{
+			name: "valid_resource_update_priority",
+			extension: v1alpha1.ServiceMeshExtension{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test",
+					Namespace:  "test",
+					Generation: 1,
+				},
+				Spec: v1alpha1.ServiceMeshExtensionSpec{
+					Image: "docker.io/test/test:latest",
+				},
+			},
+			events: []ExtensionEvent{
+				{
+					Extension: &v1alpha1.ServiceMeshExtension{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "test",
+							Namespace:  "test",
+							Generation: 3,
+						},
+						Spec: v1alpha1.ServiceMeshExtensionSpec{
+							Image:    "docker.io/test/test:latest",
+							Priority: &oneHundred,
+						},
+					},
+					Operation: ExtensionEventOperationUpdate,
+				},
+				{
+					Extension: &v1alpha1.ServiceMeshExtension{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "test",
+							Namespace:  "test",
+							Generation: 4,
+						},
+						Spec: v1alpha1.ServiceMeshExtensionSpec{
+							Image:    "docker.io/test/test:latest",
+							Priority: &twoHundred,
+						},
+					},
+					Operation: ExtensionEventOperationUpdate,
+				},
+			},
+			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{
+				Phase:    fakestrategy.FakeManifest.Phase,
+				Priority: 200,
+				Deployment: v1alpha1.DeploymentStatus{
+					Ready:           true,
+					ContainerSHA256: fakestrategy.FakeContainerSHA256,
+					SHA256:          fakestrategy.FakeModuleSHA256,
+				},
+				ObservedGeneration: 4,
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -193,11 +254,15 @@ func TestWorker(t *testing.T) {
 			}
 			if !cmp.Equal(tc.expectedStatus, v1alpha1.ServiceMeshExtensionStatus{}) {
 				// validate URL
-				if len(updatedExtension.Status.Deployment.URL) < len(baseURL) {
-					t.Fatalf("generated URL is invalid: %s", updatedExtension.Status.Deployment.URL)
+				url, err := url.Parse(updatedExtension.Status.Deployment.URL)
+				if err != nil {
+					t.Fatalf("failed to parse baseURL: %s", err)
 				}
-				if _, err := uuid.Parse(updatedExtension.Status.Deployment.URL[len(baseURL)+1:]); err != nil {
-					t.Fatalf("generated URL is invalid: %s", updatedExtension.Status.Deployment.URL)
+				if fmt.Sprintf("%s://%s", url.Scheme, url.Host) != baseURL {
+					t.Fatalf("generated base URL path is invalid: %s", updatedExtension.Status.Deployment.URL)
+				}
+				if _, err := uuid.Parse(strings.TrimLeft(url.Path, "/")); err != nil {
+					t.Fatalf("generated URL path is invalid: %s", updatedExtension.Status.Deployment.URL)
 				}
 			}
 		})
