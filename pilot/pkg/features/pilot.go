@@ -21,7 +21,6 @@ import (
 	"github.com/golang/protobuf/ptypes/duration"
 
 	"istio.io/istio/pkg/jwt"
-
 	"istio.io/pkg/env"
 )
 
@@ -193,6 +192,14 @@ var (
 			"Gateways with same selectors in different namespaces will not be applicable.",
 	).Get()
 
+	EnableLegacyInboundListeners = env.RegisterBoolVar(
+		"PILOT_ENABLE_LEGACY_INBOUND_LISTENERS",
+		false,
+		"Enable legacy inbound listeners. When enabled, inbound redirection to port 15001 will be supported. "+
+			"If disabled, inbound requests must be directed to port 15006 and will be routed by a single listener. "+
+			"This is intended for migration purposes only.",
+	).Get()
+
 	InboundProtocolDetectionTimeout = env.RegisterDurationVar(
 		"PILOT_INBOUND_PROTOCOL_DETECTION_TIMEOUT",
 		1*time.Second,
@@ -340,4 +347,8 @@ var (
 
 	EnableMaistraExtensionSupport = env.RegisterBoolVar("ENABLE_MAISTRA_EXTENSIONS", false,
 		"If enabled, pilot, will watch ServiceMeshExtension resources and apply them to filter chains of its proxies").Get()
+
+	PilotEnableLoopBlockers = env.RegisterBoolVar("PILOT_ENABLE_LOOP_BLOCKER", true,
+		"If enabled, Envoy will be configured to prevent traffic directly to the inbound/outbound "+
+			"ports (15001/15006). This prevents traffic loops. This option will be removed, and considered always enabled, in 1.9.").Get()
 )

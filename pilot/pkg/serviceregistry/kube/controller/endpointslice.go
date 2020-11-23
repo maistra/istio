@@ -84,15 +84,6 @@ func (esc *endpointSliceController) updateEDS(es interface{}, event model.Event)
 	svcName := slice.Labels[discoveryv1alpha1.LabelServiceName]
 	hostname := kube.ServiceHostname(svcName, slice.Namespace, esc.c.domainSuffix)
 
-	esc.c.RLock()
-	svc := esc.c.servicesMap[hostname]
-	esc.c.RUnlock()
-
-	if svc == nil {
-		log.Infof("Handle EDS endpoint: skip updating, service %s/%s has mot been populated", svcName, slice.Namespace)
-		return
-	}
-
 	endpoints := make([]*model.IstioEndpoint, 0)
 	if event != model.EventDelete {
 		for _, e := range slice.Endpoints {
@@ -101,19 +92,9 @@ func (esc *endpointSliceController) updateEDS(es interface{}, event model.Event)
 				continue
 			}
 			for _, a := range e.Addresses {
-				pod := esc.c.pods.getPodByIP(a)
-				if pod == nil {
-					// This can not happen in usual case
-					if e.TargetRef != nil && e.TargetRef.Kind == "Pod" {
-						log.Warnf("Endpoint without pod %s %s.%s", a, svcName, slice.Namespace)
-
-						if esc.c.metrics != nil {
-							esc.c.metrics.AddMetric(model.EndpointNoPod, string(hostname), nil, a)
-						}
-						// TODO: keep them in a list, and check when pod events happen !
-						continue
-					}
-					// For service without selector, maybe there are no related pods
+				pod, expectedUpdate := getPod(esc.c, a, &metav1.ObjectMeta{Name: slice.Name, Namespace: slice.Namespace}, e.TargetRef, hostname)
+				if pod == nil && expectedUpdate {
+					continue
 				}
 
 				builder := esc.newEndpointBuilder(pod, e)
@@ -134,6 +115,8 @@ func (esc *endpointSliceController) updateEDS(es interface{}, event model.Event)
 				}
 			}
 		}
+	} else {
+		esc.forgetEndpoint(es)
 	}
 
 	esc.endpointCache.Update(hostname, slice.Name, endpoints)
@@ -141,16 +124,6 @@ func (esc *endpointSliceController) updateEDS(es interface{}, event model.Event)
 	log.Debugf("Handle EDS endpoint %s in namespace %s", svcName, slice.Namespace)
 
 	_ = esc.c.xdsUpdater.EDSUpdate(esc.c.clusterID, string(hostname), slice.Namespace, esc.endpointCache.Get(hostname))
-	for _, handler := range esc.c.instanceHandlers {
-		for _, ep := range endpoints {
-			si := &model.ServiceInstance{
-				Service:     svc,
-				ServicePort: nil,
-				Endpoint:    ep,
-			}
-			handler(si, event)
-		}
-	}
 }
 
 func (esc *endpointSliceController) onEvent(curr interface{}, event model.Event) error {
@@ -354,4 +327,18 @@ func (e *endpointSliceCache) Get(hostname host.Name) []*model.IstioEndpoint {
 		endpoints = append(endpoints, eps...)
 	}
 	return endpoints
+}
+
+func (esc *endpointSliceController) getInformer() cache.SharedIndexInformer {
+	return esc.informer
+}
+
+func (esc *endpointSliceController) forgetEndpoint(endpoint interface{}) {
+	slice := endpoint.(*discoveryv1alpha1.EndpointSlice)
+	key := kube.KeyFunc(slice.Name, slice.Namespace)
+	for _, e := range slice.Endpoints {
+		for _, a := range e.Addresses {
+			esc.c.pods.dropNeedsUpdate(key, a)
+		}
+	}
 }

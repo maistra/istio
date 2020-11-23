@@ -76,5 +76,5 @@ spec:
           mountPath: /var/lib/mysql
       volumes:
       - name: var-lib-mysql
-        emptyDir:
+        emptyDir: {}
 ---

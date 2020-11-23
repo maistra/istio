@@ -16,24 +16,23 @@ package model
 
 import (
 	"fmt"
+	"hash/crc32"
 	"sort"
 	"strings"
 	"time"
-
-	"istio.io/pkg/ledger"
 
 	udpa "github.com/cncf/udpa/go/udpa/type/v1"
 	"github.com/gogo/protobuf/proto"
 
 	mccpb "istio.io/api/mixer/v1/config/client"
 	networking "istio.io/api/networking/v1alpha3"
-
 	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/host"
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
+	"istio.io/pkg/ledger"
 )
 
 var (
@@ -47,6 +46,16 @@ type ConfigKey struct {
 	Kind      resource.GroupVersionKind
 	Name      string
 	Namespace string
+}
+
+func (key ConfigKey) HashCode() uint32 {
+	var result uint32
+	result = 31*result + crc32.ChecksumIEEE([]byte(key.Kind.Kind))
+	result = 31*result + crc32.ChecksumIEEE([]byte(key.Kind.Version))
+	result = 31*result + crc32.ChecksumIEEE([]byte(key.Kind.Group))
+	result = 31*result + crc32.ChecksumIEEE([]byte(key.Namespace))
+	result = 31*result + crc32.ChecksumIEEE([]byte(key.Name))
+	return result
 }
 
 // ConfigsOfKind extracts configs of the specified kind.
@@ -367,17 +376,23 @@ func resolveGatewayName(gwname string, meta ConfigMeta) string {
 	if !strings.Contains(gwname, "/") {
 		if !strings.Contains(gwname, ".") {
 			// we have a short name. Resolve to a gateway in same namespace
-			out = fmt.Sprintf("%s/%s", meta.Namespace, gwname)
+			out = meta.Namespace + "/" + gwname
 		} else {
 			// parse namespace from FQDN. This is very hacky, but meant for backward compatibility only
-			parts := strings.Split(gwname, ".")
-			out = fmt.Sprintf("%s/%s", parts[1], parts[0])
+			// This is a legacy FQDN format. Transform name.ns.svc.cluster.local -> ns/name
+			i := strings.Index(gwname, ".")
+			fqdn := strings.Index(gwname[i+1:], ".")
+			if fqdn == -1 {
+				out = gwname[i+1:] + "/" + gwname[:i]
+			} else {
+				out = gwname[i+1:i+1+fqdn] + "/" + gwname[:i]
+			}
 		}
 	} else {
 		// remove the . from ./gateway and substitute it with the namespace name
-		parts := strings.Split(gwname, "/")
-		if parts[0] == "." {
-			out = fmt.Sprintf("%s/%s", meta.Namespace, parts[1])
+		i := strings.Index(gwname, "/")
+		if gwname[:i] == "." {
+			out = meta.Namespace + "/" + gwname[i+1:]
 		}
 	}
 	return out

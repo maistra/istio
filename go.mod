@@ -148,6 +148,7 @@ require (
 	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/text v0.3.3 // indirect
 	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0
 	golang.org/x/tools v0.0.0-20200115044656-831fdb1e1868
 	google.golang.org/api v0.15.0
@@ -157,10 +158,10 @@ require (
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.3.0
 	helm.sh/helm/v3 v3.2.0
-	istio.io/api v0.0.0-20200715212100-dbf5277541ef
-	istio.io/gogo-genproto v0.0.0-20200511213158-02f1fd1746e5
-	istio.io/pkg v0.0.0-20200511212725-7bfbbf968c23
-	k8s.io/api v0.18.4
+	istio.io/api v0.0.0-20201113182140-d4b7e3fc2b44
+	istio.io/gogo-genproto v0.0.0-20201113182723-5b8563d8a012
+	istio.io/pkg v0.0.0-20201113182530-a5cdf6e8c3cd
+	k8s.io/api v0.18.1
 	k8s.io/apiextensions-apiserver v0.18.0
 	k8s.io/apimachinery v0.18.4
 	k8s.io/cli-runtime v0.18.0
