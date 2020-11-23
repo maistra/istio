@@ -1273,6 +1273,40 @@ func TestBuildGatewayListeners(t *testing.T) {
 			},
 			[]string{"0.0.0.0_80", "0.0.0.0_801"},
 		},
+		{
+			"privileged port on unprivileged pod",
+			&pilot_model.Proxy{
+				Metadata: &pilot_model.NodeMetadata{
+					UnprivilegedPod: "true",
+				},
+			},
+			&networking.Gateway{
+				Servers: []*networking.Server{
+					{
+						Port: &networking.Port{Name: "http", Number: 80, Protocol: "HTTP"},
+					},
+					{
+						Port: &networking.Port{Name: "http", Number: 8080, Protocol: "HTTP"},
+					},
+				},
+			},
+			[]string{"0.0.0.0_8080"},
+		},
+		{
+			"privileged port on privileged pod",
+			&pilot_model.Proxy{},
+			&networking.Gateway{
+				Servers: []*networking.Server{
+					{
+						Port: &networking.Port{Name: "http", Number: 80, Protocol: "HTTP"},
+					},
+					{
+						Port: &networking.Port{Name: "http", Number: 8080, Protocol: "HTTP"},
+					},
+				},
+			},
+			[]string{"0.0.0.0_80", "0.0.0.0_8080"},
+		},
 	}
 
 	for _, tt := range cases {
@@ -1281,6 +1315,12 @@ func TestBuildGatewayListeners(t *testing.T) {
 		env := buildEnv(t, []pilot_model.Config{{Spec: tt.gateway}}, []pilot_model.Config{})
 		proxyGateway.SetGatewaysForProxy(env.PushContext)
 		proxyGateway.ServiceInstances = tt.node.ServiceInstances
+		if tt.node.Metadata != nil {
+			proxyGateway.Metadata = tt.node.Metadata
+		} else {
+			proxyGateway.Metadata = &proxyGatewayMetadata
+		}
+
 		proxyGateway.DiscoverIPVersions()
 		builder := configgen.buildGatewayListeners(&proxyGateway, env.PushContext, &ListenerBuilder{})
 		var listeners []string
