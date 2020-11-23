@@ -161,7 +161,7 @@ require (
 	istio.io/api v0.0.0-20201113182140-d4b7e3fc2b44
 	istio.io/gogo-genproto v0.0.0-20201113182723-5b8563d8a012
 	istio.io/pkg v0.0.0-20201113182530-a5cdf6e8c3cd
-	k8s.io/api v0.18.1
+	k8s.io/api v0.18.4
 	k8s.io/apiextensions-apiserver v0.18.0
 	k8s.io/apimachinery v0.18.4
 	k8s.io/cli-runtime v0.18.0
