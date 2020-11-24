@@ -625,6 +625,7 @@ func TestVirtualServiceWithExportTo(t *testing.T) {
 	ps.Mesh = env.Mesh()
 	ps.ServiceDiscovery = env
 	configStore := NewFakeStore()
+	gatewayName := "default/gateway"
 
 	rule1 := Config{
 		ConfigMeta: ConfigMeta{
@@ -652,6 +653,20 @@ func TestVirtualServiceWithExportTo(t *testing.T) {
 			ExportTo: []string{"test2", "ns1", "test1"},
 		},
 	}
+	rule2Gw := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule2Gw",
+			Namespace: "test2",
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Group:     collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Group(),
+			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
+		},
+		Spec: &networking.VirtualService{
+			Gateways: []string{gatewayName, constants.IstioMeshGateway},
+			Hosts:    []string{"rule2gw.com"},
+			ExportTo: []string{"test2", "ns1", "test1"},
+		},
+	}
 	rule3 := Config{
 		ConfigMeta: ConfigMeta{
 			Name:      "rule3",
@@ -661,7 +676,22 @@ func TestVirtualServiceWithExportTo(t *testing.T) {
 			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
 		},
 		Spec: &networking.VirtualService{
+			Gateways: []string{constants.IstioMeshGateway},
 			Hosts:    []string{"rule3.com"},
+			ExportTo: []string{"test1", "test2", "*"},
+		},
+	}
+	rule3Gw := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule3Gw",
+			Namespace: "test3",
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Group:     collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Group(),
+			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
+		},
+		Spec: &networking.VirtualService{
+			Gateways: []string{gatewayName},
+			Hosts:    []string{"rule3gw.com"},
 			ExportTo: []string{"test1", "test2", "*"},
 		},
 	}
@@ -678,17 +708,10 @@ func TestVirtualServiceWithExportTo(t *testing.T) {
 		},
 	}
 
-	if _, err := configStore.Create(rule1); err != nil {
-		t.Fatalf("could not create rule1")
-	}
-	if _, err := configStore.Create(rule2); err != nil {
-		t.Fatalf("could not create rule2")
-	}
-	if _, err := configStore.Create(rule3); err != nil {
-		t.Fatalf("could not create rule3")
-	}
-	if _, err := configStore.Create(rootNS); err != nil {
-		t.Fatalf("could not create rootNS")
+	for _, c := range []Config{rule1, rule2, rule3, rule2Gw, rule3Gw, rootNS} {
+		if _, err := configStore.Create(c); err != nil {
+			t.Fatalf("could not create %v", c.Name)
+		}
 	}
 
 	store := istioConfigStore{ConfigStore: configStore}
@@ -700,38 +723,64 @@ func TestVirtualServiceWithExportTo(t *testing.T) {
 
 	cases := []struct {
 		proxyNs   string
+		gateway   string
 		wantHosts []string
 	}{
 		{
 			proxyNs:   "test1",
-			wantHosts: []string{"rule1.com", "rule2.com", "rule3.com", "rootNS.com"},
+			wantHosts: []string{"rule1.com", "rule2.com", "rule2gw.com", "rule3.com", "rootNS.com"},
+			gateway:   constants.IstioMeshGateway,
 		},
 		{
 			proxyNs:   "test2",
-			wantHosts: []string{"rule2.com", "rule3.com", "rootNS.com"},
+			wantHosts: []string{"rule2.com", "rule2gw.com", "rule3.com", "rootNS.com"},
+			gateway:   constants.IstioMeshGateway,
 		},
 		{
 			proxyNs:   "ns1",
-			wantHosts: []string{"rule1.com", "rule2.com", "rule3.com", "rootNS.com"},
+			wantHosts: []string{"rule1.com", "rule2.com", "rule2gw.com", "rule3.com", "rootNS.com"},
+			gateway:   constants.IstioMeshGateway,
 		},
 		{
 			proxyNs:   "random",
 			wantHosts: []string{"rule3.com", "rootNS.com"},
+			gateway:   constants.IstioMeshGateway,
+		},
+		{
+			proxyNs:   "test1",
+			wantHosts: []string{"rule2gw.com", "rule3gw.com"},
+			gateway:   gatewayName,
+		},
+		{
+			proxyNs:   "test2",
+			wantHosts: []string{"rule2gw.com", "rule3gw.com"},
+			gateway:   gatewayName,
+		},
+		{
+			proxyNs:   "ns1",
+			wantHosts: []string{"rule2gw.com", "rule3gw.com"},
+			gateway:   gatewayName,
+		},
+		{
+			proxyNs:   "random",
+			wantHosts: []string{"rule3gw.com"},
+			gateway:   gatewayName,
 		},
 	}
 	for _, tt := range cases {
-		rules := ps.VirtualServices(&Proxy{ConfigNamespace: tt.proxyNs}, map[string]bool{constants.IstioMeshGateway: true})
-		gotHosts := make([]string, 0)
-		for _, r := range rules {
-			vs := r.Spec.(*networking.VirtualService)
-			gotHosts = append(gotHosts, vs.Hosts...)
-		}
-		if !reflect.DeepEqual(gotHosts, tt.wantHosts) {
-			t.Errorf("proxy in %s namespace: want %+v, got %+v", tt.proxyNs, tt.wantHosts, gotHosts)
-		}
+		t.Run(fmt.Sprintf("%s-%s", tt.proxyNs, tt.gateway), func(t *testing.T) {
+			rules := ps.VirtualServicesForGateway(&Proxy{ConfigNamespace: tt.proxyNs}, tt.gateway)
+			gotHosts := make([]string, 0)
+			for _, r := range rules {
+				vs := r.Spec.(*networking.VirtualService)
+				gotHosts = append(gotHosts, vs.Hosts...)
+			}
+			if !reflect.DeepEqual(gotHosts, tt.wantHosts) {
+				t.Errorf("want %+v, got %+v", tt.wantHosts, gotHosts)
+			}
+		})
 	}
 }
-
 func TestServiceWithExportTo(t *testing.T) {
 	ps := NewPushContext()
 	env := &Environment{Watcher: mesh.NewFixedWatcher(&meshconfig.MeshConfig{RootNamespace: "zzz"})}

@@ -92,15 +92,13 @@ type PushContext struct {
 	QuotaSpecBinding []Config `json:"-"`
 
 	// VirtualService related
+	// This contains all virtual services visible to this namespace extracted from
+	// exportTos that explicitly contained this namespace. The keys are namespace,gateway.
+	virtualServicesExportedToNamespaceByGateway map[string]map[string][]Config
 	// this contains all the virtual services with exportTo "." and current namespace. The keys are namespace,gateway.
 	privateVirtualServicesByNamespaceAndGateway map[string]map[string][]Config
 	// This contains all virtual services whose exportTo is "*", keyed by gateway
 	publicVirtualServicesByGateway map[string][]Config
-
-	// This contains all virtual services visible to this namespace extracted from
-	// exportTos that explicitly contained this namespace.
-	virtualServicesExportedToNamespace map[string][]Config
-	// This contains all virtual services whose exportTo is "*"
 
 	// destination rules are of three types:
 	//  namespaceLocalDestRules: all public/private dest rules pertaining to a service defined in a given namespace
@@ -467,7 +465,7 @@ func NewPushContext() *PushContext {
 		servicesExportedToNamespace:                 map[string][]*Service{},
 		publicVirtualServicesByGateway:              map[string][]Config{},
 		privateVirtualServicesByNamespaceAndGateway: map[string]map[string][]Config{},
-		virtualServicesExportedToNamespace:          map[string][]Config{},
+		virtualServicesExportedToNamespaceByGateway: map[string]map[string][]Config{},
 		namespaceLocalDestRules:                     map[string]*processedDestRules{},
 		exportedDestRulesByNamespace:                map[string]*processedDestRules{},
 		sidecarsByNamespace:                         map[string][]*SidecarScope{},
@@ -478,7 +476,7 @@ func NewPushContext() *PushContext {
 		ProxyStatus:                                 map[string]map[string]ProxyPushStatus{},
 		ServiceAccounts:                             map[host.Name]map[int][]string{},
 	}
-} // xuxa
+}
 
 // JSON implements json.Marshaller, with a lock.
 func (ps *PushContext) StatusJSON() ([]byte, error) {
@@ -616,6 +614,7 @@ func (ps *PushContext) Services(proxy *Proxy) []*Service {
 
 func (ps *PushContext) VirtualServicesForGateway(proxy *Proxy, gateway string) []Config {
 	res := ps.privateVirtualServicesByNamespaceAndGateway[proxy.ConfigNamespace][gateway]
+	res = append(res, ps.virtualServicesExportedToNamespaceByGateway[proxy.ConfigNamespace][gateway]...)
 	res = append(res, ps.publicVirtualServicesByGateway[gateway]...)
 	return res
 }
@@ -947,9 +946,9 @@ func (ps *PushContext) updateContext(
 			return err
 		}
 	} else {
+		ps.virtualServicesExportedToNamespaceByGateway = oldPushContext.virtualServicesExportedToNamespaceByGateway
 		ps.privateVirtualServicesByNamespaceAndGateway = oldPushContext.privateVirtualServicesByNamespaceAndGateway
 		ps.publicVirtualServicesByGateway = oldPushContext.publicVirtualServicesByGateway
-		ps.virtualServicesExportedToNamespace = oldPushContext.virtualServicesExportedToNamespace
 	}
 
 	if destinationRulesChanged {
@@ -1109,9 +1108,10 @@ func (ps *PushContext) initAuthnPolicies(env *Environment) error {
 
 // Caches list of virtual services
 func (ps *PushContext) initVirtualServices(env *Environment) error {
+	ps.virtualServicesExportedToNamespaceByGateway = map[string]map[string][]Config{}
 	ps.privateVirtualServicesByNamespaceAndGateway = map[string]map[string][]Config{}
 	ps.publicVirtualServicesByGateway = map[string][]Config{}
-	ps.virtualServicesExportedToNamespace = map[string][]Config{}
+
 	virtualServices, err := env.List(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(), NamespaceAll)
 	if err != nil {
 		return err
@@ -1238,17 +1238,22 @@ func (ps *PushContext) initVirtualServices(env *Environment) error {
 				// . or other namespaces
 				for exportTo := range exportToMap {
 					if exportTo == visibility.Private || string(exportTo) == ns {
-						// exportTo with same namespace is effectively private
 						if _, f := ps.privateVirtualServicesByNamespaceAndGateway[ns]; !f {
 							ps.privateVirtualServicesByNamespaceAndGateway[ns] = map[string][]Config{}
 						}
+						// add to local namespace only
 						for _, gw := range gwNames {
 							ps.privateVirtualServicesByNamespaceAndGateway[ns][gw] = append(ps.privateVirtualServicesByNamespaceAndGateway[ns][gw], virtualService)
 						}
 					} else {
-						// exportTo is a specific target namespace
-						ps.virtualServicesExportedToNamespace[string(exportTo)] =
-							append(ps.virtualServicesExportedToNamespace[string(exportTo)], virtualService)
+						if _, f := ps.virtualServicesExportedToNamespaceByGateway[string(exportTo)]; !f {
+							ps.virtualServicesExportedToNamespaceByGateway[string(exportTo)] = map[string][]Config{}
+						}
+						// add to local namespace only
+						for _, gw := range gwNames {
+							ps.virtualServicesExportedToNamespaceByGateway[string(exportTo)][gw] =
+								append(ps.virtualServicesExportedToNamespaceByGateway[string(exportTo)][gw], virtualService)
+						}
 					}
 				}
 			}
