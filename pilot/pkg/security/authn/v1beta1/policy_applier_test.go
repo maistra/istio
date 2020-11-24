@@ -15,6 +15,7 @@
 package v1beta1
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
