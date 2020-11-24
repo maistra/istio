@@ -26,7 +26,10 @@
           "value": "kubernetes://apis/batch/v1beta1/namespaces/default/cronjobs/hello"
         }
       ],
-      "resources": {}
+      "resources": {},
+      "securityContext": {
+        "runAsUser": 1337
+      }
     }
   },
   {
