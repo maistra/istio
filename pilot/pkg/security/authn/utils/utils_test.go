@@ -278,6 +278,7 @@ func runTestBuildInboundFilterChain(t *testing.T, tlsParam *auth.TlsParameters) 
 								},
 							},
 							AlpnProtocols: []string{"h2", "http/1.1"},
+							TlsParams:     tlsParam,
 						},
 						RequireClientCertificate: protovalue.BoolTrue,
 					},
