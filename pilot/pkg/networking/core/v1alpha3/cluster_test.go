@@ -857,16 +857,17 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 		Sni:               "custom.foo.com",
 	}
 	tests := []struct {
-		name            string
-		tls             *networking.ClientTLSSettings
-		sans            []string
-		sni             string
-		proxy           *model.Proxy
-		autoMTLSEnabled bool
-		meshExternal    bool
-		serviceMTLSMode model.MutualTLSMode
-		want            *networking.ClientTLSSettings
-		wantCtxType     mtlsContextType
+		name                 string
+		tls                  *networking.ClientTLSSettings
+		sans                 []string
+		sni                  string
+		proxy                *model.Proxy
+		autoMTLSEnabled      bool
+		meshExternal         bool
+		serviceMTLSMode      model.MutualTLSMode
+		clusterDiscoveryType apiv2.Cluster_DiscoveryType
+		want                 *networking.ClientTLSSettings
+		wantCtxType          mtlsContextType
 	}{
 		{
 			"Destination rule TLS sni and SAN override",
@@ -874,7 +875,7 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 			[]string{"spiffe://foo/serviceaccount/1"},
 			"foo.com",
 			&model.Proxy{Metadata: &model.NodeMetadata{}},
-			false, false, model.MTLSUnknown,
+			false, false, model.MTLSUnknown, apiv2.Cluster_EDS,
 			tlsSettings,
 			userSupplied,
 		},
@@ -891,7 +892,7 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 			[]string{"spiffe://foo/serviceaccount/1"},
 			"foo.com",
 			&model.Proxy{Metadata: &model.NodeMetadata{}},
-			false, false, model.MTLSUnknown,
+			false, false, model.MTLSUnknown, apiv2.Cluster_EDS,
 			&networking.ClientTLSSettings{
 				Mode:              networking.ClientTLSSettings_ISTIO_MUTUAL,
 				CaCertificates:    constants.DefaultRootCert,
@@ -912,7 +913,7 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 				TLSClientKey:       "/custom/key.pem",
 				TLSClientRootCert:  "/custom/root.pem",
 			}},
-			false, false, model.MTLSUnknown,
+			false, false, model.MTLSUnknown, apiv2.Cluster_EDS,
 			&networking.ClientTLSSettings{
 				Mode:              networking.ClientTLSSettings_ISTIO_MUTUAL,
 				CaCertificates:    "/custom/root.pem",
@@ -929,7 +930,7 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 			[]string{"spiffe://foo/serviceaccount/1"},
 			"foo.com",
 			&model.Proxy{Metadata: &model.NodeMetadata{}},
-			true, false, model.MTLSStrict,
+			true, false, model.MTLSStrict, apiv2.Cluster_EDS,
 			&networking.ClientTLSSettings{
 				Mode:              networking.ClientTLSSettings_ISTIO_MUTUAL,
 				CaCertificates:    constants.DefaultRootCert,
@@ -946,7 +947,7 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 			[]string{"spiffe://foo/serviceaccount/1"},
 			"foo.com",
 			&model.Proxy{Metadata: &model.NodeMetadata{}},
-			true, false, model.MTLSPermissive,
+			true, false, model.MTLSPermissive, apiv2.Cluster_EDS,
 			&networking.ClientTLSSettings{
 				Mode:              networking.ClientTLSSettings_ISTIO_MUTUAL,
 				CaCertificates:    constants.DefaultRootCert,
@@ -963,7 +964,7 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 			[]string{"spiffe://foo/serviceaccount/1"},
 			"foo.com",
 			&model.Proxy{Metadata: &model.NodeMetadata{}},
-			true, false, model.MTLSDisable,
+			true, false, model.MTLSDisable, apiv2.Cluster_EDS,
 			nil,
 			userSupplied,
 		},
@@ -973,7 +974,7 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 			[]string{"spiffe://foo/serviceaccount/1"},
 			"foo.com",
 			&model.Proxy{Metadata: &model.NodeMetadata{}},
-			true, false, model.MTLSUnknown,
+			true, false, model.MTLSUnknown, apiv2.Cluster_EDS,
 			nil,
 			userSupplied,
 		},
@@ -983,7 +984,7 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 			[]string{"spiffe://foo/serviceaccount/1"},
 			"foo.com",
 			&model.Proxy{Metadata: &model.NodeMetadata{}},
-			true, true, model.MTLSUnknown,
+			true, true, model.MTLSUnknown, apiv2.Cluster_EDS,
 			nil,
 			userSupplied,
 		},
@@ -993,7 +994,17 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 			[]string{"spiffe://foo/serviceaccount/1"},
 			"foo.com",
 			&model.Proxy{Metadata: &model.NodeMetadata{}},
-			false, false, model.MTLSDisable,
+			false, false, model.MTLSDisable, apiv2.Cluster_EDS,
+			nil,
+			userSupplied,
+		},
+		{
+			"Do not enable auto mtls when cluster type is `Cluster_ORIGINAL_DST`",
+			nil,
+			[]string{"spiffe://foo/serviceaccount/1"},
+			"foo.com",
+			&model.Proxy{Metadata: &model.NodeMetadata{}},
+			true, false, model.MTLSPermissive, apiv2.Cluster_ORIGINAL_DST,
 			nil,
 			userSupplied,
 		},
@@ -1001,7 +1012,8 @@ func TestConditionallyConvertToIstioMtls(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotTLS, gotCtxType := conditionallyConvertToIstioMtls(tt.tls, tt.sans, tt.sni, tt.proxy, tt.autoMTLSEnabled, tt.meshExternal, tt.serviceMTLSMode)
+			gotTLS, gotCtxType := conditionallyConvertToIstioMtls(tt.tls, tt.sans, tt.sni, tt.proxy,
+				tt.autoMTLSEnabled, tt.meshExternal, tt.serviceMTLSMode, tt.clusterDiscoveryType)
 			if !reflect.DeepEqual(gotTLS, tt.want) {
 				t.Errorf("cluster TLS does not match exppected result want %#v, got %#v", tt.want, gotTLS)
 			}
@@ -1048,9 +1060,16 @@ func TestApplyOutlierDetection(t *testing.T) {
 		o    *apiv2_cluster.OutlierDetection
 	}{
 		{
+			"Nil outlier detection",
+			nil,
+			nil,
+		},
+		{
 			"No outlier detection is set",
 			&networking.OutlierDetection{},
-			&apiv2_cluster.OutlierDetection{},
+			&apiv2_cluster.OutlierDetection{
+				EnforcingSuccessRate: &wrappers.UInt32Value{Value: 0},
+			},
 		},
 		{
 			"Deprecated consecutive errors is set",
@@ -1061,6 +1080,7 @@ func TestApplyOutlierDetection(t *testing.T) {
 				EnforcingConsecutive_5Xx:           &wrappers.UInt32Value{Value: 0},
 				ConsecutiveGatewayFailure:          &wrappers.UInt32Value{Value: 3},
 				EnforcingConsecutiveGatewayFailure: &wrappers.UInt32Value{Value: 100},
+				EnforcingSuccessRate:               &wrappers.UInt32Value{Value: 0},
 			},
 		},
 		{
@@ -1074,6 +1094,7 @@ func TestApplyOutlierDetection(t *testing.T) {
 				EnforcingConsecutive_5Xx:           &wrappers.UInt32Value{Value: 100},
 				ConsecutiveGatewayFailure:          &wrappers.UInt32Value{Value: 3},
 				EnforcingConsecutiveGatewayFailure: &wrappers.UInt32Value{Value: 100},
+				EnforcingSuccessRate:               &wrappers.UInt32Value{Value: 0},
 			},
 		},
 		{
@@ -1084,6 +1105,7 @@ func TestApplyOutlierDetection(t *testing.T) {
 			&apiv2_cluster.OutlierDetection{
 				ConsecutiveGatewayFailure:          &wrappers.UInt32Value{Value: 3},
 				EnforcingConsecutiveGatewayFailure: &wrappers.UInt32Value{Value: 100},
+				EnforcingSuccessRate:               &wrappers.UInt32Value{Value: 0},
 			},
 		},
 		{
@@ -1094,6 +1116,7 @@ func TestApplyOutlierDetection(t *testing.T) {
 			&apiv2_cluster.OutlierDetection{
 				Consecutive_5Xx:          &wrappers.UInt32Value{Value: 3},
 				EnforcingConsecutive_5Xx: &wrappers.UInt32Value{Value: 100},
+				EnforcingSuccessRate:     &wrappers.UInt32Value{Value: 0},
 			},
 		},
 		{
@@ -1104,6 +1127,7 @@ func TestApplyOutlierDetection(t *testing.T) {
 			&apiv2_cluster.OutlierDetection{
 				ConsecutiveGatewayFailure:          &wrappers.UInt32Value{Value: 0},
 				EnforcingConsecutiveGatewayFailure: &wrappers.UInt32Value{Value: 0},
+				EnforcingSuccessRate:               &wrappers.UInt32Value{Value: 0},
 			},
 		},
 		{
@@ -1114,6 +1138,7 @@ func TestApplyOutlierDetection(t *testing.T) {
 			&apiv2_cluster.OutlierDetection{
 				Consecutive_5Xx:          &wrappers.UInt32Value{Value: 0},
 				EnforcingConsecutive_5Xx: &wrappers.UInt32Value{Value: 0},
+				EnforcingSuccessRate:     &wrappers.UInt32Value{Value: 0},
 			},
 		},
 	}
@@ -2095,6 +2120,53 @@ func TestRedisProtocolClusterAtGateway(t *testing.T) {
 			g.Expect(cluster.LbPolicy).To(Equal(apiv2.Cluster_MAGLEV))
 		}
 	}
+}
+
+func TestAutoMTLSClusterSubsets(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	destRule := &networking.DestinationRule{
+		Host: TestServiceNHostname,
+		Subsets: []*networking.Subset{
+			{
+				Name: "foobar",
+				TrafficPolicy: &networking.TrafficPolicy{
+					ConnectionPool: &networking.ConnectionPoolSettings{
+						Http: &networking.ConnectionPoolSettings_HTTPSettings{
+							MaxRequestsPerConnection: 1,
+						},
+					},
+					PortLevelSettings: []*networking.TrafficPolicy_PortTrafficPolicy{
+						{
+							Port: &networking.PortSelector{
+								Number: 8080,
+							},
+							Tls: &networking.ClientTLSSettings{
+								Mode: networking.ClientTLSSettings_ISTIO_MUTUAL,
+								Sni:  "custom.sni.com",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testMesh.EnableAutoMtls.Value = true
+
+	clusters, err := buildTestClusters(TestServiceNHostname, 0, model.SidecarProxy, nil, testMesh, destRule)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	tlsContext := getTLSContext(t, clusters[1])
+	g.Expect(tlsContext).ToNot(BeNil())
+	g.Expect(tlsContext.GetSni()).To(Equal("custom.sni.com"))
+	g.Expect(clusters[1].TransportSocketMatches).To(HaveLen(0))
+
+	for _, i := range []int{0, 2, 3} {
+		g.Expect(getTLSContext(t, clusters[i])).To(BeNil())
+		g.Expect(clusters[i].TransportSocketMatches).To(HaveLen(2))
+	}
+
 }
 
 func TestAutoMTLSClusterIgnoreWorkloadLevelPeerAuthn(t *testing.T) {

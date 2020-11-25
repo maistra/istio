@@ -32,6 +32,10 @@ import (
 type kubeEndpointsController interface {
 	HasSynced() bool
 	Run(stopCh <-chan struct{})
+	getInformer() cache.SharedIndexInformer
+	onEvent(curr interface{}, event model.Event) error
+	// forgetEndpoint does internal bookkeeping on a deleted endpoint
+	forgetEndpoint(endpoint interface{})
 	InstancesByPort(c *Controller, svc *model.Service, reqSvcPort int,
 		labelsList labels.Collection) ([]*model.ServiceInstance, error)
 	GetProxyServiceInstances(c *Controller, proxy *model.Proxy) []*model.ServiceInstance
@@ -57,8 +61,10 @@ func (e *kubeEndpoints) Run(stopCh <-chan struct{}) {
 // handleEvent processes the event.
 func (e *kubeEndpoints) handleEvent(name string, namespace string, event model.Event, ep interface{}, fn updateEdsFunc) error {
 	log.Debugf("Handle event %s for endpoint %s in namespace %s", event, name, namespace)
+	// Update internal endpoint cache no matter what kind of service, even headless service.
+	// As for gateways, the cluster discovery type is `EDS` for headless service.
+	fn(ep, event)
 
-	// headless service cluster discovery type is ORIGINAL_DST, we do not need update EDS.
 	if features.EnableHeadlessService {
 		if obj, _, _ := e.c.services.GetIndexer().GetByKey(kube.KeyFunc(name, namespace)); obj != nil {
 			svc := obj.(*v1.Service)
@@ -69,7 +75,7 @@ func (e *kubeEndpoints) handleEvent(name string, namespace string, event model.E
 					// TODO: extend and set service instance type, so no need to re-init push context
 					ConfigsUpdated: map[model.ConfigKey]struct{}{{
 						Kind:      model.ServiceEntryKind,
-						Name:      svc.Name,
+						Name:      string(kube.ServiceHostname(svc.Name, svc.Namespace, e.c.domainSuffix)),
 						Namespace: svc.Namespace,
 					}: {}},
 					Reason: []model.TriggerReason{model.EndpointUpdate},
@@ -78,8 +84,6 @@ func (e *kubeEndpoints) handleEvent(name string, namespace string, event model.E
 			}
 		}
 	}
-
-	fn(ep, event)
 
 	return nil
 }

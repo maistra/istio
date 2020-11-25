@@ -57,5 +57,5 @@ spec:
           mountPath: /data/db
       volumes:
       - name: data-db
-        emptyDir:
+        emptyDir: {}
 ---

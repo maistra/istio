@@ -17,6 +17,7 @@ package v1alpha3
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	xdsapi "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -124,7 +125,7 @@ func (configgen *ConfigGeneratorImpl) buildGatewayListeners(
 				} else {
 					// passthrough or tcp, yields multiple filter chains
 					tcpChainOpts := configgen.createGatewayTCPFilterChainOpts(node, push,
-						server, map[string]bool{mergedGateway.GatewayNameForServer[server]: true})
+						server, mergedGateway.GatewayNameForServer[server])
 					filterChainOpts = append(filterChainOpts, tcpChainOpts...)
 					for i := 0; i < len(tcpChainOpts); i++ {
 						filterChains = append(filterChains, istionetworking.FilterChain{ListenerProtocol: istionetworking.ListenerProtocolTCP})
@@ -218,7 +219,7 @@ func (configgen *ConfigGeneratorImpl) buildGatewayHTTPRouteConfig(node *model.Pr
 
 	// make sure that there is some server listening on this port
 	if _, ok := merged.ServersByRouteName[routeName]; !ok {
-		log.Warnf("Gateway missing for route %s. This is normal if gateway was recently deleted. Have %v", routeName, merged.ServersByRouteName)
+		log.Warnf("Gateway missing for route %s. This is normal if gateway was recently deleted.", routeName)
 
 		// This can happen when a gateway has recently been deleted. Envoy will still request route
 		// information due to the draining of listeners, so we should not return an error.
@@ -236,7 +237,7 @@ func (configgen *ConfigGeneratorImpl) buildGatewayHTTPRouteConfig(node *model.Pr
 	vHostDedupMap := make(map[host.Name]*route.VirtualHost)
 	for _, server := range servers {
 		gatewayName := merged.GatewayNameForServer[server]
-		virtualServices := push.VirtualServices(node, map[string]bool{gatewayName: true})
+		virtualServices := push.VirtualServicesForGateway(node, gatewayName)
 		for _, virtualService := range virtualServices {
 			virtualServiceHosts := host.NewNames(virtualService.Spec.(*networking.VirtualService).Hosts)
 			serverHosts := host.NamesForNamespace(server.Hosts, virtualService.Namespace)
@@ -261,7 +262,7 @@ func (configgen *ConfigGeneratorImpl) buildGatewayHTTPRouteConfig(node *model.Pr
 				} else {
 					newVHost := &route.VirtualHost{
 						Name:    domainName(string(hostname), port),
-						Domains: buildGatewayVirtualHostDomains(string(hostname)),
+						Domains: buildGatewayVirtualHostDomains(string(hostname), port),
 						Routes:  routes,
 					}
 					if server.Tls != nil && server.Tls.HttpsRedirect {
@@ -449,7 +450,7 @@ func buildGatewayListenerTLSContext(
 		// SDS config for gateway to fetch key/cert at gateway agent.
 		authn_model.ApplyCustomSDSToCommonTLSContext(tls.CommonTlsContext, server.Tls, authn_model.IngressGatewaySdsUdsPath)
 	} else if server.Tls.Mode == networking.ServerTLSSettings_ISTIO_MUTUAL {
-		authn_model.ApplyToCommonTLSContext(tls.CommonTlsContext, metadata, sdsPath, server.Tls.SubjectAltNames)
+		authn_model.ApplyToCommonTLSContext(tls.CommonTlsContext, metadata, sdsPath, server.Tls.SubjectAltNames, []string{})
 	} else {
 		// Fall back to the read-from-file approach when SDS is not enabled or Tls.CredentialName is not specified.
 		tls.CommonTlsContext.TlsCertificates = []*auth.TlsCertificate{
@@ -511,7 +512,7 @@ func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol, defaultTLSP
 
 func (configgen *ConfigGeneratorImpl) createGatewayTCPFilterChainOpts(
 	node *model.Proxy, push *model.PushContext, server *networking.Server,
-	gatewaysForWorkload map[string]bool) []*filterChainOpts {
+	gatewayName string) []*filterChainOpts {
 
 	// We have a TCP/TLS server. This could be TLS termination (user specifies server.TLS with simple/mutual)
 	// or opaque TCP (server.TLS is nil). or it could be a TLS passthrough with SNI based routing.
@@ -519,7 +520,7 @@ func (configgen *ConfigGeneratorImpl) createGatewayTCPFilterChainOpts(
 	// This is opaque TCP server. Find matching virtual services with TCP blocks and forward
 	if server.Tls == nil {
 		if filters := buildGatewayNetworkFiltersFromTCPRoutes(node,
-			push, server, gatewaysForWorkload); len(filters) > 0 {
+			push, server, gatewayName); len(filters) > 0 {
 			return []*filterChainOpts{
 				{
 					sniHosts:       nil,
@@ -533,7 +534,7 @@ func (configgen *ConfigGeneratorImpl) createGatewayTCPFilterChainOpts(
 		// and forward to backend
 		// Validation ensures that non-passthrough servers will have certs
 		if filters := buildGatewayNetworkFiltersFromTCPRoutes(node,
-			push, server, gatewaysForWorkload); len(filters) > 0 {
+			push, server, gatewayName); len(filters) > 0 {
 			// If proxy version is over 1.1, and proxy sends metadata USER_SDS, then create SDS config for
 			// gateway listener.
 			return []*filterChainOpts{
@@ -546,7 +547,7 @@ func (configgen *ConfigGeneratorImpl) createGatewayTCPFilterChainOpts(
 		}
 	} else {
 		// Passthrough server.
-		return buildGatewayNetworkFiltersFromTLSRoutes(node, push, server, gatewaysForWorkload)
+		return buildGatewayNetworkFiltersFromTLSRoutes(node, push, server, gatewayName)
 	}
 
 	return []*filterChainOpts{}
@@ -556,7 +557,7 @@ func (configgen *ConfigGeneratorImpl) createGatewayTCPFilterChainOpts(
 // It first obtains all virtual services bound to the set of Gateways for this workload, filters them by this
 // server's port and hostnames, and produces network filters for each destination from the filtered services.
 func buildGatewayNetworkFiltersFromTCPRoutes(node *model.Proxy, push *model.PushContext, server *networking.Server,
-	gatewaysForWorkload map[string]bool) []*listener.Filter {
+	gatewayName string) []*listener.Filter {
 	port := &model.Port{
 		Name:     server.Port.Name,
 		Port:     int(server.Port.Number),
@@ -568,7 +569,7 @@ func buildGatewayNetworkFiltersFromTCPRoutes(node *model.Proxy, push *model.Push
 		gatewayServerHosts[host.Name(hostname)] = true
 	}
 
-	virtualServices := push.VirtualServices(node, gatewaysForWorkload)
+	virtualServices := push.VirtualServicesForGateway(node, gatewayName)
 	for _, v := range virtualServices {
 		vsvc := v.Spec.(*networking.VirtualService)
 		// We have two cases here:
@@ -585,7 +586,7 @@ func buildGatewayNetworkFiltersFromTCPRoutes(node *model.Proxy, push *model.Push
 		// For the moment, there can be only one match that succeeds
 		// based on the match port/server port and the gateway name
 		for _, tcp := range vsvc.Tcp {
-			if l4MultiMatch(tcp.Match, server, gatewaysForWorkload) {
+			if l4MultiMatch(tcp.Match, server, gatewayName) {
 				return buildOutboundNetworkFilters(node, tcp.Route, push, port, v.ConfigMeta)
 			}
 		}
@@ -598,7 +599,7 @@ func buildGatewayNetworkFiltersFromTCPRoutes(node *model.Proxy, push *model.Push
 // It first obtains all virtual services bound to the set of Gateways for this workload, filters them by this
 // server's port and hostnames, and produces network filters for each destination from the filtered services
 func buildGatewayNetworkFiltersFromTLSRoutes(node *model.Proxy, push *model.PushContext, server *networking.Server,
-	gatewaysForWorkload map[string]bool) []*filterChainOpts {
+	gatewayName string) []*filterChainOpts {
 	port := &model.Port{
 		Name:     server.Port.Name,
 		Port:     int(server.Port.Number),
@@ -620,7 +621,7 @@ func buildGatewayNetworkFiltersFromTLSRoutes(node *model.Proxy, push *model.Push
 			networkFilters: buildOutboundAutoPassthroughFilterStack(push, node, port),
 		})
 	} else {
-		virtualServices := push.VirtualServices(node, gatewaysForWorkload)
+		virtualServices := push.VirtualServicesForGateway(node, gatewayName)
 		for _, v := range virtualServices {
 			vsvc := v.Spec.(*networking.VirtualService)
 			// We have two cases here:
@@ -640,7 +641,7 @@ func buildGatewayNetworkFiltersFromTLSRoutes(node *model.Proxy, push *model.Push
 			// chain matches
 			for _, tls := range vsvc.Tls {
 				for _, match := range tls.Match {
-					if l4SingleMatch(convertTLSMatchToL4Match(match), server, gatewaysForWorkload) {
+					if l4SingleMatch(convertTLSMatchToL4Match(match), server, gatewayName) {
 						// the sni hosts in the match will become part of a filter chain match
 						filterChains = append(filterChains, &filterChainOpts{
 							sniHosts:       match.SniHosts,
@@ -695,11 +696,11 @@ func convertTLSMatchToL4Match(tlsMatch *networking.TLSMatchAttributes) *networki
 	}
 }
 
-func l4MultiMatch(predicates []*networking.L4MatchAttributes, server *networking.Server, gatewaysForWorkload map[string]bool) bool {
+func l4MultiMatch(predicates []*networking.L4MatchAttributes, server *networking.Server, gatewayName string) bool {
 	// NB from proto definitions: each set of predicates is OR'd together; inside of a predicate all conditions are AND'd.
 	// This means we can return as soon as we get any match of an entire predicate.
 	for _, match := range predicates {
-		if l4SingleMatch(match, server, gatewaysForWorkload) {
+		if l4SingleMatch(match, server, gatewayName) {
 			return true
 		}
 	}
@@ -707,9 +708,9 @@ func l4MultiMatch(predicates []*networking.L4MatchAttributes, server *networking
 	return len(predicates) == 0
 }
 
-func l4SingleMatch(match *networking.L4MatchAttributes, server *networking.Server, gatewaysForWorkload map[string]bool) bool {
+func l4SingleMatch(match *networking.L4MatchAttributes, server *networking.Server, gatewayName string) bool {
 	// if there's no gateway predicate, gatewayMatch is true; otherwise we match against the gateways for this workload
-	return isPortMatch(match.Port, server) && isGatewayMatch(gatewaysForWorkload, match.Gateways)
+	return isPortMatch(match.Port, server) && isGatewayMatch(gatewayName, match.Gateways)
 }
 
 func isPortMatch(port uint32, server *networking.Server) bool {
@@ -721,15 +722,19 @@ func isPortMatch(port uint32, server *networking.Server) bool {
 	return portMatch
 }
 
-func isGatewayMatch(gatewaysForWorkload map[string]bool, gatewayNames []string) bool {
+func isGatewayMatch(gateway string, gatewayNames []string) bool {
 	// if there's no gateway predicate, gatewayMatch is true; otherwise we match against the gateways for this workload
-	gatewayMatch := len(gatewayNames) == 0
+	if len(gatewayNames) == 0 {
+		return true
+	}
 	if len(gatewayNames) > 0 {
 		for _, gatewayName := range gatewayNames {
-			gatewayMatch = gatewayMatch || gatewaysForWorkload[gatewayName]
+			if gatewayName == gateway {
+				return true
+			}
 		}
 	}
-	return gatewayMatch
+	return false
 }
 
 func getSNIHostsForServer(server *networking.Server) []string {
@@ -757,12 +762,22 @@ func getSNIHostsForServer(server *networking.Server) []string {
 	return sniHostsSlice
 }
 
-func buildGatewayVirtualHostDomains(hostname string) []string {
+func buildGatewayVirtualHostDomains(hostname string, port int) []string {
 	domains := []string{hostname}
 	if hostname == "*" {
 		return domains
 	}
-	// To support gateway behind a LB with unknown port.
-	domains = append(domains, hostname+":*")
+
+	// Per https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/route/route_components.proto#route-virtualhost
+	// we can only have one wildcard. Ideally, we want to match any port, as the host
+	// header may have a different port (behind a LB, nodeport, etc). However, if we
+	// have a wildcard domain we cannot do that since we would need two wildcards.
+	// Therefore, we will preserve the original port if there is a wildcard host.
+	// TODO(https://github.com/envoyproxy/envoy/issues/12647) support wildcard host with wildcard port.
+	if len(hostname) > 0 && hostname[0] == '*' {
+		domains = append(domains, hostname+":"+strconv.Itoa(port))
+	} else {
+		domains = append(domains, hostname+":*")
+	}
 	return domains
 }
