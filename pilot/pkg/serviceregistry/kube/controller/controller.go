@@ -92,15 +92,23 @@ var (
 		"Events from k8s registry.",
 		monitoring.WithLabels(typeTag, eventTag),
 	)
-
+	// nolint: gocritic
+	// This is deprecated in favor of `pilot_k8s_endpoints_pending_pod`, which is a gauge indicating the number of
+	// currently missing pods. This helps distinguish transient errors from permanent ones
 	endpointsWithNoPods = monitoring.NewSum(
 		"pilot_k8s_endpoints_with_no_pods",
 		"Endpoints that does not have any corresponding pods.")
+
+	endpointsPendingPodUpdate = monitoring.NewGauge(
+		"pilot_k8s_endpoints_pending_pod",
+		"Number of endpoints that do not currently have any corresponding pods.",
+	)
 )
 
 func init() {
 	monitoring.MustRegister(k8sEvents)
 	monitoring.MustRegister(endpointsWithNoPods)
+	monitoring.MustRegister(endpointsPendingPodUpdate)
 }
 
 func incrementEvent(kind, event string) {
@@ -205,6 +213,7 @@ type Controller struct {
 	metadataClient metadata.Interface
 	queue          queue.Instance
 	services       cache.SharedIndexInformer
+	serviceLister  listerv1.ServiceLister
 	endpoints      kubeEndpointsController
 
 	podLocalitySource PodLocalitySource
@@ -220,8 +229,7 @@ type Controller struct {
 	domainSuffix         string
 	clusterID            string
 
-	serviceHandlers  []func(*model.Service, model.Event)
-	instanceHandlers []func(*model.ServiceInstance, model.Event)
+	serviceHandlers []func(*model.Service, model.Event)
 
 	// This is only used for test
 	stop chan struct{}
@@ -301,6 +309,7 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 
 	c.services = cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, options.ResyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	c.serviceLister = listerv1.NewServiceLister(c.services.GetIndexer())
 	registerHandlers(c.services, c.queue, "Services", c.onServiceEvent)
 
 	switch options.EndpointMode {
@@ -330,7 +339,16 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 		registerHandlers(c.filteredNodeInformer, c.queue, "Nodes", c.onNodeEvent)
 	}
 
-	c.pods = newPodCache(c, mrc, options)
+	c.pods = newPodCache(c, mrc, options, func(key string) {
+		item, exists, err := c.endpoints.getInformer().GetStore().GetByKey(key)
+		if err != nil || !exists {
+			log.Debugf("Endpoint %v lookup failed, skipping stale endpoint. error: %v", key, err)
+			return
+		}
+		c.queue.Push(func() error {
+			return c.endpoints.onEvent(item, model.EventUpdate)
+		})
+	})
 	registerHandlers(c.pods.informer, c.queue, "Pods", c.pods.onEvent)
 
 	return c
@@ -347,6 +365,19 @@ func (c *Controller) Cluster() string {
 func (c *Controller) checkReadyForEvents() error {
 	if !c.HasSynced() {
 		return errors.New("waiting till full synchronization")
+	}
+	return nil
+}
+
+func (c *Controller) Cleanup() error {
+	svcs, err := c.serviceLister.List(klabels.NewSelector())
+	if err != nil {
+		return fmt.Errorf("error listing services for deletion: %v", err)
+	}
+	for _, s := range svcs {
+		name := kube.ServiceHostname(s.Name, s.Namespace, c.domainSuffix)
+		c.xdsUpdater.SvcUpdate(c.clusterID, string(name), s.Namespace, model.EventDelete)
+		// TODO(landow) do we need to notify service handlers?
 	}
 	return nil
 }
@@ -401,7 +432,7 @@ func (c *Controller) onServiceEvent(curr interface{}, event model.Event) error {
 		c.Unlock()
 	}
 
-	c.xdsUpdater.SvcUpdate(c.clusterID, svc.Name, svc.Namespace, event)
+	c.xdsUpdater.SvcUpdate(c.clusterID, string(svcConv.Hostname), svc.Namespace, event)
 	// Notify service handlers.
 	for _, f := range c.serviceHandlers {
 		f(svcConv, event)
@@ -829,51 +860,46 @@ func (c *Controller) InstancesByPort(svc *model.Service, reqSvcPort int,
 
 // GetProxyServiceInstances returns service instances co-located with a given proxy
 func (c *Controller) GetProxyServiceInstances(proxy *model.Proxy) ([]*model.ServiceInstance, error) {
-	out := make([]*model.ServiceInstance, 0)
 	if len(proxy.IPAddresses) > 0 {
 		// only need to fetch the corresponding pod through the first IP, although there are multiple IP scenarios,
 		// because multiple ips belong to the same pod
 		proxyIP := proxy.IPAddresses[0]
 		pod := c.pods.getPodByIP(proxyIP)
 		if pod != nil {
-			// for split horizon EDS k8s multi cluster, in case there are pods of the same ip across clusters,
-			// which can happen when multi clusters using same pod cidr.
-			// As we have proxy Network meta, compare it with the network which endpoint belongs to,
-			// if they are not same, ignore the pod, because the pod is in another cluster.
-			if proxy.Metadata.Network != c.endpointNetwork(proxyIP) {
-				return out, nil
+			if !c.isControllerForProxy(proxy) {
+				return nil, fmt.Errorf("proxy is in cluster %v, but controller is for cluster %v", proxy.Metadata.ClusterID, c.clusterID)
 			}
+
 			// 1. find proxy service by label selector, if not any, there may exist headless service without selector
 			// failover to 2
 			if services, err := getPodServices(listerv1.NewServiceLister(c.services.GetIndexer()), pod); err == nil && len(services) > 0 {
+				out := make([]*model.ServiceInstance, 0)
 				for _, svc := range services {
 					out = append(out, c.getProxyServiceInstancesByPod(pod, svc, proxy)...)
 				}
 				return out, nil
 			}
 			// 2. Headless service without selector
-			out = c.endpoints.GetProxyServiceInstances(c, proxy)
-		} else {
-			var err error
-			// 3. The pod is not present when this is called
-			// due to eventual consistency issues. However, we have a lot of information about the pod from the proxy
-			// metadata already. Because of this, we can still get most of the information we need.
-			// If we cannot accurately construct ServiceInstances from just the metadata, this will return an error and we can
-			// attempt to read the real pod.
-			out, err = c.getProxyServiceInstancesFromMetadata(proxy)
-			if err != nil {
-				log.Warnf("getProxyServiceInstancesFromMetadata for %v failed: %v", proxy.ID, err)
-			}
+			return c.endpoints.GetProxyServiceInstances(c, proxy), nil
 		}
-	}
-	if len(out) == 0 {
-		if c.metrics != nil {
-			c.metrics.AddMetric(model.ProxyStatusNoService, proxy.ID, proxy, "")
-		} else {
-			log.Infof("Missing metrics env, empty list of services for pod %s", proxy.ID)
+		var err error
+		// 3. The pod is not present when this is called
+		// due to eventual consistency issues. However, we have a lot of information about the pod from the proxy
+		// metadata already. Because of this, we can still get most of the information we need.
+		// If we cannot accurately construct ServiceInstances from just the metadata, this will return an error and we can
+		// attempt to read the real pod.
+		out, err := c.getProxyServiceInstancesFromMetadata(proxy)
+		if err != nil {
+			log.Warnf("getProxyServiceInstancesFromMetadata for %v failed: %v", proxy.ID, err)
 		}
+		return out, nil
 	}
-	return out, nil
+	if c.metrics != nil {
+		c.metrics.AddMetric(model.ProxyStatusNoService, proxy.ID, proxy, "")
+	} else {
+		log.Infof("Missing metrics env, empty list of services for pod %s", proxy.ID)
+	}
+	return nil, nil
 }
 
 func getPodServices(s listerv1.ServiceLister, pod *v1.Pod) ([]*v1.Service, error) {
@@ -898,6 +924,12 @@ func getPodServices(s listerv1.ServiceLister, pod *v1.Pod) ([]*v1.Service, error
 	return services, nil
 }
 
+// isControllerForProxy should be used for proxies assumed to be in the kube cluster for this controller. Workload Entries
+// may not necessarily pass this check, but we still want to allow kube services to select workload instances.
+func (c *Controller) isControllerForProxy(proxy *model.Proxy) bool {
+	return proxy.Metadata.ClusterID == c.clusterID
+}
+
 // getProxyServiceInstancesFromMetadata retrieves ServiceInstances using proxy Metadata rather than
 // from the Pod. This allows retrieving Instances immediately, regardless of delays in Kubernetes.
 // If the proxy doesn't have enough metadata, an error is returned
@@ -906,7 +938,7 @@ func (c *Controller) getProxyServiceInstancesFromMetadata(proxy *model.Proxy) ([
 		return nil, fmt.Errorf("no workload labels found")
 	}
 
-	if proxy.Metadata.ClusterID != c.clusterID {
+	if !c.isControllerForProxy(proxy) {
 		return nil, fmt.Errorf("proxy is in cluster %v, but controller is for cluster %v", proxy.Metadata.ClusterID, c.clusterID)
 	}
 
@@ -1117,40 +1149,53 @@ func (c *Controller) AppendServiceHandler(f func(*model.Service, model.Event)) e
 
 // AppendInstanceHandler implements a service catalog operation
 func (c *Controller) AppendInstanceHandler(f func(*model.ServiceInstance, model.Event)) error {
-	c.instanceHandlers = append(c.instanceHandlers, f)
 	return nil
 }
 
-func (c *Controller) updateEDS(ep *v1.Endpoints, event model.Event) {
-	hostname := kube.ServiceHostname(ep.Name, ep.Namespace, c.domainSuffix)
-
-	c.RLock()
-	svc := c.servicesMap[hostname]
-	c.RUnlock()
-	if svc == nil {
-		log.Infof("Handle EDS endpoints: skip updating, service %s/%s has not been populated", ep.Name, ep.Namespace)
-		return
+// getPod fetches a pod by IP address.
+// A pod may be missing (nil) for two reasons:
+// * It is an endpoint without an associated Pod. In this case, expectPod will be false.
+// * It is an endpoint with an associate Pod, but its not found. In this case, expectPod will be true.
+//   this may happen due to eventually consistency issues, out of order events, etc. In this case, the caller
+//   should not precede with the endpoint, or inaccurate information would be sent which may have impacts on
+//   correctness and security.
+func getPod(c *Controller, ip string, ep *metav1.ObjectMeta, targetRef *v1.ObjectReference, host host.Name) (rpod *v1.Pod, expectPod bool) {
+	pod := c.pods.getPodByIP(ip)
+	if pod != nil {
+		return pod, false
 	}
+	// This means, the endpoint event has arrived before pod event.
+	// This might happen because PodCache is eventually consistent.
+	if targetRef != nil && targetRef.Kind == "Pod" {
+		key := kube.KeyFunc(targetRef.Name, targetRef.Namespace)
+		// There is a small chance getInformer may have the pod, but it hasn't
+		// made its way to the PodCache yet as it a shared queue.
+		podFromInformer, f, err := c.pods.informer.GetStore().GetByKey(key)
+		if err != nil || !f {
+			log.Debugf("Endpoint without pod %s %s.%s error: %v", ip, ep.Name, ep.Namespace, err)
+			endpointsWithNoPods.Increment()
+			if c.metrics != nil {
+				c.metrics.AddMetric(model.EndpointNoPod, string(host), nil, ip)
+			}
+			// Tell pod cache we want to queue the endpoint event when this pod arrives.
+			epkey := kube.KeyFunc(ep.Name, ep.Namespace)
+			c.pods.recordNeedsUpdate(epkey, ip)
+			return nil, true
+		}
+		pod = podFromInformer.(*v1.Pod)
+	}
+	return pod, false
+}
+
+func (c *Controller) updateEDS(ep *v1.Endpoints, event model.Event, epc *endpointsController) {
+	hostname := kube.ServiceHostname(ep.Name, ep.Namespace, c.domainSuffix)
 	endpoints := make([]*model.IstioEndpoint, 0)
 	if event != model.EventDelete {
 		for _, ss := range ep.Subsets {
 			for _, ea := range ss.Addresses {
-				pod := c.pods.getPodByIP(ea.IP)
-				if pod == nil {
-					// This means, the endpoint event has arrived before pod event. This might happen because
-					// PodCache is eventually consistent. We should try to get the pod from kube-api server.
-					if ea.TargetRef != nil && ea.TargetRef.Kind == "Pod" {
-						pod = c.pods.getPod(ea.TargetRef.Name, ea.TargetRef.Namespace)
-						if pod == nil {
-							// If pod is still not available, this an unusual case.
-							endpointsWithNoPods.Increment()
-							log.Errorf("Endpoint without pod %s %s.%s", ea.IP, ep.Name, ep.Namespace)
-							if c.metrics != nil {
-								c.metrics.AddMetric(model.EndpointNoPod, string(hostname), nil, ea.IP)
-							}
-							continue
-						}
-					}
+				pod, expectedUpdate := getPod(c, ea.IP, &metav1.ObjectMeta{Name: ep.Name, Namespace: ep.Namespace}, ea.TargetRef, hostname)
+				if pod == nil && expectedUpdate {
+					continue
 				}
 
 				builder := NewEndpointBuilder(c, pod)
@@ -1163,21 +1208,13 @@ func (c *Controller) updateEDS(ep *v1.Endpoints, event model.Event) {
 				}
 			}
 		}
+	} else {
+		epc.forgetEndpoint(ep)
 	}
 
 	log.Debugf("Handle EDS: %d endpoints for %s in namespace %s", len(endpoints), ep.Name, ep.Namespace)
 
 	_ = c.xdsUpdater.EDSUpdate(c.clusterID, string(hostname), ep.Namespace, endpoints)
-	for _, handler := range c.instanceHandlers {
-		for _, ep := range endpoints {
-			si := &model.ServiceInstance{
-				Service:     svc,
-				ServicePort: nil,
-				Endpoint:    ep,
-			}
-			handler(si, event)
-		}
-	}
 }
 
 // namedRangerEntry for holding network's CIDR and name

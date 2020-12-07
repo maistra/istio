@@ -16,6 +16,7 @@ package podman
 
 import (
 	"bytes"
+	"errors"
 	"os/exec"
 	"strings"
 	"sync"
@@ -25,83 +26,56 @@ var (
 	lock sync.Mutex = sync.Mutex{}
 )
 
-func Login(token, registry string) (string, error) {
-	lock.Lock()
-	defer lock.Unlock()
-
-	cmd := exec.Command("podman", "--storage-driver=vfs", "login", "--tls-verify=false", "--username=mec", "--password="+token, registry)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	return strings.TrimSpace(out.String()), err
+type Podman interface {
+	Login(token, registry string) (string, error)
+	Pull(image string) (string, error)
+	Create(image string) (string, error)
+	Copy(from, to string) (string, error)
+	RemoveContainer(containerID string) error
+	GetImageID(image string) (string, error)
 }
 
-func Pull(image string) (string, error) {
-	lock.Lock()
-	defer lock.Unlock()
+type podman struct{}
 
-	cmd := exec.Command("podman", "--storage-driver=vfs", "pull", "--tls-verify=false", image)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(out.String()), err
+func NewPodman() Podman {
+	return &podman{}
 }
 
-func Create(image string) (string, error) {
-	lock.Lock()
-	defer lock.Unlock()
-
-	cmd := exec.Command("podman", "--storage-driver=vfs", "create", image, ".")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(out.String()), err
+func (p *podman) Login(registry, token string) (string, error) {
+	return p.runCommand("login", "--tls-verify=false", "--username=mec", "--password="+token, registry)
 }
 
-func Copy(from, to string) (string, error) {
-	lock.Lock()
-	defer lock.Unlock()
-
-	cmd := exec.Command("podman", "--storage-driver=vfs", "cp", from, to)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(out.String()), err
+func (p *podman) Pull(image string) (string, error) {
+	return p.runCommand("pull", "--tls-verify=false", image)
 }
 
-func RemoveContainer(containerID string) error {
-	lock.Lock()
-	defer lock.Unlock()
+func (p *podman) Create(image string) (string, error) {
+	return p.runCommand("create", image, ".")
+}
 
-	cmd := exec.Command("podman", "--storage-driver=vfs", "rm", containerID)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return err
-	}
+func (p *podman) Copy(from, to string) (string, error) {
+	return p.runCommand("cp", from, to)
+}
+
+func (p *podman) RemoveContainer(containerID string) error {
+	_, err := p.runCommand("rm", containerID)
 	return err
 }
 
-func GetImageID(image string) (string, error) {
+func (p *podman) GetImageID(image string) (string, error) {
+	return p.runCommand("image", "ls", "-nq", image)
+}
+
+func (p *podman) runCommand(args ...string) (string, error) {
 	lock.Lock()
 	defer lock.Unlock()
-
-	cmd := exec.Command("podman", "--storage-driver=vfs", "image", "ls", "-nq", image)
-	var out bytes.Buffer
+	cmd := exec.Command("podman", append([]string{"--storage-driver=vfs"}, args...)...)
+	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
+	cmd.Stderr = &errOut
 	err := cmd.Run()
 	if err != nil {
-		return "", err
+		err = errors.New(strings.TrimSpace(errOut.String()))
 	}
 	return strings.TrimSpace(out.String()), err
 }

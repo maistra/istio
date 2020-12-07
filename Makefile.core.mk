@@ -22,7 +22,7 @@ SHELL := /bin/bash -o pipefail
 VERSION ?= 1.6-dev
 
 # Base version of Istio image to use
-BASE_VERSION ?= 1.6-dev.5
+BASE_VERSION ?= 1.6-dev.12
 
 export GO111MODULE ?= on
 export GOPROXY ?= https://proxy.golang.org
@@ -443,7 +443,7 @@ with_junit_report: | $(JUNIT_REPORT)
 
 # Run coverage tests
 ifeq ($(WHAT),)
-       TEST_OBJ = common-test pilot-test mixer-test security-test galley-test istioctl-test operator-test
+       TEST_OBJ = common-test mec-test pilot-test mixer-test security-test galley-test istioctl-test operator-test
 else
        TEST_OBJ = selected-pkg-test
 endif
@@ -453,6 +453,10 @@ test: | $(JUNIT_REPORT)
 	2>&1 | tee >($(JUNIT_REPORT) > $(JUNIT_OUT))
 
 # TODO: remove the racetest targets and just have *-test targets that call race
+
+.PHONY: mec-test
+mec-test:
+	go test ${GOBUILDFLAGS} ${T} ./mec/...
 
 .PHONY: pilot-test
 pilot-test: pilot-racetest

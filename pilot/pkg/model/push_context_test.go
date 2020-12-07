@@ -29,12 +29,15 @@ import (
 	securityBeta "istio.io/api/security/v1beta1"
 	selectorpb "istio.io/api/type/v1beta1"
 
+	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/host"
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
 	"istio.io/istio/pkg/config/visibility"
+	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	"istio.io/istio/pkg/servicemesh/model"
 )
 
 func TestMergeUpdateRequest(t *testing.T) {
@@ -229,6 +232,124 @@ func TestEnvoyFilters(t *testing.T) {
 	}
 }
 
+func TestExtensions(t *testing.T) {
+	extensionsTestNamespace := []*model.ExtensionWrapper{
+		{
+			Name:             "v1",
+			Phase:            v1alpha1.FilterPhasePreAuthN,
+			WorkloadSelector: map[string]string{"app": "v1"},
+		},
+		{
+			Name:             "v2",
+			Phase:            v1alpha1.FilterPhasePostAuthN,
+			WorkloadSelector: map[string]string{"app": "v2"},
+		},
+	}
+	extensionsRootNamespace := []*model.ExtensionWrapper{
+		{
+			Name:             "globalv1",
+			Phase:            v1alpha1.FilterPhasePreAuthZ,
+			WorkloadSelector: map[string]string{"app": "v1"},
+		},
+		{
+			Name:             "globalv3",
+			Phase:            v1alpha1.FilterPhasePostAuthZ,
+			WorkloadSelector: map[string]string{"app": "v3"},
+		},
+	}
+
+	push := &PushContext{
+		Mesh: &meshconfig.MeshConfig{
+			RootNamespace: "istio-system",
+		},
+		extensionsByNamespace: map[string][]*model.ExtensionWrapper{
+			"istio-system": extensionsRootNamespace,
+			"test-ns":      extensionsTestNamespace,
+		},
+	}
+
+	cases := []struct {
+		name               string
+		proxy              *Proxy
+		expectedExtensions map[v1alpha1.FilterPhase][]*model.ExtensionWrapper
+	}{
+		{
+			name: "proxy matches two extensions",
+			proxy: &Proxy{
+				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v1"}},
+				ConfigNamespace: "test-ns",
+			},
+			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
+				v1alpha1.FilterPhasePreAuthN: {
+					{
+						Name:             "v1",
+						Phase:            v1alpha1.FilterPhasePreAuthN,
+						WorkloadSelector: map[string]string{"app": "v1"},
+					},
+				},
+				v1alpha1.FilterPhasePreAuthZ: {
+					{
+						Name:             "globalv1",
+						Phase:            v1alpha1.FilterPhasePreAuthZ,
+						WorkloadSelector: map[string]string{"app": "v1"},
+					},
+				},
+			},
+		},
+		{
+			name: "proxy in root namespace matches an extension",
+			proxy: &Proxy{
+				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v3"}},
+				ConfigNamespace: "istio-system",
+			},
+			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
+				v1alpha1.FilterPhasePostAuthZ: {
+					{
+						Name:             "globalv3",
+						Phase:            v1alpha1.FilterPhasePostAuthZ,
+						WorkloadSelector: map[string]string{"app": "v3"},
+					},
+				},
+			},
+		},
+
+		{
+			name: "proxy matches no extension",
+			proxy: &Proxy{
+				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v4"}},
+				ConfigNamespace: "test-ns",
+			},
+			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{},
+		},
+
+		{
+			name: "proxy matches extension in root ns",
+			proxy: &Proxy{
+				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v3"}},
+				ConfigNamespace: "test-n2",
+			},
+			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
+				v1alpha1.FilterPhasePostAuthZ: {
+					{
+						Name:             "globalv3",
+						Phase:            v1alpha1.FilterPhasePostAuthZ,
+						WorkloadSelector: map[string]string{"app": "v3"},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			extensions := push.Extensions(tt.proxy)
+			if !cmp.Equal(extensions, tt.expectedExtensions) {
+				t.Errorf("%s: Extension mismatch, +got -want: %s", tt.name, cmp.Diff(extensions, tt.expectedExtensions))
+			}
+		})
+	}
+}
+
 func TestSidecarScope(t *testing.T) {
 	ps := NewPushContext()
 	env := &Environment{Watcher: mesh.NewFixedWatcher(&meshconfig.MeshConfig{RootNamespace: "istio-system"})}
@@ -399,7 +520,7 @@ func scopeToSidecar(scope *SidecarScope) string {
 	return scope.Config.Namespace + "/" + scope.Config.Name
 }
 
-func TestSetDestinationRule(t *testing.T) {
+func TestSetDestinationRuleMerging(t *testing.T) {
 	ps := NewPushContext()
 	ps.defaultDestinationRuleExportTo = map[visibility.Instance]bool{visibility.Public: true}
 	testhost := "httpbin.org"
@@ -439,7 +560,7 @@ func TestSetDestinationRule(t *testing.T) {
 	}
 	ps.SetDestinationRules([]Config{destinationRuleNamespace1, destinationRuleNamespace2})
 	subsetsLocal := ps.namespaceLocalDestRules["test"].destRule[host.Name(testhost)].Spec.(*networking.DestinationRule).Subsets
-	subsetsExport := ps.namespaceExportedDestRules["test"].destRule[host.Name(testhost)].Spec.(*networking.DestinationRule).Subsets
+	subsetsExport := ps.exportedDestRulesByNamespace["test"].destRule[host.Name(testhost)].Spec.(*networking.DestinationRule).Subsets
 	if len(subsetsLocal) != 4 {
 		t.Errorf("want %d, but got %d", 4, len(subsetsLocal))
 	}
@@ -449,75 +570,413 @@ func TestSetDestinationRule(t *testing.T) {
 	}
 }
 
-func TestSubsetToLabels(t *testing.T) {
+func TestSetDestinationRuleWithExportTo(t *testing.T) {
 	ps := NewPushContext()
-	ps.defaultDestinationRuleExportTo = map[visibility.Instance]bool{visibility.Public: true}
-	ps.Mesh = &meshconfig.MeshConfig{
-		RootNamespace: "istio-system",
-	}
+	ps.Mesh = &meshconfig.MeshConfig{RootNamespace: "istio-system"}
 	testhost := "httpbin.org"
 	destinationRuleNamespace1 := Config{
 		ConfigMeta: ConfigMeta{
 			Name:      "rule1",
-			Namespace: "test",
+			Namespace: "test1",
 		},
 		Spec: &networking.DestinationRule{
-			Host: testhost,
+			Host:     testhost,
+			ExportTo: []string{".", "ns1"},
 			Subsets: []*networking.Subset{
 				{
 					Name: "subset1",
 				},
 				{
-					Name:   "subset2",
-					Labels: map[string]string{},
+					Name: "subset2",
 				},
+			},
+		},
+	}
+	destinationRuleNamespace2 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule2",
+			Namespace: "test2",
+		},
+		Spec: &networking.DestinationRule{
+			Host:     testhost,
+			ExportTo: []string{"test2", "ns1", "test1"},
+			Subsets: []*networking.Subset{
 				{
 					Name: "subset3",
-					Labels: map[string]string{
-						"a": "b",
-					},
+				},
+				{
+					Name: "subset4",
 				},
 			},
 		},
 	}
-	proxy := &Proxy{
-		Metadata:        &NodeMetadata{IstioVersion: "1.6.0"},
-		ConfigNamespace: "test",
+	destinationRuleNamespace3 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule3",
+			Namespace: "test3",
+		},
+		Spec: &networking.DestinationRule{
+			Host:     testhost,
+			ExportTo: []string{"test1", "test2", "*"},
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset5",
+				},
+				{
+					Name: "subset6",
+				},
+			},
+		},
 	}
-
-	ps.SetDestinationRules([]Config{destinationRuleNamespace1})
-
-	for _, test := range []struct {
-		name     string
-		subset   string
-		expected labels.Collection
+	destinationRuleRootNamespace := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule4",
+			Namespace: "istio-system",
+		},
+		Spec: &networking.DestinationRule{
+			Host: testhost,
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset7",
+				},
+				{
+					Name: "subset8",
+				},
+			},
+		},
+	}
+	destinationRuleRootNamespaceLocal := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule1",
+			Namespace: "istio-system",
+		},
+		Spec: &networking.DestinationRule{
+			Host:     testhost,
+			ExportTo: []string{"."},
+			Subsets: []*networking.Subset{
+				{
+					Name: "subset9",
+				},
+				{
+					Name: "subset10",
+				},
+			},
+		},
+	}
+	ps.SetDestinationRules([]Config{destinationRuleNamespace1, destinationRuleNamespace2,
+		destinationRuleNamespace3, destinationRuleRootNamespace, destinationRuleRootNamespaceLocal})
+	cases := []struct {
+		proxyNs     string
+		serviceNs   string
+		wantSubsets []string
 	}{
 		{
-			name:     "No labels",
-			subset:   "subset1",
-			expected: nil,
+			proxyNs:     "test1",
+			serviceNs:   "test1",
+			wantSubsets: []string{"subset1", "subset2"},
 		},
 		{
-			name:     "Empty labels",
-			subset:   "subset2",
-			expected: nil,
+			proxyNs:     "test1",
+			serviceNs:   "test2",
+			wantSubsets: []string{"subset1", "subset2"},
 		},
 		{
-			name:   "With labels",
-			subset: "subset3",
-			expected: labels.Collection{
-				{
-					"a": "b",
-				},
-			},
+			proxyNs:     "test2",
+			serviceNs:   "test1",
+			wantSubsets: []string{"subset3", "subset4"},
 		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			labelsCollection := ps.SubsetToLabels(proxy, test.subset, host.Name(testhost))
-			if cmp.Diff(labelsCollection, test.expected) != "" {
-				t.Errorf("want %v, but got %v", test.expected, labelsCollection)
+		{
+			proxyNs:     "test3",
+			serviceNs:   "test1",
+			wantSubsets: []string{"subset5", "subset6"},
+		},
+		{
+			proxyNs:     "ns1",
+			serviceNs:   "test1",
+			wantSubsets: []string{"subset1", "subset2"},
+		},
+		{
+			proxyNs:     "ns1",
+			serviceNs:   "random",
+			wantSubsets: []string{"subset7", "subset8"},
+		},
+		{
+			proxyNs:     "random",
+			serviceNs:   "random",
+			wantSubsets: []string{"subset7", "subset8"},
+		},
+		{
+			proxyNs:     "test3",
+			serviceNs:   "random",
+			wantSubsets: []string{"subset5", "subset6"},
+		},
+		{
+			proxyNs:     "istio-system",
+			serviceNs:   "random",
+			wantSubsets: []string{"subset9", "subset10"},
+		},
+		{
+			proxyNs:     "istio-system",
+			serviceNs:   "istio-system",
+			wantSubsets: []string{"subset9", "subset10"},
+		},
+	}
+	for _, tt := range cases {
+		t.Run(fmt.Sprintf("%s-%s", tt.proxyNs, tt.serviceNs), func(t *testing.T) {
+			destRuleConfig := ps.DestinationRule(&Proxy{ConfigNamespace: tt.proxyNs},
+				&Service{Hostname: host.Name(testhost), Attributes: ServiceAttributes{Namespace: tt.serviceNs}})
+			if destRuleConfig == nil {
+				t.Fatalf("proxy in %s namespace: dest rule is nil, expected subsets %+v", tt.proxyNs, tt.wantSubsets)
+			}
+			destRule := destRuleConfig.Spec.(*networking.DestinationRule)
+			var gotSubsets []string
+			for _, ss := range destRule.Subsets {
+				gotSubsets = append(gotSubsets, ss.Name)
+			}
+			if !reflect.DeepEqual(gotSubsets, tt.wantSubsets) {
+				t.Fatalf("want %+v, got %+v", tt.wantSubsets, gotSubsets)
 			}
 		})
+	}
+}
+
+func TestVirtualServiceWithExportTo(t *testing.T) {
+	ps := NewPushContext()
+	env := &Environment{Watcher: mesh.NewFixedWatcher(&meshconfig.MeshConfig{RootNamespace: "zzz"})}
+	ps.Mesh = env.Mesh()
+	ps.ServiceDiscovery = env
+	configStore := NewFakeStore()
+	gatewayName := "default/gateway"
+
+	rule1 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule1",
+			Namespace: "test1",
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Group:     collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Group(),
+			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
+		},
+		Spec: &networking.VirtualService{
+			Hosts:    []string{"rule1.com"},
+			ExportTo: []string{".", "ns1"},
+		},
+	}
+	rule2 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule2",
+			Namespace: "test2",
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Group:     collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Group(),
+			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
+		},
+		Spec: &networking.VirtualService{
+			Hosts:    []string{"rule2.com"},
+			ExportTo: []string{"test2", "ns1", "test1"},
+		},
+	}
+	rule2Gw := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule2Gw",
+			Namespace: "test2",
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Group:     collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Group(),
+			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
+		},
+		Spec: &networking.VirtualService{
+			Gateways: []string{gatewayName, constants.IstioMeshGateway},
+			Hosts:    []string{"rule2gw.com"},
+			ExportTo: []string{"test2", "ns1", "test1"},
+		},
+	}
+	rule3 := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule3",
+			Namespace: "test3",
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Group:     collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Group(),
+			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
+		},
+		Spec: &networking.VirtualService{
+			Gateways: []string{constants.IstioMeshGateway},
+			Hosts:    []string{"rule3.com"},
+			ExportTo: []string{"test1", "test2", "*"},
+		},
+	}
+	rule3Gw := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "rule3Gw",
+			Namespace: "test3",
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Group:     collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Group(),
+			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
+		},
+		Spec: &networking.VirtualService{
+			Gateways: []string{gatewayName},
+			Hosts:    []string{"rule3gw.com"},
+			ExportTo: []string{"test1", "test2", "*"},
+		},
+	}
+	rootNS := Config{
+		ConfigMeta: ConfigMeta{
+			Name:      "zzz",
+			Namespace: "zzz",
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Group:     collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Group(),
+			Version:   collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Version(),
+		},
+		Spec: &networking.VirtualService{
+			Hosts: []string{"rootNS.com"},
+		},
+	}
+
+	for _, c := range []Config{rule1, rule2, rule3, rule2Gw, rule3Gw, rootNS} {
+		if _, err := configStore.Create(c); err != nil {
+			t.Fatalf("could not create %v", c.Name)
+		}
+	}
+
+	store := istioConfigStore{ConfigStore: configStore}
+	env.IstioConfigStore = &store
+	ps.initDefaultExportMaps()
+	if err := ps.initVirtualServices(env); err != nil {
+		t.Fatalf("init virtual services failed: %v", err)
+	}
+
+	cases := []struct {
+		proxyNs   string
+		gateway   string
+		wantHosts []string
+	}{
+		{
+			proxyNs:   "test1",
+			wantHosts: []string{"rule1.com", "rule2.com", "rule2gw.com", "rule3.com", "rootNS.com"},
+			gateway:   constants.IstioMeshGateway,
+		},
+		{
+			proxyNs:   "test2",
+			wantHosts: []string{"rule2.com", "rule2gw.com", "rule3.com", "rootNS.com"},
+			gateway:   constants.IstioMeshGateway,
+		},
+		{
+			proxyNs:   "ns1",
+			wantHosts: []string{"rule1.com", "rule2.com", "rule2gw.com", "rule3.com", "rootNS.com"},
+			gateway:   constants.IstioMeshGateway,
+		},
+		{
+			proxyNs:   "random",
+			wantHosts: []string{"rule3.com", "rootNS.com"},
+			gateway:   constants.IstioMeshGateway,
+		},
+		{
+			proxyNs:   "test1",
+			wantHosts: []string{"rule2gw.com", "rule3gw.com"},
+			gateway:   gatewayName,
+		},
+		{
+			proxyNs:   "test2",
+			wantHosts: []string{"rule2gw.com", "rule3gw.com"},
+			gateway:   gatewayName,
+		},
+		{
+			proxyNs:   "ns1",
+			wantHosts: []string{"rule2gw.com", "rule3gw.com"},
+			gateway:   gatewayName,
+		},
+		{
+			proxyNs:   "random",
+			wantHosts: []string{"rule3gw.com"},
+			gateway:   gatewayName,
+		},
+	}
+	for _, tt := range cases {
+		t.Run(fmt.Sprintf("%s-%s", tt.proxyNs, tt.gateway), func(t *testing.T) {
+			rules := ps.VirtualServicesForGateway(&Proxy{ConfigNamespace: tt.proxyNs}, tt.gateway)
+			gotHosts := make([]string, 0)
+			for _, r := range rules {
+				vs := r.Spec.(*networking.VirtualService)
+				gotHosts = append(gotHosts, vs.Hosts...)
+			}
+			if !reflect.DeepEqual(gotHosts, tt.wantHosts) {
+				t.Errorf("want %+v, got %+v", tt.wantHosts, gotHosts)
+			}
+		})
+	}
+}
+func TestServiceWithExportTo(t *testing.T) {
+	ps := NewPushContext()
+	env := &Environment{Watcher: mesh.NewFixedWatcher(&meshconfig.MeshConfig{RootNamespace: "zzz"})}
+	ps.Mesh = env.Mesh()
+	ps.ServiceDiscovery = env
+
+	svc1 := &Service{
+		Hostname: "svc1",
+		Attributes: ServiceAttributes{
+			Namespace: "test1",
+			ExportTo:  map[visibility.Instance]bool{visibility.Private: true, visibility.Instance("ns1"): true},
+		},
+	}
+	svc2 := &Service{
+		Hostname: "svc2",
+		Attributes: ServiceAttributes{
+			Namespace: "test2",
+			ExportTo: map[visibility.Instance]bool{visibility.Instance("test1"): true,
+				visibility.Instance("ns1"):   true,
+				visibility.Instance("test2"): true},
+		},
+	}
+	svc3 := &Service{
+		Hostname: "svc3",
+		Attributes: ServiceAttributes{
+			Namespace: "test3",
+			ExportTo: map[visibility.Instance]bool{visibility.Instance("test1"): true,
+				visibility.Public:            true,
+				visibility.Instance("test2"): true},
+		},
+	}
+	svc4 := &Service{
+		Hostname: "svc4",
+		Attributes: ServiceAttributes{
+			Namespace: "test4",
+		},
+	}
+	env.ServiceDiscovery = &localServiceDiscovery{
+		services: []*Service{svc1, svc2, svc3, svc4},
+	}
+	ps.initDefaultExportMaps()
+	if err := ps.initServiceRegistry(env); err != nil {
+		t.Fatalf("init services failed: %v", err)
+	}
+
+	cases := []struct {
+		proxyNs   string
+		wantHosts []string
+	}{
+		{
+			proxyNs:   "test1",
+			wantHosts: []string{"svc1", "svc2", "svc3", "svc4"},
+		},
+		{
+			proxyNs:   "test2",
+			wantHosts: []string{"svc2", "svc3", "svc4"},
+		},
+		{
+			proxyNs:   "ns1",
+			wantHosts: []string{"svc1", "svc2", "svc3", "svc4"},
+		},
+		{
+			proxyNs:   "random",
+			wantHosts: []string{"svc3", "svc4"},
+		},
+	}
+	for _, tt := range cases {
+		services := ps.Services(&Proxy{ConfigNamespace: tt.proxyNs})
+		gotHosts := make([]string, 0)
+		for _, r := range services {
+			gotHosts = append(gotHosts, string(r.Hostname))
+		}
+		if !reflect.DeepEqual(gotHosts, tt.wantHosts) {
+			t.Errorf("proxy in %s namespace: want %+v, got %+v", tt.proxyNs, tt.wantHosts, gotHosts)
+		}
 	}
 }
 
@@ -635,4 +1094,41 @@ func TestIsClusterLocal(t *testing.T) {
 			g.Expect(clusterLocal).To(Equal(c.expected))
 		})
 	}
+}
+
+// MockDiscovery is an in-memory ServiceDiscover with mock services
+type localServiceDiscovery struct {
+	services []*Service
+}
+
+func (l *localServiceDiscovery) Services() ([]*Service, error) {
+	return l.services, nil
+}
+
+func (l *localServiceDiscovery) GetService(hostname host.Name) (*Service, error) {
+	panic("implement me")
+}
+
+func (l *localServiceDiscovery) InstancesByPort(svc *Service, servicePort int, labels labels.Collection) ([]*ServiceInstance, error) {
+	panic("implement me")
+}
+
+func (l *localServiceDiscovery) GetProxyServiceInstances(proxy *Proxy) ([]*ServiceInstance, error) {
+	panic("implement me")
+}
+
+func (l *localServiceDiscovery) GetProxyWorkloadLabels(proxy *Proxy) (labels.Collection, error) {
+	panic("implement me")
+}
+
+func (l *localServiceDiscovery) ManagementPorts(addr string) PortList {
+	panic("implement me")
+}
+
+func (l *localServiceDiscovery) WorkloadHealthCheckInfo(addr string) ProbeList {
+	panic("implement me")
+}
+
+func (l *localServiceDiscovery) GetIstioServiceAccounts(svc *Service, ports []int) []string {
+	panic("implement me")
 }

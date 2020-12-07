@@ -29,19 +29,21 @@ type ImageRef struct {
 }
 
 type Manifest struct {
-	SchemaVersion ManifestSchemaVersion `json:"schemaVersion"`
-	Name          string                `json:"name"`
-	Description   string                `json:"description"`
-	Version       string                `json:"version"`
-	Phase         v1alpha1.FilterPhase  `json:"phase"`
-	Priority      int                   `json:"priority"`
-	Module        string                `json:"module"`
+	SchemaVersion ManifestSchemaVersion `yaml:"schemaVersion"`
+	Name          string                `yaml:"name"`
+	Description   string                `yaml:"description"`
+	Version       string                `yaml:"version"`
+	Phase         v1alpha1.FilterPhase  `yaml:"phase"`
+	Priority      int                   `yaml:"priority"`
+	Module        string                `yaml:"module"`
 }
 
 type ManifestSchemaVersion string
 
 const (
 	ManifestSchemaVersion1 = "1"
+
+	legalSHA256Chars = "0123456789abcdef"
 )
 
 func (i *ImageRef) String() string {
@@ -51,25 +53,52 @@ func (i *ImageRef) String() string {
 	return fmt.Sprintf("%s/%s:%s", i.Hub, i.Repository, i.Tag)
 }
 
-func StringToImageRef(ref string) *ImageRef {
-	colonSplit := strings.SplitN(ref, ":", 2)
-	tag := colonSplit[1]
-	slashSplit := strings.Split(colonSplit[0], "/")
-	repo := slashSplit[len(slashSplit)-1]
-	hub := strings.Join(slashSplit[:len(slashSplit)-1], "/")
+func StringToImageRef(ref string) (result *ImageRef) {
+	var tag, sha string
+	var uri string
+	if i := strings.Index(ref, "@"); i > -1 {
+		uri = ref[:i]
+		sha = ref[i+8:] // len("@sha256:") == 8
+		if len(sha) != 64 {
+			return nil
+		}
+		for i := 0; i < len(sha); i++ {
+			if !strings.Contains(legalSHA256Chars, sha[i:i+1]) { //nolint
+				return nil
+			}
+		}
+	} else {
+		refSplit := strings.Split(ref, ":")
+		if len(refSplit) < 2 || len(refSplit) > 3 {
+			return nil
+		} else if len(refSplit) == 3 {
+			// hostname can come with port
+			refSplit = []string{strings.Join(refSplit[:2], ":"), refSplit[2]}
+		}
+		uri = refSplit[0]
+		tag = refSplit[1]
+	}
 
-	shaIndex := strings.Index(tag, "sha256:")
-	if shaIndex == -1 {
-		return &ImageRef{
+	uriSplit := strings.Split(uri, "/")
+	if len(uriSplit) < 2 {
+		return nil
+	}
+	hub := strings.Join(uriSplit[:len(uriSplit)-1], "/")
+	repo := uriSplit[len(uriSplit)-1]
+
+	if sha != "" {
+		result = &ImageRef{
 			Hub:        hub,
-			Tag:        tag,
 			Repository: repo,
+			SHA256:     sha,
+		}
+	} else {
+		result = &ImageRef{
+			Hub:        hub,
+			Repository: repo,
+			Tag:        tag,
 		}
 	}
 
-	return &ImageRef{
-		Hub:        hub,
-		SHA256:     tag[shaIndex+7:],
-		Repository: repo,
-	}
+	return result
 }

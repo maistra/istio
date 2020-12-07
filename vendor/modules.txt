@@ -697,8 +697,11 @@ github.com/openshift/api/image/dockerpre012
 github.com/openshift/api/image/v1
 github.com/openshift/api/route/v1
 # github.com/openshift/client-go v0.0.0-20200623090625-83993cebb5ae
+github.com/openshift/client-go/image/clientset/versioned
+github.com/openshift/client-go/image/clientset/versioned/fake
 github.com/openshift/client-go/image/clientset/versioned/scheme
 github.com/openshift/client-go/image/clientset/versioned/typed/image/v1
+github.com/openshift/client-go/image/clientset/versioned/typed/image/v1/fake
 github.com/openshift/client-go/route/clientset/versioned/scheme
 github.com/openshift/client-go/route/clientset/versioned/typed/route/v1
 # github.com/opentracing/opentracing-go v1.0.2
@@ -1053,7 +1056,7 @@ helm.sh/helm/v3/pkg/chart
 helm.sh/helm/v3/pkg/chart/loader
 helm.sh/helm/v3/pkg/chartutil
 helm.sh/helm/v3/pkg/engine
-# istio.io/api v0.0.0-20200715212100-dbf5277541ef
+# istio.io/api v0.0.0-20201113182140-d4b7e3fc2b44
 istio.io/api/annotation
 istio.io/api/authentication/v1alpha1
 istio.io/api/label
@@ -1068,10 +1071,10 @@ istio.io/api/policy/v1beta1
 istio.io/api/rbac/v1alpha1
 istio.io/api/security/v1beta1
 istio.io/api/type/v1beta1
-# istio.io/gogo-genproto v0.0.0-20200511213158-02f1fd1746e5
+# istio.io/gogo-genproto v0.0.0-20201113182723-5b8563d8a012
 istio.io/gogo-genproto/googleapis/google/api
 istio.io/gogo-genproto/googleapis/google/rpc
-# istio.io/pkg v0.0.0-20200511212725-7bfbbf968c23
+# istio.io/pkg v0.0.0-20201113182530-a5cdf6e8c3cd
 istio.io/pkg/appsignals
 istio.io/pkg/attribute
 istio.io/pkg/cache

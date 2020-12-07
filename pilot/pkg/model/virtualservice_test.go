@@ -15,6 +15,7 @@
 package model
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -26,6 +27,7 @@ import (
 
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pkg/config/schema/collections"
+	"istio.io/istio/pkg/config/visibility"
 )
 
 func TestMergeVirtualServices(t *testing.T) {
@@ -60,7 +62,7 @@ func TestMergeVirtualServices(t *testing.T) {
 		ConfigMeta: ConfigMeta{
 			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
 			Name:      "root-vs",
-			Namespace: "default",
+			Namespace: "istio-system",
 		},
 		Spec: &networking.VirtualService{
 			Hosts:    []string{"*.org"},
@@ -104,7 +106,7 @@ func TestMergeVirtualServices(t *testing.T) {
 		ConfigMeta: ConfigMeta{
 			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
 			Name:      "root-vs",
-			Namespace: "default",
+			Namespace: "istio-system",
 		},
 		Spec: &networking.VirtualService{
 			Hosts:    []string{"*.org"},
@@ -135,6 +137,7 @@ func TestMergeVirtualServices(t *testing.T) {
 		Spec: &networking.VirtualService{
 			Hosts:    []string{},
 			Gateways: []string{"gateway"},
+			ExportTo: []string{"istio-system"},
 			Http: []*networking.HTTPRoute{
 				{
 					Match: []*networking.HTTPMatchRequest{
@@ -193,11 +196,24 @@ func TestMergeVirtualServices(t *testing.T) {
 		},
 	}
 
+	delegateVsNotExported := Config{
+		ConfigMeta: ConfigMeta{
+			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
+			Name:      "productpage-vs",
+			Namespace: "default2",
+		},
+		Spec: &networking.VirtualService{
+			Hosts:    []string{},
+			Gateways: []string{"gateway"},
+			ExportTo: []string{"."},
+		},
+	}
+
 	mergedVs := Config{
 		ConfigMeta: ConfigMeta{
 			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
 			Name:      "root-vs",
-			Namespace: "default",
+			Namespace: "istio-system",
 		},
 		Spec: &networking.VirtualService{
 			Hosts:    []string{"*.org"},
@@ -367,7 +383,7 @@ func TestMergeVirtualServices(t *testing.T) {
 		ConfigMeta: ConfigMeta{
 			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
 			Name:      "root-vs",
-			Namespace: "default",
+			Namespace: "istio-system",
 		},
 		Spec: &networking.VirtualService{
 			Hosts:    []string{"*.org"},
@@ -434,7 +450,7 @@ func TestMergeVirtualServices(t *testing.T) {
 		ConfigMeta: ConfigMeta{
 			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
 			Name:      "root-vs",
-			Namespace: "default",
+			Namespace: "istio-system",
 		},
 		Spec: &networking.VirtualService{
 			Hosts:    []string{"*.org"},
@@ -504,7 +520,7 @@ func TestMergeVirtualServices(t *testing.T) {
 		ConfigMeta: ConfigMeta{
 			Type:      collections.IstioNetworkingV1Alpha3Virtualservices.Resource().Kind(),
 			Name:      "root-vs",
-			Namespace: "default",
+			Namespace: "istio-system",
 		},
 		Spec: &networking.VirtualService{
 			Hosts:    []string{"*.org"},
@@ -592,11 +608,16 @@ func TestMergeVirtualServices(t *testing.T) {
 			virtualServices:         []Config{multiRoutes.DeepCopy(), singleDelegate},
 			expectedVirtualServices: []Config{mergedVs3},
 		},
+		{
+			name:                    "delegate not exported to root vs namespace",
+			virtualServices:         []Config{rootVs, delegateVsNotExported},
+			expectedVirtualServices: []Config{oneRoot},
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := mergeVirtualServicesIfNeeded(tc.virtualServices)
+			got := mergeVirtualServicesIfNeeded(tc.virtualServices, map[visibility.Instance]bool{visibility.Public: true})
 			if !reflect.DeepEqual(got, tc.expectedVirtualServices) {
 				t.Errorf("expected vs %v, but got %v,\n diff: %s ", len(tc.expectedVirtualServices), len(got), cmp.Diff(tc.expectedVirtualServices, got))
 			}
@@ -1462,6 +1483,24 @@ func TestHasConflict(t *testing.T) {
 			expected: false,
 		},
 		{
+			name: "withoutHeaders mismatch",
+			root: &networking.HTTPMatchRequest{
+				WithoutHeaders: map[string]*networking.StringMatch{
+					"header": {
+						MatchType: &networking.StringMatch_Prefix{Prefix: "h1"},
+					},
+				},
+			},
+			leaf: &networking.HTTPMatchRequest{
+				WithoutHeaders: map[string]*networking.StringMatch{
+					"header": {
+						MatchType: &networking.StringMatch_Exact{Exact: "h2"},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
 			name: "port",
 			root: &networking.HTTPMatchRequest{
 				Port: 8080,
@@ -1580,5 +1619,60 @@ func TestFuzzMergeHttpMatchRequest(t *testing.T) {
 
 	if !reflect.DeepEqual(merged, root) {
 		t.Errorf("%s", cmp.Diff(merged, root))
+	}
+}
+
+var gatewayNameTests = []struct {
+	gateway   string
+	namespace string
+	resolved  string
+}{
+	{
+		"./gateway",
+		"default",
+		"default/gateway",
+	},
+	{
+		"gateway",
+		"default",
+		"default/gateway",
+	},
+	{
+		"default/gateway",
+		"foo",
+		"default/gateway",
+	},
+	{
+		"gateway.default",
+		"default",
+		"default/gateway",
+	},
+	{
+		"gateway.default",
+		"foo",
+		"default/gateway",
+	},
+	{
+		"private.ingress.svc.cluster.local",
+		"foo",
+		"ingress/private",
+	},
+}
+
+func TestResolveGatewayName(t *testing.T) {
+	for _, tt := range gatewayNameTests {
+		t.Run(fmt.Sprintf("%s-%s", tt.gateway, tt.namespace), func(t *testing.T) {
+			if got := resolveGatewayName(tt.gateway, ConfigMeta{Namespace: tt.namespace}); got != tt.resolved {
+				t.Fatalf("expected %q got %q", tt.resolved, got)
+			}
+		})
+	}
+}
+
+func BenchmarkResolveGatewayName(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for _, tt := range gatewayNameTests {
+			_ = resolveGatewayName(tt.gateway, ConfigMeta{Namespace: tt.namespace})
+		}
 	}
 }

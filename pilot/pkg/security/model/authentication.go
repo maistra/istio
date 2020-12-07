@@ -16,6 +16,7 @@ package model
 
 import (
 	"sync"
+	"time"
 
 	auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
 	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -29,6 +30,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/networking/util"
 	"istio.io/istio/pkg/config/constants"
+	"istio.io/istio/pkg/spiffe"
 )
 
 const (
@@ -114,7 +116,10 @@ func ConstructSdsSecretConfig(name, sdsUdsPath string) *auth.SdsSecretConfig {
 	if name == "" || sdsUdsPath == "" {
 		return nil
 	}
-
+	var fetchTimeout = features.InitialFetchTimeout
+	if name == SDSDefaultResourceName || name == SDSRootResourceName {
+		fetchTimeout = ptypes.DurationProto(time.Second * 0)
+	}
 	return &auth.SdsSecretConfig{
 		Name: name,
 		SdsConfig: &core.ConfigSource{
@@ -130,7 +135,7 @@ func ConstructSdsSecretConfig(name, sdsUdsPath string) *auth.SdsSecretConfig {
 					},
 				},
 			},
-			InitialFetchTimeout: features.InitialFetchTimeout,
+			InitialFetchTimeout: fetchTimeout,
 		},
 	}
 }
@@ -154,8 +159,17 @@ func ConstructValidationContext(rootCAFilePath string, subjectAltNames []string)
 	return ret
 }
 
+func appendURIPrefixToTrustDomain(trustDomainAliases []string) []string {
+	var res []string
+	for _, td := range trustDomainAliases {
+		res = append(res, spiffe.URIPrefix+td+"/")
+	}
+	return res
+}
+
 // ApplyToCommonTLSContext completes the commonTlsContext for `ISTIO_MUTUAL` TLS mode
-func ApplyToCommonTLSContext(tlsContext *auth.CommonTlsContext, metadata *model.NodeMetadata, sdsPath string, subjectAltNames []string) {
+func ApplyToCommonTLSContext(tlsContext *auth.CommonTlsContext, metadata *model.NodeMetadata,
+	sdsPath string, subjectAltNames []string, trustDomainAliases []string) {
 	// configure TLS with SDS
 	if metadata.SdsEnabled && sdsPath != "" {
 		// These are certs being mounted from within the pod. Rather than reading directly in Envoy,
@@ -167,12 +181,18 @@ func ApplyToCommonTLSContext(tlsContext *auth.CommonTlsContext, metadata *model.
 			CaCertificatePath: metadata.TLSServerRootCert,
 		}
 
+		// TODO: if subjectAltName ends with *, create a prefix match as well.
+		// TODO: if user explicitly specifies SANs - should we alter his explicit config by adding all spifee aliases?
+		matchSAN := util.StringToExactMatch(subjectAltNames)
+		if len(trustDomainAliases) > 0 {
+			matchSAN = append(matchSAN, util.StringToPrefixMatch(appendURIPrefixToTrustDomain(trustDomainAliases))...)
+		}
+
 		// configure server listeners with SDS.
 		tlsContext.ValidationContextType = &auth.CommonTlsContext_CombinedValidationContext{
 			CombinedValidationContext: &auth.CommonTlsContext_CombinedCertificateValidationContext{
-				DefaultValidationContext: &auth.CertificateValidationContext{MatchSubjectAltNames: util.StringToExactMatch(subjectAltNames)},
-				ValidationContextSdsSecretConfig: ConstructSdsSecretConfig(
-					model.GetOrDefault(res.GetRootResourceName(), SDSRootResourceName), sdsPath),
+				DefaultValidationContext:         &auth.CertificateValidationContext{MatchSubjectAltNames: matchSAN},
+				ValidationContextSdsSecretConfig: ConstructSdsSecretConfig(model.GetOrDefault(res.GetRootResourceName(), SDSRootResourceName), sdsPath),
 			},
 		}
 		tlsContext.TlsCertificateSdsSecretConfigs = []*auth.SdsSecretConfig{

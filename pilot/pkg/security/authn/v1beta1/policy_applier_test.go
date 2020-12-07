@@ -36,7 +36,6 @@ import (
 	"istio.io/api/security/v1beta1"
 	type_beta "istio.io/api/type/v1beta1"
 
-	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/model/test"
 	"istio.io/istio/pilot/pkg/networking"
@@ -838,13 +837,6 @@ func TestConvertToEnvoyJwtConfig(t *testing.T) {
 	}
 }
 
-func setSkipValidateTrustDomain(value string, t *testing.T) {
-	err := os.Setenv(features.SkipValidateTrustDomain.Name, value)
-	if err != nil {
-		t.Fatalf("failed to set SkipValidateTrustDomain: %v", err)
-	}
-}
-
 func humanReadableAuthnFilterDump(filter *http_conn.HttpFilter) string {
 	if filter == nil {
 		return "<nil>"
@@ -862,12 +854,11 @@ func TestAuthnFilterConfig(t *testing.T) {
 	jwksURI := ms.URL + "/oauth2/v3/certs"
 
 	cases := []struct {
-		name                    string
-		isGateway               bool
-		skipTrustDomainValidate bool
-		jwtIn                   []*model.Config
-		peerIn                  []*model.Config
-		expected                *http_conn.HttpFilter
+		name      string
+		isGateway bool
+		jwtIn     []*model.Config
+		peerIn    []*model.Config
+		expected  *http_conn.HttpFilter
 	}{
 		{
 			name: "no-policy",
@@ -886,6 +877,7 @@ func TestAuthnFilterConfig(t *testing.T) {
 								},
 							},
 						},
+						SkipValidateTrustDomain: true,
 					}),
 				},
 			},
@@ -896,8 +888,7 @@ func TestAuthnFilterConfig(t *testing.T) {
 			expected:  nil,
 		},
 		{
-			name:                    "no-request-authn-rule-skip-trust-domain",
-			skipTrustDomainValidate: true,
+			name: "no-request-authn-rule-skip-trust-domain",
 			expected: &http_conn.HttpFilter{
 				Name: "istio_authn",
 				ConfigType: &http_conn.HttpFilter_TypedConfig{
@@ -956,6 +947,7 @@ func TestAuthnFilterConfig(t *testing.T) {
 							OriginIsOptional: true,
 							PrincipalBinding: authn_alpha.PrincipalBinding_USE_ORIGIN,
 						},
+						SkipValidateTrustDomain: true,
 					}),
 				},
 			},
@@ -990,6 +982,7 @@ func TestAuthnFilterConfig(t *testing.T) {
 							OriginIsOptional: true,
 							PrincipalBinding: authn_alpha.PrincipalBinding_USE_ORIGIN,
 						},
+						SkipValidateTrustDomain: true,
 					}),
 				},
 			},
@@ -1050,6 +1043,7 @@ func TestAuthnFilterConfig(t *testing.T) {
 							OriginIsOptional: true,
 							PrincipalBinding: authn_alpha.PrincipalBinding_USE_ORIGIN,
 						},
+						SkipValidateTrustDomain: true,
 					}),
 				},
 			},
@@ -1110,6 +1104,7 @@ func TestAuthnFilterConfig(t *testing.T) {
 							OriginIsOptional: true,
 							PrincipalBinding: authn_alpha.PrincipalBinding_USE_ORIGIN,
 						},
+						SkipValidateTrustDomain: true,
 					}),
 				},
 			},
@@ -1140,6 +1135,7 @@ func TestAuthnFilterConfig(t *testing.T) {
 								},
 							},
 						},
+						SkipValidateTrustDomain: true,
 					}),
 				},
 			},
@@ -1159,8 +1155,7 @@ func TestAuthnFilterConfig(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name:                    "beta-mtls-skip-trust-domain",
-			skipTrustDomainValidate: true,
+			name: "beta-mtls-skip-trust-domain",
 			peerIn: []*model.Config{
 				{
 					Spec: &v1beta1.PeerAuthentication{
@@ -1193,12 +1188,6 @@ func TestAuthnFilterConfig(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if c.skipTrustDomainValidate {
-				setSkipValidateTrustDomain("true", t)
-				defer func() {
-					setSkipValidateTrustDomain("false", t)
-				}()
-			}
 			proxyType := model.SidecarProxy
 			if c.isGateway {
 				proxyType = model.Router
@@ -1525,6 +1514,7 @@ func runTestOnInboundFilterChains(t *testing.T, tlsParam *envoy_auth.TlsParamete
 				tc.sdsUdsPath,
 				testNode,
 				networking.ListenerProtocolAuto,
+				[]string{},
 			)
 			if !reflect.DeepEqual(got, tc.expected) {
 				t.Errorf("[%v] unexpected filter chains, got %v, want %v", tc.name, got, tc.expected)

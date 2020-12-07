@@ -20,6 +20,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/golang/protobuf/ptypes"
 
 	auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
 	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -173,7 +176,7 @@ func runTestBuildGatewayListenerTLSContext(t *testing.T, tlsParam *auth.TlsParam
 						{
 							Name: "default",
 							SdsConfig: &core.ConfigSource{
-								InitialFetchTimeout: features.InitialFetchTimeout,
+								InitialFetchTimeout: ptypes.DurationProto(time.Second * 0),
 								ConfigSourceSpecifier: &core.ConfigSource_ApiConfigSource{
 									ApiConfigSource: &core.ApiConfigSource{
 										ApiType: core.ApiConfigSource_GRPC,
@@ -195,7 +198,7 @@ func runTestBuildGatewayListenerTLSContext(t *testing.T, tlsParam *auth.TlsParam
 							ValidationContextSdsSecretConfig: &auth.SdsSecretConfig{
 								Name: "ROOTCA",
 								SdsConfig: &core.ConfigSource{
-									InitialFetchTimeout: features.InitialFetchTimeout,
+									InitialFetchTimeout: ptypes.DurationProto(time.Second * 0),
 									ConfigSourceSpecifier: &core.ConfigSource_ApiConfigSource{
 										ApiConfigSource: &core.ApiConfigSource{
 											ApiType: core.ApiConfigSource_GRPC,
@@ -1063,6 +1066,21 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			},
 		},
 	}
+	httpGatewayWildcard := pilot_model.Config{
+		ConfigMeta: pilot_model.ConfigMeta{
+			Name:      "gateway",
+			Namespace: "default",
+		},
+		Spec: &networking.Gateway{
+			Selector: map[string]string{"istio": "ingressgateway"},
+			Servers: []*networking.Server{
+				{
+					Hosts: []string{"*"},
+					Port:  &networking.Port{Name: "http", Number: 80, Protocol: "HTTP"},
+				},
+			},
+		},
+	}
 	virtualServiceSpec := &networking.VirtualService{
 		Hosts:    []string{"example.org"},
 		Gateways: []string{"gateway"},
@@ -1173,6 +1191,17 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 				},
 			},
 		},
+		{
+			"wildcard virtual service",
+			[]pilot_model.Config{virtualServiceWildcard},
+			[]pilot_model.Config{httpGatewayWildcard},
+			"http.80",
+			map[string][]string{
+				"*.org:80": {
+					"*.org", "*.org:80",
+				},
+			},
+		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1244,6 +1273,40 @@ func TestBuildGatewayListeners(t *testing.T) {
 			},
 			[]string{"0.0.0.0_80", "0.0.0.0_801"},
 		},
+		{
+			"privileged port on unprivileged pod",
+			&pilot_model.Proxy{
+				Metadata: &pilot_model.NodeMetadata{
+					UnprivilegedPod: "true",
+				},
+			},
+			&networking.Gateway{
+				Servers: []*networking.Server{
+					{
+						Port: &networking.Port{Name: "http", Number: 80, Protocol: "HTTP"},
+					},
+					{
+						Port: &networking.Port{Name: "http", Number: 8080, Protocol: "HTTP"},
+					},
+				},
+			},
+			[]string{"0.0.0.0_8080"},
+		},
+		{
+			"privileged port on privileged pod",
+			&pilot_model.Proxy{},
+			&networking.Gateway{
+				Servers: []*networking.Server{
+					{
+						Port: &networking.Port{Name: "http", Number: 80, Protocol: "HTTP"},
+					},
+					{
+						Port: &networking.Port{Name: "http", Number: 8080, Protocol: "HTTP"},
+					},
+				},
+			},
+			[]string{"0.0.0.0_80", "0.0.0.0_8080"},
+		},
 	}
 
 	for _, tt := range cases {
@@ -1252,6 +1315,12 @@ func TestBuildGatewayListeners(t *testing.T) {
 		env := buildEnv(t, []pilot_model.Config{{Spec: tt.gateway}}, []pilot_model.Config{})
 		proxyGateway.SetGatewaysForProxy(env.PushContext)
 		proxyGateway.ServiceInstances = tt.node.ServiceInstances
+		if tt.node.Metadata != nil {
+			proxyGateway.Metadata = tt.node.Metadata
+		} else {
+			proxyGateway.Metadata = &proxyGatewayMetadata
+		}
+
 		proxyGateway.DiscoverIPVersions()
 		builder := configgen.buildGatewayListeners(&proxyGateway, env.PushContext, &ListenerBuilder{})
 		var listeners []string
