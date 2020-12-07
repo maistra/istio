@@ -34,4 +34,6 @@ type Options struct {
 	StatusController status.Controller
 
 	WatchedNamespaces string
+
+	DisableCRDScan bool
 }

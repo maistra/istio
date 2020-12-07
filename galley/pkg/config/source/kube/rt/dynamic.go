@@ -64,11 +64,11 @@ func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
 			mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces, func(namespace string) cache.ListerWatcher {
 				return &cache.ListWatch{
 					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return d.List(context.TODO(), options)
+						return d.Namespace(namespace).List(context.TODO(), options)
 					},
 					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 						options.Watch = true
-						return d.Watch(context.TODO(), options)
+						return d.Namespace(namespace).Watch(context.TODO(), options)
 					},
 				}
 			})
