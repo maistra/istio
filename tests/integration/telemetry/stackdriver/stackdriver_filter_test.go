@@ -88,6 +88,7 @@ func TestStackdriverMonitoring(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	framework.NewSuite(m).
+		Skip("https://github.com/istio/istio/issues/29268").
 		Label(label.CustomSetup).
 		Label(label.IPv4). // We get detected as on GCE, since our tests run there, but don't have connectivity
 		Setup(ConditionallySetupMetadataServer).
