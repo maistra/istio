@@ -136,6 +136,7 @@ func TestStackdriverMonitoring(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	framework.NewSuite(m).
+		Skip("https://github.com/istio/istio/issues/29268").
 		Label(label.CustomSetup).
 		Setup(istio.Setup(getIstioInstance(), setupConfig)).
 		Setup(testSetup).

@@ -126,6 +126,7 @@ spec:
 func TestMain(m *testing.M) {
 	framework.
 		NewSuite(m).
+		Skip("https://github.com/istio/istio/issues/29268").
 		RequireSingleCluster().
 		Setup(istio.Setup(&istioInst, func(_ resource.Context, cfg *istio.Config) {
 			cfg.Values["meshConfig.enableTracing"] = "true"
