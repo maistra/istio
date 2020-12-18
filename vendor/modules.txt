@@ -680,6 +680,67 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
+# github.com/maistra/xns-informer v0.0.0-20201218143644-1418f0ff1cfb
+## explicit
+github.com/maistra/xns-informer/pkg/generated/kube
+github.com/maistra/xns-informer/pkg/generated/kube/admissionregistration
+github.com/maistra/xns-informer/pkg/generated/kube/admissionregistration/v1
+github.com/maistra/xns-informer/pkg/generated/kube/admissionregistration/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/apps
+github.com/maistra/xns-informer/pkg/generated/kube/apps/v1
+github.com/maistra/xns-informer/pkg/generated/kube/apps/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/apps/v1beta2
+github.com/maistra/xns-informer/pkg/generated/kube/autoscaling
+github.com/maistra/xns-informer/pkg/generated/kube/autoscaling/v1
+github.com/maistra/xns-informer/pkg/generated/kube/autoscaling/v2beta1
+github.com/maistra/xns-informer/pkg/generated/kube/autoscaling/v2beta2
+github.com/maistra/xns-informer/pkg/generated/kube/batch
+github.com/maistra/xns-informer/pkg/generated/kube/batch/v1
+github.com/maistra/xns-informer/pkg/generated/kube/batch/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/batch/v2alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/certificates
+github.com/maistra/xns-informer/pkg/generated/kube/certificates/v1
+github.com/maistra/xns-informer/pkg/generated/kube/certificates/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/coordination
+github.com/maistra/xns-informer/pkg/generated/kube/coordination/v1
+github.com/maistra/xns-informer/pkg/generated/kube/coordination/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/core
+github.com/maistra/xns-informer/pkg/generated/kube/core/v1
+github.com/maistra/xns-informer/pkg/generated/kube/discovery
+github.com/maistra/xns-informer/pkg/generated/kube/discovery/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/discovery/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/events
+github.com/maistra/xns-informer/pkg/generated/kube/events/v1
+github.com/maistra/xns-informer/pkg/generated/kube/events/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/extensions
+github.com/maistra/xns-informer/pkg/generated/kube/extensions/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/flowcontrol
+github.com/maistra/xns-informer/pkg/generated/kube/flowcontrol/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/networking
+github.com/maistra/xns-informer/pkg/generated/kube/networking/v1
+github.com/maistra/xns-informer/pkg/generated/kube/networking/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/node
+github.com/maistra/xns-informer/pkg/generated/kube/node/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/node/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/policy
+github.com/maistra/xns-informer/pkg/generated/kube/policy/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/rbac
+github.com/maistra/xns-informer/pkg/generated/kube/rbac/v1
+github.com/maistra/xns-informer/pkg/generated/kube/rbac/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/rbac/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/scheduling
+github.com/maistra/xns-informer/pkg/generated/kube/scheduling/v1
+github.com/maistra/xns-informer/pkg/generated/kube/scheduling/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/scheduling/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/settings
+github.com/maistra/xns-informer/pkg/generated/kube/settings/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/storage
+github.com/maistra/xns-informer/pkg/generated/kube/storage/v1
+github.com/maistra/xns-informer/pkg/generated/kube/storage/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/storage/v1beta1
+github.com/maistra/xns-informer/pkg/informers
+github.com/maistra/xns-informer/pkg/internal/sets
+github.com/maistra/xns-informer/pkg/testing
 # github.com/mattn/go-colorable v0.1.7
 github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.12
@@ -1574,6 +1635,8 @@ k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 # k8s.io/component-base v0.19.3
 k8s.io/component-base/version
+# k8s.io/klog v1.0.0
+k8s.io/klog
 # k8s.io/klog/v2 v2.3.0
 k8s.io/klog/v2
 # k8s.io/kube-openapi v0.0.0-20200831175022-64514a1d5d59
