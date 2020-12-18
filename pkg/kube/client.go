@@ -29,6 +29,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	kubeinformers "github.com/maistra/xns-informer/pkg/generated/kube"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
+	xnsinformerstesting "github.com/maistra/xns-informer/pkg/testing"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
@@ -46,8 +49,6 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
-	dynamicfake "k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -112,7 +113,7 @@ type Client interface {
 	ServiceApis() serviceapisclient.Interface
 
 	// KubeInformer returns an informer for core kube client
-	KubeInformer() informers.SharedInformerFactory
+	KubeInformer() kubeinformers.SharedInformerFactory
 
 	// DynamicInformer returns an informer for dynamic client
 	DynamicInformer() dynamicinformer.DynamicSharedInformerFactory
@@ -195,20 +196,32 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 	c := &client{
 		informerWatchesPending: atomic.NewInt32(0),
 	}
-	fakeClient := fake.NewSimpleClientset(objects...)
-	c.Interface = fakeClient
-	c.kube = c.Interface
-	c.kubeInformer = informers.NewSharedInformerFactory(c.Interface, resyncInterval)
 
 	s := runtime.NewScheme()
-	if err := metav1.AddMetaToScheme(s); err != nil {
+	if err := fake.AddToScheme(s); err != nil {
 		panic(err.Error())
 	}
+
+	fakeClient, fakeDynamic, err := xnsinformerstesting.NewFakeClients(s, objects...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	c.dynamic = fakeDynamic
+	c.Interface = fakeClient
+	c.kube = fakeClient
+
+	c.xnsInformerFactory = xnsinformers.NewSharedInformerFactoryWithOptions(
+		c.dynamic,
+		resyncInterval,
+		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}), // TODO: Pass namespaces.
+	)
+
+	c.kubeInformer = kubeinformers.NewSharedInformerFactory(c.xnsInformerFactory)
 
 	c.metadata = metadatafake.NewSimpleMetadataClient(s)
 	c.metadataInformer = metadatainformer.NewSharedInformerFactory(c.metadata, resyncInterval)
 
-	c.dynamic = dynamicfake.NewSimpleDynamicClient(s)
 	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
 	istioFake := istiofake.NewSimpleClientset()
@@ -264,11 +277,13 @@ type client struct {
 
 	config *rest.Config
 
+	xnsInformerFactory xnsinformers.SharedInformerFactory
+
 	extSet        kubeExtClient.Interface
 	versionClient discovery.ServerVersionInterface
 
 	kube         kubernetes.Interface
-	kubeInformer informers.SharedInformerFactory
+	kubeInformer kubeinformers.SharedInformerFactory
 
 	dynamic         dynamic.Interface
 	dynamicInformer dynamicinformer.DynamicSharedInformerFactory
@@ -310,7 +325,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	if err != nil {
 		return nil, err
 	}
-	c.kubeInformer = informers.NewSharedInformerFactory(c.Interface, resyncInterval)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
 	if err != nil {
@@ -323,6 +337,14 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 		return nil, err
 	}
 	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+
+	c.xnsInformerFactory = xnsinformers.NewSharedInformerFactoryWithOptions(
+		c.dynamic,
+		resyncInterval,
+		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}), // TODO: Pass namespaces.
+	)
+
+	c.kubeInformer = kubeinformers.NewSharedInformerFactory(c.xnsInformerFactory)
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
@@ -390,7 +412,7 @@ func (c *client) ServiceApis() serviceapisclient.Interface {
 	return c.serviceapis
 }
 
-func (c *client) KubeInformer() informers.SharedInformerFactory {
+func (c *client) KubeInformer() kubeinformers.SharedInformerFactory {
 	return c.kubeInformer
 }
 
@@ -413,7 +435,7 @@ func (c *client) ServiceApisInformer() serviceapisinformer.SharedInformerFactory
 // RunAndWait starts all informers and waits for their caches to sync.
 // Warning: this must be called AFTER .Informer() is called, which will register the informer.
 func (c *client) RunAndWait(stop <-chan struct{}) {
-	c.kubeInformer.Start(stop)
+	c.xnsInformerFactory.Start(stop)
 	c.dynamicInformer.Start(stop)
 	c.metadataInformer.Start(stop)
 	c.istioInformer.Start(stop)
@@ -422,7 +444,7 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		// WaitForCacheSync will virtually never be synced on the first call, as its called immediately after Start()
 		// This triggers a 100ms delay per call, which is often called 2-3 times in a test, delaying tests.
 		// Instead, we add an aggressive sync polling
-		fastWaitForCacheSync(c.kubeInformer)
+		fastWaitForCacheSyncXns(c.xnsInformerFactory)
 		fastWaitForCacheSyncDynamic(c.dynamicInformer)
 		fastWaitForCacheSyncDynamic(c.metadataInformer)
 		fastWaitForCacheSync(c.istioInformer)
@@ -434,7 +456,7 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 			return false, nil
 		})
 	} else {
-		c.kubeInformer.WaitForCacheSync(stop)
+		c.xnsInformerFactory.WaitForCacheSync(stop)
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
 		c.istioInformer.WaitForCacheSync(stop)
@@ -448,6 +470,10 @@ type reflectInformerSync interface {
 
 type dynamicInformerSync interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[schema.GroupVersionResource]bool
+}
+
+type xnsInformerSync interface {
+	WaitForCacheSync(stopCh <-chan struct{}) bool
 }
 
 // Wait for cache sync immediately, rather than with 100ms delay which slows tests
@@ -475,6 +501,14 @@ func fastWaitForCacheSyncDynamic(informerFactory dynamicInformerSync) {
 			}
 		}
 		return true, nil
+	})
+}
+
+func fastWaitForCacheSyncXns(informerFactory xnsInformerSync) {
+	returnImmediately := make(chan struct{})
+	close(returnImmediately)
+	_ = wait.PollImmediate(time.Microsecond, wait.ForeverTestTimeout, func() (bool, error) {
+		return informerFactory.WaitForCacheSync(returnImmediately), nil
 	})
 }
 

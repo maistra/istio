@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 
+	kubeinformers "github.com/maistra/xns-informer/pkg/generated/kube"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -26,7 +27,6 @@ import (
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/metadata/metadatainformer"
@@ -96,7 +96,7 @@ func (c MockClient) Metadata() metadata.Interface {
 	panic("not used in mock")
 }
 
-func (c MockClient) KubeInformer() informers.SharedInformerFactory {
+func (c MockClient) KubeInformer() kubeinformers.SharedInformerFactory {
 	panic("not used in mock")
 }
 
