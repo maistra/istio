@@ -42,6 +42,7 @@ import (
 // representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations.
 // Clients may not set this value. It is represented in RFC3339 form and is in UTC.
 // Populated by the system. Read-only. Null for lists. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata"
+// +cue-gen:DestinationRule:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags
@@ -87,7 +88,7 @@ type DestinationRuleList struct {
 // +cue-gen:EnvoyFilter:subresource:status
 // +cue-gen:EnvoyFilter:scope:Namespaced
 // +cue-gen:EnvoyFilter:resource:categories=istio-io,networking-istio-io
-// +cue-gen:EnvoyFilter:preserveUnknownFields:configPatches.[].patch.value
+// +cue-gen:EnvoyFilter:preserveUnknownFields:true
 // -->
 //
 // <!-- go code generation tags
@@ -133,6 +134,7 @@ type EnvoyFilterList struct {
 // +cue-gen:Gateway:subresource:status
 // +cue-gen:Gateway:scope:Namespaced
 // +cue-gen:Gateway:resource:categories=istio-io,networking-istio-io,shortNames=gw
+// +cue-gen:Gateway:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags
@@ -187,6 +189,7 @@ type GatewayList struct {
 // representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations.
 // Clients may not set this value. It is represented in RFC3339 form and is in UTC.
 // Populated by the system. Read-only. Null for lists. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata"
+// +cue-gen:ServiceEntry:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags
@@ -233,6 +236,7 @@ type ServiceEntryList struct {
 // +cue-gen:Sidecar:subresource:status
 // +cue-gen:Sidecar:scope:Namespaced
 // +cue-gen:Sidecar:resource:categories=istio-io,networking-istio-io
+// +cue-gen:Sidecar:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags
@@ -284,6 +288,7 @@ type SidecarList struct {
 // representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations.
 // Clients may not set this value. It is represented in RFC3339 form and is in UTC.
 // Populated by the system. Read-only. Null for lists. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata"
+// +cue-gen:VirtualService:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags
@@ -333,6 +338,7 @@ type VirtualServiceList struct {
 // Clients may not set this value. It is represented in RFC3339 form and is in UTC.
 // Populated by the system. Read-only. Null for lists. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata"
 // +cue-gen:WorkloadEntry:printerColumn:name=Address,type=string,JSONPath=.spec.address,description="Address associated with the network endpoint."
+// +cue-gen:WorkloadEntry:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags
@@ -383,6 +389,7 @@ type WorkloadEntryList struct {
 // representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations.
 // Clients may not set this value. It is represented in RFC3339 form and is in UTC.
 // Populated by the system. Read-only. Null for lists. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata"
+// +cue-gen:WorkloadGroup:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags

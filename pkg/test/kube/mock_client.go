@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 
+	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
 	kubeinformers "github.com/maistra/xns-informer/pkg/generated/kube"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
@@ -38,7 +39,6 @@ import (
 	serviceapisinformer "sigs.k8s.io/service-apis/pkg/client/informers/externalversions"
 
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
-	istioinformer "istio.io/client-go/pkg/informers/externalversions"
 	"istio.io/istio/pkg/kube"
 	"istio.io/pkg/version"
 )

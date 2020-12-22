@@ -22,6 +22,7 @@ import (
 	settings "github.com/maistra/xns-informer/pkg/generated/kube/settings"
 	storage "github.com/maistra/xns-informer/pkg/generated/kube/storage"
 	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type SharedInformerFactory interface {
@@ -43,6 +44,7 @@ type SharedInformerFactory interface {
 	Scheduling() scheduling.Interface
 	Settings() settings.Interface
 	Storage() storage.Interface
+	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 }
 
 type sharedInformerFactory struct {
