@@ -293,6 +293,8 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 		meshSource.Set(s.environment.Mesh())
 	})
 	processingArgs.MeshSource = meshSource
+	processingArgs.MemberRoll = s.kubeClient.GetMemberRoll()
+	processingArgs.DisableCRDScan = !args.RegistryOptions.KubeOptions.EnableCRDScan
 
 	processing := components.NewProcessing(processingArgs)
 

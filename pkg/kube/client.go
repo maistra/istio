@@ -29,6 +29,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	gatewayapiinformer "github.com/maistra/xns-informer/pkg/generated/gatewayapi"
+	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
+	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
@@ -48,15 +52,12 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/metadata"
 	metadatafake "k8s.io/client-go/metadata/fake"
-	"k8s.io/client-go/metadata/metadatainformer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	clienttesting "k8s.io/client-go/testing"
@@ -69,7 +70,6 @@ import (
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gatewayapiclient "sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned"
 	gatewayapifake "sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned/fake"
-	gatewayapiinformer "sigs.k8s.io/gateway-api/pkg/client/informers/gateway/externalversions"
 	mcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 	mcsapisClient "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned"
 	mcsapisfake "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/fake"
@@ -83,8 +83,8 @@ import (
 	clienttelemetry "istio.io/client-go/pkg/apis/telemetry/v1alpha1"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
-	istioinformer "istio.io/client-go/pkg/informers/externalversions"
 	"istio.io/istio/pkg/queue"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
 )
 
@@ -124,13 +124,13 @@ type Client interface {
 	MCSApis() mcsapisClient.Interface
 
 	// KubeInformer returns an informer for core kube client
-	KubeInformer() informers.SharedInformerFactory
+	KubeInformer() kubeinformer.SharedInformerFactory
 
 	// DynamicInformer returns an informer for dynamic client
-	DynamicInformer() dynamicinformer.DynamicSharedInformerFactory
+	DynamicInformer() xnsinformers.DynamicSharedInformerFactory
 
 	// MetadataInformer returns an informer for metadata client
-	MetadataInformer() metadatainformer.SharedInformerFactory
+	MetadataInformer() xnsinformers.MetadataSharedInformerFactory
 
 	// IstioInformer returns an informer for the istio client
 	IstioInformer() istioinformer.SharedInformerFactory
@@ -147,6 +147,15 @@ type Client interface {
 
 	// GetKubernetesVersion returns the Kubernetes server version
 	GetKubernetesVersion() (*kubeVersion.Info, error)
+
+	// SetNamespaces sets watched namespaces if no MemberRoll controller exists.
+	SetNamespaces(namespaces ...string)
+
+	// AddMemberRoll creates a MemberRollController and adds it to the client.
+	AddMemberRoll(namespace, memberRollName string) error
+
+	// GetMemberRoll returns the member roll for the client, which may be nil.
+	GetMemberRoll() memberroll.MemberRollController
 }
 
 // ExtendedClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -217,21 +226,21 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 	}
 	c.Interface = fake.NewSimpleClientset(objects...)
 	c.kube = c.Interface
-	c.kubeInformer = informers.NewSharedInformerFactory(c.Interface, resyncInterval)
+	c.kubeInformer = kubeinformer.NewSharedInformerFactory(c.Interface, resyncInterval)
 	s := runtime.NewScheme()
 	if err := metav1.AddMetaToScheme(s); err != nil {
 		panic(err.Error())
 	}
 
 	c.metadata = metadatafake.NewSimpleMetadataClient(s)
-	c.metadataInformer = metadatainformer.NewSharedInformerFactory(c.metadata, resyncInterval)
+	c.metadataInformer = xnsinformers.NewMetadataSharedInformerFactory(c.metadata, resyncInterval)
 	// Support some galley tests using basicmetadata
 	// If you are adding something to this list, consider other options like adding to the scheme.
 	gvrToListKind := map[schema.GroupVersionResource]string{
 		{Group: "testdata.istio.io", Version: "v1alpha1", Resource: "Kind1s"}: "Kind1List",
 	}
 	c.dynamic = dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s, gvrToListKind)
-	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
 	c.istio = istiofake.NewSimpleClientset()
 	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(c.istio, resyncInterval)
@@ -321,13 +330,13 @@ type client struct {
 	extSet kubeExtClient.Interface
 
 	kube         kubernetes.Interface
-	kubeInformer informers.SharedInformerFactory
+	kubeInformer kubeinformer.SharedInformerFactory
 
 	dynamic         dynamic.Interface
-	dynamicInformer dynamicinformer.DynamicSharedInformerFactory
+	dynamicInformer xnsinformers.DynamicSharedInformerFactory
 
 	metadata         metadata.Interface
-	metadataInformer metadatainformer.SharedInformerFactory
+	metadataInformer xnsinformers.MetadataSharedInformerFactory
 
 	istio         istioclient.Interface
 	istioInformer istioinformer.SharedInformerFactory
@@ -337,6 +346,8 @@ type client struct {
 
 	mcsapis          mcsapisClient.Interface
 	mcsapisInformers mcsapisInformer.SharedInformerFactory
+
+	memberRoll memberroll.MemberRollController
 
 	// If enable, will wait for cache syncs with extremely short delay. This should be used only for tests
 	fastSync               bool
@@ -385,31 +396,45 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	if err != nil {
 		return nil, err
 	}
-	c.kubeInformer = informers.NewSharedInformerFactory(c.Interface, resyncInterval)
+	c.kubeInformer = kubeinformer.NewSharedInformerFactoryWithOptions(
+		c.Interface,
+		resyncInterval,
+		kubeinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.metadataInformer = metadatainformer.NewSharedInformerFactory(c.metadata, resyncInterval)
+	c.metadataInformer = xnsinformers.NewMetadataSharedInformerFactory(c.metadata, resyncInterval)
+	c.metadataInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.dynamic, err = dynamic.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+	c.dynamicInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.istioInformer = istioinformer.NewSharedInformerFactory(c.istio, resyncInterval)
+	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(
+		c.istio,
+		resyncInterval,
+		istioinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	c.gatewayapi, err = gatewayapiclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactory(c.gatewayapi, resyncInterval)
+	c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactoryWithOptions(
+		c.gatewayapi,
+		resyncInterval,
+		gatewayapiinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	c.mcsapis, err = mcsapisClient.NewForConfig(c.config)
 	if err != nil {
@@ -472,15 +497,15 @@ func (c *client) MCSApis() mcsapisClient.Interface {
 	return c.mcsapis
 }
 
-func (c *client) KubeInformer() informers.SharedInformerFactory {
+func (c *client) KubeInformer() kubeinformer.SharedInformerFactory {
 	return c.kubeInformer
 }
 
-func (c *client) DynamicInformer() dynamicinformer.DynamicSharedInformerFactory {
+func (c *client) DynamicInformer() xnsinformers.DynamicSharedInformerFactory {
 	return c.dynamicInformer
 }
 
-func (c *client) MetadataInformer() metadatainformer.SharedInformerFactory {
+func (c *client) MetadataInformer() xnsinformers.MetadataSharedInformerFactory {
 	return c.metadataInformer
 }
 
@@ -494,6 +519,38 @@ func (c *client) GatewayAPIInformer() gatewayapiinformer.SharedInformerFactory {
 
 func (c *client) MCSApisInformer() mcsapisInformer.SharedInformerFactory {
 	return c.mcsapisInformers
+}
+
+func (c *client) SetNamespaces(namespaces ...string) {
+	// This is a no-op if a MemberRoll controller exists.
+	if c.memberRoll != nil {
+		return
+	}
+
+	c.kubeInformer.SetNamespaces(namespaces...)
+	c.istioInformer.SetNamespaces(namespaces...)
+	c.dynamicInformer.SetNamespaces(namespaces...)
+	c.metadataInformer.SetNamespaces(namespaces...)
+	c.gatewayapiInformer.SetNamespaces(namespaces...)
+}
+
+func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
+	c.memberRoll, err = memberroll.NewMemberRollController(c.config, namespace, memberRollName, resyncInterval)
+	if err != nil {
+		return err
+	}
+
+	c.memberRoll.Register(c.kubeInformer, "kubernetes-informers")
+	c.memberRoll.Register(c.istioInformer, "istio-infomrers")
+	c.memberRoll.Register(c.dynamicInformer, "dynamic-informers")
+	c.memberRoll.Register(c.metadataInformer, "metadata-informers")
+	c.memberRoll.Register(c.gatewayapiInformer, "service-apis-informers")
+
+	return nil
+}
+
+func (c *client) GetMemberRoll() memberroll.MemberRollController {
+	return c.memberRoll
 }
 
 // RunAndWait starts all informers and waits for their caches to sync.

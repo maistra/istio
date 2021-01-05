@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -582,6 +583,24 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 		s.kubeClient, err = kubelib.NewClient(kubelib.NewClientConfigForRestConfig(kubeRestConfig))
 		if err != nil {
 			return fmt.Errorf("failed creating kube client: %v", err)
+		}
+
+		memberRollName := args.RegistryOptions.KubeOptions.MemberRollName
+		if memberRollName != "" {
+			err := s.kubeClient.AddMemberRoll(args.Namespace, memberRollName)
+			if err != nil {
+				return fmt.Errorf("failed creating member roll: %v", err)
+			}
+		} else {
+			// No MemberRoll configured, set namespaces based on args.
+			var namespaces []string
+			if args.RegistryOptions.KubeOptions.WatchedNamespaces != "" {
+				namespaces = strings.Split(args.RegistryOptions.KubeOptions.WatchedNamespaces, ",")
+			} else {
+				namespaces = []string{metav1.NamespaceAll}
+			}
+
+			s.kubeClient.SetNamespaces(namespaces...)
 		}
 	}
 

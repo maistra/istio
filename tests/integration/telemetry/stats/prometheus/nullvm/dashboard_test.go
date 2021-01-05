@@ -129,6 +129,7 @@ var dashboards = []struct {
 }
 
 func TestDashboard(t *testing.T) {
+	t.Skip("https://github.com/istio/istio/issues/30247")
 	c, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	framework.NewTest(t).
