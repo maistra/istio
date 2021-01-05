@@ -29,6 +29,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
+	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
+	serviceapisinformer "github.com/maistra/xns-informer/pkg/generated/serviceapis"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
@@ -47,15 +51,12 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/metadata"
 	metadatafake "k8s.io/client-go/metadata/fake"
-	"k8s.io/client-go/metadata/metadatainformer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	clienttesting "k8s.io/client-go/testing"
@@ -67,12 +68,11 @@ import (
 	"k8s.io/kubectl/pkg/cmd/util"
 	serviceapisclient "sigs.k8s.io/service-apis/pkg/client/clientset/versioned"
 	serviceapisfake "sigs.k8s.io/service-apis/pkg/client/clientset/versioned/fake"
-	serviceapisinformer "sigs.k8s.io/service-apis/pkg/client/informers/externalversions"
 
 	"istio.io/api/label"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
-	istioinformer "istio.io/client-go/pkg/informers/externalversions"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
 )
 
@@ -112,13 +112,13 @@ type Client interface {
 	ServiceApis() serviceapisclient.Interface
 
 	// KubeInformer returns an informer for core kube client
-	KubeInformer() informers.SharedInformerFactory
+	KubeInformer() kubeinformer.SharedInformerFactory
 
 	// DynamicInformer returns an informer for dynamic client
-	DynamicInformer() dynamicinformer.DynamicSharedInformerFactory
+	DynamicInformer() xnsinformers.DynamicSharedInformerFactory
 
 	// MetadataInformer returns an informer for metadata client
-	MetadataInformer() metadatainformer.SharedInformerFactory
+	MetadataInformer() xnsinformers.MetadataSharedInformerFactory
 
 	// IstioInformer returns an informer for the istio client
 	IstioInformer() istioinformer.SharedInformerFactory
@@ -129,6 +129,15 @@ type Client interface {
 	// RunAndWait starts all informers and waits for their caches to sync.
 	// Warning: this must be called AFTER .Informer() is called, which will register the informer.
 	RunAndWait(stop <-chan struct{})
+
+	// SetNamespaces sets watched namespaces if no MemberRoll controller exists.
+	SetNamespaces(namespaces ...string)
+
+	// AddMemberRoll creates a MemberRollController and adds it to the client.
+	AddMemberRoll(namespace, memberRollName string) error
+
+	// GetMemberRoll returns the member roll for the client, which may be nil.
+	GetMemberRoll() memberroll.MemberRollController
 }
 
 // ExtendedClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -198,7 +207,7 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 	fakeClient := fake.NewSimpleClientset(objects...)
 	c.Interface = fakeClient
 	c.kube = c.Interface
-	c.kubeInformer = informers.NewSharedInformerFactory(c.Interface, resyncInterval)
+	c.kubeInformer = kubeinformer.NewSharedInformerFactory(c.Interface, resyncInterval)
 
 	s := runtime.NewScheme()
 	if err := metav1.AddMetaToScheme(s); err != nil {
@@ -206,10 +215,10 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 	}
 
 	c.metadata = metadatafake.NewSimpleMetadataClient(s)
-	c.metadataInformer = metadatainformer.NewSharedInformerFactory(c.metadata, resyncInterval)
+	c.metadataInformer = xnsinformers.NewMetadataSharedInformerFactory(c.metadata, resyncInterval)
 
 	c.dynamic = dynamicfake.NewSimpleDynamicClient(s)
-	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
 	istioFake := istiofake.NewSimpleClientset()
 	c.istio = istioFake
@@ -264,19 +273,21 @@ type client struct {
 	versionClient discovery.ServerVersionInterface
 
 	kube         kubernetes.Interface
-	kubeInformer informers.SharedInformerFactory
+	kubeInformer kubeinformer.SharedInformerFactory
 
 	dynamic         dynamic.Interface
-	dynamicInformer dynamicinformer.DynamicSharedInformerFactory
+	dynamicInformer xnsinformers.DynamicSharedInformerFactory
 
 	metadata         metadata.Interface
-	metadataInformer metadatainformer.SharedInformerFactory
+	metadataInformer xnsinformers.MetadataSharedInformerFactory
 
 	istio         istioclient.Interface
 	istioInformer istioinformer.SharedInformerFactory
 
 	serviceapis          serviceapisclient.Interface
 	serviceapisInformers serviceapisinformer.SharedInformerFactory
+
+	memberRoll memberroll.MemberRollController
 
 	// If enable, will wait for cache syncs with extremely short delay. This should be used only for tests
 	fastSync               bool
@@ -319,31 +330,45 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	if err != nil {
 		return nil, err
 	}
-	c.kubeInformer = informers.NewSharedInformerFactory(c.Interface, resyncInterval)
+	c.kubeInformer = kubeinformer.NewSharedInformerFactoryWithOptions(
+		c.Interface,
+		resyncInterval,
+		kubeinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.metadataInformer = metadatainformer.NewSharedInformerFactory(c.metadata, resyncInterval)
+	c.metadataInformer = xnsinformers.NewMetadataSharedInformerFactory(c.metadata, resyncInterval)
+	c.metadataInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.dynamic, err = dynamic.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+	c.dynamicInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.istioInformer = istioinformer.NewSharedInformerFactory(c.istio, resyncInterval)
+	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(
+		c.istio,
+		resyncInterval,
+		istioinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	c.serviceapis, err = serviceapisclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.serviceapis, resyncInterval)
+	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactoryWithOptions(
+		c.serviceapis,
+		resyncInterval,
+		serviceapisinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	ext, err := kubeExtClient.NewForConfig(c.config)
 	if err != nil {
@@ -395,15 +420,15 @@ func (c *client) ServiceApis() serviceapisclient.Interface {
 	return c.serviceapis
 }
 
-func (c *client) KubeInformer() informers.SharedInformerFactory {
+func (c *client) KubeInformer() kubeinformer.SharedInformerFactory {
 	return c.kubeInformer
 }
 
-func (c *client) DynamicInformer() dynamicinformer.DynamicSharedInformerFactory {
+func (c *client) DynamicInformer() xnsinformers.DynamicSharedInformerFactory {
 	return c.dynamicInformer
 }
 
-func (c *client) MetadataInformer() metadatainformer.SharedInformerFactory {
+func (c *client) MetadataInformer() xnsinformers.MetadataSharedInformerFactory {
 	return c.metadataInformer
 }
 
@@ -413,6 +438,38 @@ func (c *client) IstioInformer() istioinformer.SharedInformerFactory {
 
 func (c *client) ServiceApisInformer() serviceapisinformer.SharedInformerFactory {
 	return c.serviceapisInformers
+}
+
+func (c *client) SetNamespaces(namespaces ...string) {
+	// This is a no-op if a MemberRoll controller exists.
+	if c.memberRoll != nil {
+		return
+	}
+
+	c.kubeInformer.SetNamespaces(namespaces...)
+	c.istioInformer.SetNamespaces(namespaces...)
+	c.dynamicInformer.SetNamespaces(namespaces...)
+	c.metadataInformer.SetNamespaces(namespaces...)
+	c.serviceapisInformers.SetNamespaces(namespaces...)
+}
+
+func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
+	c.memberRoll, err = memberroll.NewMemberRollController(c.config, namespace, memberRollName, resyncInterval)
+	if err != nil {
+		return err
+	}
+
+	c.memberRoll.Register(c.kubeInformer, "kubernetes-informers")
+	c.memberRoll.Register(c.istioInformer, "istio-infomrers")
+	c.memberRoll.Register(c.dynamicInformer, "dynamic-informers")
+	c.memberRoll.Register(c.metadataInformer, "metadata-informers")
+	c.memberRoll.Register(c.serviceapisInformers, "service-apis-informers")
+
+	return nil
+}
+
+func (c *client) GetMemberRoll() memberroll.MemberRollController {
+	return c.memberRoll
 }
 
 // RunAndWait starts all informers and waits for their caches to sync.
