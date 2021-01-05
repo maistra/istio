@@ -771,6 +771,79 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
+# github.com/maistra/xns-informer v0.0.0 => github.com/luksa/xns-informer v0.0.0-20220204100742-3436f0ac2527
+## explicit
+github.com/maistra/xns-informer/pkg/generated/gatewayapi
+github.com/maistra/xns-informer/pkg/generated/gatewayapi/apis
+github.com/maistra/xns-informer/pkg/generated/gatewayapi/apis/v1alpha2
+github.com/maistra/xns-informer/pkg/generated/gatewayapi/internalinterfaces
+github.com/maistra/xns-informer/pkg/generated/istio
+github.com/maistra/xns-informer/pkg/generated/istio/extensions
+github.com/maistra/xns-informer/pkg/generated/istio/extensions/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/istio/internalinterfaces
+github.com/maistra/xns-informer/pkg/generated/istio/networking
+github.com/maistra/xns-informer/pkg/generated/istio/networking/v1alpha3
+github.com/maistra/xns-informer/pkg/generated/istio/networking/v1beta1
+github.com/maistra/xns-informer/pkg/generated/istio/security
+github.com/maistra/xns-informer/pkg/generated/istio/security/v1beta1
+github.com/maistra/xns-informer/pkg/generated/istio/telemetry
+github.com/maistra/xns-informer/pkg/generated/istio/telemetry/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube
+github.com/maistra/xns-informer/pkg/generated/kube/admissionregistration
+github.com/maistra/xns-informer/pkg/generated/kube/admissionregistration/v1
+github.com/maistra/xns-informer/pkg/generated/kube/admissionregistration/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/apps
+github.com/maistra/xns-informer/pkg/generated/kube/apps/v1
+github.com/maistra/xns-informer/pkg/generated/kube/apps/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/apps/v1beta2
+github.com/maistra/xns-informer/pkg/generated/kube/autoscaling
+github.com/maistra/xns-informer/pkg/generated/kube/autoscaling/v1
+github.com/maistra/xns-informer/pkg/generated/kube/autoscaling/v2beta1
+github.com/maistra/xns-informer/pkg/generated/kube/autoscaling/v2beta2
+github.com/maistra/xns-informer/pkg/generated/kube/batch
+github.com/maistra/xns-informer/pkg/generated/kube/batch/v1
+github.com/maistra/xns-informer/pkg/generated/kube/batch/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/certificates
+github.com/maistra/xns-informer/pkg/generated/kube/certificates/v1
+github.com/maistra/xns-informer/pkg/generated/kube/certificates/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/coordination
+github.com/maistra/xns-informer/pkg/generated/kube/coordination/v1
+github.com/maistra/xns-informer/pkg/generated/kube/coordination/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/core
+github.com/maistra/xns-informer/pkg/generated/kube/core/v1
+github.com/maistra/xns-informer/pkg/generated/kube/discovery
+github.com/maistra/xns-informer/pkg/generated/kube/discovery/v1
+github.com/maistra/xns-informer/pkg/generated/kube/discovery/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/events
+github.com/maistra/xns-informer/pkg/generated/kube/events/v1
+github.com/maistra/xns-informer/pkg/generated/kube/events/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/extensions
+github.com/maistra/xns-informer/pkg/generated/kube/extensions/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/flowcontrol
+github.com/maistra/xns-informer/pkg/generated/kube/flowcontrol/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/internalinterfaces
+github.com/maistra/xns-informer/pkg/generated/kube/networking
+github.com/maistra/xns-informer/pkg/generated/kube/networking/v1
+github.com/maistra/xns-informer/pkg/generated/kube/networking/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/node
+github.com/maistra/xns-informer/pkg/generated/kube/node/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/node/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/policy
+github.com/maistra/xns-informer/pkg/generated/kube/policy/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/rbac
+github.com/maistra/xns-informer/pkg/generated/kube/rbac/v1
+github.com/maistra/xns-informer/pkg/generated/kube/rbac/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/rbac/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/scheduling
+github.com/maistra/xns-informer/pkg/generated/kube/scheduling/v1
+github.com/maistra/xns-informer/pkg/generated/kube/scheduling/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/scheduling/v1beta1
+github.com/maistra/xns-informer/pkg/generated/kube/storage
+github.com/maistra/xns-informer/pkg/generated/kube/storage/v1
+github.com/maistra/xns-informer/pkg/generated/kube/storage/v1alpha1
+github.com/maistra/xns-informer/pkg/generated/kube/storage/v1beta1
+github.com/maistra/xns-informer/pkg/informers
+github.com/maistra/xns-informer/pkg/internal/sets
 # github.com/marten-seemann/qpack v0.2.1
 github.com/marten-seemann/qpack
 # github.com/marten-seemann/qtls-go1-16 v0.1.4
@@ -1391,17 +1464,6 @@ istio.io/client-go/pkg/clientset/versioned/typed/security/v1beta1
 istio.io/client-go/pkg/clientset/versioned/typed/security/v1beta1/fake
 istio.io/client-go/pkg/clientset/versioned/typed/telemetry/v1alpha1
 istio.io/client-go/pkg/clientset/versioned/typed/telemetry/v1alpha1/fake
-istio.io/client-go/pkg/informers/externalversions
-istio.io/client-go/pkg/informers/externalversions/extensions
-istio.io/client-go/pkg/informers/externalversions/extensions/v1alpha1
-istio.io/client-go/pkg/informers/externalversions/internalinterfaces
-istio.io/client-go/pkg/informers/externalversions/networking
-istio.io/client-go/pkg/informers/externalversions/networking/v1alpha3
-istio.io/client-go/pkg/informers/externalversions/networking/v1beta1
-istio.io/client-go/pkg/informers/externalversions/security
-istio.io/client-go/pkg/informers/externalversions/security/v1beta1
-istio.io/client-go/pkg/informers/externalversions/telemetry
-istio.io/client-go/pkg/informers/externalversions/telemetry/v1alpha1
 istio.io/client-go/pkg/listers/extensions/v1alpha1
 istio.io/client-go/pkg/listers/networking/v1alpha3
 istio.io/client-go/pkg/listers/networking/v1beta1
@@ -1612,7 +1674,6 @@ k8s.io/client-go/discovery/cached/disk
 k8s.io/client-go/discovery/cached/memory
 k8s.io/client-go/discovery/fake
 k8s.io/client-go/dynamic
-k8s.io/client-go/dynamic/dynamicinformer
 k8s.io/client-go/dynamic/dynamiclister
 k8s.io/client-go/dynamic/fake
 k8s.io/client-go/informers
@@ -1804,7 +1865,6 @@ k8s.io/client-go/listers/storage/v1alpha1
 k8s.io/client-go/listers/storage/v1beta1
 k8s.io/client-go/metadata
 k8s.io/client-go/metadata/fake
-k8s.io/client-go/metadata/metadatainformer
 k8s.io/client-go/metadata/metadatalister
 k8s.io/client-go/pkg/apis/clientauthentication
 k8s.io/client-go/pkg/apis/clientauthentication/install
@@ -1981,10 +2041,6 @@ sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned/fake
 sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned/scheme
 sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned/typed/apis/v1alpha2
 sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned/typed/apis/v1alpha2/fake
-sigs.k8s.io/gateway-api/pkg/client/informers/gateway/externalversions
-sigs.k8s.io/gateway-api/pkg/client/informers/gateway/externalversions/apis
-sigs.k8s.io/gateway-api/pkg/client/informers/gateway/externalversions/apis/v1alpha2
-sigs.k8s.io/gateway-api/pkg/client/informers/gateway/externalversions/internalinterfaces
 sigs.k8s.io/gateway-api/pkg/client/listers/gateway/apis/v1alpha2
 # sigs.k8s.io/kustomize/api v0.8.11
 sigs.k8s.io/kustomize/api/builtins
@@ -2089,3 +2145,4 @@ sigs.k8s.io/yaml
 # github.com/docker/distribution => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d
 # github.com/docker/docker => github.com/moby/moby v17.12.0-ce-rc1.0.20200618181300-9dc6525e6118+incompatible
 # github.com/imdario/mergo => github.com/imdario/mergo v0.3.5
+# github.com/maistra/xns-informer => github.com/luksa/xns-informer v0.0.0-20220204100742-3436f0ac2527

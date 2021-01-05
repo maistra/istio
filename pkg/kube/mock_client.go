@@ -19,28 +19,28 @@ import (
 	"fmt"
 	"net/http"
 
+	gatewayapiinformer "github.com/maistra/xns-informer/pkg/generated/gatewayapi"
+	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
+	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kubeVersion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
-	"k8s.io/client-go/metadata/metadatainformer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 	"k8s.io/kubectl/pkg/cmd/util"
 	serviceapisclient "sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned"
-	serviceapisinformer "sigs.k8s.io/gateway-api/pkg/client/informers/gateway/externalversions"
 	mcsapisclient "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned"
 	mcsapisinformer "sigs.k8s.io/mcs-api/pkg/client/informers/externalversions"
 
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
-	istioinformer "istio.io/client-go/pkg/informers/externalversions"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
 )
 
@@ -94,7 +94,7 @@ func (c MockClient) IstioInformer() istioinformer.SharedInformerFactory {
 	panic("not used in mock")
 }
 
-func (c MockClient) GatewayAPIInformer() serviceapisinformer.SharedInformerFactory {
+func (c MockClient) GatewayAPIInformer() gatewayapiinformer.SharedInformerFactory {
 	panic("not used in mock")
 }
 
@@ -106,15 +106,15 @@ func (c MockClient) Metadata() metadata.Interface {
 	panic("not used in mock")
 }
 
-func (c MockClient) KubeInformer() informers.SharedInformerFactory {
+func (c MockClient) KubeInformer() kubeinformer.SharedInformerFactory {
 	panic("not used in mock")
 }
 
-func (c MockClient) DynamicInformer() dynamicinformer.DynamicSharedInformerFactory {
+func (c MockClient) DynamicInformer() xnsinformers.DynamicSharedInformerFactory {
 	panic("not used in mock")
 }
 
-func (c MockClient) MetadataInformer() metadatainformer.SharedInformerFactory {
+func (c MockClient) MetadataInformer() xnsinformers.MetadataSharedInformerFactory {
 	panic("not used in mock")
 }
 
@@ -131,6 +131,18 @@ func (c MockClient) DynamicClient() dynamic.Interface {
 }
 
 func (c MockClient) MetadataClient() metadata.Interface {
+	panic("not used in mock")
+}
+
+func (c MockClient) SetNamespaces(namespaces ...string) {
+	panic("not used in mock")
+}
+
+func (c MockClient) AddMemberRoll(namespace, memberRollName string) error {
+	panic("not used in mock")
+}
+
+func (c MockClient) GetMemberRoll() memberroll.MemberRollController {
 	panic("not used in mock")
 }
 

@@ -113,8 +113,13 @@ type Options struct {
 	// MeshServiceController is a mesh-wide service Controller.
 	MeshServiceController *aggregate.Controller
 
-	ResyncPeriod time.Duration
-	DomainSuffix string
+	// Namespace the controller watches. If set to meta_v1.NamespaceAll (""), controller watches all namespaces
+	WatchedNamespaces string
+	ResyncPeriod      time.Duration
+	DomainSuffix      string
+
+	// Name of the Maistra MemberRoll resource.
+	MemberRollName string
 
 	// ClusterID identifies the remote cluster in a multicluster env.
 	ClusterID cluster.ID
@@ -152,6 +157,12 @@ type Options struct {
 
 	// If meshConfig.DiscoverySelectors are specified, the DiscoveryNamespacesFilter tracks the namespaces this controller watches.
 	DiscoveryNamespacesFilter filter.DiscoveryNamespacesFilter
+
+	// EnableCRDScan determines whether the controller will list all CRDs
+	// present in the cluster, and subsequently only create watches on those
+	// that are. If this is set to false, all CRDs defined in the schema must be
+	// present for istiod to function.
+	EnableCRDScan bool
 }
 
 func (o Options) GetSyncInterval() time.Duration {
@@ -344,7 +355,8 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 
 	c.nsInformer = kubeClient.KubeInformer().Core().V1().Namespaces().Informer()
 	c.nsLister = kubeClient.KubeInformer().Core().V1().Namespaces().Lister()
-	if c.opts.SystemNamespace != "" {
+	// Don't start the namespace informer if Maistra's MemberRoll is in use.
+	if c.opts.SystemNamespace != "" && options.MemberRollName == "" {
 		nsInformer := filter.NewFilteredSharedIndexInformer(func(obj interface{}) bool {
 			ns, ok := obj.(*v1.Namespace)
 			if !ok {
