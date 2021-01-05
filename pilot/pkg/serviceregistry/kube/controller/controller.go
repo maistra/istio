@@ -110,6 +110,9 @@ type Options struct {
 	ResyncPeriod      time.Duration
 	DomainSuffix      string
 
+	// Name of the Maistra MemberRoll resource.
+	MemberRollName string
+
 	// ClusterID identifies the remote cluster in a multicluster env.
 	ClusterID string
 
@@ -140,6 +143,12 @@ type Options struct {
 
 	// SyncTimeout, if set, causes HasSynced to be returned when marked true.
 	SyncTimeout *atomic.Bool
+
+	// EnableCRDScan determines whether the controller will list all CRDs
+	// present in the cluster, and subsequently only create watches on those
+	// that are. If this is set to false, all CRDs defined in the schema must be
+	// present for istiod to function.
+	EnableCRDScan bool
 }
 
 func (o Options) GetSyncInterval() time.Duration {
@@ -293,7 +302,8 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		syncTimeout:                 options.SyncTimeout,
 	}
 
-	if options.SystemNamespace != "" {
+	// Don't start the namespace informer if Maistra's MemberRoll is in use.
+	if options.SystemNamespace != "" && options.MemberRollName == "" {
 		c.nsInformer = informers.NewSharedInformerFactoryWithOptions(c.client, options.ResyncPeriod,
 			informers.WithTweakListOptions(func(listOpts *metav1.ListOptions) {
 				listOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", options.SystemNamespace).String()
