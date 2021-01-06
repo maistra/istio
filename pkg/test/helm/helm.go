@@ -29,7 +29,7 @@ func Init(homeDir string, clientOnly bool) error {
 		clientSuffix = " --client-only"
 	}
 
-	out, err := shell.Execute(true, "helm --home %s init %s", homeDir, clientSuffix)
+	out, err := shell.Execute(true, "helm --home %s init %s --stable-repo-url https://charts.helm.sh/stable", homeDir, clientSuffix)
 	if err != nil {
 		scopes.Framework.Errorf("helm init: %v, out:%q", err, out)
 	} else {
