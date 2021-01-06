@@ -255,7 +255,7 @@ dumpsys: out_dir
 # Run once for each cluster, to install helm on the cluster
 helm/init: ${HELM}
 	kubectl apply -n kube-system -f install/kubernetes/helm/helm-service-account.yaml
-	helm init --upgrade --service-account tiller
+	helm init --stable-repo-url https://charts.helm.sh/stable --upgrade --service-account tiller
 
 # Install istio for the first time
 helm/install:

@@ -634,7 +634,7 @@ $(HELM): $(ISTIO_OUT)
 	bin/init_helm.sh
 
 $(HOME)/.helm:
-	$(HELM) init --client-only
+	$(HELM) init --stable-repo-url https://charts.helm.sh/stable --client-only
 
 # create istio-init.yaml
 istio-init.yaml: $(HELM) $(HOME)/.helm
