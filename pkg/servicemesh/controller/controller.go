@@ -23,7 +23,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
-	"istio.io/istio/pkg/kube"
 	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	"istio.io/istio/pkg/servicemesh/client/clientset/versioned"
 	versioned_v1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
@@ -40,20 +39,17 @@ type serviceMeshMemberRollController struct {
 }
 
 type MemberRollListener interface {
-	UpdateNamespaces(namespaces []string)
+	Start(stopCh <-chan struct{})
+	WaitForCacheSync(stopCh <-chan struct{}) bool
+	SetNamespaces(namespaces []string)
 }
 
 type MemberRollController interface {
 	Register(listener MemberRollListener)
-	Start(stop chan struct{})
+	Start(stopCh <-chan struct{})
 }
 
-func NewMemberRollControllerFromConfigFile(kubeConfig string, namespace string, memberRollName string, resync time.Duration) (MemberRollController, error) {
-	config, err := kube.BuildClientConfig(kubeConfig, "")
-	if err != nil {
-		fmt.Printf("Could not create k8s config: %v", err)
-		return nil, err
-	}
+func NewMemberRollController(config *rest.Config, namespace string, memberRollName string, resync time.Duration) (MemberRollController, error) {
 	cs, err := versioned_v1.NewForConfig(config)
 	if err != nil {
 		fmt.Printf("Could not create k8s clientset: %v", err)
@@ -75,12 +71,12 @@ func newMemberRollSharedInformer(restClient rest.Interface, namespace string, re
 		externalversions.WithNamespace(namespace)).Maistra().V1().ServiceMeshMemberRolls().Informer()
 }
 
-func (smmrc *serviceMeshMemberRollController) Start(stop chan struct{}) {
+func (smmrc *serviceMeshMemberRollController) Start(stopCh <-chan struct{}) {
 	smmrc.lock.Lock()
 	defer smmrc.lock.Unlock()
 
 	if !smmrc.started {
-		go smmrc.informer.Run(stop)
+		go smmrc.informer.Run(stopCh)
 		smmrc.started = true
 	}
 }
@@ -140,11 +136,14 @@ func (smmrl *serviceMeshMemberRollListener) updateNamespaces(operation string, m
 	} else {
 		namespaces := smmrl.smmrc.getNamespaces(members)
 		sort.Strings(namespaces)
-		if !smmrl.checkEquality(smmrl.currentNamespaces, namespaces) {
-			smmrl.currentNamespaces = namespaces
-			log.Infof("ServiceMeshMemberRoll %v %s, namespaces now %q", memberRollName, operation, smmrl.currentNamespaces)
-			smmrl.listener.UpdateNamespaces(smmrl.currentNamespaces)
-		}
+		smmrl.currentNamespaces = namespaces
+		log.Infof("ServiceMeshMemberRoll %v %s, namespaces now %q",
+			memberRollName, operation, smmrl.currentNamespaces)
+
+		stopCh := make(chan struct{}) // Only stopped on remove.
+		smmrl.listener.SetNamespaces(smmrl.currentNamespaces)
+		smmrl.listener.Start(stopCh)
+		smmrl.listener.WaitForCacheSync(stopCh)
 	}
 }
 
