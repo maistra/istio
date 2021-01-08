@@ -71,6 +71,7 @@ import (
 	"istio.io/api/label"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	istioscheme "istio.io/client-go/pkg/clientset/versioned/scheme"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
 )
 
@@ -130,6 +131,12 @@ type Client interface {
 	// RunAndWait starts all informers and waits for their caches to sync.
 	// Warning: this must be called AFTER .Informer() is called, which will register the informer.
 	RunAndWait(stop <-chan struct{})
+
+	// SetNamespaces sets watched namespaces if no MemberRoll controller exists.
+	SetNamespaces(namespaces []string)
+
+	// AddMemberRoll creates a MemberRollController and adds it to the client.
+	AddMemberRoll(namespace, memberRollName string) error
 }
 
 // ExtendedClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -216,10 +223,14 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 	c.Interface = fakeClient
 	c.kube = fakeClient
 
+	// The informer factory starts out configured for all namesapces, but in
+	// practice, when run under istiod, either a MemberRoll controller will be
+	// registered or SetNamespaces() will be called to configure a set of
+	// namespaces to watch -- which may still be metav1.NamespaceAll.
 	c.xnsInformerFactory = xnsinformers.NewSharedInformerFactoryWithOptions(
 		c.dynamic,
 		resyncInterval,
-		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}), // TODO: Pass namespaces.
+		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}),
 		xnsinformers.WithScheme(s),
 	)
 
@@ -296,6 +307,8 @@ type client struct {
 	serviceapis          serviceapisclient.Interface
 	serviceapisInformers serviceapisinformer.SharedInformerFactory
 
+	memberRoll memberroll.MemberRollController
+
 	// If enable, will wait for cache syncs with extremely short delay. This should be used only for tests
 	fastSync               bool
 	informerWatchesPending *atomic.Int32
@@ -347,10 +360,14 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 		return nil, err
 	}
 
+	// The informer factory starts out configured for all namesapces, but in
+	// practice, when run under istiod, either a MemberRoll controller will be
+	// registered or SetNamespaces() will be called to configure a set of
+	// namespaces to watch -- which may still be metav1.NamespaceAll.
 	c.xnsInformerFactory = xnsinformers.NewSharedInformerFactoryWithOptions(
 		c.dynamic,
 		resyncInterval,
-		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}), // TODO: Pass namespaces.
+		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}),
 		xnsinformers.WithScheme(s),
 	)
 
@@ -442,6 +459,26 @@ func (c *client) ServiceApisInformer() serviceapisinformer.SharedInformerFactory
 	return c.serviceapisInformers
 }
 
+func (c *client) SetNamespaces(namespaces []string) {
+	// This is a no-op if a MemberRoll controller exists.
+	if c.memberRoll != nil {
+		return
+	}
+
+	c.xnsInformerFactory.SetNamespaces(namespaces)
+}
+
+func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
+	c.memberRoll, err = memberroll.NewMemberRollController(c.config, namespace, memberRollName, resyncInterval)
+	if err != nil {
+		return err
+	}
+
+	c.memberRoll.Register(c.xnsInformerFactory)
+
+	return nil
+}
+
 // RunAndWait starts all informers and waits for their caches to sync.
 // Warning: this must be called AFTER .Informer() is called, which will register the informer.
 func (c *client) RunAndWait(stop <-chan struct{}) {
@@ -468,6 +505,10 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
 		c.serviceapisInformers.WaitForCacheSync(stop)
+	}
+
+	if c.memberRoll != nil {
+		c.memberRoll.Start(stop)
 	}
 }
 

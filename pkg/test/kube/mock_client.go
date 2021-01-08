@@ -124,6 +124,14 @@ func (c MockClient) MetadataClient() metadata.Interface {
 	panic("not used in mock")
 }
 
+func (c MockClient) SetNamespaces(namespaces []string) {
+	panic("not used in mock")
+}
+
+func (c MockClient) AddMemberRoll(namespace, memberRollName string) error {
+	panic("not used in mock")
+}
+
 func (c MockClient) AllDiscoveryDo(_ context.Context, _, _ string) (map[string][]byte, error) {
 	return c.Results, nil
 }
