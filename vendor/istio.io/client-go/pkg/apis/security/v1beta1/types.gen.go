@@ -63,6 +63,7 @@ import (
 // +cue-gen:AuthorizationPolicy:subresource:status
 // +cue-gen:AuthorizationPolicy:scope:Namespaced
 // +cue-gen:AuthorizationPolicy:resource:categories=istio-io,security-istio-io,plural=authorizationpolicies
+// +cue-gen:AuthorizationPolicy:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags
@@ -183,6 +184,7 @@ type AuthorizationPolicyList struct {
 // +cue-gen:PeerAuthentication:subresource:status
 // +cue-gen:PeerAuthentication:scope:Namespaced
 // +cue-gen:PeerAuthentication:resource:categories=istio-io,security-istio-io,shortNames=pa
+// +cue-gen:PeerAuthentication:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags
@@ -217,7 +219,7 @@ type PeerAuthenticationList struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // RequestAuthentication defines what request authentication methods are supported by a workload.
-// If will reject a request if the request contains invalid authentication information, based on the
+// It will reject a request if the request contains invalid authentication information, based on the
 // configured authentication rules. A request that does not contain any authentication credentials
 // will be accepted but will not have any authenticated identity. To restrict access to authenticated
 // requests only, this should be accompanied by an authorization rule.
@@ -314,7 +316,7 @@ type PeerAuthenticationList struct {
 //        requestPrincipals: ["*"]
 //  - to:
 //    - operation:
-//        paths: ["/healthz]
+//        paths: ["/healthz"]
 // ```
 //
 // <!-- crd generation tags
@@ -326,6 +328,7 @@ type PeerAuthenticationList struct {
 // +cue-gen:RequestAuthentication:subresource:status
 // +cue-gen:RequestAuthentication:scope:Namespaced
 // +cue-gen:RequestAuthentication:resource:categories=istio-io,security-istio-io,shortNames=ra
+// +cue-gen:RequestAuthentication:preserveUnknownFields:false
 // -->
 //
 // <!-- go code generation tags

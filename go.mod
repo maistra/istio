@@ -58,7 +58,7 @@ require (
 	github.com/kr/pretty v0.2.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.0.5
-	github.com/maistra/xns-informer v0.0.0-20201218143644-1418f0ff1cfb
+	github.com/maistra/xns-informer v0.0.0-20210106130940-cd4ec9d92a8e
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mholt/archiver/v3 v3.3.2
 	github.com/miekg/dns v1.1.34
@@ -104,7 +104,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 	helm.sh/helm/v3 v3.2.4
 	istio.io/api v0.0.0-20201123152548-197f11e4ea09
-	istio.io/client-go v0.0.0-20200908160912-f99162621a1a
+	istio.io/client-go v1.8.1
 	istio.io/gogo-genproto v0.0.0-20201112235858-7e611cb4d738
 	istio.io/pkg v0.0.0-20201112235759-c861803834b2
 	k8s.io/api v0.19.3

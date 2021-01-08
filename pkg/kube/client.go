@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
 	kubeinformers "github.com/maistra/xns-informer/pkg/generated/kube"
 	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	xnsinformerstesting "github.com/maistra/xns-informer/pkg/testing"
@@ -69,8 +70,7 @@ import (
 
 	"istio.io/api/label"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
-	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
-	istioinformer "istio.io/client-go/pkg/informers/externalversions"
+	istioscheme "istio.io/client-go/pkg/clientset/versioned/scheme"
 	"istio.io/pkg/version"
 )
 
@@ -198,11 +198,16 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 	}
 
 	s := runtime.NewScheme()
-	if err := fake.AddToScheme(s); err != nil {
+	err := fake.AddToScheme(s)
+	if err != nil {
+		panic(err.Error())
+	}
+	err = istioscheme.AddToScheme(s)
+	if err != nil {
 		panic(err.Error())
 	}
 
-	fakeClient, fakeDynamic, err := xnsinformerstesting.NewFakeClients(s, objects...)
+	fakeClient, fakeDynamic, istioFake, err := xnsinformerstesting.NewFakeClients(s, objects...)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -215,6 +220,7 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 		c.dynamic,
 		resyncInterval,
 		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}), // TODO: Pass namespaces.
+		xnsinformers.WithScheme(s),
 	)
 
 	c.kubeInformer = kubeinformers.NewSharedInformerFactory(c.xnsInformerFactory)
@@ -224,9 +230,8 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 
 	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
-	istioFake := istiofake.NewSimpleClientset()
 	c.istio = istioFake
-	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(c.istio, resyncInterval)
+	c.istioInformer = istioinformer.NewSharedInformerFactory(c.xnsInformerFactory)
 
 	c.serviceapis = serviceapisfake.NewSimpleClientset()
 	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.serviceapis, resyncInterval)
@@ -245,22 +250,16 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 		c.informerWatchesPending.Inc()
 		return false, nil, nil
 	}
-	watchReactor := func(tracker clienttesting.ObjectTracker) func(action clienttesting.Action) (handled bool, ret watch.Interface, err error) {
-		return func(action clienttesting.Action) (handled bool, ret watch.Interface, err error) {
-			gvr := action.GetResource()
-			ns := action.GetNamespace()
-			watch, err := tracker.Watch(gvr, ns)
-			if err != nil {
-				return false, nil, err
-			}
-			c.informerWatchesPending.Dec()
-			return true, watch, nil
-		}
+	watchReactor := func(action clienttesting.Action) (handled bool, ret watch.Interface, err error) {
+		c.informerWatchesPending.Dec()
+		return false, nil, nil
 	}
 	fakeClient.PrependReactor("list", "*", listReactor)
-	fakeClient.PrependWatchReactor("*", watchReactor(fakeClient.Tracker()))
+	fakeClient.PrependWatchReactor("*", watchReactor)
+	fakeDynamic.PrependReactor("list", "*", listReactor)
+	fakeDynamic.PrependWatchReactor("*", watchReactor)
 	istioFake.PrependReactor("list", "*", listReactor)
-	istioFake.PrependWatchReactor("*", watchReactor(istioFake.Tracker()))
+	istioFake.PrependWatchReactor("*", watchReactor)
 	c.fastSync = true
 
 	return c
@@ -338,10 +337,21 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	}
 	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
+	s := runtime.NewScheme()
+	err = scheme.AddToScheme(s)
+	if err != nil {
+		return nil, err
+	}
+	err = istioscheme.AddToScheme(s)
+	if err != nil {
+		return nil, err
+	}
+
 	c.xnsInformerFactory = xnsinformers.NewSharedInformerFactoryWithOptions(
 		c.dynamic,
 		resyncInterval,
 		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}), // TODO: Pass namespaces.
+		xnsinformers.WithScheme(s),
 	)
 
 	c.kubeInformer = kubeinformers.NewSharedInformerFactory(c.xnsInformerFactory)
@@ -350,7 +360,7 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	if err != nil {
 		return nil, err
 	}
-	c.istioInformer = istioinformer.NewSharedInformerFactory(c.istio, resyncInterval)
+	c.istioInformer = istioinformer.NewSharedInformerFactory(c.xnsInformerFactory)
 
 	c.serviceapis, err = serviceapisclient.NewForConfig(c.config)
 	if err != nil {
@@ -438,7 +448,6 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 	c.xnsInformerFactory.Start(stop)
 	c.dynamicInformer.Start(stop)
 	c.metadataInformer.Start(stop)
-	c.istioInformer.Start(stop)
 	c.serviceapisInformers.Start(stop)
 	if c.fastSync {
 		// WaitForCacheSync will virtually never be synced on the first call, as its called immediately after Start()
@@ -447,7 +456,6 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		fastWaitForCacheSyncXns(c.xnsInformerFactory)
 		fastWaitForCacheSyncDynamic(c.dynamicInformer)
 		fastWaitForCacheSyncDynamic(c.metadataInformer)
-		fastWaitForCacheSync(c.istioInformer)
 		fastWaitForCacheSync(c.serviceapisInformers)
 		_ = wait.PollImmediate(time.Microsecond, wait.ForeverTestTimeout, func() (bool, error) {
 			if c.informerWatchesPending.Load() == 0 {
@@ -459,7 +467,6 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		c.xnsInformerFactory.WaitForCacheSync(stop)
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
-		c.istioInformer.WaitForCacheSync(stop)
 		c.serviceapisInformers.WaitForCacheSync(stop)
 	}
 }
