@@ -145,6 +145,9 @@ func init() {
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.TrustDomain, "trust-domain", "",
 		"The domain serves to identify the system with spiffe")
 
+	discoveryCmd.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.MemberRollName, "memberRollName", "",
+		"The name of the MemberRoll resource")
+
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",
 		"Discovery service HTTP address")
