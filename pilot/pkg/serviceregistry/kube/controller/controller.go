@@ -109,6 +109,9 @@ type Options struct {
 	ResyncPeriod      time.Duration
 	DomainSuffix      string
 
+	// Name of the Maistra MemberRoll resource.
+	MemberRollName string
+
 	// ClusterID identifies the remote cluster in a multicluster env.
 	ClusterID string
 
