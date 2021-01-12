@@ -5,31 +5,62 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/kubernetes/fake"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/testing"
+	serviceapisfake "sigs.k8s.io/service-apis/pkg/client/clientset/versioned/fake"
 )
+
+type FakeClients struct {
+	Kubernetes  *kubefake.Clientset
+	Istio       *istiofake.Clientset
+	ServiceAPIs *serviceapisfake.Clientset
+	Dynamic     *dynamicfake.FakeDynamicClient
+}
 
 // NewFakeClients returns a new fake typed client and a new fake dynamic client
 // for testing.  The typed client is configured to reflect any writes into the
 // dynamic client's store, converting them to unstructured objects.  This is a
 // one-way operation.  Writes made via the dynamic client are not readable from
 // the typed client.
-func NewFakeClients(s *runtime.Scheme, objects ...runtime.Object) (*fake.Clientset, *dynamicfake.FakeDynamicClient, *istiofake.Clientset, error) {
-	unstructuredObjects, err := ObjectsToUnstructured(s, objects...)
-	if err != nil {
-		return nil, nil, nil, err
+func NewFakeClients(s *runtime.Scheme, objects ...runtime.Object) (*FakeClients, error) {
+	// Register everything with the scheme.
+	if err := kubefake.AddToScheme(s); err != nil {
+		return nil, err
 	}
 
-	kubeClient := fake.NewSimpleClientset(objects...)
-	dynamicClient := dynamicfake.NewSimpleDynamicClient(s, unstructuredObjects...)
+	if err := istiofake.AddToScheme(s); err != nil {
+		return nil, err
+	}
+
+	if err := serviceapisfake.AddToScheme(s); err != nil {
+		return nil, err
+	}
+
+	// TODO: This may be unnecessary.  The dynamic fake does conversion as well.
+	unstructuredObjects, err := ObjectsToUnstructured(s, objects...)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeClient := kubefake.NewSimpleClientset(objects...)
 	istioClient := istiofake.NewSimpleClientset()
+	serviceClient := serviceapisfake.NewSimpleClientset()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(s, unstructuredObjects...)
 
 	// Reflect any writes done via the typed client set into the dynamic
 	// client's store after converting them to unstructured objects.
 	kubeClient.PrependReactor("*", "*", UnstructuredObjectReflector(s, &dynamicClient.Fake))
 	istioClient.PrependReactor("*", "*", UnstructuredObjectReflector(s, &dynamicClient.Fake))
+	serviceClient.PrependReactor("*", "*", UnstructuredObjectReflector(s, &dynamicClient.Fake))
 
-	return kubeClient, dynamicClient, istioClient, nil
+	clients := &FakeClients{
+		Kubernetes:  kubeClient,
+		Istio:       istioClient,
+		ServiceAPIs: serviceClient,
+		Dynamic:     dynamicClient,
+	}
+
+	return clients, nil
 }
 
 // ObjectsToUnstructured uses the given runtime.ObjectConvertor to map each

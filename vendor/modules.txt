@@ -680,7 +680,7 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/maistra/xns-informer v0.0.0-20210106130940-cd4ec9d92a8e
+# github.com/maistra/xns-informer v0.0.0-20210112143738-56452153702e
 ## explicit
 github.com/maistra/xns-informer/pkg/generated/istio
 github.com/maistra/xns-informer/pkg/generated/istio/networking
@@ -744,6 +744,9 @@ github.com/maistra/xns-informer/pkg/generated/kube/storage
 github.com/maistra/xns-informer/pkg/generated/kube/storage/v1
 github.com/maistra/xns-informer/pkg/generated/kube/storage/v1alpha1
 github.com/maistra/xns-informer/pkg/generated/kube/storage/v1beta1
+github.com/maistra/xns-informer/pkg/generated/serviceapis
+github.com/maistra/xns-informer/pkg/generated/serviceapis/apis
+github.com/maistra/xns-informer/pkg/generated/serviceapis/apis/v1alpha1
 github.com/maistra/xns-informer/pkg/informers
 github.com/maistra/xns-informer/pkg/internal/sets
 github.com/maistra/xns-informer/pkg/testing
@@ -1758,8 +1761,6 @@ sigs.k8s.io/service-apis/pkg/client/clientset/versioned/fake
 sigs.k8s.io/service-apis/pkg/client/clientset/versioned/scheme
 sigs.k8s.io/service-apis/pkg/client/clientset/versioned/typed/apis/v1alpha1
 sigs.k8s.io/service-apis/pkg/client/clientset/versioned/typed/apis/v1alpha1/fake
-sigs.k8s.io/service-apis/pkg/client/informers/externalversions
-sigs.k8s.io/service-apis/pkg/client/informers/externalversions/apis
 sigs.k8s.io/service-apis/pkg/client/informers/externalversions/apis/v1alpha1
 sigs.k8s.io/service-apis/pkg/client/informers/externalversions/internalinterfaces
 sigs.k8s.io/service-apis/pkg/client/listers/apis/v1alpha1
