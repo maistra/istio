@@ -21,6 +21,7 @@ import (
 
 	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
 	kubeinformers "github.com/maistra/xns-informer/pkg/generated/kube"
+	serviceapisinformer "github.com/maistra/xns-informer/pkg/generated/serviceapis"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -36,7 +37,6 @@ import (
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 	"k8s.io/kubectl/pkg/cmd/util"
 	serviceapisclient "sigs.k8s.io/service-apis/pkg/client/clientset/versioned"
-	serviceapisinformer "sigs.k8s.io/service-apis/pkg/client/informers/externalversions"
 
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/kube"
