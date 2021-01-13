@@ -24,13 +24,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
 	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
 	kubeinformers "github.com/maistra/xns-informer/pkg/generated/kube"
+	serviceapisinformer "github.com/maistra/xns-informer/pkg/generated/serviceapis"
 	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	xnsinformerstesting "github.com/maistra/xns-informer/pkg/testing"
 	"go.uber.org/atomic"
@@ -51,7 +51,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/metadata"
 	metadatafake "k8s.io/client-go/metadata/fake"
@@ -65,8 +64,7 @@ import (
 	kubectlDelete "k8s.io/kubectl/pkg/cmd/delete"
 	"k8s.io/kubectl/pkg/cmd/util"
 	serviceapisclient "sigs.k8s.io/service-apis/pkg/client/clientset/versioned"
-	serviceapisfake "sigs.k8s.io/service-apis/pkg/client/clientset/versioned/fake"
-	serviceapisinformer "sigs.k8s.io/service-apis/pkg/client/informers/externalversions"
+	serviceapisscheme "sigs.k8s.io/service-apis/pkg/client/clientset/versioned/scheme"
 
 	"istio.io/api/label"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
@@ -205,23 +203,14 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 	}
 
 	s := runtime.NewScheme()
-	err := fake.AddToScheme(s)
-	if err != nil {
-		panic(err.Error())
-	}
-	err = istioscheme.AddToScheme(s)
+	fakeClients, err := xnsinformerstesting.NewFakeClients(s, objects...)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	fakeClient, fakeDynamic, istioFake, err := xnsinformerstesting.NewFakeClients(s, objects...)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	c.dynamic = fakeDynamic
-	c.Interface = fakeClient
-	c.kube = fakeClient
+	c.dynamic = fakeClients.Dynamic
+	c.Interface = fakeClients.Kubernetes
+	c.kube = fakeClients.Kubernetes
 
 	// The informer factory starts out configured for all namesapces, but in
 	// practice, when run under istiod, either a MemberRoll controller will be
@@ -241,11 +230,11 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 
 	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
-	c.istio = istioFake
+	c.istio = fakeClients.Istio
 	c.istioInformer = istioinformer.NewSharedInformerFactory(c.xnsInformerFactory)
 
-	c.serviceapis = serviceapisfake.NewSimpleClientset()
-	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.serviceapis, resyncInterval)
+	c.serviceapis = fakeClients.ServiceAPIs
+	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.xnsInformerFactory)
 
 	c.extSet = extfake.NewSimpleClientset()
 
@@ -265,12 +254,12 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 		c.informerWatchesPending.Dec()
 		return false, nil, nil
 	}
-	fakeClient.PrependReactor("list", "*", listReactor)
-	fakeClient.PrependWatchReactor("*", watchReactor)
-	fakeDynamic.PrependReactor("list", "*", listReactor)
-	fakeDynamic.PrependWatchReactor("*", watchReactor)
-	istioFake.PrependReactor("list", "*", listReactor)
-	istioFake.PrependWatchReactor("*", watchReactor)
+	fakeClients.Kubernetes.PrependReactor("list", "*", listReactor)
+	fakeClients.Kubernetes.PrependWatchReactor("*", watchReactor)
+	fakeClients.Dynamic.PrependReactor("list", "*", listReactor)
+	fakeClients.Dynamic.PrependWatchReactor("*", watchReactor)
+	fakeClients.Istio.PrependReactor("list", "*", listReactor)
+	fakeClients.Istio.PrependWatchReactor("*", watchReactor)
 	c.fastSync = true
 
 	return c
@@ -351,11 +340,18 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
 	s := runtime.NewScheme()
+
 	err = scheme.AddToScheme(s)
 	if err != nil {
 		return nil, err
 	}
+
 	err = istioscheme.AddToScheme(s)
+	if err != nil {
+		return nil, err
+	}
+
+	err = serviceapisscheme.AddToScheme(s)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +379,7 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	if err != nil {
 		return nil, err
 	}
-	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.serviceapis, resyncInterval)
+	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.xnsInformerFactory)
 
 	ext, err := kubeExtClient.NewForConfig(c.config)
 	if err != nil {
@@ -485,7 +481,6 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 	c.xnsInformerFactory.Start(stop)
 	c.dynamicInformer.Start(stop)
 	c.metadataInformer.Start(stop)
-	c.serviceapisInformers.Start(stop)
 	if c.fastSync {
 		// WaitForCacheSync will virtually never be synced on the first call, as its called immediately after Start()
 		// This triggers a 100ms delay per call, which is often called 2-3 times in a test, delaying tests.
@@ -493,7 +488,6 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		fastWaitForCacheSyncXns(c.xnsInformerFactory)
 		fastWaitForCacheSyncDynamic(c.dynamicInformer)
 		fastWaitForCacheSyncDynamic(c.metadataInformer)
-		fastWaitForCacheSync(c.serviceapisInformers)
 		_ = wait.PollImmediate(time.Microsecond, wait.ForeverTestTimeout, func() (bool, error) {
 			if c.informerWatchesPending.Load() == 0 {
 				return true, nil
@@ -504,16 +498,11 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		c.xnsInformerFactory.WaitForCacheSync(stop)
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
-		c.serviceapisInformers.WaitForCacheSync(stop)
 	}
 
 	if c.memberRoll != nil {
 		c.memberRoll.Start(stop)
 	}
-}
-
-type reflectInformerSync interface {
-	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 }
 
 type dynamicInformerSync interface {
@@ -522,21 +511,6 @@ type dynamicInformerSync interface {
 
 type xnsInformerSync interface {
 	WaitForCacheSync(stopCh <-chan struct{}) bool
-}
-
-// Wait for cache sync immediately, rather than with 100ms delay which slows tests
-// See https://github.com/kubernetes/kubernetes/issues/95262#issuecomment-703141573
-func fastWaitForCacheSync(informerFactory reflectInformerSync) {
-	returnImmediately := make(chan struct{})
-	close(returnImmediately)
-	_ = wait.PollImmediate(time.Microsecond, wait.ForeverTestTimeout, func() (bool, error) {
-		for _, synced := range informerFactory.WaitForCacheSync(returnImmediately) {
-			if !synced {
-				return false, nil
-			}
-		}
-		return true, nil
-	})
 }
 
 func fastWaitForCacheSyncDynamic(informerFactory dynamicInformerSync) {

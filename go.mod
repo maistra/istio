@@ -58,7 +58,7 @@ require (
 	github.com/kr/pretty v0.2.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.0.5
-	github.com/maistra/xns-informer v0.0.0-20210106130940-cd4ec9d92a8e
+	github.com/maistra/xns-informer v0.0.0-20210112143738-56452153702e
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mholt/archiver/v3 v3.3.2
 	github.com/miekg/dns v1.1.34
