@@ -23,7 +23,7 @@ import (
 
 // HelmInit init helm with a service account
 func HelmInit(serviceAccount string) error {
-	_, err := Shell("helm init --upgrade --service-account %s", serviceAccount)
+	_, err := Shell("helm init --upgrade --stable-repo-url https://charts.helm.sh/stable --service-account %s", serviceAccount)
 	return err
 }
 

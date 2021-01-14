@@ -141,7 +141,7 @@ func HelmTemplate(deploymentName, namespace, chartDir, workDir, valuesFile strin
 	}
 
 	// Initialize the helm (but do not install tiller).
-	if _, err := exec(fmt.Sprintf("helm --home %s init --client-only", helmRepoDir)); err != nil {
+	if _, err := exec(fmt.Sprintf("helm --home %s init --stable-repo-url https://charts.helm.sh/stable --client-only", helmRepoDir)); err != nil {
 		return "", err
 	}
 
