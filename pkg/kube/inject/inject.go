@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	yamlDecoder "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/utils/pointer"
 
 	"istio.io/api/annotation"
 	"istio.io/api/label"
@@ -50,6 +51,12 @@ import (
 // InjectionPolicy determines the policy for injecting the
 // sidecar proxy into the watched namespace(s).
 type InjectionPolicy string
+
+// Defaults values for injecting istio proxy into kubernetes
+// resources.
+const (
+	DefaultSidecarProxyUID = int64(1337)
+)
 
 const (
 	// InjectionPolicyDisabled specifies that the sidecar injector
@@ -93,6 +100,8 @@ type SidecarTemplateData struct {
 	MeshConfig     *meshconfig.MeshConfig
 	Values         map[string]interface{}
 	Revision       string
+	ProxyUID       *int64
+	ProxyGID       *int64
 }
 
 type Template *corev1.Pod
@@ -334,6 +343,8 @@ func RunTemplate(params InjectionParameters) (mergedPod *corev1.Pod, templatePod
 		MeshConfig:     meshConfig,
 		Values:         values,
 		Revision:       params.revision,
+		ProxyUID:       params.proxyUID,
+		ProxyGID:       params.proxyGID,
 	}
 	funcMap := CreateInjectionFuncmap()
 
@@ -662,6 +673,7 @@ func IntoObject(sidecarTemplate Templates, valuesConfig string, revision string,
 		revision:            revision,
 		proxyEnvs:           map[string]string{},
 		injectedAnnotations: nil,
+		proxyUID:            pointer.Int64Ptr(DefaultSidecarProxyUID),
 	}
 	patchBytes, err := injectPod(params)
 	if err != nil {
