@@ -48,6 +48,8 @@ import (
 	"istio.io/pkg/log"
 )
 
+const ProxyUIDAnnotation = "sidecar.istio.io/proxyUID"
+
 var (
 	runtimeScheme     = runtime.NewScheme()
 	codecs            = serializer.NewCodecFactory(runtimeScheme)
@@ -333,6 +335,7 @@ type InjectionParameters struct {
 	revision            string
 	proxyEnvs           map[string]string
 	injectedAnnotations map[string]string
+	proxyUID            uint64
 }
 
 func checkPreconditions(params InjectionParameters) {
@@ -587,6 +590,8 @@ func postProcessPod(pod *corev1.Pod, injectedPod corev1.Pod, req InjectionParame
 		return err
 	}
 
+	replaceProxyRunAsUserID(pod, req.proxyUID)
+
 	return nil
 }
 
@@ -774,13 +779,43 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	log.Debugf("OldObject: %v", string(req.OldObject.Raw))
 
 	wh.mu.RLock()
+	partialInjection := false
 	if !injectRequired(ignoredNamespaces, wh.Config, &pod.Spec, pod.ObjectMeta) {
-		log.Infof("Skipping %s/%s due to policy check", pod.ObjectMeta.Namespace, podName)
-		totalSkippedInjections.Increment()
-		wh.mu.RUnlock()
-		return &kube.AdmissionResponse{
-			Allowed: true,
+		if wasInjectedThroughIstioctl(&pod) {
+			log.Infof("Performing partial injection into pre-injected pod %s/%s (injecting Multus annotation and runAsUser id)", pod.ObjectMeta.Namespace, podName)
+			totalPartialInjections.Increment()
+			partialInjection = true
+		} else {
+			log.Infof("Skipping %s/%s due to policy check", pod.ObjectMeta.Namespace, podName)
+			totalSkippedInjections.Increment()
+			wh.mu.RUnlock()
+			return &kube.AdmissionResponse{
+				Allowed: true,
+			}
 		}
+	}
+
+	proxyUID, err := getProxyUIDFromAnnotation(pod)
+	if err != nil {
+		log.Infof("Could not get proxyUID from annotation: %v", err)
+	}
+	if proxyUID == nil {
+		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
+			uid := uint64(*pod.Spec.SecurityContext.RunAsUser) + 1
+			proxyUID = &uid
+		}
+		for _, c := range pod.Spec.Containers {
+			if c.Name != ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
+				uid := uint64(*c.SecurityContext.RunAsUser) + 1
+				if proxyUID == nil || uid > *proxyUID {
+					proxyUID = &uid
+				}
+			}
+		}
+	}
+	if proxyUID == nil {
+		uid := DefaultSidecarProxyUID
+		proxyUID = &uid
 	}
 
 	deploy, typeMeta := kube.GetDeployMetaFromPod(&pod)
@@ -796,10 +831,16 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 		revision:            wh.revision,
 		injectedAnnotations: wh.Config.InjectedAnnotations,
 		proxyEnvs:           parseInjectEnvs(path),
+		proxyUID:            *proxyUID,
 	}
 	wh.mu.RUnlock()
 
-	patchBytes, err := injectPod(params)
+	var patchBytes []byte
+	if partialInjection {
+		patchBytes, err = injectPodPartial(params)
+	} else {
+		patchBytes, err = injectPod(params)
+	}
 	if err != nil {
 		handleError(fmt.Sprintf("Pod injection failed: %v", err))
 		return toAdmissionResponse(err)
@@ -914,4 +955,69 @@ func parseInjectEnvs(path string) map[string]string {
 func handleError(message string) {
 	log.Errorf(message)
 	totalFailedInjections.Increment()
+}
+
+func injectPodPartial(req InjectionParameters) ([]byte, error) {
+	checkPreconditions(req)
+
+	// The patch will be built relative to the initial pod, capture its current state
+	originalPodSpec, err := json.Marshal(req.pod)
+	if err != nil {
+		return nil, err
+	}
+
+	mergedPod := req.pod.DeepCopy()
+	replaceProxyRunAsUserID(mergedPod, req.proxyUID)
+
+	patch, err := createPatch(mergedPod, originalPodSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create patch: %v", err)
+	}
+
+	log.Debugf("AdmissionResponse: patch=%v\n", string(patch))
+	return patch, nil
+}
+
+func wasInjectedThroughIstioctl(pod *corev1.Pod) bool {
+	_, found := pod.Annotations[annotation.SidecarStatus.Name]
+	return found
+}
+
+// modifies the pod to ensure that the proxy runs with the given proxyUID instead of 1337
+func replaceProxyRunAsUserID(pod *corev1.Pod, proxyUID uint64) {
+	for i, c := range pod.Spec.InitContainers {
+		if c.Name == InitContainerName {
+			for j, arg := range c.Args {
+				if arg == "-u" {
+					pod.Spec.InitContainers[i].Args[j+1] = strconv.FormatUint(proxyUID, 10)
+					break
+				}
+			}
+			break
+		}
+	}
+	for i, c := range pod.Spec.Containers {
+		if c.Name == ProxyContainerName {
+			if c.SecurityContext == nil {
+				securityContext := corev1.SecurityContext{}
+				pod.Spec.Containers[i].SecurityContext = &securityContext
+			}
+			proxyUIDasInt64 := int64(proxyUID)
+			pod.Spec.Containers[i].SecurityContext.RunAsUser = &proxyUIDasInt64
+			break
+		}
+	}
+}
+
+func getProxyUIDFromAnnotation(pod corev1.Pod) (*uint64, error) {
+	if pod.Annotations != nil {
+		if annotationValue, found := pod.Annotations[ProxyUIDAnnotation]; found {
+			proxyUID, err := strconv.ParseUint(annotationValue, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			return &proxyUID, nil
+		}
+	}
+	return nil, nil
 }

@@ -51,6 +51,12 @@ import (
 // sidecar proxy into the watched namespace(s).
 type InjectionPolicy string
 
+// Defaults values for injecting istio proxy into kubernetes
+// resources.
+const (
+	DefaultSidecarProxyUID = uint64(1337)
+)
+
 const (
 	// InjectionPolicyDisabled specifies that the sidecar injector
 	// will not inject the sidecar into resources by default for the
@@ -93,6 +99,7 @@ type SidecarTemplateData struct {
 	MeshConfig     *meshconfig.MeshConfig
 	Values         map[string]interface{}
 	Revision       string
+	ProxyUID       uint64
 }
 
 type Template *corev1.Pod
@@ -334,6 +341,7 @@ func RunTemplate(params InjectionParameters) (mergedPod *corev1.Pod, templatePod
 		MeshConfig:     meshConfig,
 		Values:         values,
 		Revision:       params.revision,
+		ProxyUID:       params.proxyUID,
 	}
 	funcMap := CreateInjectionFuncmap()
 
@@ -662,6 +670,7 @@ func IntoObject(sidecarTemplate Templates, valuesConfig string, revision string,
 		revision:            revision,
 		proxyEnvs:           map[string]string{},
 		injectedAnnotations: nil,
+		proxyUID:            DefaultSidecarProxyUID,
 	}
 	patchBytes, err := injectPod(params)
 	if err != nil {

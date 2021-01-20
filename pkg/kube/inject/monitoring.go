@@ -56,6 +56,11 @@ var (
 		"sidecar_injection_skip_total",
 		"Total number of skipped sidecar injection requests.",
 	)
+
+	totalPartialInjections = monitoring.NewSum(
+		"sidecar_injection_partial_total",
+		"Total number of partial sidecar injection requests.",
+	)
 )
 
 func init() {
