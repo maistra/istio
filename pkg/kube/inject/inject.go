@@ -123,6 +123,12 @@ func validateAnnotations(annotations map[string]string) (err error) {
 // sidecar proxy into the watched namespace(s).
 type InjectionPolicy string
 
+// Defaults values for injecting istio proxy into kubernetes
+// resources.
+const (
+	DefaultSidecarProxyUID = uint64(1337)
+)
+
 const (
 	// InjectionPolicyDisabled specifies that the sidecar injector
 	// will not inject the sidecar into resources by default for the
@@ -173,6 +179,7 @@ type SidecarTemplateData struct {
 	ProxyConfig    *meshconfig.ProxyConfig
 	MeshConfig     *meshconfig.MeshConfig
 	Values         map[string]interface{}
+	ProxyUID       uint64
 }
 
 // Config specifies the sidecar injection configuration This includes
@@ -514,6 +521,7 @@ func InjectionData(params InjectionParameters, typeMetadata *metav1.TypeMeta, de
 		ProxyConfig:    meshConfig.GetDefaultConfig(),
 		MeshConfig:     meshConfig,
 		Values:         values,
+		ProxyUID:       params.proxyUID,
 	}
 
 	funcMap := template.FuncMap{
@@ -801,8 +809,9 @@ func IntoObject(sidecarTemplate string, valuesConfig string, revision string, me
 		revision:            revision,
 		proxyEnvs:           map[string]string{},
 		injectedAnnotations: nil,
+		proxyUID:            DefaultSidecarProxyUID,
 	}
-	patchBytes, err := injectPod(params)
+	patchBytes, err := injectPod(params, false)
 	if err != nil {
 		return nil, err
 	}
