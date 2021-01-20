@@ -1,4 +1,5 @@
 // Copyright Istio Authors
+
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,10 +27,10 @@ import (
 	"istio.io/istio/galley/pkg/config/scope"
 	"istio.io/istio/galley/pkg/config/testing/fixtures"
 	"istio.io/istio/galley/pkg/config/testing/k8smeta"
-	"istio.io/istio/galley/pkg/testing/mock"
 	"istio.io/istio/pkg/config/event"
 	"istio.io/istio/pkg/config/resource"
 	resource2 "istio.io/istio/pkg/config/schema/resource"
+	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/pkg/log"
 )
 
@@ -65,9 +66,8 @@ func TestBasic(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	k := mock.NewKube()
-	client, err := k.KubeClient()
-	g.Expect(err).To(BeNil())
+	k := kubelib.NewFakeClient()
+	client := k.Kube()
 
 	// Start the source.
 	s := newOrFail(t, k, k8smeta.MustGet().KubeCollections(), nil)
@@ -81,6 +81,7 @@ func TestBasic(t *testing.T) {
 
 	acc.Clear()
 
+	var err error
 	node := &corev1.Node{
 		ObjectMeta: fakeObjectMeta,
 		Spec: corev1.NodeSpec{
@@ -106,9 +107,8 @@ func TestNodes(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	k := mock.NewKube()
-	client, err := k.KubeClient()
-	g.Expect(err).To(BeNil())
+	k := kubelib.NewFakeClient()
+	client := k.Kube()
 
 	// Start the source.
 	s := newOrFail(t, k, metadata, nil)
@@ -121,6 +121,7 @@ func TestNodes(t *testing.T) {
 	}
 	acc.Clear()
 
+	var err error
 	node := &corev1.Node{
 		ObjectMeta: fakeObjectMeta,
 		Spec: corev1.NodeSpec{
@@ -174,9 +175,8 @@ func TestPods(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	k := mock.NewKube()
-	client, err := k.KubeClient()
-	g.Expect(err).To(BeNil())
+	k := kubelib.NewFakeClient()
+	client := k.Kube()
 
 	// Start the source.
 	s := newOrFail(t, k, metadata, nil)
@@ -189,6 +189,7 @@ func TestPods(t *testing.T) {
 	}
 	acc.Clear()
 
+	var err error
 	pod := &corev1.Pod{
 		ObjectMeta: fakeObjectMeta,
 		Spec: corev1.PodSpec{
@@ -252,9 +253,8 @@ func TestServices(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	k := mock.NewKube()
-	client, err := k.KubeClient()
-	g.Expect(err).To(BeNil())
+	k := kubelib.NewFakeClient()
+	client := k.Kube()
 
 	// Start the source.
 	s := newOrFail(t, k, metadata, nil)
@@ -267,6 +267,7 @@ func TestServices(t *testing.T) {
 	}
 	acc.Clear()
 
+	var err error
 	svc := &corev1.Service{
 		ObjectMeta: fakeObjectMeta,
 		Spec: corev1.ServiceSpec{
@@ -325,9 +326,8 @@ func TestEndpoints(t *testing.T) {
 	prevLevel := setDebugLogLevel()
 	defer restoreLogLevel(prevLevel)
 
-	k := mock.NewKube()
-	client, err := k.KubeClient()
-	g.Expect(err).To(BeNil())
+	k := kubelib.NewFakeClient()
+	client := k.Kube()
 
 	// Start the source.
 	s := newOrFail(t, k, metadata, nil)
@@ -340,6 +340,7 @@ func TestEndpoints(t *testing.T) {
 	}
 	acc.Clear()
 
+	var err error
 	eps := &corev1.Endpoints{
 		ObjectMeta: fakeObjectMeta,
 		Subsets: []corev1.EndpointSubset{

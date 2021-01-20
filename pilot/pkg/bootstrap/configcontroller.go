@@ -362,7 +362,7 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 	processingArgs.MeshConfigFile = args.MeshConfigFile
 	processingArgs.EnableConfigAnalysis = true
 
-	processing := components.NewProcessing(processingArgs)
+	processing := components.NewProcessing(s.kubeClient, processingArgs)
 
 	s.addStartFunc(func(stop <-chan struct{}) error {
 		go leaderelection.

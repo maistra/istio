@@ -15,13 +15,14 @@
 package components
 
 import (
+	"fmt"
+
 	"istio.io/istio/galley/pkg/config/analysis/analyzers"
 	"istio.io/istio/galley/pkg/config/processing"
 	"istio.io/istio/galley/pkg/config/processing/snapshotter"
 	"istio.io/istio/galley/pkg/config/processor"
 	"istio.io/istio/galley/pkg/config/processor/groups"
 	"istio.io/istio/galley/pkg/config/processor/transforms"
-	"istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/galley/pkg/config/source/kube/apiserver"
 	"istio.io/istio/galley/pkg/config/source/kube/apiserver/status"
 	"istio.io/istio/galley/pkg/config/util/kuberesource"
@@ -29,6 +30,7 @@ import (
 	"istio.io/istio/pkg/config/event"
 	"istio.io/istio/pkg/config/schema"
 	"istio.io/istio/pkg/config/schema/collection"
+	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/mcp/monitoring"
 	"istio.io/istio/pkg/mcp/snapshot"
 	"istio.io/pkg/log"
@@ -41,7 +43,7 @@ type Processing struct {
 
 	mcpCache *snapshot.Cache
 
-	k kube.Interfaces
+	k kubelib.Client
 
 	runtime  *processing.Runtime
 	reporter monitoring.Reporter
@@ -49,9 +51,10 @@ type Processing struct {
 }
 
 // NewProcessing returns a new processing component.
-func NewProcessing(a *settings.Args) *Processing {
+func NewProcessing(k kubelib.Client, a *settings.Args) *Processing {
 	mcpCache := snapshot.New(groups.IndexFunction)
 	return &Processing{
+		k:        k,
 		args:     a,
 		mcpCache: mcpCache,
 	}
@@ -119,19 +122,11 @@ func (p *Processing) Start() (err error) {
 	return nil
 }
 
-func (p *Processing) getKubeInterfaces() (k kube.Interfaces, err error) {
-	if p.k == nil {
-		p.k, err = newInterfaces(p.args.KubeConfig)
-	}
-	k = p.k
-	return
-}
-
 func (p *Processing) createSourceAndStatusUpdater(schemas collection.Schemas) (
 	src event.Source, updater snapshotter.StatusUpdater, err error) {
 
-	var k kube.Interfaces
-	if k, err = p.getKubeInterfaces(); err != nil {
+	if p.k == nil {
+		err = fmt.Errorf("kubernetes client is nil")
 		return
 	}
 
@@ -141,11 +136,9 @@ func (p *Processing) createSourceAndStatusUpdater(schemas collection.Schemas) (
 	}
 
 	o := apiserver.Options{
-		Client:            k,
-		WatchedNamespaces: p.args.WatchedNamespaces,
-		ResyncPeriod:      p.args.ResyncPeriod,
-		Schemas:           schemas,
-		StatusController:  statusCtl,
+		Client:           p.k,
+		Schemas:          schemas,
+		StatusController: statusCtl,
 	}
 	s := apiserver.New(o)
 	src = s

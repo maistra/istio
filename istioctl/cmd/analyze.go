@@ -32,7 +32,6 @@ import (
 	"istio.io/istio/galley/pkg/config/analysis/local"
 	"istio.io/istio/galley/pkg/config/analysis/msg"
 	"istio.io/istio/galley/pkg/config/processing/snapshotter"
-	cfgKube "istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/istioctl/pkg/util/formatting"
 	"istio.io/istio/istioctl/pkg/util/handlers"
 	"istio.io/istio/pkg/config/resource"
@@ -169,11 +168,10 @@ func Analyze() *cobra.Command {
 			if useKube {
 				// Set up the kube client
 				config := kube.BuildClientCmd(kubeconfig, configContext)
-				restConfig, err := config.ClientConfig()
+				k, err := kube.NewClient(config)
 				if err != nil {
 					return err
 				}
-				k := cfgKube.NewInterfaces(restConfig)
 				sa.AddRunningKubeSource(k)
 			}
 
