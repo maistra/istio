@@ -363,7 +363,7 @@ func generateYAML(cfg echo.Config, cluster resource.Cluster) (serviceYAML string
 	return generateYAMLWithSettings(cfg, settings, cluster)
 }
 
-const DefaultVMImage = "app_sidecar_ubuntu_bionic"
+const DefaultVMImage = "app_sidecar_centos_8"
 
 func generateYAMLWithSettings(cfg echo.Config,
 	settings *image.Settings, cluster resource.Cluster) (serviceYAML string, deploymentYAML string, err error) {
