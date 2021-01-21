@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net/http"
 
-	maistrav1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
+	maistrav1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/typed/servicemesh/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -28,19 +28,19 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	MaistraV1() maistrav1.MaistraV1Interface
+	MaistraV1alpha1() maistrav1alpha1.MaistraV1alpha1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	maistraV1 *maistrav1.MaistraV1Client
+	maistraV1alpha1 *maistrav1alpha1.MaistraV1alpha1Client
 }
 
-// MaistraV1 retrieves the MaistraV1Client
-func (c *Clientset) MaistraV1() maistrav1.MaistraV1Interface {
-	return c.maistraV1
+// MaistraV1alpha1 retrieves the MaistraV1alpha1Client
+func (c *Clientset) MaistraV1alpha1() maistrav1alpha1.MaistraV1alpha1Interface {
+	return c.maistraV1alpha1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -83,7 +83,7 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 
 	var cs Clientset
 	var err error
-	cs.maistraV1, err = maistrav1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	cs.maistraV1alpha1, err = maistrav1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.maistraV1 = maistrav1.New(c)
+	cs.maistraV1alpha1 = maistrav1alpha1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
