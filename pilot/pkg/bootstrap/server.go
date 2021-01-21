@@ -70,6 +70,7 @@ import (
 	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/inject"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
+	"istio.io/istio/pkg/servicemesh/federation"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/istio/security/pkg/pki/ca"
@@ -134,6 +135,8 @@ type Server struct {
 	httpsServer      *http.Server // webhooks HTTPS Server.
 	httpsReadyClient *http.Client
 
+	federationServer *federation.Server
+
 	grpcServer       *grpc.Server
 	secureGrpcServer *grpc.Server
 
@@ -151,9 +154,10 @@ type Server struct {
 	// If the address os empty, the webhooks will be set on the default httpPort.
 	httpsMux *http.ServeMux // webhooks
 
-	HTTPListener       net.Listener
-	GRPCListener       net.Listener
-	SecureGrpcListener net.Listener
+	HTTPListener           net.Listener
+	GRPCListener           net.Listener
+	SecureGrpcListener     net.Listener
+	FederationHTTPListener net.Listener
 
 	// fileWatcher used to watch mesh config, networks and certificates.
 	fileWatcher filewatcher.FileWatcher
@@ -205,6 +209,14 @@ func NewServer(args *PilotArgs) (*Server, error) {
 		httpMux:         http.NewServeMux(),
 		monitoringMux:   http.NewServeMux(),
 		readinessProbes: make(map[string]readinessProbe),
+	}
+
+	if features.EnableFederationDiscoveryServer {
+		var err error
+		s.federationServer, err = federation.NewServer(args.ServerOptions.FederationAddr, e, s.clusterID, features.NetworkName)
+		if err != nil {
+			return nil, fmt.Errorf("error initializing federation server: %v", err)
+		}
 	}
 
 	if args.ShutdownDuration == 0 {
@@ -437,6 +449,10 @@ func (s *Server) Start(stop <-chan struct{}) error {
 				log.Errorf("error serving https server: %v", err)
 			}
 		}()
+	}
+
+	if s.federationServer != nil {
+		go s.federationServer.Run(stop)
 	}
 
 	s.waitForShutdown(stop)
@@ -884,6 +900,10 @@ func (s *Server) initRegistryEventHandlers() {
 		s.XDSServer.ConfigUpdate(pushReq)
 	}
 	s.ServiceController().AppendServiceHandler(serviceHandler)
+
+	if s.federationServer != nil {
+		s.ServiceController().AppendServiceHandler(s.federationServer.UpdateService)
+	}
 
 	if s.configController != nil {
 		configHandler := func(old config.Config, curr config.Config, event model.Event) {

@@ -63,6 +63,7 @@ require (
 	github.com/miekg/dns v1.1.35
 	github.com/mitchellh/copystructure v1.0.0
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/mitchellh/hashstructure/v2 v2.0.1
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/onsi/gomega v1.10.4
 	github.com/openshift/api v0.0.0-20200929171550-c99a4deebbe5
