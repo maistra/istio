@@ -53,7 +53,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=maistra.io, Version=v1
 	case v1.SchemeGroupVersion.WithResource("servicemeshmemberrolls"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Maistra().V1().ServiceMeshMemberRolls().Informer()}, nil
-
 	}
 
 	return nil, fmt.Errorf("no informer found for %v", resource)

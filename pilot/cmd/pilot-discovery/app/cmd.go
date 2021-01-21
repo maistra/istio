@@ -162,6 +162,8 @@ func addFlags(c *cobra.Command) {
 		"Whether to prevent istiod watching Node objects")
 	c.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableIngressClassName, "enableIngressClassName",
 		true, "Whether support processing Ingress resources that use the new ingressClassName field in their spec")
+	c.PersistentFlags().StringVar(&serverArgs.ServerOptions.FederationAddr, "federationAddr", ":8188",
+		"Federation Service Discovery HTTP address")
 
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	c.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",

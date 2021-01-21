@@ -17,22 +17,31 @@
 package fake
 
 import (
-	v1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
+	v1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/typed/servicemesh/v1alpha1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeMaistraV1 struct {
+type FakeMaistraV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeMaistraV1) ServiceMeshMemberRolls(namespace string) v1.ServiceMeshMemberRollInterface {
+func (c *FakeMaistraV1alpha1) MeshFederations(namespace string) v1alpha1.MeshFederationInterface {
+	return &FakeMeshFederations{c, namespace}
+}
+
+func (c *FakeMaistraV1alpha1) ServiceExports(namespace string) v1alpha1.ServiceExportsInterface {
+	return &FakeServiceExports{c, namespace}
+}
+
+func (c *FakeMaistraV1alpha1) ServiceMeshMemberRolls(namespace string) v1.ServiceMeshMemberRollInterface {
 	return &FakeServiceMeshMemberRolls{c, namespace}
 }
 
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeMaistraV1) RESTClient() rest.Interface {
+func (c *FakeMaistraV1alpha1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

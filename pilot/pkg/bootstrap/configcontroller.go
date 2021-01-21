@@ -131,6 +131,14 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 		})
 	}
 
+	if features.EnableFederation {
+		if s.federation == nil {
+			log.Errorf("Federation support disabled: federation not initialized")
+		} else {
+			s.ConfigStores = append(s.ConfigStores, s.federation.ConfigStore())
+		}
+	}
+
 	// Wrap the config controller with a cache.
 	aggregateConfigController, err := configaggregate.MakeCache(s.ConfigStores)
 	if err != nil {
