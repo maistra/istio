@@ -49,7 +49,7 @@ const (
 	Centos7      VMDistro = "Centos7"
 	Centos8      VMDistro = "Centos8"
 
-	DefaultVMDistro = UbuntuBionic
+	DefaultVMDistro = Centos8
 )
 
 // Config defines the options for creating an Echo component.
