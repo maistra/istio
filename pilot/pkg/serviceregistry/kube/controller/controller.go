@@ -43,6 +43,7 @@ import (
 	"istio.io/istio/pkg/config/protocol"
 	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/queue"
+	"istio.io/istio/pkg/servicemesh/federation"
 	"istio.io/pkg/log"
 	"istio.io/pkg/monitoring"
 )
@@ -446,10 +447,16 @@ func (c *Controller) onServiceEvent(curr interface{}, event model.Event) error {
 
 		if len(endpoints) > 0 {
 			c.xdsUpdater.EDSCacheUpdate(c.clusterID, string(svcConv.Hostname), svc.Namespace, endpoints)
+			if svcConv.Attributes.Labels[federation.ExportLabel] != "" {
+				c.xdsUpdater.EDSCacheUpdate(c.clusterID, svcConv.Attributes.Labels[federation.ExportLabel], svc.Namespace, endpoints)
+			}
 		}
 	}
 
 	c.xdsUpdater.SvcUpdate(c.clusterID, string(svcConv.Hostname), svc.Namespace, event)
+	if svcConv.Attributes.Labels[federation.ExportLabel] != "" {
+		c.xdsUpdater.SvcUpdate(c.clusterID, svcConv.Attributes.Labels[federation.ExportLabel], svc.Namespace, event)
+	}
 	// Notify service handlers.
 	for _, f := range c.serviceHandlers {
 		f(svcConv, event)
