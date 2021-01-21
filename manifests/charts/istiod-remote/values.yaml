@@ -2,6 +2,7 @@
 
 ## Discovery Settings
 pilot:
+  enableFederation: true
   autoscaleEnabled: true
   autoscaleMin: 1
   autoscaleMax: 5
@@ -114,8 +115,8 @@ sidecarInjectorWebhook:
   # This is intended for advanced configuration only; most users should use the built in template
   templates: {}
   # Default templates specifies a set of default templates that are used in sidecar injection.
-  # By default, a template `sidecar` is always provided, which contains the template of default sidecar. 
-  # To inject other additional templates, define it using the `templates` option, and add it to 
+  # By default, a template `sidecar` is always provided, which contains the template of default sidecar.
+  # To inject other additional templates, define it using the `templates` option, and add it to
   # the default templates list.
   # For example:
   #

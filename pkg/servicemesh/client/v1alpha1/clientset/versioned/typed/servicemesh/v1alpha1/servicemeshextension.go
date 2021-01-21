@@ -55,7 +55,7 @@ type serviceMeshExtensions struct {
 }
 
 // newServiceMeshExtensions returns a ServiceMeshExtensions
-func newServiceMeshExtensions(c *ServicemeshV1alpha1Client, namespace string) *serviceMeshExtensions {
+func newServiceMeshExtensions(c *MaistraV1alpha1Client, namespace string) *serviceMeshExtensions {
 	return &serviceMeshExtensions{
 		client: c.RESTClient(),
 		ns:     namespace,

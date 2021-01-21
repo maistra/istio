@@ -16,4 +16,8 @@
 
 package v1alpha1
 
+type MeshFederationExpansion interface{}
+
+type ServiceExportsExpansion interface{}
+
 type ServiceMeshExtensionExpansion interface{}

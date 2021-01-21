@@ -19,7 +19,7 @@ package versioned
 import (
 	"fmt"
 
-	servicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/typed/servicemesh/v1alpha1"
+	maistrav1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/typed/servicemesh/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -27,19 +27,19 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	ServicemeshV1alpha1() servicemeshv1alpha1.ServicemeshV1alpha1Interface
+	MaistraV1alpha1() maistrav1alpha1.MaistraV1alpha1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	servicemeshV1alpha1 *servicemeshv1alpha1.ServicemeshV1alpha1Client
+	maistraV1alpha1 *maistrav1alpha1.MaistraV1alpha1Client
 }
 
-// ServicemeshV1alpha1 retrieves the ServicemeshV1alpha1Client
-func (c *Clientset) ServicemeshV1alpha1() servicemeshv1alpha1.ServicemeshV1alpha1Interface {
-	return c.servicemeshV1alpha1
+// MaistraV1alpha1 retrieves the MaistraV1alpha1Client
+func (c *Clientset) MaistraV1alpha1() maistrav1alpha1.MaistraV1alpha1Interface {
+	return c.maistraV1alpha1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -63,7 +63,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
-	cs.servicemeshV1alpha1, err = servicemeshv1alpha1.NewForConfig(&configShallowCopy)
+	cs.maistraV1alpha1, err = maistrav1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
-	cs.servicemeshV1alpha1 = servicemeshv1alpha1.NewForConfigOrDie(c)
+	cs.maistraV1alpha1 = maistrav1alpha1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -88,7 +88,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.servicemeshV1alpha1 = servicemeshv1alpha1.New(c)
+	cs.maistraV1alpha1 = maistrav1alpha1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
