@@ -161,6 +161,8 @@ func addFlags(c *cobra.Command) {
 		true, "Whether support processing Ingress resources that use the new ingressClassName field in their spec")
 	c.PersistentFlags().StringVar(&extension.CacheCluster, "cacheCluster", extension.DefaultCacheCluster,
 		"Cluster pointing to Extension Cache component. This is used in proxies to retrieve WASM filters.")
+	c.PersistentFlags().StringVar(&serverArgs.ServerOptions.FederationAddr, "federationAddr", ":8188",
+		"Federation Service Discovery HTTP address")
 
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	c.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",

@@ -1521,6 +1521,9 @@ spec:
     - port: 15014
       name: http-monitoring # prometheus stats
       protocol: TCP
+    - port: 8188
+      name: http-discovery # federation discovery
+      protocol: TCP
   selector:
     app: istiod
     # Label used by the 'default' service. For versioned deployments we match with app and version.
@@ -1583,6 +1586,8 @@ spec:
             protocol: TCP
           - containerPort: 15017
             protocol: TCP
+          - containerPort: 8188
+            protocol: TCP
           readinessProbe:
             httpGet:
               path: /ready
@@ -1614,6 +1619,8 @@ spec:
                 fieldPath: spec.serviceAccountName
           - name: KUBECONFIG
             value: /var/run/secrets/remote/config
+          - name: PILOT_ENABLE_FEDERATION
+            value: "true"
           - name: PILOT_TRACE_SAMPLING
             value: "1"
           - name: PILOT_ENABLE_PROTOCOL_SNIFFING_FOR_OUTBOUND

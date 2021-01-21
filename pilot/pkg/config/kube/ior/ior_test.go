@@ -237,7 +237,6 @@ func TestCreate(t *testing.T) {
 					}
 				}
 			}
-
 		})
 	}
 }
@@ -458,7 +457,6 @@ func TestConcurrency(t *testing.T) {
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 func generateNamespaces(qty int) []string {

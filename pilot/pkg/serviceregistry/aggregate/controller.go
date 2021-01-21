@@ -379,3 +379,10 @@ func (c *Controller) GetIstioServiceAccounts(svc *model.Service, ports []int) []
 	sort.Strings(result)
 	return result
 }
+
+func (c *Controller) Unwrap(registry serviceregistry.Instance) serviceregistry.Instance {
+	if registryEntry, ok := registry.(*registryEntry); ok {
+		return registryEntry.Instance
+	}
+	return registry
+}

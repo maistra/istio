@@ -71,6 +71,8 @@ import (
 	"istio.io/istio/pkg/kube/multicluster"
 	"istio.io/istio/pkg/security"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
+	"istio.io/istio/pkg/servicemesh/federation"
+	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/istio/security/pkg/pki/ca"
@@ -130,6 +132,8 @@ type Server struct {
 	httpServer       *http.Server // debug, monitoring and readiness Server.
 	httpsServer      *http.Server // webhooks HTTPS Server.
 	httpsReadyClient *http.Client
+
+	federation *federation.Federation
 
 	grpcServer        *grpc.Server
 	grpcAddress       string
@@ -268,8 +272,39 @@ func NewServer(args *PilotArgs, initFuncs ...func(*Server)) (*Server, error) {
 		return nil, err
 	}
 
+	// federation support must be initialized before config and service controllers
+	if features.EnableFederation {
+		if s.kubeClient == nil {
+			log.Errorf("could not initialize federation discovery server: kubeClient is nil")
+		} else {
+			var err error
+			s.federation, err = federation.New(federation.Options{
+				ControllerOptions: common.ControllerOptions{
+					KubeClient:   s.kubeClient,
+					ResyncPeriod: args.RegistryOptions.KubeOptions.ResyncPeriod,
+					Namespace:    args.RegistryOptions.ClusterRegistriesNamespace,
+				},
+				BindAddress:       args.ServerOptions.FederationAddr,
+				Env:               s.environment,
+				Network:           features.NetworkName,
+				XDSUpdater:        s.XDSServer,
+				ServiceController: s.ServiceController(),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("error initializing federation: %v", err)
+			}
+		}
+	}
+
 	if err := s.initControllers(args); err != nil {
 		return nil, err
+	}
+
+	if s.federation != nil {
+		s.addStartFunc(func(stop <-chan struct{}) error {
+			go s.federation.StartControllers(stop)
+			return nil
+		})
 	}
 
 	s.XDSServer.InitGenerators(e, args.Namespace)
@@ -508,6 +543,10 @@ func (s *Server) Start(stop <-chan struct{}) error {
 				log.Errorf("error serving https server: %v", err)
 			}
 		}()
+	}
+
+	if s.federation != nil {
+		go s.federation.StartServer(stop)
 	}
 
 	s.waitForShutdown(stop)
@@ -905,6 +944,9 @@ func (s *Server) cachesSynced() bool {
 	if !s.configController.HasSynced() {
 		return false
 	}
+	if s.federation != nil && !s.federation.ControllersSynced() {
+		return false
+	}
 	return true
 }
 
@@ -925,6 +967,10 @@ func (s *Server) initRegistryEventHandlers() {
 		s.XDSServer.ConfigUpdate(pushReq)
 	}
 	s.ServiceController().AppendServiceHandler(serviceHandler)
+
+	if s.federation != nil {
+		s.federation.RegisterServiceHandlers(s.ServiceController())
+	}
 
 	if s.configController != nil {
 		configHandler := func(prev config.Config, curr config.Config, event model.Event) {

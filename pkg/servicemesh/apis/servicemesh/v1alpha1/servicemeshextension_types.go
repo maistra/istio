@@ -74,6 +74,7 @@ type ServiceMeshExtension struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ServiceMeshExtensionList contains a list of ServiceMeshExtension
 type ServiceMeshExtensionList struct {

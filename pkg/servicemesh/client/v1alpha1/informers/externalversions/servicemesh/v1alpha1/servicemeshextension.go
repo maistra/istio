@@ -60,13 +60,13 @@ func NewFilteredServiceMeshExtensionInformer(client versioned.Interface, namespa
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ServicemeshV1alpha1().ServiceMeshExtensions(namespace).List(context.TODO(), options)
+				return client.MaistraV1alpha1().ServiceMeshExtensions(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ServicemeshV1alpha1().ServiceMeshExtensions(namespace).Watch(context.TODO(), options)
+				return client.MaistraV1alpha1().ServiceMeshExtensions(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&servicemeshv1alpha1.ServiceMeshExtension{},

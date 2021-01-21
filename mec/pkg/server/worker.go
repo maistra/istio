@@ -54,7 +54,7 @@ type Worker struct {
 
 	pullStrategy model.ImagePullStrategy
 
-	client       v1alpha1client.ServicemeshV1alpha1Interface
+	client       v1alpha1client.MaistraV1alpha1Interface
 	stopChan     <-chan struct{}
 	resultChan   chan workerResult
 	Queue        chan ExtensionEvent
