@@ -76,7 +76,7 @@ const (
 	Centos7      VMDistro = "Centos7"
 	Rockylinux8  VMDistro = "Centos8"
 
-	DefaultVMDistro = UbuntuJammy
+	DefaultVMDistro = Rockylinux8
 )
 
 // Config defines the options for creating an Echo component.
