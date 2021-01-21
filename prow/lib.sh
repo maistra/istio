@@ -75,11 +75,11 @@ function build_images() {
   # Build just the images needed for tests
   targets="docker.pilot docker.proxyv2 "
 
-  # use ubuntu:bionic to test vms by default
-  nonDistrolessTargets="docker.app docker.app_sidecar_ubuntu_bionic "
+  # use centos:8 to test vms by default
+  nonDistrolessTargets="docker.app docker.app_sidecar_centos_8 "
   if [[ "${SELECT_TEST}" == "test.integration.pilot.kube" ]]; then
     nonDistrolessTargets+="docker.app_sidecar_ubuntu_xenial docker.app_sidecar_ubuntu_focal docker.app_sidecar_ubuntu_bionic "
-    nonDistrolessTargets+="docker.app_sidecar_debian_9 docker.app_sidecar_debian_10 docker.app_sidecar_centos_7 docker.app_sidecar_centos_8 "
+    nonDistrolessTargets+="docker.app_sidecar_debian_9 docker.app_sidecar_debian_10 docker.app_sidecar_centos_7 docker.app_sidecar_ubuntu_bionic "
   fi
   targets+="docker.operator "
   targets+="docker.install-cni "
