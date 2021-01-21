@@ -138,7 +138,7 @@ func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuff
 		name := fmt.Sprintf("%s.%s", s.Resource().Plural(), s.Resource().Group())
 		schemasByCRDName[name] = s
 	}
-	var out = &Client{
+	out := &Client{
 		domainSuffix:     domainSuffix,
 		schemas:          schemas,
 		schemasByCRDName: schemasByCRDName,

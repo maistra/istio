@@ -27,6 +27,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/keycertbundle"
 	"istio.io/istio/pilot/pkg/server"

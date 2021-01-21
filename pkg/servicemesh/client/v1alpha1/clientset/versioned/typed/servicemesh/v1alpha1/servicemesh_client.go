@@ -22,22 +22,32 @@ import (
 	rest "k8s.io/client-go/rest"
 )
 
-type ServicemeshV1alpha1Interface interface {
+type MaistraV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	MeshFederationsGetter
+	ServiceExportsGetter
 	ServiceMeshExtensionsGetter
 }
 
-// ServicemeshV1alpha1Client is used to interact with features provided by the servicemesh group.
-type ServicemeshV1alpha1Client struct {
+// MaistraV1alpha1Client is used to interact with features provided by the maistra.io group.
+type MaistraV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *ServicemeshV1alpha1Client) ServiceMeshExtensions(namespace string) ServiceMeshExtensionInterface {
+func (c *MaistraV1alpha1Client) MeshFederations(namespace string) MeshFederationInterface {
+	return newMeshFederations(c, namespace)
+}
+
+func (c *MaistraV1alpha1Client) ServiceExports(namespace string) ServiceExportsInterface {
+	return newServiceExports(c, namespace)
+}
+
+func (c *MaistraV1alpha1Client) ServiceMeshExtensions(namespace string) ServiceMeshExtensionInterface {
 	return newServiceMeshExtensions(c, namespace)
 }
 
-// NewForConfig creates a new ServicemeshV1alpha1Client for the given config.
-func NewForConfig(c *rest.Config) (*ServicemeshV1alpha1Client, error) {
+// NewForConfig creates a new MaistraV1alpha1Client for the given config.
+func NewForConfig(c *rest.Config) (*MaistraV1alpha1Client, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -46,12 +56,12 @@ func NewForConfig(c *rest.Config) (*ServicemeshV1alpha1Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ServicemeshV1alpha1Client{client}, nil
+	return &MaistraV1alpha1Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new ServicemeshV1alpha1Client for the given config and
+// NewForConfigOrDie creates a new MaistraV1alpha1Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *ServicemeshV1alpha1Client {
+func NewForConfigOrDie(c *rest.Config) *MaistraV1alpha1Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -59,9 +69,9 @@ func NewForConfigOrDie(c *rest.Config) *ServicemeshV1alpha1Client {
 	return client
 }
 
-// New creates a new ServicemeshV1alpha1Client for the given RESTClient.
-func New(c rest.Interface) *ServicemeshV1alpha1Client {
-	return &ServicemeshV1alpha1Client{c}
+// New creates a new MaistraV1alpha1Client for the given RESTClient.
+func New(c rest.Interface) *MaistraV1alpha1Client {
+	return &MaistraV1alpha1Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -79,7 +89,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *ServicemeshV1alpha1Client) RESTClient() rest.Interface {
+func (c *MaistraV1alpha1Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

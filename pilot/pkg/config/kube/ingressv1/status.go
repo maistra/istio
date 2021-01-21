@@ -21,10 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"istio.io/istio/pkg/config/mesh"
-	kubelib "istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/queue"
-	"istio.io/pkg/log"
 	coreV1 "k8s.io/api/core/v1"
 	knetworking "k8s.io/api/networking/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,6 +30,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	ingresslister "k8s.io/client-go/listers/networking/v1"
+
+	"istio.io/istio/pkg/config/mesh"
+	kubelib "istio.io/istio/pkg/kube"
+	"istio.io/istio/pkg/queue"
+	"istio.io/pkg/log"
 )
 
 const (
