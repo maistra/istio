@@ -158,13 +158,12 @@ func (m *Multicluster) AddMemberCluster(clients kubelib.Client, clusterID string
 
 func (m *Multicluster) AddFederatedCluster(clusterID string, discoveryEndpoint string) error {
 	// stopCh to stop controller created here when cluster removed.
-	stopCh := make(chan struct{})
 	m.m.Lock()
 	options := federation.Options{
 		DiscoveryEndpoint: discoveryEndpoint,
 		ClusterID:         clusterID,
 		XDSUpdater:        m.XDSUpdater,
-		ResyncPeriod:      time.Second * 30,
+		ResyncPeriod:      time.Minute * 5,
 	}
 	log.Infof("Initializing Federation service registry %q at %s", options.ClusterID, options.DiscoveryEndpoint)
 	kubectl := federation.NewController(options)
@@ -174,7 +173,6 @@ func (m *Multicluster) AddFederatedCluster(clusterID string, discoveryEndpoint s
 	// Only need to add service handler for kubernetes registry as `initRegistryEventHandlers`,
 	// because when endpoints update `XDSUpdater.EDSUpdate` has already been called.
 	_ = kubectl.AppendServiceHandler(func(svc *model.Service, ev model.Event) { m.updateHandler(svc) })
-	go kubectl.Run(stopCh)
 
 	return nil
 }

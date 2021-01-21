@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff"
+
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pkg/config/constants"
@@ -37,6 +39,8 @@ var _ model.ServiceDiscovery = &Controller{}
 var _ model.Controller = &Controller{}
 var _ serviceregistry.Instance = &Controller{}
 
+var logger = log.RegisterScope("federation-registry", "federation-registry", 0)
+
 // Controller aggregates data across different registries and monitors for changes
 type Controller struct {
 	meshHolder        mesh.Holder
@@ -44,6 +48,7 @@ type Controller struct {
 	networkName       string
 	clusterID         string
 	resyncPeriod      time.Duration
+	backoffPolicy     *backoff.ExponentialBackOff
 
 	xdsUpdater model.XDSUpdater
 
@@ -51,6 +56,8 @@ type Controller struct {
 	serviceStore  []*model.Service
 	instanceStore map[host.Name][]*model.ServiceInstance
 	gatewayStore  []*model.Gateway
+
+	lastMessage *federation.ServiceListMessage
 }
 
 type Options struct {
@@ -64,6 +71,8 @@ type Options struct {
 
 // NewController creates a new Aggregate controller
 func NewController(opt Options) *Controller {
+	backoffPolicy := backoff.NewExponentialBackOff()
+	backoffPolicy.MaxElapsedTime = 0
 	return &Controller{
 		meshHolder:        opt.MeshHolder,
 		discoveryEndpoint: opt.DiscoveryEndpoint,
@@ -71,6 +80,7 @@ func NewController(opt Options) *Controller {
 		clusterID:         opt.ClusterID,
 		xdsUpdater:        opt.XDSUpdater,
 		resyncPeriod:      opt.ResyncPeriod,
+		backoffPolicy:     backoffPolicy,
 	}
 }
 
@@ -86,21 +96,21 @@ func (c *Controller) pollServices() *federation.ServiceListMessage {
 	url := c.discoveryEndpoint + "/services/"
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Errorf("Failed to GET URL: '%s': %s", url, err)
+		logger.Errorf("Failed to GET URL: '%s': %s", url, err)
 		return nil
 	}
 
 	respBytes := []byte{}
 	_, err = resp.Body.Read(respBytes)
 	if err != nil {
-		log.Errorf("Failed to read response body from URL '%s': %s", url, err)
+		logger.Errorf("Failed to read response body from URL '%s': %s", url, err)
 		return nil
 	}
 
 	var serviceList federation.ServiceListMessage
 	err = json.NewDecoder(resp.Body).Decode(&serviceList)
 	if err != nil {
-		log.Errorf("Failed to unmarshal response bytes: %s", err)
+		logger.Errorf("Failed to unmarshal response bytes: %s", err)
 		return nil
 	}
 	return &serviceList
@@ -109,58 +119,57 @@ func (c *Controller) pollServices() *federation.ServiceListMessage {
 func getNameAndNamespaceFromHostname(hostname string) (string, string) {
 	fragments := strings.Split(hostname, ".")
 	if len(fragments) != 5 {
-		log.Warnf("Can't parse hostname: %s", hostname)
+		logger.Warnf("Can't parse hostname: %s", hostname)
 		return hostname, ""
 	}
 	return fragments[0], fragments[1]
 }
 
+func (c *Controller) convertService(s *federation.ServiceMessage, networkGateways []*model.Gateway) (*model.Service, []*model.ServiceInstance) {
+	instances := []*model.ServiceInstance{}
+	name, namespace := getNameAndNamespaceFromHostname(s.Name)
+	svc := &model.Service{
+		Attributes: model.ServiceAttributes{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Resolution:      model.ClientSideLB,
+		Address:         constants.UnspecifiedIP,
+		Hostname:        host.Name(s.Name),
+		Ports:           model.PortList{},
+		ServiceAccounts: []string{},
+	}
+	for _, port := range s.ServicePorts {
+		svc.Ports = append(svc.Ports, &model.Port{
+			Name:     port.Name,
+			Port:     port.Port,
+			Protocol: protocol.Instance(port.Protocol),
+		})
+	}
+
+	for _, port := range svc.Ports {
+		for _, networkGateway := range networkGateways {
+			instances = append(instances, &model.ServiceInstance{
+				Service:     svc,
+				ServicePort: port,
+				Endpoint: &model.IstioEndpoint{
+					Address:      networkGateway.Addr,
+					EndpointPort: networkGateway.Port,
+					Network:      c.networkName,
+					Locality: model.Locality{
+						ClusterID: c.clusterID,
+					},
+					ServicePortName: port.Name,
+				},
+			})
+		}
+	}
+	return svc, instances
+}
+
 func (c *Controller) convertServices(serviceList *federation.ServiceListMessage) {
 	services := []*model.Service{}
 	instances := make(map[host.Name][]*model.ServiceInstance)
-	for _, s := range serviceList.Services {
-		name, namespace := getNameAndNamespaceFromHostname(s.Name)
-		svc := &model.Service{
-			Attributes: model.ServiceAttributes{
-				Name:      name,
-				Namespace: namespace,
-			},
-			Resolution:      model.ClientSideLB,
-			Address:         constants.UnspecifiedIP,
-			Hostname:        host.Name(s.Name),
-			Ports:           model.PortList{},
-			ServiceAccounts: []string{},
-		}
-		for _, port := range s.ServicePorts {
-			svc.Ports = append(svc.Ports, &model.Port{
-				Name:     port.Name,
-				Port:     port.Port,
-				Protocol: protocol.Instance(port.Protocol),
-			})
-		}
-
-		services = append(services, svc)
-		for _, port := range svc.Ports {
-			for _, networkGateway := range serviceList.NetworkGatewayEndpoints {
-				if list, ok := instances[svc.Hostname]; !ok || list == nil {
-					instances[svc.Hostname] = []*model.ServiceInstance{}
-				}
-				instances[svc.Hostname] = append(instances[svc.Hostname], &model.ServiceInstance{
-					Service:     svc,
-					ServicePort: port,
-					Endpoint: &model.IstioEndpoint{
-						Address:      networkGateway.Hostname,
-						EndpointPort: uint32(port.Port),
-						Network:      c.networkName,
-						Locality: model.Locality{
-							ClusterID: c.clusterID,
-						},
-						ServicePortName: port.Name,
-					},
-				})
-			}
-		}
-	}
 	gateways := []*model.Gateway{}
 	for _, gateway := range serviceList.NetworkGatewayEndpoints {
 		gateways = append(gateways, &model.Gateway{
@@ -168,11 +177,16 @@ func (c *Controller) convertServices(serviceList *federation.ServiceListMessage)
 			Port: uint32(gateway.Port),
 		})
 	}
-	autoAllocateIPs(services)
+	for _, s := range serviceList.Services {
+		svc, instanceList := c.convertService(s, gateways)
+		services = append(services, svc)
+		instances[svc.Hostname] = instanceList
+	}
 	c.storeLock.Lock()
 	c.serviceStore = services
 	c.instanceStore = instances
 	c.gatewayStore = gateways
+	c.lastMessage = serviceList
 	c.storeLock.Unlock()
 }
 
@@ -199,7 +213,7 @@ func autoAllocateIPs(services []*model.Service) []*model.Service {
 				x++
 			}
 			if x >= maxIPs {
-				log.Errorf("out of IPs to allocate for service entries")
+				logger.Errorf("out of IPs to allocate for service entries")
 				return services
 			}
 			thirdOctet := x / 255
@@ -214,7 +228,7 @@ func autoAllocateIPs(services []*model.Service) []*model.Service {
 func (c *Controller) Services() ([]*model.Service, error) {
 	c.storeLock.RLock()
 	defer c.storeLock.RUnlock()
-	return c.serviceStore, nil
+	return autoAllocateIPs(c.serviceStore), nil
 }
 
 // GetService retrieves a service by hostname if exists
@@ -260,32 +274,166 @@ func (c *Controller) GetProxyWorkloadLabels(proxy *model.Proxy) labels.Collectio
 
 // Run starts all the controllers
 func (c *Controller) Run(stop <-chan struct{}) {
+	eventCh := make(chan *federation.WatchEvent)
+	refreshTicker := time.NewTicker(c.resyncPeriod)
+	defer refreshTicker.Stop()
+	c.resync()
+	go func() {
+		for {
+			logger.Info("starting watch")
+			err := c.watch(eventCh, stop)
+			if err != nil {
+				logger.Errorf("watch failed: %s", err)
+				time.Sleep(c.backoffPolicy.NextBackOff())
+			} else {
+				return
+			}
+		}
+	}()
 	for {
 		select {
 		case <-stop:
-			log.Info("Federation Controller terminated")
-			break
-		default:
+			logger.Info("Federation Controller terminated")
+			return
+		case e := <-eventCh:
+			logger.Debugf("watch event received: %s service %s", e.Action, e.Service.Name)
+			c.handleEvent(e)
+		case <-refreshTicker.C:
+			_ = c.resync()
 		}
-		svcList := c.pollServices()
-		if svcList != nil {
-			c.convertServices(svcList)
-			c.storeLock.RLock()
-			for hostname, instanceList := range c.instanceStore {
-				endpoints := []*model.IstioEndpoint{}
-				for _, instance := range instanceList {
-					endpoints = append(endpoints, instance.Endpoint)
-				}
-				c.xdsUpdater.SvcUpdate(c.clusterID, string(hostname), instanceList[0].Service.Attributes.Namespace, model.EventUpdate)
-				c.xdsUpdater.EDSUpdate(c.clusterID, string(hostname), instanceList[0].Service.Attributes.Namespace, endpoints)
-			}
-			c.storeLock.RUnlock()
-		}
-		<-time.After(c.resyncPeriod)
 	}
 }
 
-// HasSynced returns true when all registries have synced
+func (c *Controller) handleEvent(e *federation.WatchEvent) {
+	if e.Service == nil {
+		checksum := c.resync()
+		if checksum != e.Checksum {
+			// this shouldn't happen
+			logger.Error("checksum mismatch after resync")
+		}
+		return
+	}
+	c.storeLock.RLock()
+	gateways := c.gatewayStore
+	c.storeLock.RUnlock()
+	svc, instances := c.convertService(e.Service, gateways)
+
+	// verify we're up to date
+	lastReceivedMessage := c.lastMessage
+	if e.Action == federation.ActionAdd {
+		lastReceivedMessage.Services = append(c.lastMessage.Services, e.Service)
+	} else if e.Action == federation.ActionUpdate {
+		for i, s := range lastReceivedMessage.Services {
+			if s.Name == e.Service.Name {
+				lastReceivedMessage.Services[i] = e.Service
+				break
+			}
+		}
+	} else if e.Action == federation.ActionDelete {
+		for i, s := range lastReceivedMessage.Services {
+			if s.Name == e.Service.Name {
+				lastReceivedMessage.Services[i] = c.lastMessage.Services[len(c.lastMessage.Services)-1]
+				lastReceivedMessage.Services = c.lastMessage.Services[:len(c.lastMessage.Services)-1]
+				break
+			}
+		}
+	}
+	lastReceivedMessage.Checksum = lastReceivedMessage.GenerateChecksum()
+	if lastReceivedMessage.Checksum != e.Checksum {
+		logger.Warnf("checksums don't match. resyncing")
+		c.resync()
+		return
+	}
+
+	c.storeLock.Lock()
+	defer c.storeLock.Unlock()
+	c.lastMessage = lastReceivedMessage
+
+	endpoints := []*model.IstioEndpoint{}
+	action := model.EventAdd
+	if e.Action == federation.ActionAdd {
+		c.serviceStore = append(c.serviceStore, svc)
+		c.instanceStore[svc.Hostname] = instances
+		for _, instance := range instances {
+			endpoints = append(endpoints, instance.Endpoint)
+		}
+	} else if e.Action == federation.ActionUpdate {
+		action = model.EventUpdate
+		c.serviceStore = append(c.serviceStore, svc)
+		c.instanceStore[svc.Hostname] = instances
+		for _, instance := range instances {
+			endpoints = append(endpoints, instance.Endpoint)
+		}
+	} else if e.Action == federation.ActionDelete {
+		action = model.EventDelete
+		for i, s := range c.serviceStore {
+			if s.Hostname == svc.Hostname {
+				c.serviceStore[i] = c.serviceStore[len(c.serviceStore)-1]
+				c.serviceStore = c.serviceStore[:len(c.serviceStore)-1]
+				break
+			}
+		}
+		delete(c.instanceStore, svc.Hostname)
+	}
+	c.xdsUpdater.SvcUpdate(c.clusterID, string(svc.Hostname), svc.Attributes.Namespace, action)
+	c.xdsUpdater.EDSUpdate(c.clusterID, string(svc.Hostname), svc.Attributes.Namespace, endpoints)
+	c.xdsUpdater.ConfigUpdate(&model.PushRequest{
+		Full: true,
+	})
+}
+
+func (c *Controller) watch(eventCh chan *federation.WatchEvent, stopCh <-chan struct{}) error {
+	req, err := http.NewRequest("GET", c.discoveryEndpoint+"/watch", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
+	}
+
+	// connection was established successfully. reset backoffPolicy
+	c.backoffPolicy.Reset()
+
+	dec := json.NewDecoder(resp.Body)
+	for {
+		select {
+		case <-stopCh:
+			return nil
+		default:
+		}
+		var e federation.WatchEvent
+		err := dec.Decode(&e)
+		if err != nil {
+			return err
+		}
+		eventCh <- &e
+	}
+}
+
+func (c *Controller) resync() uint64 {
+	svcList := c.pollServices()
+	if svcList != nil {
+		c.convertServices(svcList)
+		c.storeLock.RLock()
+		for hostname, instanceList := range c.instanceStore {
+			endpoints := []*model.IstioEndpoint{}
+			for _, instance := range instanceList {
+				endpoints = append(endpoints, instance.Endpoint)
+			}
+			c.xdsUpdater.SvcUpdate(c.clusterID, string(hostname), instanceList[0].Service.Attributes.Namespace, model.EventUpdate)
+			c.xdsUpdater.EDSUpdate(c.clusterID, string(hostname), instanceList[0].Service.Attributes.Namespace, endpoints)
+		}
+		c.storeLock.RUnlock()
+		return svcList.Checksum
+	}
+	return 0
+}
+
+// HasSynced always returns true so not to stall istiod on a broken federation connection
 func (c *Controller) HasSynced() bool {
 	return true
 }

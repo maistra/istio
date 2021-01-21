@@ -14,10 +14,12 @@
 
 package federation
 
+import hashstructure "github.com/mitchellh/hashstructure/v2"
+
 type ServiceListMessage struct {
 	Checksum                uint64             `json:"checksum" hash:"ignore"`
-	NetworkGatewayEndpoints []*ServiceEndpoint `json:"networkGatewayEndpoints"`
-	Services                []*ServiceMessage  `json:"services"`
+	NetworkGatewayEndpoints []*ServiceEndpoint `json:"networkGatewayEndpoints" hash:"set"`
+	Services                []*ServiceMessage  `json:"services" hash:"set"`
 }
 
 type ServiceMessage struct {
@@ -34,4 +36,24 @@ type ServicePort struct {
 type ServiceEndpoint struct {
 	Port     int    `json:"port"`
 	Hostname string `json:"hostname"`
+}
+
+type WatchEvent struct {
+	Action   string          `json:"action"`
+	Service  *ServiceMessage `json:"service"`
+	Checksum uint64          `json:"checksum"`
+}
+
+var (
+	ActionAdd    = "add"
+	ActionUpdate = "update"
+	ActionDelete = "delete"
+)
+
+func (s *ServiceListMessage) GenerateChecksum() uint64 {
+	checksum, err := hashstructure.Hash(s, hashstructure.FormatV2, nil)
+	if err != nil {
+		return 0
+	}
+	return checksum
 }

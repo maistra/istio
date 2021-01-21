@@ -48,6 +48,9 @@ type Server struct {
 
 	currentServices         map[string]*ServiceMessage
 	currentGatewayEndpoints []*ServiceEndpoint
+
+	watchMut       sync.RWMutex
+	currentWatches []chan *WatchEvent
 }
 
 func NewServer(addr string, env *model.Environment, clusterID, network string) (*Server, error) {
@@ -68,6 +71,7 @@ func NewServer(addr string, env *model.Environment, clusterID, network string) (
 	}
 	mux := mux.NewRouter()
 	mux.HandleFunc("/services/", fed.handleServiceList)
+	mux.HandleFunc("/watch", fed.handleWatch)
 	fed.httpServer.Handler = mux
 	return fed, nil
 }
@@ -94,23 +98,24 @@ func (s *Server) getServiceMessage(svc *model.Service) *ServiceMessage {
 	return ret
 }
 
-func (s *Server) handleServiceList(response http.ResponseWriter, request *http.Request) {
-	s.RLock()
-	defer s.RUnlock()
-	ret := ServiceListMessage{
+// s has to be Lock()ed
+func (s *Server) getServiceListMessage() *ServiceListMessage {
+	ret := &ServiceListMessage{
 		NetworkGatewayEndpoints: s.currentGatewayEndpoints,
 	}
 	ret.Services = []*ServiceMessage{}
 	for _, svcMessage := range s.currentServices {
 		ret.Services = append(ret.Services, svcMessage)
 	}
-	checksum, err := hashstructure.Hash(ret, hashstructure.FormatV2, nil)
-	if err != nil {
-		logger.Errorf("failed to generate checksum: %s", err)
-		response.WriteHeader(500)
-		return
-	}
-	ret.Checksum = checksum
+	ret.Checksum = ret.GenerateChecksum()
+	return ret
+}
+
+func (s *Server) handleServiceList(response http.ResponseWriter, request *http.Request) {
+	s.RLock()
+	defer s.RUnlock()
+	ret := s.getServiceListMessage()
+
 	respBytes, err := json.Marshal(ret)
 	if err != nil {
 		logger.Errorf("failed to marshal to json: %s", err)
@@ -125,8 +130,52 @@ func (s *Server) handleServiceList(response http.ResponseWriter, request *http.R
 	}
 }
 
+func (s *Server) handleWatch(response http.ResponseWriter, request *http.Request) {
+	watch := make(chan *WatchEvent)
+	s.watchMut.Lock()
+	s.currentWatches = append(s.currentWatches, watch)
+	s.watchMut.Unlock()
+	defer func() {
+		s.watchMut.Lock()
+		for i, w := range s.currentWatches {
+			if w == watch {
+				s.currentWatches[i] = s.currentWatches[len(s.currentWatches)-1]
+				s.currentWatches = s.currentWatches[:len(s.currentWatches)-1]
+				break
+			}
+		}
+		s.watchMut.Unlock()
+	}()
+	response.Header().Set("Content-Type", "application/json")
+	response.Header().Set("Transfer-Encoding", "chunked")
+	response.WriteHeader(200)
+	flusher, ok := response.(http.Flusher)
+	if !ok {
+		panic("expected http.ResponseWriter to be an http.Flusher")
+	}
+	flusher.Flush()
+	for {
+		event := <-watch
+		respBytes, err := json.Marshal(event)
+		if err != nil {
+			return
+		}
+		_, err = response.Write(respBytes)
+		if err != nil {
+			logger.Errorf("failed to write http response: %s", err)
+			return
+		}
+		_, err = response.Write([]byte("\r\n"))
+		if err != nil {
+			logger.Errorf("failed to write http response: %s", err)
+			return
+		}
+		flusher.Flush()
+	}
+}
+
 func (s *Server) resync() {
-	s.resyncNetworkGateways()
+	_, _ = s.resyncNetworkGateways()
 
 	s.Lock()
 	defer s.Unlock()
@@ -147,7 +196,7 @@ func (s *Server) resync() {
 	s.currentServices = serviceMap
 }
 
-func (s *Server) resyncNetworkGateways() {
+func (s *Server) resyncNetworkGateways() (bool, error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -158,7 +207,20 @@ func (s *Server) resyncNetworkGateways() {
 			Hostname: gateway.Addr,
 		})
 	}
-	s.currentGatewayEndpoints = gatewayEndpoints
+
+	oldGatewayChecksum, err := hashstructure.Hash(s.currentGatewayEndpoints, hashstructure.FormatV2, &hashstructure.HashOptions{SlicesAsSets: true})
+	if err != nil {
+		return false, err
+	}
+	newGatewayChecksum, err := hashstructure.Hash(gatewayEndpoints, hashstructure.FormatV2, &hashstructure.HashOptions{SlicesAsSets: true})
+	if err != nil {
+		return false, err
+	}
+	if oldGatewayChecksum != newGatewayChecksum {
+		s.currentGatewayEndpoints = gatewayEndpoints
+		return true, nil
+	}
+	return false, nil
 }
 
 func (s *Server) Run(stopCh <-chan struct{}) {
@@ -173,7 +235,13 @@ func (s *Server) Run(stopCh <-chan struct{}) {
 func (s *Server) UpdateService(svc *model.Service, event model.Event) {
 	// this might be a NetworkGateway
 	if svc != nil && svc.Attributes.ClusterExternalAddresses != nil {
-		s.resyncNetworkGateways()
+		networkGatewaysChanged, _ := s.resyncNetworkGateways()
+		if networkGatewaysChanged {
+			s.pushWatchEvent(&WatchEvent{
+				Action:  ActionUpdate,
+				Service: nil,
+			})
+		}
 	}
 
 	var svcMessage *ServiceMessage
@@ -183,20 +251,72 @@ func (s *Server) UpdateService(svc *model.Service, event model.Event) {
 		if svcMessage != nil {
 			s.Lock()
 			defer s.Unlock()
-			s.currentServices[string(svc.Hostname)] = svcMessage
+			s.addService(string(svc.Hostname), svcMessage)
 		}
 	case model.EventUpdate:
 		svcMessage = s.getServiceMessage(svc)
 		s.Lock()
 		defer s.Unlock()
 		if svcMessage != nil {
-			s.currentServices[string(svc.Hostname)] = svcMessage
-		} else {
-			delete(s.currentServices, string(svc.Hostname))
+			if existingSvc, found := s.currentServices[string(svc.Hostname)]; found {
+				if existingSvc.Name != svcMessage.Name {
+					s.deleteService(string(svc.Hostname), existingSvc)
+					s.addService(string(svc.Hostname), svcMessage)
+				} else {
+					s.updateService(string(svc.Hostname), svcMessage)
+				}
+			} else {
+				s.addService(string(svc.Hostname), svcMessage)
+			}
+		} else if existingSvc, found := s.currentServices[string(svc.Hostname)]; found {
+			s.deleteService(string(svc.Hostname), existingSvc)
 		}
 	case model.EventDelete:
 		s.Lock()
 		defer s.Unlock()
-		delete(s.currentServices, string(svc.Hostname))
+		if existingSvc, found := s.currentServices[string(svc.Hostname)]; found {
+			s.deleteService(string(svc.Hostname), existingSvc)
+		}
+	}
+}
+
+// s has to be Lock()ed
+func (s *Server) addService(hostname string, svc *ServiceMessage) {
+	s.currentServices[hostname] = svc
+	e := &WatchEvent{
+		Action:  ActionAdd,
+		Service: svc,
+	}
+	s.pushWatchEvent(e)
+}
+
+// s has to be Lock()ed
+func (s *Server) updateService(hostname string, svc *ServiceMessage) {
+	s.currentServices[hostname] = svc
+	e := &WatchEvent{
+		Action:  ActionUpdate,
+		Service: svc,
+	}
+	s.pushWatchEvent(e)
+}
+
+// s has to be Lock()ed
+func (s *Server) deleteService(hostname string, svc *ServiceMessage) {
+	delete(s.currentServices, hostname)
+	e := &WatchEvent{
+		Action:  ActionDelete,
+		Service: svc,
+	}
+	s.pushWatchEvent(e)
+}
+
+// s has to be Lock()ed
+func (s *Server) pushWatchEvent(e *WatchEvent) {
+	list := s.getServiceListMessage()
+	e.Checksum = list.Checksum
+	s.watchMut.RLock()
+	defer s.watchMut.RUnlock()
+	for _, w := range s.currentWatches {
+		w <- e
 	}
 }
