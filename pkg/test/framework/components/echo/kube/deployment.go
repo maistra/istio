@@ -574,7 +574,7 @@ func GenerateService(cfg echo.Config) (string, error) {
 	return tmpl.Execute(serviceTemplate, params)
 }
 
-const DefaultVMImage = "app_sidecar_ubuntu_bionic"
+const DefaultVMImage = "app_sidecar_centos_8"
 
 func templateParams(cfg echo.Config, settings *image.Settings, versions resource.RevVerMap) (map[string]interface{}, error) {
 	if settings == nil {
