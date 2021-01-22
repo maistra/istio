@@ -46,8 +46,8 @@ spec:
         version: v1
     spec:
       containers:
-      - name: mongodb 
-        image: docker.io/istio/examples-bookinfo-mongodb:1.16.2
+      - name: mongodb
+        image: maistra/examples-bookinfo-mongodb:2.0.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 27017
