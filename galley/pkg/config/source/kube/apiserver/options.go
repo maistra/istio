@@ -15,23 +15,17 @@
 package apiserver
 
 import (
-	"time"
-
-	"istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/galley/pkg/config/source/kube/apiserver/status"
 	"istio.io/istio/pkg/config/schema/collection"
+	kubelib "istio.io/istio/pkg/kube"
 )
 
 // Options for the kube controller
 type Options struct {
 	// The Client interfaces to use for connecting to the API server.
-	Client kube.Interfaces
-
-	ResyncPeriod time.Duration
+	Client kubelib.Client
 
 	Schemas collection.Schemas
 
 	StatusController status.Controller
-
-	WatchedNamespaces string
 }
