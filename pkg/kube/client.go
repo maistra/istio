@@ -24,15 +24,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
-	kubeinformers "github.com/maistra/xns-informer/pkg/generated/kube"
-	serviceapisinformer "github.com/maistra/xns-informer/pkg/generated/serviceapis"
-	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
-	xnsinformerstesting "github.com/maistra/xns-informer/pkg/testing"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
@@ -50,7 +46,10 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/metadata"
 	metadatafake "k8s.io/client-go/metadata/fake"
@@ -64,12 +63,13 @@ import (
 	kubectlDelete "k8s.io/kubectl/pkg/cmd/delete"
 	"k8s.io/kubectl/pkg/cmd/util"
 	serviceapisclient "sigs.k8s.io/service-apis/pkg/client/clientset/versioned"
-	serviceapisscheme "sigs.k8s.io/service-apis/pkg/client/clientset/versioned/scheme"
+	serviceapisfake "sigs.k8s.io/service-apis/pkg/client/clientset/versioned/fake"
+	serviceapisinformer "sigs.k8s.io/service-apis/pkg/client/informers/externalversions"
 
 	"istio.io/api/label"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
-	istioscheme "istio.io/client-go/pkg/clientset/versioned/scheme"
-	memberroll "istio.io/istio/pkg/servicemesh/controller"
+	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	istioinformer "istio.io/client-go/pkg/informers/externalversions"
 	"istio.io/pkg/version"
 )
 
@@ -112,7 +112,7 @@ type Client interface {
 	ServiceApis() serviceapisclient.Interface
 
 	// KubeInformer returns an informer for core kube client
-	KubeInformer() kubeinformers.SharedInformerFactory
+	KubeInformer() informers.SharedInformerFactory
 
 	// DynamicInformer returns an informer for dynamic client
 	DynamicInformer() dynamicinformer.DynamicSharedInformerFactory
@@ -129,12 +129,6 @@ type Client interface {
 	// RunAndWait starts all informers and waits for their caches to sync.
 	// Warning: this must be called AFTER .Informer() is called, which will register the informer.
 	RunAndWait(stop <-chan struct{})
-
-	// SetNamespaces sets watched namespaces if no MemberRoll controller exists.
-	SetNamespaces(namespaces []string)
-
-	// AddMemberRoll creates a MemberRollController and adds it to the client.
-	AddMemberRoll(namespace, memberRollName string) error
 }
 
 // ExtendedClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -201,40 +195,28 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 	c := &client{
 		informerWatchesPending: atomic.NewInt32(0),
 	}
+	fakeClient := fake.NewSimpleClientset(objects...)
+	c.Interface = fakeClient
+	c.kube = c.Interface
+	c.kubeInformer = informers.NewSharedInformerFactory(c.Interface, resyncInterval)
 
 	s := runtime.NewScheme()
-	fakeClients, err := xnsinformerstesting.NewFakeClients(s, objects...)
-	if err != nil {
+	if err := metav1.AddMetaToScheme(s); err != nil {
 		panic(err.Error())
 	}
-
-	c.dynamic = fakeClients.Dynamic
-	c.Interface = fakeClients.Kubernetes
-	c.kube = fakeClients.Kubernetes
-
-	// The informer factory starts out configured for all namesapces, but in
-	// practice, when run under istiod, either a MemberRoll controller will be
-	// registered or SetNamespaces() will be called to configure a set of
-	// namespaces to watch -- which may still be metav1.NamespaceAll.
-	c.xnsInformerFactory = xnsinformers.NewSharedInformerFactoryWithOptions(
-		c.dynamic,
-		resyncInterval,
-		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}),
-		xnsinformers.WithScheme(s),
-	)
-
-	c.kubeInformer = kubeinformers.NewSharedInformerFactory(c.xnsInformerFactory)
 
 	c.metadata = metadatafake.NewSimpleMetadataClient(s)
 	c.metadataInformer = metadatainformer.NewSharedInformerFactory(c.metadata, resyncInterval)
 
+	c.dynamic = dynamicfake.NewSimpleDynamicClient(s)
 	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
-	c.istio = fakeClients.Istio
-	c.istioInformer = istioinformer.NewSharedInformerFactory(c.xnsInformerFactory)
+	istioFake := istiofake.NewSimpleClientset()
+	c.istio = istioFake
+	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(c.istio, resyncInterval)
 
-	c.serviceapis = fakeClients.ServiceAPIs
-	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.xnsInformerFactory)
+	c.serviceapis = serviceapisfake.NewSimpleClientset()
+	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.serviceapis, resyncInterval)
 
 	c.extSet = extfake.NewSimpleClientset()
 
@@ -250,16 +232,22 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 		c.informerWatchesPending.Inc()
 		return false, nil, nil
 	}
-	watchReactor := func(action clienttesting.Action) (handled bool, ret watch.Interface, err error) {
-		c.informerWatchesPending.Dec()
-		return false, nil, nil
+	watchReactor := func(tracker clienttesting.ObjectTracker) func(action clienttesting.Action) (handled bool, ret watch.Interface, err error) {
+		return func(action clienttesting.Action) (handled bool, ret watch.Interface, err error) {
+			gvr := action.GetResource()
+			ns := action.GetNamespace()
+			watch, err := tracker.Watch(gvr, ns)
+			if err != nil {
+				return false, nil, err
+			}
+			c.informerWatchesPending.Dec()
+			return true, watch, nil
+		}
 	}
-	fakeClients.Kubernetes.PrependReactor("list", "*", listReactor)
-	fakeClients.Kubernetes.PrependWatchReactor("*", watchReactor)
-	fakeClients.Dynamic.PrependReactor("list", "*", listReactor)
-	fakeClients.Dynamic.PrependWatchReactor("*", watchReactor)
-	fakeClients.Istio.PrependReactor("list", "*", listReactor)
-	fakeClients.Istio.PrependWatchReactor("*", watchReactor)
+	fakeClient.PrependReactor("list", "*", listReactor)
+	fakeClient.PrependWatchReactor("*", watchReactor(fakeClient.Tracker()))
+	istioFake.PrependReactor("list", "*", listReactor)
+	istioFake.PrependWatchReactor("*", watchReactor(istioFake.Tracker()))
 	c.fastSync = true
 
 	return c
@@ -276,13 +264,11 @@ type client struct {
 
 	config *rest.Config
 
-	xnsInformerFactory xnsinformers.SharedInformerFactory
-
 	extSet        kubeExtClient.Interface
 	versionClient discovery.ServerVersionInterface
 
 	kube         kubernetes.Interface
-	kubeInformer kubeinformers.SharedInformerFactory
+	kubeInformer informers.SharedInformerFactory
 
 	dynamic         dynamic.Interface
 	dynamicInformer dynamicinformer.DynamicSharedInformerFactory
@@ -295,8 +281,6 @@ type client struct {
 
 	serviceapis          serviceapisclient.Interface
 	serviceapisInformers serviceapisinformer.SharedInformerFactory
-
-	memberRoll memberroll.MemberRollController
 
 	// If enable, will wait for cache syncs with extremely short delay. This should be used only for tests
 	fastSync               bool
@@ -326,6 +310,7 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	if err != nil {
 		return nil, err
 	}
+	c.kubeInformer = informers.NewSharedInformerFactory(c.Interface, resyncInterval)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
 	if err != nil {
@@ -339,47 +324,17 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	}
 	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
-	s := runtime.NewScheme()
-
-	err = scheme.AddToScheme(s)
-	if err != nil {
-		return nil, err
-	}
-
-	err = istioscheme.AddToScheme(s)
-	if err != nil {
-		return nil, err
-	}
-
-	err = serviceapisscheme.AddToScheme(s)
-	if err != nil {
-		return nil, err
-	}
-
-	// The informer factory starts out configured for all namesapces, but in
-	// practice, when run under istiod, either a MemberRoll controller will be
-	// registered or SetNamespaces() will be called to configure a set of
-	// namespaces to watch -- which may still be metav1.NamespaceAll.
-	c.xnsInformerFactory = xnsinformers.NewSharedInformerFactoryWithOptions(
-		c.dynamic,
-		resyncInterval,
-		xnsinformers.WithNamespaces([]string{metav1.NamespaceAll}),
-		xnsinformers.WithScheme(s),
-	)
-
-	c.kubeInformer = kubeinformers.NewSharedInformerFactory(c.xnsInformerFactory)
-
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.istioInformer = istioinformer.NewSharedInformerFactory(c.xnsInformerFactory)
+	c.istioInformer = istioinformer.NewSharedInformerFactory(c.istio, resyncInterval)
 
 	c.serviceapis, err = serviceapisclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.xnsInformerFactory)
+	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.serviceapis, resyncInterval)
 
 	ext, err := kubeExtClient.NewForConfig(c.config)
 	if err != nil {
@@ -435,7 +390,7 @@ func (c *client) ServiceApis() serviceapisclient.Interface {
 	return c.serviceapis
 }
 
-func (c *client) KubeInformer() kubeinformers.SharedInformerFactory {
+func (c *client) KubeInformer() informers.SharedInformerFactory {
 	return c.kubeInformer
 }
 
@@ -455,39 +410,23 @@ func (c *client) ServiceApisInformer() serviceapisinformer.SharedInformerFactory
 	return c.serviceapisInformers
 }
 
-func (c *client) SetNamespaces(namespaces []string) {
-	// This is a no-op if a MemberRoll controller exists.
-	if c.memberRoll != nil {
-		return
-	}
-
-	c.xnsInformerFactory.SetNamespaces(namespaces)
-}
-
-func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
-	c.memberRoll, err = memberroll.NewMemberRollController(c.config, namespace, memberRollName, resyncInterval)
-	if err != nil {
-		return err
-	}
-
-	c.memberRoll.Register(c.xnsInformerFactory)
-
-	return nil
-}
-
 // RunAndWait starts all informers and waits for their caches to sync.
 // Warning: this must be called AFTER .Informer() is called, which will register the informer.
 func (c *client) RunAndWait(stop <-chan struct{}) {
-	c.xnsInformerFactory.Start(stop)
+	c.kubeInformer.Start(stop)
 	c.dynamicInformer.Start(stop)
 	c.metadataInformer.Start(stop)
+	c.istioInformer.Start(stop)
+	c.serviceapisInformers.Start(stop)
 	if c.fastSync {
 		// WaitForCacheSync will virtually never be synced on the first call, as its called immediately after Start()
 		// This triggers a 100ms delay per call, which is often called 2-3 times in a test, delaying tests.
 		// Instead, we add an aggressive sync polling
-		fastWaitForCacheSyncXns(c.xnsInformerFactory)
+		fastWaitForCacheSync(c.kubeInformer)
 		fastWaitForCacheSyncDynamic(c.dynamicInformer)
 		fastWaitForCacheSyncDynamic(c.metadataInformer)
+		fastWaitForCacheSync(c.istioInformer)
+		fastWaitForCacheSync(c.serviceapisInformers)
 		_ = wait.PollImmediate(time.Microsecond, wait.ForeverTestTimeout, func() (bool, error) {
 			if c.informerWatchesPending.Load() == 0 {
 				return true, nil
@@ -495,25 +434,25 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 			return false, nil
 		})
 	} else {
-		c.xnsInformerFactory.WaitForCacheSync(stop)
+		c.kubeInformer.WaitForCacheSync(stop)
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
+		c.istioInformer.WaitForCacheSync(stop)
+		c.serviceapisInformers.WaitForCacheSync(stop)
 	}
+}
 
-	if c.memberRoll != nil {
-		c.memberRoll.Start(stop)
-	}
+type reflectInformerSync interface {
+	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 }
 
 type dynamicInformerSync interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[schema.GroupVersionResource]bool
 }
 
-type xnsInformerSync interface {
-	WaitForCacheSync(stopCh <-chan struct{}) bool
-}
-
-func fastWaitForCacheSyncDynamic(informerFactory dynamicInformerSync) {
+// Wait for cache sync immediately, rather than with 100ms delay which slows tests
+// See https://github.com/kubernetes/kubernetes/issues/95262#issuecomment-703141573
+func fastWaitForCacheSync(informerFactory reflectInformerSync) {
 	returnImmediately := make(chan struct{})
 	close(returnImmediately)
 	_ = wait.PollImmediate(time.Microsecond, wait.ForeverTestTimeout, func() (bool, error) {
@@ -526,11 +465,16 @@ func fastWaitForCacheSyncDynamic(informerFactory dynamicInformerSync) {
 	})
 }
 
-func fastWaitForCacheSyncXns(informerFactory xnsInformerSync) {
+func fastWaitForCacheSyncDynamic(informerFactory dynamicInformerSync) {
 	returnImmediately := make(chan struct{})
 	close(returnImmediately)
 	_ = wait.PollImmediate(time.Microsecond, wait.ForeverTestTimeout, func() (bool, error) {
-		return informerFactory.WaitForCacheSync(returnImmediately), nil
+		for _, synced := range informerFactory.WaitForCacheSync(returnImmediately) {
+			if !synced {
+				return false, nil
+			}
+		}
+		return true, nil
 	})
 }
 
