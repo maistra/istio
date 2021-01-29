@@ -39,9 +39,7 @@ type serviceMeshMemberRollController struct {
 }
 
 type MemberRollListener interface {
-	Start(stopCh <-chan struct{})
-	WaitForCacheSync(stopCh <-chan struct{}) bool
-	SetNamespaces(namespaces []string)
+	SetNamespaces(namespaces ...string)
 }
 
 type MemberRollController interface {
@@ -140,10 +138,7 @@ func (smmrl *serviceMeshMemberRollListener) updateNamespaces(operation string, m
 		log.Infof("ServiceMeshMemberRoll %v %s, namespaces now %q",
 			memberRollName, operation, smmrl.currentNamespaces)
 
-		stopCh := make(chan struct{}) // Only stopped on remove.
-		smmrl.listener.SetNamespaces(smmrl.currentNamespaces)
-		smmrl.listener.Start(stopCh)
-		smmrl.listener.WaitForCacheSync(stopCh)
+		smmrl.listener.SetNamespaces(smmrl.currentNamespaces...)
 	}
 }
 
