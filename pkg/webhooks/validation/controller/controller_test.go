@@ -257,9 +257,6 @@ func reconcileHelper(t *testing.T, c *fakeController) {
 }
 
 func TestGreenfield(t *testing.T) {
-	// xns-informer issue: https://issues.redhat.com/browse/MAISTRA-2052
-	// the linter wants an istio issue in the message...
-	t.Skip("https://github.com/istio/istio/issues/100000000")
 	g := NewWithT(t)
 	c := createTestController(t)
 
@@ -302,9 +299,6 @@ func TestGreenfield(t *testing.T) {
 }
 
 func TestCABundleChange(t *testing.T) {
-	// xns-informer issue: https://issues.redhat.com/browse/MAISTRA-2052
-	// the linter wants an istio issue in the message...
-	t.Skip("https://github.com/istio/istio/issues/100000000")
 	g := NewWithT(t)
 	c := createTestController(t)
 
