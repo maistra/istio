@@ -37,6 +37,7 @@ import (
 	"istio.io/istio/galley/pkg/config/processor/transforms"
 	"istio.io/istio/galley/pkg/config/scope"
 	"istio.io/istio/galley/pkg/config/source/inmemory"
+	"istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/galley/pkg/config/source/kube/apiserver"
 	kube_inmemory "istio.io/istio/galley/pkg/config/source/kube/inmemory"
 	"istio.io/istio/galley/pkg/config/util/kuberesource"
@@ -47,7 +48,6 @@ import (
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/snapshots"
-	kubelib "istio.io/istio/pkg/kube"
 )
 
 const (
@@ -267,8 +267,12 @@ func (sa *SourceAnalyzer) AddReaderKubeSource(readers []ReaderSource) error {
 
 // AddRunningKubeSource adds a source based on a running k8s cluster to the current SourceAnalyzer
 // Also tries to get mesh config from the running cluster, if it can
-func (sa *SourceAnalyzer) AddRunningKubeSource(k kubelib.Client) {
-	client := k.Kube()
+func (sa *SourceAnalyzer) AddRunningKubeSource(k kube.Interfaces) {
+	client, err := k.KubeClient()
+	if err != nil {
+		scope.Analysis.Errorf("error getting KubeClient: %v", err)
+		return
+	}
 
 	// Since we're using a running k8s source, try to get meshconfig and meshnetworks from the configmap.
 	if err := sa.addRunningKubeIstioConfigMapSource(client); err != nil {

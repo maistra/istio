@@ -32,7 +32,6 @@ import (
 	"istio.io/istio/galley/pkg/server/settings"
 	"istio.io/istio/galley/pkg/testing/mock"
 	"istio.io/istio/pkg/config/event"
-	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/mcp/monitoring"
 	mcptestmon "istio.io/istio/pkg/mcp/testing/monitoring"
 )
@@ -44,7 +43,8 @@ func TestProcessing_StartErrors(t *testing.T) {
 loop:
 	for i := 0; ; i++ {
 		resetPatchTable()
-		newKubeClient := func() kubelib.Client { return kubelib.NewFakeClient() }
+		mk := mock.NewKube()
+		newInterfaces = func(string) (kube.Interfaces, error) { return mk, nil }
 
 		e := fmt.Errorf("err%d", i)
 
@@ -64,7 +64,9 @@ loop:
 
 		switch i {
 		case 0:
-			newKubeClient = func() kubelib.Client { return nil }
+			newInterfaces = func(string) (kube.Interfaces, error) {
+				return nil, e
+			}
 		case 1:
 			meshcfgNewFS = func(path string) (event.Source, error) { return nil, e }
 		case 2:
@@ -76,8 +78,7 @@ loop:
 
 		}
 
-		k := newKubeClient()
-		p := NewProcessing(k, args)
+		p := NewProcessing(args)
 		err = p.Start()
 		g.Expect(err).NotTo(BeNil())
 		t.Logf("%d) err: %v", i, err)
@@ -102,8 +103,7 @@ func TestProcessing_Basic(t *testing.T) {
 
 	args := settings.DefaultArgs()
 
-	k := kubelib.NewFakeClient()
-	p := NewProcessing(k, args)
+	p := NewProcessing(args)
 	err := p.Start()
 	g.Expect(err).To(BeNil())
 

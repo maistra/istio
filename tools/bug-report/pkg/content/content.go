@@ -22,6 +22,7 @@ import (
 	"istio.io/istio/galley/pkg/config/analysis/analyzers"
 	"istio.io/istio/galley/pkg/config/analysis/diag"
 	"istio.io/istio/galley/pkg/config/analysis/local"
+	cfgKube "istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/istioctl/pkg/util/formatting"
 	"istio.io/istio/pkg/config/resource"
 	"istio.io/istio/pkg/config/schema"
@@ -214,7 +215,8 @@ func GetAnalyze(p *Params) (map[string]string, error) {
 	sa := local.NewSourceAnalyzer(schema.MustGet(), analyzers.AllCombined(),
 		resource.Namespace(p.Namespace), resource.Namespace(p.IstioNamespace), nil, true, 5*time.Minute)
 
-	sa.AddRunningKubeSource(p.Client)
+	k := cfgKube.NewInterfaces(p.Client.RESTConfig())
+	sa.AddRunningKubeSource(k)
 
 	cancel := make(chan struct{})
 	result, err := sa.Analyze(cancel)

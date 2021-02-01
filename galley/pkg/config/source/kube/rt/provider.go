@@ -16,16 +16,21 @@ package rt
 
 import (
 	"errors"
+	"strings"
+	"sync"
+	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeSchema "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/informers"
 
+	"istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/pkg/config/schema/resource"
-	kubelib "istio.io/istio/pkg/kube"
 )
 
 var (
-	defaultProvider = NewProvider(nil)
+	defaultProvider = NewProvider(nil, metav1.NamespaceAll, 0)
 )
 
 // DefaultProvider returns a default provider that has no K8s connectivity enabled.
@@ -35,13 +40,25 @@ func DefaultProvider() *Provider {
 
 // Provider for adapters. It closes over K8s connection-related infrastructure.
 type Provider struct {
-	kubeClient kubelib.Client
-	known      map[string]*Adapter
+	mu sync.Mutex
+
+	resyncPeriod time.Duration
+	interfaces   kube.Interfaces
+	namespaces   []string
+	known        map[string]*Adapter
+
+	informers        informers.SharedInformerFactory
+	dynamicInterface dynamic.Interface
 }
 
 // NewProvider returns a new instance of Provider.
-func NewProvider(kubeClient kubelib.Client) *Provider {
-	p := &Provider{kubeClient: kubeClient}
+func NewProvider(interfaces kube.Interfaces, namespaces string, resyncPeriod time.Duration) *Provider {
+	p := &Provider{
+		resyncPeriod: resyncPeriod,
+		interfaces:   interfaces,
+		namespaces:   strings.Split(namespaces, ","),
+	}
+
 	p.initKnownAdapters()
 
 	return p
@@ -57,13 +74,41 @@ func (p *Provider) GetAdapter(r resource.Schema) *Adapter {
 	return p.getDynamicAdapter(r)
 }
 
-// GetDynamicResourceInterface returns a dynamic.NamespaceableResourceInterface for the given resource.
-func (p *Provider) GetDynamicResourceInterface(r resource.Schema) (dynamic.NamespaceableResourceInterface, error) {
-	if p.kubeClient == nil {
-		return nil, errors.New("client interfaces was not initialized")
+func (p *Provider) sharedInformerFactory() (informers.SharedInformerFactory, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.informers == nil {
+		if p.interfaces == nil {
+			return nil, errors.New("client interfaces was not initialized")
+		}
+		cl, err := p.interfaces.KubeClient()
+		if err != nil {
+			return nil, err
+		}
+		p.informers = informers.NewSharedInformerFactory(cl, p.resyncPeriod)
 	}
 
-	return p.kubeClient.Dynamic().Resource(kubeSchema.GroupVersionResource{
+	return p.informers, nil
+}
+
+// GetDynamicResourceInterface returns a dynamic.NamespaceableResourceInterface for the given resource.
+func (p *Provider) GetDynamicResourceInterface(r resource.Schema) (dynamic.NamespaceableResourceInterface, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.dynamicInterface == nil {
+		if p.interfaces == nil {
+			return nil, errors.New("client interfaces was not initialized")
+		}
+		d, err := p.interfaces.DynamicInterface()
+		if err != nil {
+			return nil, err
+		}
+		p.dynamicInterface = d
+	}
+
+	return p.dynamicInterface.Resource(kubeSchema.GroupVersionResource{
 		Group:    r.Group(),
 		Version:  r.Version(),
 		Resource: r.Plural(),

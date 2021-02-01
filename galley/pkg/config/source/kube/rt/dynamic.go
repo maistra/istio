@@ -15,17 +15,20 @@
 package rt
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/gogo/protobuf/proto"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	kubeSchema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/galley/pkg/config/util/pb"
 	"istio.io/istio/pkg/config/schema/resource"
+	"istio.io/istio/pkg/listwatch"
 )
 
 func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
@@ -53,13 +56,27 @@ func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
 		},
 
 		newInformer: func() (cache.SharedIndexInformer, error) {
-			gvr := kubeSchema.GroupVersionResource{
-				Group:    r.Group(),
-				Version:  r.Version(),
-				Resource: r.Plural(),
+			d, err := p.GetDynamicResourceInterface(r)
+			if err != nil {
+				return nil, err
 			}
 
-			return p.kubeClient.DynamicInformer().ForResource(gvr).Informer(), nil
+			mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces, func(namespace string) cache.ListerWatcher {
+				return &cache.ListWatch{
+					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+						return d.List(context.TODO(), options)
+					},
+					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+						options.Watch = true
+						return d.Watch(context.TODO(), options)
+					},
+				}
+			})
+
+			informer := cache.NewSharedIndexInformer(mlw, &unstructured.Unstructured{}, p.resyncPeriod,
+				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+
+			return informer, nil
 		},
 
 		parseJSON: func(data []byte) (interface{}, error) {

@@ -14,6 +14,7 @@
 package apiserver_test
 
 import (
+	"errors"
 	"sync/atomic"
 	"testing"
 
@@ -23,12 +24,14 @@ import (
 	extfake "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic/fake"
 	k8sTesting "k8s.io/client-go/testing"
 
 	"istio.io/istio/galley/pkg/config/analysis/diag"
 	"istio.io/istio/galley/pkg/config/analysis/msg"
+	"istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/galley/pkg/config/source/kube/apiserver"
 	"istio.io/istio/galley/pkg/config/source/kube/apiserver/status"
 	"istio.io/istio/galley/pkg/config/source/kube/rt"
@@ -39,11 +42,14 @@ import (
 	"istio.io/istio/pkg/config/resource"
 	"istio.io/istio/pkg/config/schema/collection"
 	resource2 "istio.io/istio/pkg/config/schema/resource"
-	kubelib "istio.io/istio/pkg/kube"
 )
 
 func TestNewSource(t *testing.T) {
-	k := kubelib.NewFakeClient()
+	k := &mock.Kube{}
+	for i := 0; i < 100; i++ {
+		_ = fakeClient(k)
+	}
+
 	r := basicmeta.MustGet().KubeCollections()
 
 	_ = newOrFail(t, k, r, nil)
@@ -144,8 +150,8 @@ func TestEvents(t *testing.T) {
 
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "networking.istio.io/v1beta1",
-			"kind":       "Gateway",
+			"apiVersion": "testdata.istio.io/v1alpha1",
+			"kind":       "Kind1",
 			"metadata": map[string]interface{}{
 				"name":            "i1",
 				"namespace":       "ns",
@@ -208,8 +214,8 @@ func TestEvents_WatchUpdatesStatusCtl(t *testing.T) {
 
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "networking.istio.io/v1beta1",
-			"kind":       "Gateway",
+			"apiVersion": "testdata.istio.io/v1alpha1",
+			"kind":       "Kind1",
 			"metadata": map[string]interface{}{
 				"name":            "i1",
 				"namespace":       "ns",
@@ -336,15 +342,13 @@ func TestEvents_NoneForDisabled(t *testing.T) {
 }
 
 func TestSource_WatcherFailsCreatingInformer(t *testing.T) {
-	// This test doesn't seem to work well with the new fake client.
-	// Needs to be looked into.
-	//
-	// The linter wants an istio issue in the message...
-	t.Skip("https://github.com/istio/istio/issues/100000000")
+	k := mock.NewKube()
+	wcrd := mockCrdWatch(k.APIExtClientSet)
 
-	w, wcrd, k := createMocks()
 	r := basicmeta.MustGet().KubeCollections()
 	addCrdEvents(wcrd, r.All())
+
+	k.AddResponse(nil, errors.New("no cheese found"))
 
 	// Create and start the source
 	s := newOrFail(t, k, r, nil)
@@ -359,7 +363,13 @@ func TestSource_WatcherFailsCreatingInformer(t *testing.T) {
 	acc.Clear()
 	wcrd.Stop()
 
+	wcrd = mockCrdWatch(k.APIExtClientSet)
 	addCrdEvents(wcrd, r.All())
+
+	// Now start properly and get events
+	cl := fake.NewSimpleDynamicClient(k8sRuntime.NewScheme())
+	k.AddResponse(cl, nil)
+	w := mockWatch(cl)
 
 	s.Start()
 
@@ -407,11 +417,12 @@ func TestUpdateMessage_NoStatusController_Panic(t *testing.T) {
 	s.Update(diag.Messages{})
 }
 
-func newOrFail(t *testing.T, kubeClient kubelib.Client, r collection.Schemas, sc status.Controller) *apiserver.Source {
+func newOrFail(t *testing.T, ifaces kube.Interfaces, r collection.Schemas, sc status.Controller) *apiserver.Source {
 	t.Helper()
 	o := apiserver.Options{
 		Schemas:          r,
-		Client:           kubeClient,
+		ResyncPeriod:     0,
+		Client:           ifaces,
 		StatusController: sc,
 	}
 	s := apiserver.New(o)
@@ -429,12 +440,11 @@ func start(s *apiserver.Source) *fixtures.Accumulator {
 	return acc
 }
 
-func createMocks() (*mock.Watch, *mock.Watch, kubelib.Client) {
-	k := kubelib.NewFakeClient()
-	cl := k.Dynamic().(*fake.FakeDynamicClient)
-	ext := k.Ext().(*extfake.Clientset)
+func createMocks() (*mock.Watch, *mock.Watch, *mock.Kube) {
+	k := mock.NewKube()
+	cl := fakeClient(k)
 	w := mockWatch(cl)
-	wcrd := mockCrdWatch(ext)
+	wcrd := mockCrdWatch(k.APIExtClientSet)
 	return w, wcrd, k
 }
 
@@ -445,6 +455,12 @@ func addCrdEvents(w *mock.Watch, res []collection.Schema) {
 			Type:   watch.Added,
 		})
 	}
+}
+
+func fakeClient(k *mock.Kube) *fake.FakeDynamicClient {
+	cl := fake.NewSimpleDynamicClient(k8sRuntime.NewScheme())
+	k.AddResponse(cl, nil)
+	return cl
 }
 
 func mockWatch(cl *fake.FakeDynamicClient) *mock.Watch {
