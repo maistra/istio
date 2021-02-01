@@ -20,18 +20,17 @@ import (
 	"net/http"
 
 	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
-	kubeinformers "github.com/maistra/xns-informer/pkg/generated/kube"
+	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
 	serviceapisinformer "github.com/maistra/xns-informer/pkg/generated/serviceapis"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kubeVersion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
-	"k8s.io/client-go/metadata/metadatainformer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
@@ -96,15 +95,15 @@ func (c MockClient) Metadata() metadata.Interface {
 	panic("not used in mock")
 }
 
-func (c MockClient) KubeInformer() kubeinformers.SharedInformerFactory {
+func (c MockClient) KubeInformer() kubeinformer.SharedInformerFactory {
 	panic("not used in mock")
 }
 
-func (c MockClient) DynamicInformer() dynamicinformer.DynamicSharedInformerFactory {
+func (c MockClient) DynamicInformer() xnsinformers.DynamicSharedInformerFactory {
 	panic("not used in mock")
 }
 
-func (c MockClient) MetadataInformer() metadatainformer.SharedInformerFactory {
+func (c MockClient) MetadataInformer() xnsinformers.MetadataSharedInformerFactory {
 	panic("not used in mock")
 }
 
@@ -124,7 +123,7 @@ func (c MockClient) MetadataClient() metadata.Interface {
 	panic("not used in mock")
 }
 
-func (c MockClient) SetNamespaces(namespaces []string) {
+func (c MockClient) SetNamespaces(namespaces ...string) {
 	panic("not used in mock")
 }
 

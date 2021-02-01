@@ -510,7 +510,7 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 				namespaces = []string{metav1.NamespaceAll}
 			}
 
-			s.kubeClient.SetNamespaces(namespaces)
+			s.kubeClient.SetNamespaces(namespaces...)
 		}
 	}
 

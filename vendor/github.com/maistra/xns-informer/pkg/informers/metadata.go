@@ -1,20 +1,4 @@
-/*
-Copyright 2018 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-package metadatainformer
+package informers
 
 import (
 	"context"
@@ -31,18 +15,27 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// NewSharedInformerFactory constructs a new instance of metadataSharedInformerFactory for all namespaces.
-func NewSharedInformerFactory(client metadata.Interface, defaultResync time.Duration) SharedInformerFactory {
-	return NewFilteredSharedInformerFactory(client, defaultResync, metav1.NamespaceAll, nil)
+// MetadataSharedInformerFactory provides access to shared informers and listers for metadata client.
+type MetadataSharedInformerFactory interface {
+	Start(stopCh <-chan struct{})
+	SetNamespaces(namespaces ...string)
+	ForResource(gvr schema.GroupVersionResource) informers.GenericInformer
+	WaitForCacheSync(stopCh <-chan struct{}) map[schema.GroupVersionResource]bool
 }
 
-// NewFilteredSharedInformerFactory constructs a new instance of metadataSharedInformerFactory.
+// NewMetadataSharedInformerFactory constructs a new instance of metadataSharedInformerFactory for all namespaces.
+func NewMetadataSharedInformerFactory(client metadata.Interface, defaultResync time.Duration) MetadataSharedInformerFactory {
+	namespaces := NewNamespaceSet(metav1.NamespaceAll)
+	return NewFilteredMetadataSharedInformerFactory(client, defaultResync, namespaces, nil)
+}
+
+// NewFilteredMetadataSharedInformerFactory constructs a new instance of metadataSharedInformerFactory.
 // Listers obtained via this factory will be subject to the same filters as specified here.
-func NewFilteredSharedInformerFactory(client metadata.Interface, defaultResync time.Duration, namespace string, tweakListOptions TweakListOptionsFunc) SharedInformerFactory {
+func NewFilteredMetadataSharedInformerFactory(client metadata.Interface, defaultResync time.Duration, namespaces NamespaceSet, tweakListOptions TweakListOptionsFunc) MetadataSharedInformerFactory {
 	return &metadataSharedInformerFactory{
 		client:           client,
 		defaultResync:    defaultResync,
-		namespace:        namespace,
+		namespaces:       namespaces,
 		informers:        map[schema.GroupVersionResource]informers.GenericInformer{},
 		startedInformers: make(map[schema.GroupVersionResource]bool),
 		tweakListOptions: tweakListOptions,
@@ -52,7 +45,7 @@ func NewFilteredSharedInformerFactory(client metadata.Interface, defaultResync t
 type metadataSharedInformerFactory struct {
 	client        metadata.Interface
 	defaultResync time.Duration
-	namespace     string
+	namespaces    NamespaceSet
 
 	lock      sync.Mutex
 	informers map[schema.GroupVersionResource]informers.GenericInformer
@@ -62,7 +55,7 @@ type metadataSharedInformerFactory struct {
 	tweakListOptions TweakListOptionsFunc
 }
 
-var _ SharedInformerFactory = &metadataSharedInformerFactory{}
+var _ MetadataSharedInformerFactory = &metadataSharedInformerFactory{}
 
 func (f *metadataSharedInformerFactory) ForResource(gvr schema.GroupVersionResource) informers.GenericInformer {
 	f.lock.Lock()
@@ -74,10 +67,18 @@ func (f *metadataSharedInformerFactory) ForResource(gvr schema.GroupVersionResou
 		return informer
 	}
 
-	informer = NewFilteredMetadataInformer(f.client, gvr, f.namespace, f.defaultResync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	informer = NewFilteredMetadataInformer(f.client, gvr, f.namespaces, f.defaultResync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 	f.informers[key] = informer
 
 	return informer
+}
+
+// SetNamespaces updates the set of namespaces for all current and future informers.
+func (f *metadataSharedInformerFactory) SetNamespaces(namespaces ...string) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	f.namespaces.SetNamespaces(namespaces...)
 }
 
 // Start initializes all requested informers.
@@ -116,10 +117,9 @@ func (f *metadataSharedInformerFactory) WaitForCacheSync(stopCh <-chan struct{})
 }
 
 // NewFilteredMetadataInformer constructs a new informer for a metadata type.
-func NewFilteredMetadataInformer(client metadata.Interface, gvr schema.GroupVersionResource, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions TweakListOptionsFunc) informers.GenericInformer {
-	return &metadataInformer{
-		gvr: gvr,
-		informer: cache.NewSharedIndexInformer(
+func NewFilteredMetadataInformer(client metadata.Interface, gvr schema.GroupVersionResource, namespaces NamespaceSet, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions TweakListOptionsFunc) informers.GenericInformer {
+	newInformer := func(namespace string) cache.SharedIndexInformer {
+		return cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 					if tweakListOptions != nil {
@@ -137,7 +137,12 @@ func NewFilteredMetadataInformer(client metadata.Interface, gvr schema.GroupVers
 			&metav1.PartialObjectMetadata{},
 			resyncPeriod,
 			indexers,
-		),
+		)
+	}
+
+	return &metadataInformer{
+		gvr:      gvr,
+		informer: NewMultiNamespaceInformer(namespaces, resyncPeriod, newInformer),
 	}
 }
 

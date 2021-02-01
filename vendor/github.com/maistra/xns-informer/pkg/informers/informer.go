@@ -5,10 +5,13 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 )
+
+// TweakListOptionsFunc defines the signature of a helper function that allows
+// filtering in informers created by shared informer factories.
+type TweakListOptionsFunc func(*metav1.ListOptions)
 
 // MultiNamespaceInformer extends the cache.SharedIndexInformer interface with
 // methods relevant to cross-namespace informers.
@@ -17,32 +20,11 @@ type MultiNamespaceInformer interface {
 
 	AddNamespace(namespace string)
 	RemoveNamespace(namespace string)
-	NonBlockingRun(stopCh <-chan struct{})
-	WaitForStop(stopCh <-chan struct{})
 	GetIndexers() map[string]cache.Indexer
 }
 
 // NewInformerFunc returns a new informer for a given namespace.
 type NewInformerFunc func(namespace string) cache.SharedIndexInformer
-
-// multiNamespaceGenericInformer satisfies the GenericInformer interface and
-// provides cross-namespace informers and listers.
-type multiNamespaceGenericInformer struct {
-	informer MultiNamespaceInformer
-	lister   cache.GenericLister
-}
-
-var _ informers.GenericInformer = &multiNamespaceGenericInformer{}
-
-// Informer returns the cache.SharedIndexInformer for this informer.
-func (i *multiNamespaceGenericInformer) Informer() cache.SharedIndexInformer {
-	return i.informer
-}
-
-// Lister returns the cache.GenericLister for this informer.
-func (i *multiNamespaceGenericInformer) Lister() cache.GenericLister {
-	return i.lister
-}
 
 // informerData holds a single namespaced informer.
 type informerData struct {
@@ -61,13 +43,15 @@ type eventHandlerData struct {
 // provides an informer that works across a set of namespaces -- though not all
 // methods are actually usable.
 type multiNamespaceInformer struct {
-	informers     map[string]*informerData
+	informers     map[string]cache.SharedIndexInformer
+	stopChans     map[string]chan struct{}
 	errorHandler  cache.WatchErrorHandler
 	eventHandlers []eventHandlerData
 	indexers      []cache.Indexers
 	resyncPeriod  time.Duration
-	namespaced    bool
 	lock          sync.Mutex
+	started       bool
+	namespaces    NamespaceSet
 	newInformer   NewInformerFunc
 }
 
@@ -76,24 +60,21 @@ var _ cache.SharedIndexInformer = &multiNamespaceInformer{}
 // NewMultiNamespaceInformer returns a new cross-namespace informer.  The given
 // NewInformerFunc will be used to craft new single-namespace informers when
 // adding namespaces.
-func NewMultiNamespaceInformer(namespaced bool, resync time.Duration, newInformer NewInformerFunc) MultiNamespaceInformer {
+func NewMultiNamespaceInformer(namespaces NamespaceSet, resync time.Duration, newInformer NewInformerFunc) MultiNamespaceInformer {
 	informer := &multiNamespaceInformer{
-		informers:     make(map[string]*informerData),
+		informers:     make(map[string]cache.SharedIndexInformer),
+		stopChans:     make(map[string]chan struct{}),
 		eventHandlers: make([]eventHandlerData, 0),
 		indexers:      make([]cache.Indexers, 0),
-		namespaced:    namespaced,
+		namespaces:    namespaces,
 		resyncPeriod:  resync,
 		newInformer:   newInformer,
 	}
 
-	// AddNamespace and RemoveNamespace are no-ops for cluster-scoped
-	// informers.  They watch metav1.NamespaceAll only.
-	if !namespaced {
-		informer.informers[metav1.NamespaceAll] = &informerData{
-			informer: newInformer(metav1.NamespaceAll),
-			stopCh:   make(chan struct{}),
-		}
-	}
+	namespaces.AddHandler(NamespaceSetHandlerFuncs{
+		AddFunc:    informer.AddNamespace,
+		RemoveFunc: informer.RemoveNamespace,
+	})
 
 	return informer
 }
@@ -130,7 +111,7 @@ func (i *multiNamespaceInformer) SetWatchErrorHandler(handler cache.WatchErrorHa
 	i.errorHandler = handler
 
 	for _, informer := range i.informers {
-		if err := informer.informer.SetWatchErrorHandler(handler); err != nil {
+		if err := informer.SetWatchErrorHandler(handler); err != nil {
 			return err
 		}
 	}
@@ -146,9 +127,8 @@ func (i *multiNamespaceInformer) AddNamespace(namespace string) {
 	i.lock.Lock()
 	defer i.lock.Unlock()
 
-	// If an informer for this namespace already exists, or the
-	// watched resource is cluster-scoped, this is a no-op.
-	if _, ok := i.informers[namespace]; ok || !i.namespaced {
+	// If an informer for this namespace already exists, this is a no-op.
+	if _, ok := i.informers[namespace]; ok {
 		return
 	}
 
@@ -175,10 +155,16 @@ func (i *multiNamespaceInformer) AddNamespace(namespace string) {
 		}
 	}
 
-	i.informers[namespace] = &informerData{
-		informer: informer,
-		stopCh:   make(chan struct{}),
+	stopCh := make(chan struct{})
+
+	i.informers[namespace] = informer
+	i.stopChans[namespace] = stopCh
+
+	if i.started {
+		go informer.Run(stopCh)
 	}
+
+	klog.V(4).Infof("Added informer for namespace: %q", namespace)
 }
 
 // RemoveNamespace stops and deletes the informer for the given namespace.
@@ -186,53 +172,43 @@ func (i *multiNamespaceInformer) RemoveNamespace(namespace string) {
 	i.lock.Lock()
 	defer i.lock.Unlock()
 
-	// If there is no informer for this namespace, or the watched
-	// resource is cluster-scoped, this is a no-op.
-	if _, ok := i.informers[namespace]; !ok || !i.namespaced {
+	// If there is no informer for this namespace, this is a no-op.
+	if _, ok := i.informers[namespace]; !ok {
 		return
 	}
 
-	close(i.informers[namespace].stopCh)
+	close(i.stopChans[namespace])
+	delete(i.stopChans, namespace)
 	delete(i.informers, namespace)
+
+	klog.V(4).Infof("Removed informer for namespace: %q", namespace)
 }
 
-// WaitForStop waits for the channel to be closed, then stops all informers.
-// TODO: This may be called multiple times, but should only wait once.
-func (i *multiNamespaceInformer) WaitForStop(stopCh <-chan struct{}) {
-	<-stopCh // Block until stopCh is closed.
-	i.lock.Lock()
-	defer i.lock.Unlock()
-
-	for _, informer := range i.informers {
-		if informer.started {
-			close(informer.stopCh)
-			informer.started = false
-		}
-	}
-}
-
-// NonBlockingRun starts all stopped informers and waits for the stop channel to
-// close before stopping them.  This can be called safely multiple times.
-func (i *multiNamespaceInformer) NonBlockingRun(stopCh <-chan struct{}) {
-	i.lock.Lock()
-	defer i.lock.Unlock()
-
-	for _, informer := range i.informers {
-		if !informer.started {
-			go informer.informer.Run(informer.stopCh)
-			informer.started = true
-		}
-	}
-
-	go i.WaitForStop(stopCh)
-}
-
-// Run starts all stopped informers and waits for the stop channel to close
-// before stopping them.  This can be called safely multiple times.  This
-// version blocks until the stop channel is closed.
+// Run starts all informers and waits for the stop channel to close.
 func (i *multiNamespaceInformer) Run(stopCh <-chan struct{}) {
-	i.NonBlockingRun(stopCh)
+	func() {
+		i.lock.Lock()
+		defer i.lock.Unlock()
+
+		for namespace, informer := range i.informers {
+			go informer.Run(i.stopChans[namespace])
+		}
+
+		i.started = true
+	}()
+
 	<-stopCh // Block until stopCh is closed.
+
+	i.lock.Lock()
+	defer i.lock.Unlock()
+
+	for namespace := range i.informers {
+		// Close and recreate the channel.
+		close(i.stopChans[namespace])
+		i.stopChans[namespace] = make(chan struct{})
+	}
+
+	i.started = false
 }
 
 // AddEventHandler adds the given handler to each namespaced informer.
@@ -253,7 +229,7 @@ func (i *multiNamespaceInformer) AddEventHandlerWithResyncPeriod(handler cache.R
 	})
 
 	for _, informer := range i.informers {
-		informer.informer.AddEventHandlerWithResyncPeriod(handler, resyncPeriod)
+		informer.AddEventHandlerWithResyncPeriod(handler, resyncPeriod)
 	}
 }
 
@@ -265,7 +241,7 @@ func (i *multiNamespaceInformer) AddIndexers(indexers cache.Indexers) error {
 	i.indexers = append(i.indexers, indexers)
 
 	for _, informer := range i.informers {
-		err := informer.informer.AddIndexers(indexers)
+		err := informer.AddIndexers(indexers)
 		if err != nil {
 			return err
 		}
@@ -274,13 +250,13 @@ func (i *multiNamespaceInformer) AddIndexers(indexers cache.Indexers) error {
 	return nil
 }
 
-// HasSynced checks if each started namespaced informer has synced.
+// HasSynced checks if each namespaced informer has synced.
 func (i *multiNamespaceInformer) HasSynced() bool {
 	i.lock.Lock()
 	defer i.lock.Unlock()
 
 	for _, informer := range i.informers {
-		if synced := informer.informer.HasSynced(); informer.started && !synced {
+		if synced := informer.HasSynced(); !synced {
 			return false
 		}
 	}
@@ -295,7 +271,7 @@ func (i *multiNamespaceInformer) GetIndexers() map[string]cache.Indexer {
 
 	res := make(map[string]cache.Indexer, len(i.informers))
 	for namespace, informer := range i.informers {
-		res[namespace] = informer.informer.GetIndexer()
+		res[namespace] = informer.GetIndexer()
 	}
 
 	return res

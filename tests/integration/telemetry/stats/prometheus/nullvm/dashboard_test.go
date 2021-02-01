@@ -124,6 +124,7 @@ var (
 )
 
 func TestDashboard(t *testing.T) {
+	t.Skip("https://github.com/istio/istio/issues/30247")
 	framework.NewTest(t).
 		Features("observability.telemetry.dashboard").
 		Run(func(ctx framework.TestContext) {
