@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeSchema "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -44,7 +45,7 @@ type Provider struct {
 
 	resyncPeriod time.Duration
 	interfaces   kube.Interfaces
-	namespaces   []string
+	namespaces   xnsinformers.NamespaceSet
 	known        map[string]*Adapter
 
 	informers        informers.SharedInformerFactory
@@ -56,7 +57,7 @@ func NewProvider(interfaces kube.Interfaces, namespaces string, resyncPeriod tim
 	p := &Provider{
 		resyncPeriod: resyncPeriod,
 		interfaces:   interfaces,
-		namespaces:   strings.Split(namespaces, ","),
+		namespaces:   xnsinformers.NewNamespaceSet(strings.Split(namespaces, ",")...),
 	}
 
 	p.initKnownAdapters()

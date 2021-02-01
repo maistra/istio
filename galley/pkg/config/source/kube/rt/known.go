@@ -20,6 +20,7 @@ import (
 	"reflect"
 
 	"github.com/gogo/protobuf/proto"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
@@ -32,7 +33,6 @@ import (
 
 	"istio.io/istio/galley/pkg/config/scope"
 	"istio.io/istio/galley/pkg/config/source/kube/apiserver/stats"
-	"istio.io/istio/pkg/listwatch"
 )
 
 func (p *Provider) initKnownAdapters() {
@@ -55,20 +55,23 @@ func (p *Provider) initKnownAdapters() {
 					return nil, err
 				}
 
-				mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces,
-					func(namespace string) cache.ListerWatcher {
-						return &cache.ListWatch{
-							ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-								return client.CoreV1().Services(namespace).List(context.TODO(), opts)
+				newInformer := func(namespace string) cache.SharedIndexInformer {
+					return cache.NewSharedIndexInformer(
+						&cache.ListWatch{
+							ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+								return client.CoreV1().Services(namespace).List(context.TODO(), options)
 							},
-							WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-								return client.CoreV1().Services(namespace).Watch(context.TODO(), opts)
+							WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+								return client.CoreV1().Services(namespace).Watch(context.TODO(), options)
 							},
-						}
-					})
+						},
+						&v1.Service{},
+						p.resyncPeriod,
+						cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					)
+				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.Service{}, p.resyncPeriod,
-					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+				informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
 
 				return informer, nil
 			},
@@ -160,20 +163,23 @@ func (p *Provider) initKnownAdapters() {
 					return nil, err
 				}
 
-				mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces,
-					func(namespace string) cache.ListerWatcher {
-						return &cache.ListWatch{
-							ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-								return client.CoreV1().Pods(namespace).List(context.TODO(), opts)
+				newInformer := func(namespace string) cache.SharedIndexInformer {
+					return cache.NewSharedIndexInformer(
+						&cache.ListWatch{
+							ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+								return client.CoreV1().Pods(namespace).List(context.TODO(), options)
 							},
-							WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-								return client.CoreV1().Pods(namespace).Watch(context.TODO(), opts)
+							WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+								return client.CoreV1().Pods(namespace).Watch(context.TODO(), options)
 							},
-						}
-					})
+						},
+						&v1.Pod{},
+						p.resyncPeriod,
+						cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					)
+				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, p.resyncPeriod,
-					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+				informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
 
 				return informer, nil
 			},
@@ -205,20 +211,23 @@ func (p *Provider) initKnownAdapters() {
 					return nil, err
 				}
 
-				mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces,
-					func(namespace string) cache.ListerWatcher {
-						return &cache.ListWatch{
-							ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-								return client.CoreV1().Secrets(namespace).List(context.TODO(), opts)
+				newInformer := func(namespace string) cache.SharedIndexInformer {
+					return cache.NewSharedIndexInformer(
+						&cache.ListWatch{
+							ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+								return client.CoreV1().Secrets(namespace).List(context.TODO(), options)
 							},
-							WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-								return client.CoreV1().Secrets(namespace).Watch(context.TODO(), opts)
+							WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+								return client.CoreV1().Secrets(namespace).Watch(context.TODO(), options)
 							},
-						}
-					})
+						},
+						&v1.Secret{},
+						p.resyncPeriod,
+						cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					)
+				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.Secret{}, p.resyncPeriod,
-					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+				informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
 
 				return informer, nil
 			},
@@ -249,20 +258,23 @@ func (p *Provider) initKnownAdapters() {
 					return nil, err
 				}
 
-				mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces,
-					func(namespace string) cache.ListerWatcher {
-						return &cache.ListWatch{
-							ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-								return client.CoreV1().Endpoints(namespace).List(context.TODO(), opts)
+				newInformer := func(namespace string) cache.SharedIndexInformer {
+					return cache.NewSharedIndexInformer(
+						&cache.ListWatch{
+							ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+								return client.CoreV1().Endpoints(namespace).List(context.TODO(), options)
 							},
-							WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-								return client.CoreV1().Endpoints(namespace).Watch(context.TODO(), opts)
+							WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+								return client.CoreV1().Endpoints(namespace).Watch(context.TODO(), options)
 							},
-						}
-					})
+						},
+						&v1.Endpoints{},
+						p.resyncPeriod,
+						cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					)
+				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, p.resyncPeriod,
-					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+				informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
 
 				return informer, nil
 			},
@@ -305,20 +317,23 @@ func (p *Provider) initKnownAdapters() {
 					return nil, err
 				}
 
-				mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces,
-					func(namespace string) cache.ListerWatcher {
-						return &cache.ListWatch{
-							ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-								return client.ExtensionsV1beta1().Ingresses(namespace).List(context.TODO(), opts)
+				newInformer := func(namespace string) cache.SharedIndexInformer {
+					return cache.NewSharedIndexInformer(
+						&cache.ListWatch{
+							ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+								return client.ExtensionsV1beta1().Ingresses(namespace).List(context.TODO(), options)
 							},
-							WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-								return client.ExtensionsV1beta1().Ingresses(namespace).Watch(context.TODO(), opts)
+							WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+								return client.ExtensionsV1beta1().Ingresses(namespace).Watch(context.TODO(), options)
 							},
-						}
-					})
+						},
+						&v1beta1.Ingress{},
+						p.resyncPeriod,
+						cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					)
+				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, p.resyncPeriod,
-					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+				informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
 
 				return informer, nil
 			},
@@ -388,20 +403,23 @@ func (p *Provider) initKnownAdapters() {
 					return nil, err
 				}
 
-				mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces,
-					func(namespace string) cache.ListerWatcher {
-						return &cache.ListWatch{
-							ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-								return client.AppsV1().Deployments(namespace).List(context.TODO(), opts)
+				newInformer := func(namespace string) cache.SharedIndexInformer {
+					return cache.NewSharedIndexInformer(
+						&cache.ListWatch{
+							ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+								return client.AppsV1().Deployments(namespace).List(context.TODO(), options)
 							},
-							WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-								return client.AppsV1().Deployments(namespace).Watch(context.TODO(), opts)
+							WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+								return client.AppsV1().Deployments(namespace).Watch(context.TODO(), options)
 							},
-						}
-					})
+						},
+						&appsv1.Deployment{},
+						p.resyncPeriod,
+						cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					)
+				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &appsv1.Deployment{}, p.resyncPeriod,
-					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+				informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
 
 				return informer, nil
 			},
@@ -431,20 +449,23 @@ func (p *Provider) initKnownAdapters() {
 					return nil, err
 				}
 
-				mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces,
-					func(namespace string) cache.ListerWatcher {
-						return &cache.ListWatch{
-							ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-								return client.CoreV1().ConfigMaps(namespace).List(context.TODO(), opts)
+				newInformer := func(namespace string) cache.SharedIndexInformer {
+					return cache.NewSharedIndexInformer(
+						&cache.ListWatch{
+							ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+								return client.CoreV1().ConfigMaps(namespace).List(context.TODO(), options)
 							},
-							WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-								return client.CoreV1().ConfigMaps(namespace).Watch(context.TODO(), opts)
+							WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+								return client.CoreV1().ConfigMaps(namespace).Watch(context.TODO(), options)
 							},
-						}
-					})
+						},
+						&v1.ConfigMap{},
+						p.resyncPeriod,
+						cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					)
+				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, p.resyncPeriod,
-					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+				informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
 
 				return informer, nil
 			},

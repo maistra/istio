@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/gogo/protobuf/proto"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,7 +29,6 @@ import (
 
 	"istio.io/istio/galley/pkg/config/util/pb"
 	"istio.io/istio/pkg/config/schema/resource"
-	"istio.io/istio/pkg/listwatch"
 )
 
 func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
@@ -61,20 +61,23 @@ func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
 				return nil, err
 			}
 
-			mlw := listwatch.MultiNamespaceListerWatcher(p.namespaces, func(namespace string) cache.ListerWatcher {
-				return &cache.ListWatch{
-					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return d.List(context.TODO(), options)
+			newInformer := func(namespace string) cache.SharedIndexInformer {
+				return cache.NewSharedIndexInformer(
+					&cache.ListWatch{
+						ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+							return d.Namespace(namespace).List(context.TODO(), options)
+						},
+						WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+							return d.Namespace(namespace).Watch(context.TODO(), options)
+						},
 					},
-					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						options.Watch = true
-						return d.Watch(context.TODO(), options)
-					},
-				}
-			})
+					&unstructured.Unstructured{},
+					p.resyncPeriod,
+					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+				)
+			}
 
-			informer := cache.NewSharedIndexInformer(mlw, &unstructured.Unstructured{}, p.resyncPeriod,
-				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+			informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
 
 			return informer, nil
 		},
