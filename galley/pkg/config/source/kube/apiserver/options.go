@@ -20,6 +20,7 @@ import (
 	"istio.io/istio/galley/pkg/config/source/kube"
 	"istio.io/istio/galley/pkg/config/source/kube/apiserver/status"
 	"istio.io/istio/pkg/config/schema/collection"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 )
 
 // Options for the kube controller
@@ -34,4 +35,8 @@ type Options struct {
 	StatusController status.Controller
 
 	WatchedNamespaces string
+
+	MemberRoll memberroll.MemberRollController
+
+	DisableCRDScan bool
 }

@@ -147,6 +147,8 @@ func init() {
 
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.MemberRollName, "memberRollName", "",
 		"The name of the MemberRoll resource")
+	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableCRDScan, "enableCRDScan", true,
+		"Whether to scan CRDs at startup")
 
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",

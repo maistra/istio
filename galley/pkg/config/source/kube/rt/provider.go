@@ -65,6 +65,14 @@ func NewProvider(interfaces kube.Interfaces, namespaces string, resyncPeriod tim
 	return p
 }
 
+// SetNamespaces updates the set of namespaces watched by the provider.
+func (p *Provider) SetNamespaces(namespaces ...string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.namespaces.SetNamespaces(namespaces...)
+}
+
 // GetAdapter returns a type for the group/kind. If the type is a well-known type, then the returned type will have
 // a specialized implementation. Otherwise, it will be using the dynamic conversion logic.
 func (p *Provider) GetAdapter(r resource.Schema) *Adapter {
