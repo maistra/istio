@@ -135,6 +135,9 @@ type Client interface {
 
 	// AddMemberRoll creates a MemberRollController and adds it to the client.
 	AddMemberRoll(namespace, memberRollName string) error
+
+	// GetMemberRoll returns the member roll for the client, which may be nil.
+	GetMemberRoll() memberroll.MemberRollController
 }
 
 // ExtendedClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -444,6 +447,10 @@ func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
 	c.memberRoll.Register(c.serviceapisInformers)
 
 	return nil
+}
+
+func (c *client) GetMemberRoll() memberroll.MemberRollController {
+	return c.memberRoll
 }
 
 // RunAndWait starts all informers and waits for their caches to sync.

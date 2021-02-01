@@ -39,6 +39,7 @@ import (
 
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/kube"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
 )
 
@@ -128,6 +129,10 @@ func (c MockClient) SetNamespaces(namespaces ...string) {
 }
 
 func (c MockClient) AddMemberRoll(namespace, memberRollName string) error {
+	panic("not used in mock")
+}
+
+func (c MockClient) GetMemberRoll() memberroll.MemberRollController {
 	panic("not used in mock")
 }
 
