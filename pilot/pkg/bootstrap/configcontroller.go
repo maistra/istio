@@ -97,7 +97,8 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 			leaderelection.
 				NewLeaderElection(args.Namespace, args.PodName, leaderelection.IngressController, s.kubeClient.Kube()).
 				AddRunFunction(func(leaderStop <-chan struct{}) {
-					ingressSyncer := ingress.NewStatusSyncer(meshConfig, s.kubeClient)
+					ingressSyncer := ingress.NewStatusSyncer(meshConfig, s.kubeClient,
+						args.RegistryOptions.KubeOptions.DisableNodeAccess)
 					// Start informers again. This fixes the case where informers for namespace do not start,
 					// as we create them only after acquiring the leader lock
 					// Note: stop here should be the overall pilot stop, NOT the leader election stop. We are

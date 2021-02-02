@@ -149,6 +149,8 @@ func init() {
 		"The name of the MemberRoll resource")
 	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableCRDScan, "enableCRDScan", true,
 		"Whether to scan CRDs at startup")
+	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.DisableNodeAccess, "disableNodeAccess", false,
+		"Whether to prevent istiod watching Node objects")
 
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",
