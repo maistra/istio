@@ -15,13 +15,16 @@
 package rt
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/gogo/protobuf/proto"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	kubeSchema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/galley/pkg/config/util/pb"
@@ -53,13 +56,30 @@ func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
 		},
 
 		newInformer: func() (cache.SharedIndexInformer, error) {
-			gvr := kubeSchema.GroupVersionResource{
-				Group:    r.Group(),
-				Version:  r.Version(),
-				Resource: r.Plural(),
+			d, err := p.GetDynamicResourceInterface(r)
+			if err != nil {
+				return nil, err
 			}
 
-			return p.kubeClient.DynamicInformer().ForResource(gvr).Informer(), nil
+			newInformer := func(namespace string) cache.SharedIndexInformer {
+				return cache.NewSharedIndexInformer(
+					&cache.ListWatch{
+						ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+							return d.Namespace(namespace).List(context.TODO(), options)
+						},
+						WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+							return d.Namespace(namespace).Watch(context.TODO(), options)
+						},
+					},
+					&unstructured.Unstructured{},
+					p.resyncPeriod,
+					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+				)
+			}
+
+			informer := xnsinformers.NewMultiNamespaceInformer(p.namespaces, p.resyncPeriod, newInformer)
+
+			return informer, nil
 		},
 
 		parseJSON: func(data []byte) (interface{}, error) {

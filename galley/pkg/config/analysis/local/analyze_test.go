@@ -35,10 +35,10 @@ import (
 	"istio.io/istio/galley/pkg/config/testing/data"
 	"istio.io/istio/galley/pkg/config/testing/k8smeta"
 	"istio.io/istio/galley/pkg/config/util/kubeyaml"
+	"istio.io/istio/galley/pkg/testing/mock"
 	"istio.io/istio/pkg/config/resource"
 	"istio.io/istio/pkg/config/schema"
 	"istio.io/istio/pkg/config/schema/collection"
-	kubelib "istio.io/istio/pkg/kube"
 )
 
 type testAnalyzer struct {
@@ -150,11 +150,11 @@ func TestAddInMemorySource(t *testing.T) {
 func TestAddRunningKubeSource(t *testing.T) {
 	g := NewWithT(t)
 
-	k := kubelib.NewFakeClient()
+	mk := mock.NewKube()
 
 	sa := NewSourceAnalyzer(k8smeta.MustGet(), blankCombinedAnalyzer, "", "", nil, false, timeout)
 
-	sa.AddRunningKubeSource(k)
+	sa.AddRunningKubeSource(mk)
 	g.Expect(*sa.meshCfg).To(Equal(*mesh.DefaultMeshConfig())) // Base default meshcfg
 	g.Expect(sa.meshNetworks.Networks).To(HaveLen(0))
 	g.Expect(sa.sources).To(HaveLen(1))
@@ -178,16 +178,18 @@ func TestAddRunningKubeSourceWithIstioMeshConfigMap(t *testing.T) {
 		},
 	}
 
-	k := kubelib.NewFakeClient()
-	client := k.Kube()
-
+	mk := mock.NewKube()
+	client, err := mk.KubeClient()
+	if err != nil {
+		t.Fatalf("Error getting client for mock kube: %v", err)
+	}
 	if _, err := client.CoreV1().ConfigMaps(istioNamespace.String()).Create(context.TODO(), cfg, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Error creating mesh config configmap: %v", err)
 	}
 
 	sa := NewSourceAnalyzer(k8smeta.MustGet(), blankCombinedAnalyzer, "", istioNamespace, nil, false, timeout)
 
-	sa.AddRunningKubeSource(k)
+	sa.AddRunningKubeSource(mk)
 	g.Expect(sa.meshCfg.RootNamespace).To(Equal(testRootNamespace))
 	g.Expect(sa.meshNetworks.Networks).To(HaveLen(2))
 	g.Expect(sa.sources).To(HaveLen(1))
@@ -272,10 +274,10 @@ func TestResourceFiltering(t *testing.T) {
 		fn:     func(_ analysis.Context) {},
 		inputs: []collection.Name{usedCollection.Name()},
 	}
-	k := kubelib.NewFakeClient()
+	mk := mock.NewKube()
 
 	sa := NewSourceAnalyzer(schema.MustGet(), analysis.Combine("a", a), "", "", nil, true, timeout)
-	sa.AddRunningKubeSource(k)
+	sa.AddRunningKubeSource(mk)
 
 	// All but the used collection should be disabled
 	for _, r := range recordedOptions.Schemas.All() {

@@ -24,6 +24,7 @@ import (
 	"istio.io/istio/galley/pkg/config/util/kuberesource"
 	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/schema/snapshots"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 )
 
 const (
@@ -60,6 +61,14 @@ type Args struct { // nolint:maligned
 
 	Snapshots       []string
 	TriggerSnapshot string
+
+	MemberRoll memberroll.MemberRollController
+
+	// DisableCRDScan determines whether the controller will list all CRDs
+	// present in the cluster, and subsequently only create watches on those
+	// that are. If this is set to false, all CRDs defined in the schema must be
+	// present for istiod to function.
+	DisableCRDScan bool
 }
 
 // DefaultArgs allocates an Args struct initialized with Galley's default configuration.

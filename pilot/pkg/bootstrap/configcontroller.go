@@ -361,8 +361,10 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 	processingArgs.WatchedNamespaces = args.RegistryOptions.KubeOptions.WatchedNamespaces
 	processingArgs.MeshConfigFile = args.MeshConfigFile
 	processingArgs.EnableConfigAnalysis = true
+	processingArgs.MemberRoll = s.kubeClient.GetMemberRoll()
+	processingArgs.DisableCRDScan = !args.RegistryOptions.KubeOptions.EnableCRDScan
 
-	processing := components.NewProcessing(s.kubeClient, processingArgs)
+	processing := components.NewProcessing(processingArgs)
 
 	s.addStartFunc(func(stop <-chan struct{}) error {
 		go leaderelection.

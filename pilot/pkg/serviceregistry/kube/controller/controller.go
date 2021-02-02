@@ -145,6 +145,12 @@ type Options struct {
 
 	// Duration to wait for cache syncs
 	SyncInterval time.Duration
+
+	// EnableCRDScan determines whether the controller will list all CRDs
+	// present in the cluster, and subsequently only create watches on those
+	// that are. If this is set to false, all CRDs defined in the schema must be
+	// present for istiod to function.
+	EnableCRDScan bool
 }
 
 func (o Options) GetSyncInterval() time.Duration {
