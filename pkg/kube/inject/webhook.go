@@ -679,6 +679,7 @@ type InjectionParameters struct {
 	proxyEnvs           map[string]string
 	injectedAnnotations map[string]string
 	proxyUID            uint64
+	proxyGID            *int64
 }
 
 func injectPod(req InjectionParameters, partialInjection bool) ([]byte, error) {
@@ -689,6 +690,9 @@ func injectPod(req InjectionParameters, partialInjection bool) ([]byte, error) {
 		// k8s sa jwt token volume mount file is only accessible to root user, not istio-proxy(the user that istio proxy runs as).
 		// workaround by https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
 		var grp = int64(1337)
+		if req.proxyGID != nil {
+			grp = *req.proxyGID
+		}
 		if pod.Spec.SecurityContext == nil {
 			pod.Spec.SecurityContext = &corev1.PodSecurityContext{
 				FSGroup: &grp,
@@ -760,6 +764,7 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 		}
 	}
 
+	var proxyGID *int64
 	proxyUID, err := getProxyUID(pod)
 	if err != nil {
 		log.Infof("Could not get proxyUID from annotation: %v", err)
@@ -768,12 +773,19 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
 			uid := uint64(*pod.Spec.SecurityContext.RunAsUser) + 1
 			proxyUID = &uid
+			gid := *pod.Spec.SecurityContext.RunAsUser
+			// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
+			proxyGID = &gid
 		}
 		for _, c := range pod.Spec.Containers {
 			if c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
 				uid := uint64(*c.SecurityContext.RunAsUser) + 1
+				gid := *c.SecurityContext.RunAsUser
 				if proxyUID == nil || uid > *proxyUID {
 					proxyUID = &uid
+				}
+				if proxyGID == nil {
+					proxyGID = &gid
 				}
 			}
 		}
@@ -781,6 +793,10 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	if proxyUID == nil {
 		uid := DefaultSidecarProxyUID
 		proxyUID = &uid
+	}
+	if proxyGID == nil {
+		gid := int64(DefaultSidecarProxyUID)
+		proxyGID = &gid
 	}
 
 	deploy, typeMeta := kube.GetDeployMetaFromPod(&pod)
@@ -796,6 +812,7 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 		injectedAnnotations: wh.Config.InjectedAnnotations,
 		proxyEnvs:           parseInjectEnvs(path),
 		proxyUID:            *proxyUID,
+		proxyGID:            proxyGID,
 	}
 
 	patchBytes, err := injectPod(params, partialInjection)
