@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -52,6 +53,9 @@ type NamespaceController struct {
 	queue              queue.Instance
 	namespacesInformer cache.SharedInformer
 	configMapInformer  cache.SharedInformer
+
+	usesMemberRollController bool
+	namespaces               xnsinformers.NamespaceSet
 }
 
 // NewNamespaceController returns a pointer to a newly constructed NamespaceController instance.
@@ -86,7 +90,15 @@ func NewNamespaceController(data func() map[string]string, kubeClient kube.Clien
 			if cm.Name != CACertNamespaceConfigMap {
 				return
 			}
+
 			c.queue.Push(func() error {
+				// Maistra can't read Namespaces objects, so it can't avoid the
+				// issue mentioned below.  It can either not recreate the
+				// deleted ConfigMap, or it can ignore issues with termination.
+				if c.usesMemberRollController {
+					return c.insertDataForNamespace(cm.Namespace)
+				}
+
 				ns, err := kubeClient.CoreV1().Namespaces().Get(context.TODO(), cm.Namespace, metav1.GetOptions{})
 				if err != nil {
 					return err
@@ -100,6 +112,23 @@ func NewNamespaceController(data func() map[string]string, kubeClient kube.Clien
 			})
 		},
 	})
+
+	// If a MemberRoll controller is configured on the client, skip creating the
+	// namespace informer and just respond to changes in the MemberRoll.
+	if mrc := kubeClient.GetMemberRoll(); mrc != nil {
+		c.usesMemberRollController = true
+		c.namespaces = xnsinformers.NewNamespaceSet()
+		c.namespaces.AddHandler(xnsinformers.NamespaceSetHandlerFuncs{
+			AddFunc: func(ns string) {
+				if err := c.insertDataForNamespace(ns); err != nil {
+					log.Errorf("error inserting data for namespace: %v", err)
+				}
+			},
+		})
+
+		mrc.Register(c.namespaces)
+		return c
+	}
 
 	c.namespacesInformer = kubeClient.KubeInformer().Core().V1().Namespaces().Informer()
 	c.namespacesInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -120,7 +149,13 @@ func NewNamespaceController(data func() map[string]string, kubeClient kube.Clien
 
 // Run starts the NamespaceController until a value is sent to stopCh.
 func (nc *NamespaceController) Run(stopCh <-chan struct{}) {
-	cache.WaitForCacheSync(stopCh, nc.namespacesInformer.HasSynced, nc.configMapInformer.HasSynced)
+	syncFuncs := []cache.InformerSynced{nc.configMapInformer.HasSynced}
+
+	if nc.namespacesInformer != nil {
+		syncFuncs = append(syncFuncs, nc.namespacesInformer.HasSynced)
+	}
+
+	cache.WaitForCacheSync(stopCh, syncFuncs...)
 	log.Infof("Namespace controller started")
 	go nc.queue.Run(stopCh)
 }
