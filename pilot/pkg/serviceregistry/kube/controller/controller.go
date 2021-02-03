@@ -151,6 +151,12 @@ type Options struct {
 	// that are. If this is set to false, all CRDs defined in the schema must be
 	// present for istiod to function.
 	EnableCRDScan bool
+
+	// DisableNodeAccess determines whether the controller should attempt to
+	// watch and/or list Node objects.  If this is true, some features will not
+	// be available, e.g. NodePort gateways and determining locality information
+	// based on Nodes.
+	DisableNodeAccess bool
 }
 
 func (o Options) GetSyncInterval() time.Duration {
@@ -314,10 +320,12 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		c.endpoints = newEndpointSliceController(c, kubeClient.KubeInformer().Discovery().V1beta1().EndpointSlices())
 	}
 
-	// This is for getting the node IPs of a selected set of nodes
-	c.nodeInformer = kubeClient.KubeInformer().Core().V1().Nodes().Informer()
-	c.nodeLister = kubeClient.KubeInformer().Core().V1().Nodes().Lister()
-	registerHandlers(c.nodeInformer, c.queue, "Nodes", c.onNodeEvent, nil)
+	if !options.DisableNodeAccess {
+		// This is for getting the node IPs of a selected set of nodes
+		c.nodeInformer = kubeClient.KubeInformer().Core().V1().Nodes().Informer()
+		c.nodeLister = kubeClient.KubeInformer().Core().V1().Nodes().Lister()
+		registerHandlers(c.nodeInformer, c.queue, "Nodes", c.onNodeEvent, nil)
+	}
 
 	c.pods = newPodCache(c, kubeClient.KubeInformer().Core().V1().Pods(), func(key string) {
 		item, exists, err := c.endpoints.getInformer().GetStore().GetByKey(key)
@@ -570,7 +578,7 @@ func (c *Controller) HasSynced() bool {
 		!c.serviceInformer.HasSynced() ||
 		!c.endpoints.HasSynced() ||
 		!c.pods.informer.HasSynced() ||
-		!c.nodeInformer.HasSynced() {
+		(c.nodeInformer != nil && !c.nodeInformer.HasSynced()) {
 		return false
 	}
 
@@ -598,10 +606,12 @@ func (c *Controller) SyncAll() error {
 		}
 	}
 
-	nodes := c.nodeInformer.GetStore().List()
-	log.Debugf("initializing %d nodes", len(nodes))
-	for _, s := range nodes {
-		err = multierror.Append(err, c.onNodeEvent(s, model.EventAdd))
+	if c.nodeInformer != nil {
+		nodes := c.nodeInformer.GetStore().List()
+		log.Debugf("initializing %d nodes", len(nodes))
+		for _, s := range nodes {
+			err = multierror.Append(err, c.onNodeEvent(s, model.EventAdd))
+		}
 	}
 
 	services := c.serviceInformer.GetStore().List()
@@ -683,6 +693,19 @@ func (c *Controller) getPodLocality(pod *v1.Pod) string {
 	// if pod has `istio-locality` label, skip below ops
 	if len(pod.Labels[model.LocalityLabel]) > 0 {
 		return model.GetLocalityLabelOrDefault(pod.Labels[model.LocalityLabel], "")
+	}
+
+	if c.nodeLister == nil {
+		// Maistra compatibility. Try Node labels copied to Pod.
+		region := getLabelValue(pod, NodeRegionLabel, NodeRegionLabelGA)
+		zone := getLabelValue(pod, NodeZoneLabel, NodeZoneLabelGA)
+		subzone := getLabelValue(pod, label.IstioSubZone, "")
+
+		if region == "" && zone == "" && subzone == "" {
+			return ""
+		}
+
+		return region + "/" + zone + "/" + subzone // Format: "%s/%s/%s"
 	}
 
 	// NodeName is set by the scheduler after the pod is created
