@@ -21,17 +21,17 @@ import (
 
 func flushAndDeleteChains(ext dep.Dependencies, cmd string, table string, chains []string) {
 	for _, chain := range chains {
-		ext.RunQuietlyAndIgnore(cmd, "-t", table, "-F", chain)
-		ext.RunQuietlyAndIgnore(cmd, "-t", table, "-X", chain)
+		ext.RunQuietlyAndIgnore(cmd, "-w", "-t", table, "-F", chain)
+		ext.RunQuietlyAndIgnore(cmd, "-w", "-t", table, "-X", chain)
 	}
 }
 
 func removeOldChains(ext dep.Dependencies, cmd string) {
 	for _, table := range []string{constants.NAT, constants.MANGLE} {
 		// Remove the old chains
-		ext.RunQuietlyAndIgnore(cmd, "-t", table, "-D", constants.PREROUTING, "-p", constants.TCP, "-j", constants.ISTIOINBOUND)
+		ext.RunQuietlyAndIgnore(cmd, "-w", "-t", table, "-D", constants.PREROUTING, "-p", constants.TCP, "-j", constants.ISTIOINBOUND)
 	}
-	ext.RunQuietlyAndIgnore(cmd, "-t", constants.NAT, "-D", constants.OUTPUT, "-p", constants.TCP, "-j", constants.ISTIOOUTPUT)
+	ext.RunQuietlyAndIgnore(cmd, "-w", "-t", constants.NAT, "-D", constants.OUTPUT, "-p", constants.TCP, "-j", constants.ISTIOOUTPUT)
 
 	// Flush and delete the istio chains from NAT table.
 	chains := []string{constants.ISTIOOUTPUT, constants.ISTIOINBOUND}
