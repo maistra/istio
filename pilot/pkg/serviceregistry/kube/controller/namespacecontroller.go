@@ -92,11 +92,15 @@ func NewNamespaceController(data func() map[string]string, kubeClient kube.Clien
 			}
 
 			c.queue.Push(func() error {
-				// Maistra can't read Namespaces objects, so it can't avoid the
-				// issue mentioned below.  It can either not recreate the
-				// deleted ConfigMap, or it can ignore issues with termination.
+				// If a MemberRoll controller is in use, and the set of
+				// namespaces still includes the one for this ConfigMap,
+				// then recreate the ConfigMap, otherwise do nothing.
 				if c.usesMemberRollController {
-					return c.insertDataForNamespace(cm.Namespace)
+					if c.namespaces.Contains(cm.Namespace) {
+						return c.insertDataForNamespace(cm.Namespace)
+					}
+
+					return nil
 				}
 
 				ns, err := kubeClient.CoreV1().Namespaces().Get(context.TODO(), cm.Namespace, metav1.GetOptions{})
