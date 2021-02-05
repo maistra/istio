@@ -126,7 +126,7 @@ func (s *Source) Start() {
 	s.provider = rt.NewProvider(s.options.Client, s.options.WatchedNamespaces, s.options.ResyncPeriod)
 
 	if s.options.MemberRoll != nil {
-		s.options.MemberRoll.Register(s.provider)
+		s.options.MemberRoll.Register(s.provider, "galley")
 	}
 
 	if s.options.DisableCRDScan {
