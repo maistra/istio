@@ -440,11 +440,11 @@ func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
 		return err
 	}
 
-	c.memberRoll.Register(c.kubeInformer)
-	c.memberRoll.Register(c.istioInformer)
-	c.memberRoll.Register(c.dynamicInformer)
-	c.memberRoll.Register(c.metadataInformer)
-	c.memberRoll.Register(c.serviceapisInformers)
+	c.memberRoll.Register(c.kubeInformer, "kubernetes-informers")
+	c.memberRoll.Register(c.istioInformer, "istio-infomrers")
+	c.memberRoll.Register(c.dynamicInformer, "dynamic-informers")
+	c.memberRoll.Register(c.metadataInformer, "metadata-informers")
+	c.memberRoll.Register(c.serviceapisInformers, "service-apis-informers")
 
 	return nil
 }

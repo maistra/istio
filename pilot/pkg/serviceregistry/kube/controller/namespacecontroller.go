@@ -126,7 +126,7 @@ func NewNamespaceController(data func() map[string]string, kubeClient kube.Clien
 			},
 		})
 
-		mrc.Register(c.namespaces)
+		mrc.Register(c.namespaces, "namespace-controller")
 		return c
 	}
 
