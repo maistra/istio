@@ -151,6 +151,8 @@ func init() {
 		"Whether to scan CRDs at startup")
 	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.DisableNodeAccess, "disableNodeAccess", false,
 		"Whether to prevent istiod watching Node objects")
+	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableIngressClassName, "enableIngressClassName",
+		true, "Whether support processing Ingress resources that use the new ingressClassName field in their spec")
 
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",
