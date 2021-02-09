@@ -133,15 +133,17 @@ func (cl *Client) HasSynced() bool {
 	return true
 }
 
-func New(client kube.Client, revision, domainSuffix string) (model.ConfigStoreCache, error) {
+func New(client kube.Client, revision, domainSuffix string, enableCRDScan bool) (model.ConfigStoreCache, error) {
 	schemas := collections.Pilot
 	if features.EnableServiceApis {
 		schemas = collections.PilotServiceApi
 	}
-	return NewForSchemas(context.Background(), client, revision, domainSuffix, schemas)
+	return NewForSchemas(context.Background(), client, revision, domainSuffix, schemas, enableCRDScan)
 }
 
-func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuffix string, schemas collection.Schemas) (model.ConfigStoreCache, error) {
+func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuffix string,
+	schemas collection.Schemas, enableCRDScan bool) (model.ConfigStoreCache, error) {
+
 	out := &Client{
 		domainSuffix:      domainSuffix,
 		schemas:           schemas,
@@ -151,14 +153,20 @@ func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuff
 		istioClient:       client.Istio(),
 		serviceApisClient: client.ServiceApis(),
 	}
-	known, err := knownCRDs(ctx, client.Ext())
-	if err != nil {
-		return nil, err
+	var known map[string]struct{}
+	if enableCRDScan {
+		var err error
+		known, err = knownCRDs(ctx, client.Ext())
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, s := range out.schemas.All() {
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
 		name := fmt.Sprintf("%s.%s", s.Resource().Plural(), s.Resource().Group())
-		if _, f := known[name]; f {
+		// If EnableCRDScan is false, then ignore whether the CRD is in the map
+		// and just try to add informers for all types.
+		if _, f := known[name]; f || !enableCRDScan {
 			var i informers.GenericInformer
 			var err error
 			if s.Resource().Group() == "networking.x-k8s.io" {

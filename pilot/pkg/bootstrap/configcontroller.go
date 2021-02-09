@@ -268,7 +268,8 @@ func (s *Server) initStatusController(args *PilotArgs, writeStatus bool) {
 }
 
 func (s *Server) makeKubeConfigController(args *PilotArgs) (model.ConfigStoreCache, error) {
-	c, err := crdclient.New(s.kubeClient, args.Revision, args.RegistryOptions.KubeOptions.DomainSuffix)
+	options := args.RegistryOptions.KubeOptions
+	c, err := crdclient.New(s.kubeClient, args.Revision, options.DomainSuffix, options.EnableCRDScan)
 	if err != nil {
 		return nil, err
 	}
