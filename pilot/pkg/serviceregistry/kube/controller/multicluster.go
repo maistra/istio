@@ -275,7 +275,7 @@ func createConfigStore(client kubelib.Client, revision string, opts Options) (mo
 		Build()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return crdclient.NewForSchemas(ctx, client, revision, opts.DomainSuffix, workloadEntriesSchemas)
+	return crdclient.NewForSchemas(ctx, client, revision, opts.DomainSuffix, workloadEntriesSchemas, opts.EnableCRDScan)
 }
 
 func (m *Multicluster) updateHandler(svc *model.Service) {
