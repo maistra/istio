@@ -147,11 +147,16 @@ func New(client kube.Client, revision string, options controller2.Options) (mode
 		istioClient:       client.Istio(),
 		serviceApisClient: client.ServiceApis(),
 	}
-	known := knownCRDs(client.Ext())
+	var known map[string]struct{}
+	if options.EnableCRDScan {
+		known = knownCRDs(client.Ext())
+	}
 	for _, s := range out.schemas.All() {
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
 		name := fmt.Sprintf("%s.%s", s.Resource().Plural(), s.Resource().Group())
-		if _, f := known[name]; f {
+		// If EnableCRDScan is false, then ignore whether the CRD is in the map
+		// and just try to add informers for all types.
+		if _, f := known[name]; f || !options.EnableCRDScan {
 			var i informers.GenericInformer
 			var err error
 			if s.Resource().Group() == "networking.x-k8s.io" {
