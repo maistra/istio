@@ -321,5 +321,5 @@ func createWleConfigStore(client kubelib.Client, revision string, opts Options) 
 	workloadEntriesSchemas := collection.NewSchemasBuilder().
 		MustAdd(collections.IstioNetworkingV1Alpha3Workloadentries).
 		Build()
-	return crdclient.NewForSchemas(client, revision, opts.DomainSuffix, workloadEntriesSchemas)
+	return crdclient.NewForSchemas(client, revision, opts.DomainSuffix, workloadEntriesSchemas, opts.EnableCRDScan)
 }
