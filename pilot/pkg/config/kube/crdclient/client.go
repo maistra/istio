@@ -103,12 +103,12 @@ type Client struct {
 
 var _ model.ConfigStoreCache = &Client{}
 
-func New(client kube.Client, revision, domainSuffix string) (model.ConfigStoreCache, error) {
+func New(client kube.Client, revision, domainSuffix string, enableCRDScan bool) (model.ConfigStoreCache, error) {
 	schemas := collections.Pilot
 	if features.EnableGatewayAPI {
 		schemas = collections.PilotGatewayAPI
 	}
-	return NewForSchemas(context.Background(), client, revision, domainSuffix, schemas)
+	return NewForSchemas(context.Background(), client, revision, domainSuffix, schemas, enableCRDScan)
 }
 
 var crdWatches = map[config.GroupVersionKind]chan struct{}{
@@ -132,7 +132,8 @@ func WaitForCRD(k config.GroupVersionKind, stop <-chan struct{}) bool {
 	}
 }
 
-func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuffix string, schemas collection.Schemas) (model.ConfigStoreCache, error) {
+func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuffix string,
+	schemas collection.Schemas, enableCRDScan bool) (model.ConfigStoreCache, error) {
 	schemasByCRDName := map[string]collection.Schema{}
 	for _, s := range schemas.All() {
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
@@ -156,14 +157,20 @@ func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuff
 		initialSync: atomic.NewBool(false),
 	}
 
-	known, err := knownCRDs(ctx, client.Ext())
-	if err != nil {
-		return nil, err
+	var known map[string]struct{}
+	if enableCRDScan {
+		var err error
+		known, err = knownCRDs(ctx, client.Ext())
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, s := range schemas.All() {
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
 		name := fmt.Sprintf("%s.%s", s.Resource().Plural(), s.Resource().Group())
-		if _, f := known[name]; f {
+		// If EnableCRDScan is false, then ignore whether the CRD is in the map
+		// and just try to add informers for all types.
+		if _, f := known[name]; f || !enableCRDScan {
 			handleCRDAdd(out, name, nil)
 		} else {
 			scope.Warnf("Skipping CRD %v as it is not present", s.Resource().GroupVersionKind())
