@@ -92,7 +92,7 @@ func TestBinarySizes(t *testing.T) {
 		// TODO: shrink the ranges here once the active work to reduce binary size is complete
 		// For now, having two small a range will result in lots of "merge conflicts"
 		"istioctl":        {60, 100},
-		"pilot-agent":     {30, 45},
+		"pilot-agent":     {30, 60}, // Maistra increases this from 45 to accommodate ServiceMeshExtensions
 		"pilot-discovery": {60, 80},
 		"bug-report":      {60, 100},
 	}

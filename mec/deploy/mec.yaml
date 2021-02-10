@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mec
+  namespace: istio-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mec
+  namespace: istio-system
+  labels:
+    app: mec
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  selector:
+    app: mec
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mec
+  namespace: istio-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mec
+  template:
+    metadata:
+      labels:
+        app: mec
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      serviceAccountName: mec
+      containers:
+      - image: registry.gitlab.com/dgrimm/istio/mec:latest
+        imagePullPolicy: Always
+        name: mec
+        command:
+        - mec
+        - --namespace
+        - cp
+        - --cluster
+        - outbound|80||mec.cp.svc.cluster.local
+        - --baseURL
+        - http://mec.cp.svc.cluster.local
+        env:
+        - name: HOME
+          value: /podman
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: home
+          mountPath: /podman
+        - name: servedir
+          mountPath: /srv
+        - name: graph
+          mountPath: /var/lib/containers
+      volumes:
+      - name: home
+        emptyDir: {}
+      - name: servedir
+        emptyDir: {}
+      - name: graph
+        emptyDir: {}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mec
+rules:
+- apiGroups:
+  - extensions.maistra.io
+  resources:
+  - servicemeshextensions
+  - servicemeshextensions/status
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+- apiGroups:
+  - maistra.io
+  resources:
+  - servicemeshmemberrolls
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - image.openshift.io
+  resources:
+  - imagestreams
+  - imagestreamimports
+  verbs:
+  - create
+  - update
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mec
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mec
+subjects:
+- kind: ServiceAccount
+  name: mec
+  namespace: istio-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-viewer
+  namespace: istio-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: registry-viewer
+subjects:
+- kind: ServiceAccount
+  name: mec
+  namespace: istio-system
