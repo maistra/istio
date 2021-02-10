@@ -1,0 +1,15 @@
+apiVersion: extensions.maistra.io/v1alpha1
+kind: ServiceMeshExtension
+metadata:
+  name: oidc-filter
+spec:
+  config: |
+    {
+      "auth_cluster": "outbound|8080||keycloak.default.svc.cluster.local",
+      "auth_host": "keycloak.default.svc.cluster.local:8080",
+      "login_uri": "http://localhost:8080/auth/realms/master/protocol/openid-connect/auth",
+      "token_uri": "http://localhost:8080/auth/realms/master/protocol/openid-connect/token",
+      "client_id": "test",
+      "client_secret": "INSERT_CLIENT_SECRET_HERE"
+    }
+  image: registry.gitlab.com/dgrimm/istio/oidc-filter:latest

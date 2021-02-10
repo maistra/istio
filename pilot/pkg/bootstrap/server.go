@@ -32,6 +32,7 @@ import (
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/hashicorp/go-multierror"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
@@ -67,6 +68,7 @@ import (
 	istiokeepalive "istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/inject"
+	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/istio/security/pkg/pki/ca"
@@ -228,6 +230,12 @@ func NewServer(args *PilotArgs) (*Server, error) {
 	// Apply the arguments to the configuration.
 	if err := s.initKubeClient(args); err != nil {
 		return nil, fmt.Errorf("error initializing kube client: %v", err)
+	}
+
+	if features.EnableMaistraExtensionSupport {
+		if err := s.initExtensionController(args); err != nil {
+			return nil, fmt.Errorf("extension client: %v", err)
+		}
 	}
 
 	s.initMeshConfiguration(args, s.fileWatcher)
@@ -545,6 +553,26 @@ func (s *Server) istiodReadyHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 	// TODO check readiness of other secure gRPC and HTTP servers.
 	w.WriteHeader(http.StatusOK)
+}
+
+// initExtensionController initializes the ServiceMeshExtension controller.
+func (s *Server) initExtensionController(args *PilotArgs) error {
+	if hasKubeRegistry(args.RegistryOptions.Registries) && args.RegistryOptions.FileDir == "" {
+		mrc := s.kubeClient.GetMemberRoll()
+		ec, err := extension.NewControllerFromConfigFile(
+			args.RegistryOptions.KubeConfig,
+			strings.Split(args.RegistryOptions.KubeOptions.WatchedNamespaces, ","),
+			mrc,
+			args.RegistryOptions.KubeOptions.ResyncPeriod,
+		)
+		if err != nil {
+			return multierror.Prefix(err, "Could not create ExtensionController.")
+		}
+		s.environment.ExtensionStore = ec
+		s.environment.ExtensionStore.Start(make(chan struct{}))
+	}
+
+	return nil
 }
 
 // initIstiodAdminServer initializes monitoring, debug and readiness end points.
