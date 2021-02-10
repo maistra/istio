@@ -61,7 +61,8 @@ require (
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/onsi/gomega v1.16.0
-	github.com/openshift/api v0.0.0-20200713203337-b2494ecb17dd
+	github.com/openshift/api v0.0.0-20200929171550-c99a4deebbe5
+	github.com/openshift/client-go v0.0.0-20200929181438-91d71ef2122c
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/client_model v0.2.0
