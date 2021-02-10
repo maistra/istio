@@ -574,6 +574,9 @@ var (
 				"`clientKey`, `clientCertificate`, `tokenFile`, and `exec`.").Get()
 		return sets.NewSet(strings.Split(v, ",")...)
 	}()
+
+	EnableMaistraExtensionSupport = env.RegisterBoolVar("ENABLE_MAISTRA_EXTENSIONS", false,
+		"If enabled, pilot, will watch ServiceMeshExtension resources and apply them to filter chains of its proxies").Get()
 )
 
 // UnsafeFeaturesEnabled returns true if any unsafe features are enabled.

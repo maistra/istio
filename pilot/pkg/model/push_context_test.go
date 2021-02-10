@@ -43,6 +43,8 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/visibility"
+	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	"istio.io/istio/pkg/servicemesh/model"
 )
 
 func TestMergeUpdateRequest(t *testing.T) {
@@ -922,6 +924,124 @@ func TestInitPushContext(t *testing.T) {
 	)
 	if diff != "" {
 		t.Fatalf("Push context had a diff after update: %v", diff)
+	}
+}
+
+func TestExtensions(t *testing.T) {
+	extensionsTestNamespace := []*model.ExtensionWrapper{
+		{
+			Name:             "v1",
+			Phase:            v1alpha1.FilterPhasePreAuthN,
+			WorkloadSelector: map[string]string{"app": "v1"},
+		},
+		{
+			Name:             "v2",
+			Phase:            v1alpha1.FilterPhasePostAuthN,
+			WorkloadSelector: map[string]string{"app": "v2"},
+		},
+	}
+	extensionsRootNamespace := []*model.ExtensionWrapper{
+		{
+			Name:             "globalv1",
+			Phase:            v1alpha1.FilterPhasePreAuthZ,
+			WorkloadSelector: map[string]string{"app": "v1"},
+		},
+		{
+			Name:             "globalv3",
+			Phase:            v1alpha1.FilterPhasePostAuthZ,
+			WorkloadSelector: map[string]string{"app": "v3"},
+		},
+	}
+
+	push := &PushContext{
+		Mesh: &meshconfig.MeshConfig{
+			RootNamespace: "istio-system",
+		},
+		extensionsByNamespace: map[string][]*model.ExtensionWrapper{
+			"istio-system": extensionsRootNamespace,
+			"test-ns":      extensionsTestNamespace,
+		},
+	}
+
+	cases := []struct {
+		name               string
+		proxy              *Proxy
+		expectedExtensions map[v1alpha1.FilterPhase][]*model.ExtensionWrapper
+	}{
+		{
+			name: "proxy matches two extensions",
+			proxy: &Proxy{
+				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v1"}},
+				ConfigNamespace: "test-ns",
+			},
+			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
+				v1alpha1.FilterPhasePreAuthN: {
+					{
+						Name:             "v1",
+						Phase:            v1alpha1.FilterPhasePreAuthN,
+						WorkloadSelector: map[string]string{"app": "v1"},
+					},
+				},
+				v1alpha1.FilterPhasePreAuthZ: {
+					{
+						Name:             "globalv1",
+						Phase:            v1alpha1.FilterPhasePreAuthZ,
+						WorkloadSelector: map[string]string{"app": "v1"},
+					},
+				},
+			},
+		},
+		{
+			name: "proxy in root namespace matches an extension",
+			proxy: &Proxy{
+				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v3"}},
+				ConfigNamespace: "istio-system",
+			},
+			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
+				v1alpha1.FilterPhasePostAuthZ: {
+					{
+						Name:             "globalv3",
+						Phase:            v1alpha1.FilterPhasePostAuthZ,
+						WorkloadSelector: map[string]string{"app": "v3"},
+					},
+				},
+			},
+		},
+
+		{
+			name: "proxy matches no extension",
+			proxy: &Proxy{
+				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v4"}},
+				ConfigNamespace: "test-ns",
+			},
+			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{},
+		},
+
+		{
+			name: "proxy matches extension in root ns",
+			proxy: &Proxy{
+				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v3"}},
+				ConfigNamespace: "test-n2",
+			},
+			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
+				v1alpha1.FilterPhasePostAuthZ: {
+					{
+						Name:             "globalv3",
+						Phase:            v1alpha1.FilterPhasePostAuthZ,
+						WorkloadSelector: map[string]string{"app": "v3"},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			extensions := push.Extensions(tt.proxy)
+			if !cmp.Equal(extensions, tt.expectedExtensions) {
+				t.Errorf("%s: Extension mismatch, +got -want: %s", tt.name, cmp.Diff(extensions, tt.expectedExtensions))
+			}
+		})
 	}
 }
 

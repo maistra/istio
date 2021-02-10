@@ -27,6 +27,7 @@ import (
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
 	"istio.io/istio/pkg/cmd"
 	"istio.io/istio/pkg/config/constants"
+	"istio.io/istio/pkg/servicemesh/extension"
 	"istio.io/pkg/collateral"
 	"istio.io/pkg/ctrlz"
 	"istio.io/pkg/log"
@@ -158,6 +159,8 @@ func addFlags(c *cobra.Command) {
 		"Whether to prevent istiod watching Node objects")
 	c.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableIngressClassName, "enableIngressClassName",
 		true, "Whether support processing Ingress resources that use the new ingressClassName field in their spec")
+	c.PersistentFlags().StringVar(&extension.CacheCluster, "cacheCluster", extension.DefaultCacheCluster,
+		"Cluster pointing to Extension Cache component. This is used in proxies to retrieve WASM filters.")
 
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	c.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",
