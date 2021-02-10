@@ -38,6 +38,7 @@ import (
 	xdsfilters "istio.io/istio/pilot/pkg/xds/filters"
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/proto"
+	maistra_extension "istio.io/istio/pkg/servicemesh/extension"
 	"istio.io/pkg/log"
 )
 
@@ -422,12 +423,18 @@ func (lb *ListenerBuilder) patchListeners() {
 	}
 
 	if lb.node.Type == model.Router {
+		if features.EnableMaistraExtensionSupport {
+			maistra_extension.ApplyListenerListPatches(lb.gatewayListeners, lb.node, lb.push, true)
+		}
 		lb.gatewayListeners = envoyfilter.ApplyListenerPatches(networking.EnvoyFilter_GATEWAY, lb.envoyFilterWrapper,
 			lb.gatewayListeners, false)
 		return
 	}
 
 	lb.virtualOutboundListener = lb.patchOneListener(lb.virtualOutboundListener, networking.EnvoyFilter_SIDECAR_OUTBOUND)
+	if features.EnableMaistraExtensionSupport {
+		lb.virtualInboundListener = maistra_extension.ApplyListenerPatches(lb.virtualInboundListener, lb.node, lb.push, false)
+	}
 	lb.virtualInboundListener = lb.patchOneListener(lb.virtualInboundListener, networking.EnvoyFilter_SIDECAR_INBOUND)
 	lb.inboundListeners = envoyfilter.ApplyListenerPatches(networking.EnvoyFilter_SIDECAR_INBOUND, lb.envoyFilterWrapper, lb.inboundListeners, false)
 	lb.outboundListeners = envoyfilter.ApplyListenerPatches(networking.EnvoyFilter_SIDECAR_OUTBOUND, lb.envoyFilterWrapper, lb.outboundListeners, false)

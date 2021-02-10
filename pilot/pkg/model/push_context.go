@@ -40,6 +40,8 @@ import (
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/visibility"
+	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	maistramodel "istio.io/istio/pkg/servicemesh/model"
 	"istio.io/pkg/monitoring"
 )
 
@@ -208,6 +210,9 @@ type PushContext struct {
 
 	// wasm plugins for each namespace including global config namespace
 	wasmPluginsByNamespace map[string][]*WasmPluginWrapper
+
+	// extensions for each namespace including global config namespace
+	extensionsByNamespace map[string][]*maistramodel.ExtensionWrapper
 
 	// AuthnPolicies contains Authn policies by namespace.
 	AuthnPolicies *AuthenticationPolicies `json:"-"`
@@ -1135,6 +1140,12 @@ func (ps *PushContext) createNewContext(env *Environment) error {
 		return err
 	}
 
+	if features.EnableMaistraExtensionSupport {
+		if err := ps.initExtensions(env); err != nil {
+			return err
+		}
+	}
+
 	if err := ps.initGateways(env); err != nil {
 		return err
 	}
@@ -1259,6 +1270,8 @@ func (ps *PushContext) updateContext(
 	} else {
 		ps.envoyFiltersByNamespace = oldPushContext.envoyFiltersByNamespace
 	}
+
+	ps.extensionsByNamespace = oldPushContext.extensionsByNamespace
 
 	if gatewayChanged {
 		if err := ps.initGateways(env); err != nil {
@@ -1874,6 +1887,78 @@ func (ps *PushContext) getMatchedEnvoyFilters(proxy *Proxy, namespaces string) [
 		}
 	}
 	return matchedEnvoyFilters
+}
+
+// pre computes extensions per namespace
+func (ps *PushContext) initExtensions(env *Environment) error {
+	if env == nil || env.ExtensionStore == nil {
+		return nil
+	}
+	ps.extensionsByNamespace = map[string][]*maistramodel.ExtensionWrapper{}
+	for _, extension := range env.ExtensionStore.GetExtensions() {
+		if ps.extensionsByNamespace[extension.Namespace] == nil {
+			ps.extensionsByNamespace[extension.Namespace] = []*maistramodel.ExtensionWrapper{}
+		}
+		if extension.Status.Deployment.Ready {
+			wrapper := maistramodel.ToWrapper(extension)
+			ps.extensionsByNamespace[extension.Namespace] = append(ps.extensionsByNamespace[extension.Namespace], wrapper)
+		}
+	}
+
+	return nil
+}
+
+// Extensions return the merged ExtensionWrappers of a proxy
+func (ps *PushContext) Extensions(proxy *Proxy) map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper {
+	if proxy == nil {
+		return nil
+	}
+	matchedExtensions := make(map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper)
+	// First get all the extension configs from the config root namespace
+	// and then add the ones from proxy's own namespace
+	if ps.Mesh.RootNamespace != "" {
+		// if there is no workload selector, the config applies to all workloads
+		// if there is a workload selector, check for matching workload labels
+		for _, ext := range ps.extensionsByNamespace[ps.Mesh.RootNamespace] {
+			var workloadLabels labels.Collection
+			if proxy.Metadata != nil && len(proxy.Metadata.Labels) > 0 {
+				workloadLabels = labels.Collection{proxy.Metadata.Labels}
+			}
+			if ext.WorkloadSelector == nil || workloadLabels.IsSupersetOf(ext.WorkloadSelector) {
+				matchedExtensions[ext.Phase] = append(matchedExtensions[ext.Phase], ext)
+			}
+		}
+	}
+
+	// To prevent duplicate extensions in case root namespace equals proxy's namespace
+	if proxy.ConfigNamespace != ps.Mesh.RootNamespace {
+		for _, ext := range ps.extensionsByNamespace[proxy.ConfigNamespace] {
+			var workloadLabels labels.Collection
+			if proxy.Metadata != nil && len(proxy.Metadata.Labels) > 0 {
+				workloadLabels = labels.Collection{proxy.Metadata.Labels}
+			}
+			if ext.WorkloadSelector == nil || workloadLabels.IsSupersetOf(ext.WorkloadSelector) {
+				matchedExtensions[ext.Phase] = append(matchedExtensions[ext.Phase], ext)
+			}
+		}
+	}
+
+	// sort slices by priority
+	for i, slice := range matchedExtensions {
+		sort.SliceStable(slice, func(i, j int) bool {
+			// if priority is the same, in order to still have a
+			// deterministic ordering, we sort based on name + image
+			if slice[i].Priority == slice[j].Priority {
+				in := slice[i].Image + slice[i].Image
+				jn := slice[j].Image + slice[i].Image
+				return in < jn
+			}
+			return slice[i].Priority > slice[j].Priority
+		})
+		matchedExtensions[i] = slice
+	}
+
+	return matchedExtensions
 }
 
 // pre computes gateways per namespace
