@@ -445,4 +445,7 @@ var (
 		false,
 		"If enabled, pilot will allow any upstream cluster to be used with AUTO_PASSTHROUGH. "+
 			"This option is intended for backwards compatibility only and is not secure with untrusted downstreams; it will be removed in the future.").Get()
+
+	EnableMaistraExtensionSupport = env.RegisterBoolVar("ENABLE_MAISTRA_EXTENSIONS", false,
+		"If enabled, pilot, will watch ServiceMeshExtension resources and apply them to filter chains of its proxies").Get()
 )
