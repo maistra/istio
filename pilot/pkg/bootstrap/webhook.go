@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"time"
 
+	tls_features "istio.io/istio/pkg/features"
 	"istio.io/pkg/log"
 )
 
@@ -45,9 +46,11 @@ func (s *Server) initSecureWebhookServer(args *PilotArgs) {
 		Addr:    args.ServerOptions.HTTPSAddr,
 		Handler: s.httpsMux,
 		TLSConfig: &tls.Config{
-			GetCertificate: s.getIstiodCertificate,
-			MinVersion:     tls.VersionTLS12,
-			CipherSuites:   args.ServerOptions.TLSOptions.CipherSuits,
+			GetCertificate:   s.getIstiodCertificate,
+			MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+			MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+			CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+			CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 		},
 	}
 
