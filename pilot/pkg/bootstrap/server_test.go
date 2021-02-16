@@ -27,7 +27,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/keycertbundle"
 	"istio.io/istio/pilot/pkg/server"
@@ -373,12 +372,13 @@ func TestIstiodCipherSuites(t *testing.T) {
 			clientCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
 			expectSuccess:      true,
 		},
-		{
-			name:               "client and istiod cipher suites mismatch",
-			serverCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
-			clientCipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384},
-			expectSuccess:      false,
-		},
+		// test disabled in Maistra, because the cipher suites are configured differently
+		// {
+		// 	name:               "client and istiod cipher suites mismatch",
+		// 	serverCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+		// 	clientCipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384},
+		// 	expectSuccess:      false,
+		// },
 	}
 
 	for _, c := range cases {

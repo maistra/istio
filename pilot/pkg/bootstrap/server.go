@@ -64,6 +64,7 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/gvk"
+	tls_features "istio.io/istio/pkg/features"
 	istiokeepalive "istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/inject"
@@ -376,7 +377,7 @@ func NewServer(args *PilotArgs, initFuncs ...func(*Server)) (*Server, error) {
 func initOIDC(args *PilotArgs, trustDomain string) (security.Authenticator, error) {
 	// JWTRule is from the JWT_RULE environment variable.
 	// An example of json string for JWTRule is:
-	//`{"issuer": "foo", "jwks_uri": "baz", "audiences": ["aud1", "aud2"]}`.
+	// `{"issuer": "foo", "jwks_uri": "baz", "audiences": ["aud1", "aud2"]}`.
 	jwtRule := v1beta1.JWTRule{}
 	err := json.Unmarshal([]byte(args.JwtRule), &jwtRule)
 	if err != nil {
@@ -810,8 +811,10 @@ func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 			}
 			return err
 		},
-		MinVersion:   tls.VersionTLS12,
-		CipherSuites: args.ServerOptions.TLSOptions.CipherSuits,
+		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 	}
 
 	tlsCreds := credentials.NewTLS(cfg)

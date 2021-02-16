@@ -21,6 +21,7 @@ import (
 	"istio.io/istio/pilot/pkg/networking"
 	"istio.io/istio/pilot/pkg/networking/util"
 	authn_model "istio.io/istio/pilot/pkg/security/model"
+	tls_features "istio.io/istio/pkg/features"
 	protovalue "istio.io/istio/pkg/proto"
 )
 
@@ -64,8 +65,10 @@ func BuildInboundTLS(mTLSMode model.MutualTLSMode, node *model.Proxy,
 
 	// Set Minimum TLS version to match the default client version and allowed strong cipher suites for sidecars.
 	ctx.CommonTlsContext.TlsParams = &tls.TlsParameters{
-		TlsMinimumProtocolVersion: tls.TlsParameters_TLSv1_2,
-		CipherSuites:              SupportedCiphers,
+		TlsMinimumProtocolVersion: tls_features.TLSMinProtocolVersion.Get(),
+		TlsMaximumProtocolVersion: tls_features.TLSMaxProtocolVersion.Get(),
+		CipherSuites:              tls_features.TLSCipherSuites.Get(),
+		EcdhCurves:                tls_features.TLSECDHCurves.Get(),
 	}
 
 	authn_model.ApplyToCommonTLSContext(ctx.CommonTlsContext, node, []string{}, /*subjectAltNames*/

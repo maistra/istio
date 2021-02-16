@@ -278,6 +278,20 @@ global:
     # Setting this port to a non-zero value enables STS server.
     servicePort: 0
 
+  # Configure TLS parameters for listeners
+  tls:
+    # List of supported cipher suites, e.g. TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    cipherSuites: []
+    # List of supported ECDH curves, e.g. CurveP384
+    ecdhCurves: []
+    # min supported protocol version, e.g. TLSv1_2
+    maxProtocolVersion: ""
+    # max supported protocol version, e.g. TLSv1_3
+    minProtocolVersion: ""
+
+  # Deprecated, use meshConfig.trustDomain
+  trustDomain: ""
+
 meshConfig:
   enablePrometheusMerge: true
 
