@@ -910,6 +910,12 @@ data:
           "servicePort": 0
         },
         "tag": "1.1.4",
+        "tls": {
+          "cipherSuites": [],
+          "ecdhCurves": [],
+          "maxProtocolVersion": "",
+          "minProtocolVersion": ""
+        },
         "tracer": {
           "datadog": {
             "address": "$(HOST_IP):8126"
