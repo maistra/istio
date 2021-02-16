@@ -50,6 +50,7 @@ import (
 	"istio.io/istio/pkg/config/host"
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/config/security"
+	tls_features "istio.io/istio/pkg/features"
 	"istio.io/istio/pkg/proto"
 	"istio.io/istio/pkg/util/sets"
 	"istio.io/pkg/log"
@@ -132,6 +133,12 @@ func BuildListenerTLSContext(serverTLSSettings *networking.ServerTLSSettings,
 	ctx := &auth.DownstreamTlsContext{
 		CommonTlsContext: &auth.CommonTlsContext{
 			AlpnProtocols: alpnByTransport,
+			TlsParams: &auth.TlsParameters{
+				TlsMinimumProtocolVersion: convertTLSProtocol(serverTLSSettings.MinProtocolVersion, tls_features.TLSMinProtocolVersion.Get()),
+				TlsMaximumProtocolVersion: convertTLSProtocol(serverTLSSettings.MaxProtocolVersion, tls_features.TLSMaxProtocolVersion.Get()),
+				CipherSuites:              tls_features.TLSCipherSuites.Get(),
+				EcdhCurves:                tls_features.TLSECDHCurves.Get(),
+			},
 		},
 	}
 
@@ -182,15 +189,8 @@ func BuildListenerTLSContext(serverTLSSettings *networking.ServerTLSSettings,
 		}
 	}
 
-	// Set TLS parameters if they are non-default
-	if len(serverTLSSettings.CipherSuites) > 0 ||
-		serverTLSSettings.MinProtocolVersion != networking.ServerTLSSettings_TLS_AUTO ||
-		serverTLSSettings.MaxProtocolVersion != networking.ServerTLSSettings_TLS_AUTO {
-		ctx.CommonTlsContext.TlsParams = &auth.TlsParameters{
-			TlsMinimumProtocolVersion: convertTLSProtocol(serverTLSSettings.MinProtocolVersion),
-			TlsMaximumProtocolVersion: convertTLSProtocol(serverTLSSettings.MaxProtocolVersion),
-			CipherSuites:              serverTLSSettings.CipherSuites,
-		}
+	if len(serverTLSSettings.CipherSuites) > 0 {
+		ctx.CommonTlsContext.TlsParams.CipherSuites = serverTLSSettings.CipherSuites
 	}
 
 	return ctx

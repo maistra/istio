@@ -96,6 +96,12 @@
       "servicePort": 0
     },
     "tag": "latest",
+    "tls": {
+      "cipherSuites": [],
+      "ecdhCurves": [],
+      "maxProtocolVersion": "",
+      "minProtocolVersion": ""
+    },
     "tracer": {
       "datadog": {
         "address": "$(HOST_IP):8126"
