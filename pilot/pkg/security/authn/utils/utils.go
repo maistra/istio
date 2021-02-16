@@ -24,6 +24,7 @@ import (
 	"istio.io/istio/pilot/pkg/networking/util"
 	authn_model "istio.io/istio/pilot/pkg/security/model"
 	xdsfilters "istio.io/istio/pilot/pkg/xds/filters"
+	tls_features "istio.io/istio/pkg/features"
 	protovalue "istio.io/istio/pkg/proto"
 	"istio.io/pkg/log"
 )
@@ -66,6 +67,12 @@ func BuildInboundFilterChain(mTLSMode model.MutualTLSMode, sdsUdsPath string, no
 				// expect the same from server. This  is so that secure metadata exchange
 				// transfer can take place between sidecars for TCP with mTLS.
 				AlpnProtocols: util.ALPNDownstream,
+				TlsParams: &tls.TlsParameters{
+					TlsMinimumProtocolVersion: tls_features.TLSMinProtocolVersion.Get(),
+					TlsMaximumProtocolVersion: tls_features.TLSMaxProtocolVersion.Get(),
+					CipherSuites:              tls_features.TLSCipherSuites.Get(),
+					EcdhCurves:                tls_features.TLSECDHCurves.Get(),
+				},
 			},
 			RequireClientCertificate: protovalue.BoolTrue,
 		}
@@ -85,18 +92,15 @@ func BuildInboundFilterChain(mTLSMode model.MutualTLSMode, sdsUdsPath string, no
 				// include "istio", which would interfere with negotiation of the underlying
 				// protocol, e.g. HTTP/2.
 				AlpnProtocols: util.ALPNHttp,
+				TlsParams: &tls.TlsParameters{
+					TlsMinimumProtocolVersion: tls_features.TLSMinProtocolVersion.Get(),
+					TlsMaximumProtocolVersion: tls_features.TLSMaxProtocolVersion.Get(),
+					CipherSuites:              tls_features.TLSCipherSuites.Get(),
+					EcdhCurves:                tls_features.TLSECDHCurves.Get(),
+				},
 			},
 			RequireClientCertificate: protovalue.BoolTrue,
 		}
-
-		if features.EnableTLSv2OnInboundPath {
-			// Set Minimum TLS version to match the default client version and allowed strong cipher suites for sidecars.
-			ctx.CommonTlsContext.TlsParams = &tls.TlsParameters{
-				TlsMinimumProtocolVersion: tls.TlsParameters_TLSv1_2,
-				CipherSuites:              SupportedCiphers,
-			}
-		}
-
 	}
 
 	authn_model.ApplyToCommonTLSContext(ctx.CommonTlsContext, meta, sdsUdsPath, []string{} /*subjectAltNames*/, trustDomainAliases)
