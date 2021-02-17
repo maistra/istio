@@ -49,7 +49,7 @@ func NewInstaller(cfg *config.InstallConfig, isReady *atomic.Value) *Installer {
 func (in *Installer) install(ctx context.Context) (err error) {
 	if err = copyBinaries(
 		in.cfg.CNIBinSourceDir, in.cfg.CNIBinTargetDirs,
-		in.cfg.UpdateCNIBinaries, in.cfg.SkipCNIBinaries); err != nil {
+		in.cfg.UpdateCNIBinaries, in.cfg.SkipCNIBinaries, in.cfg.CNIBinariesPrefix); err != nil {
 		cniInstalls.With(resultLabel.Value(resultCopyBinariesFailure)).Increment()
 		return
 	}
@@ -99,6 +99,8 @@ func (in *Installer) Run(ctx context.Context) (err error) {
 
 // Cleanup remove Istio CNI's config, kubeconfig file, and binaries.
 func (in *Installer) Cleanup() error {
+	istioCniExecutableName := in.cfg.CNIBinariesPrefix + "istio-cni"
+
 	installLog.Info("Cleaning up.")
 	if len(in.cniConfigFilepath) > 0 && file.Exists(in.cniConfigFilepath) {
 		if in.cfg.ChainedCNIPlugin {
@@ -119,7 +121,7 @@ func (in *Installer) Cleanup() error {
 				if err != nil {
 					return fmt.Errorf("%s: %w", in.cniConfigFilepath, err)
 				}
-				if plugin["type"] == "istio-cni" {
+				if plugin["type"] == istioCniExecutableName {
 					cniConfigMap["plugins"] = append(plugins[:i], plugins[i+1:]...)
 					break
 				}
@@ -148,7 +150,7 @@ func (in *Installer) Cleanup() error {
 	}
 
 	for _, targetDir := range in.cfg.CNIBinTargetDirs {
-		if istioCNIBin := filepath.Join(targetDir, "istio-cni"); file.Exists(istioCNIBin) {
+		if istioCNIBin := filepath.Join(targetDir, istioCniExecutableName); file.Exists(istioCNIBin) {
 			installLog.Infof("Removing binary: %s", istioCNIBin)
 			if err := os.Remove(istioCNIBin); err != nil {
 				return err
@@ -213,6 +215,8 @@ func sleepCheckInstall(ctx context.Context, cfg *config.InstallConfig, cniConfig
 
 // checkInstall returns an error if an invalid CNI configuration is detected
 func checkInstall(cfg *config.InstallConfig, cniConfigFilepath string) error {
+	istioCniExecutableName := cfg.CNIBinariesPrefix + "istio-cni"
+
 	defaultCNIConfigFilename, err := getDefaultCNINetwork(cfg.MountedCNINetDir)
 	if err != nil {
 		return err
@@ -247,7 +251,7 @@ func checkInstall(cfg *config.InstallConfig, cniConfigFilepath string) error {
 			if err != nil {
 				return fmt.Errorf("%s: %w", cniConfigFilepath, err)
 			}
-			if plugin["type"] == "istio-cni" {
+			if plugin["type"] == istioCniExecutableName {
 				return nil
 			}
 		}
@@ -260,7 +264,7 @@ func checkInstall(cfg *config.InstallConfig, cniConfigFilepath string) error {
 		return err
 	}
 
-	if cniConfigMap["type"] != "istio-cni" {
+	if cniConfigMap["type"] != istioCniExecutableName {
 		return fmt.Errorf("istio-cni CNI config file modified: %s", cniConfigFilepath)
 	}
 	return nil
