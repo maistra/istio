@@ -87,6 +87,7 @@ func init() {
 	registerBooleanParameter(constants.SkipTLSVerify, false, "Whether to use insecure TLS in kubeconfig file")
 	registerBooleanParameter(constants.UpdateCNIBinaries, true, "Update binaries")
 	registerStringArrayParameter(constants.SkipCNIBinaries, []string{}, "Binaries that should not be installed")
+	registerStringParameter(constants.CNIBinariesPrefix, "", "The filename prefix to add to each binary when copying")
 }
 
 func registerStringParameter(name, value, usage string) {
@@ -138,6 +139,7 @@ func constructConfig() (*config.Config, error) {
 
 		UpdateCNIBinaries: viper.GetBool(constants.UpdateCNIBinaries),
 		SkipCNIBinaries:   viper.GetStringSlice(constants.SkipCNIBinaries),
+		CNIBinariesPrefix: viper.GetString(constants.CNIBinariesPrefix),
 	}
 
 	if len(cfg.K8sNodeName) == 0 {
