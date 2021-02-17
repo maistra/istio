@@ -37,4 +37,5 @@ type Config struct {
 
 	UpdateCNIBinaries bool
 	SkipCNIBinaries   []string
+	CNIBinariesPrefix string
 }
