@@ -145,6 +145,7 @@ func init() {
 	registerBooleanParameter(constants.UpdateCNIBinaries, true, "Whether to refresh existing binaries when installing CNI")
 	registerStringArrayParameter(constants.SkipCNIBinaries, []string{},
 		"Binaries that should not be installed. Currently Istio only installs one binary `istio-cni`")
+	registerStringParameter(constants.CNIBinariesPrefix, "", "The filename prefix to add to each binary when copying")
 	registerIntegerParameter(constants.MonitoringPort, 15014, "HTTP port to serve prometheus metrics")
 	registerStringParameter(constants.LogUDSAddress, "/var/run/istio-cni/log.sock", "The UDS server address which CNI plugin will copy log ouptut to")
 
@@ -232,6 +233,7 @@ func constructConfig() (*config.Config, error) {
 
 		CNIBinSourceDir:   constants.CNIBinDir,
 		CNIBinTargetDirs:  []string{constants.HostCNIBinDir, constants.SecondaryBinDir},
+		CNIBinariesPrefix: viper.GetString(constants.CNIBinariesPrefix),
 		UpdateCNIBinaries: viper.GetBool(constants.UpdateCNIBinaries),
 		SkipCNIBinaries:   viper.GetStringSlice(constants.SkipCNIBinaries),
 		MonitoringPort:    viper.GetInt(constants.MonitoringPort),
