@@ -19,15 +19,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"istio.io/istio/cni/pkg/install-cni/pkg/constants"
 	"istio.io/istio/pkg/file"
 	"istio.io/pkg/log"
 )
 
-func copyBinaries(updateBinaries bool, skipBinaries []string) error {
-	srcDir := constants.CNIBinDir
-	targetDirs := []string{constants.HostCNIBinDir, constants.SecondaryBinDir}
-
+func copyBinaries(srcDir string, targetDirs []string, updateBinaries bool, skipBinaries []string, binariesPrefix string) error {
 	skipBinariesSet := arrToSet(skipBinaries)
 
 	for _, targetDir := range targetDirs {
@@ -48,18 +44,19 @@ func copyBinaries(updateBinaries bool, skipBinaries []string) error {
 				continue
 			}
 
-			targetFilepath := filepath.Join(targetDir, filename)
+			targetFilename := binariesPrefix + filename
+			targetFilepath := filepath.Join(targetDir, targetFilename)
 			if _, err := os.Stat(targetFilepath); err == nil && !updateBinaries {
 				log.Infof("%s is already here and UPDATE_CNI_BINARIES isn't true, skipping", targetFilepath)
 				continue
 			}
 
 			srcFilepath := filepath.Join(srcDir, filename)
-			err := file.AtomicCopy(srcFilepath, targetDir, filename)
+			err := file.AtomicCopy(srcFilepath, targetDir, targetFilename)
 			if err != nil {
 				return err
 			}
-			log.Infof("Copied %s to %s.", filename, targetDir)
+			log.Infof("Copied %s to %s.", filename, targetFilepath)
 		}
 	}
 
