@@ -53,6 +53,7 @@ type Kubernetes struct {
 	NodeName             string   `json:"node_name"`
 	ExcludeNamespaces    []string `json:"exclude_namespaces"`
 	CNIBinDir            string   `json:"cni_bin_dir"`
+	NetnsSetupExecutable string   `json:"netns_setup_executable"`
 }
 
 // PluginConf is whatever you expect your configuration json to be. This is whatever
@@ -147,6 +148,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	if conf.Kubernetes.InterceptRuleMgrType != "" {
 		interceptRuleMgrType = conf.Kubernetes.InterceptRuleMgrType
+	}
+	if conf.Kubernetes.NetnsSetupExecutable != "" {
+		nsSetupProg = conf.Kubernetes.NetnsSetupExecutable
 	}
 
 	log.WithLabels("ContainerID", args.ContainerID, "Pod", string(k8sArgs.K8S_POD_NAME),

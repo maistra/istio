@@ -29,6 +29,7 @@ const (
 	SkipTLSVerify        = "skip-tls-verify"
 	SkipCNIBinaries      = "skip-cni-binaries"
 	UpdateCNIBinaries    = "update-cni-binaries"
+	CNIBinariesPrefix    = "cni-binaries-prefix"
 )
 
 // Internal constants

@@ -29,11 +29,12 @@ import (
 )
 
 var (
-	ifname           = "eth0"
-	sandboxDirectory = "/tmp"
-	currentVersion   = "0.3.0"
-	k8Args           = "K8S_POD_NAMESPACE=istio-system;K8S_POD_NAME=testPodName"
-	invalidVersion   = "0.1.0"
+	ifname               = "eth0"
+	sandboxDirectory     = "/tmp"
+	netnsSetupExecutable = ""
+	currentVersion       = "0.3.0"
+	k8Args               = "K8S_POD_NAMESPACE=istio-system;K8S_POD_NAME=testPodName"
+	invalidVersion       = "0.1.0"
 
 	getKubePodInfoCalled = false
 	nsenterFuncCalled    = false
@@ -89,7 +90,8 @@ var conf = `{
 		"intercept_type": "mock",
         "node_name": "testNodeName",
         "exclude_namespaces": ["testExcludeNS"],
-        "cni_bin_dir": "/testDirectory"
+        "cni_bin_dir": "/testDirectory",
+        "netns_setup_executable": "%s"
     }
     }`
 
@@ -139,6 +141,8 @@ func resetGlobalTestVariables() {
 	testLabels = map[string]string{}
 	testAnnotations = map[string]string{}
 
+	netnsSetupExecutable = ""
+
 	interceptRuleMgrType = "mock"
 	testAnnotations[sidecarStatusKey] = "true"
 	k8Args = "K8S_POD_NAMESPACE=istio-system;K8S_POD_NAME=testPodName"
@@ -156,7 +160,7 @@ func testSetArgs(stdinData string) *skel.CmdArgs {
 }
 
 func testCmdInvalidVersion(t *testing.T, f func(args *skel.CmdArgs) error) {
-	cniConf := fmt.Sprintf(conf, invalidVersion, ifname, sandboxDirectory)
+	cniConf := fmt.Sprintf(conf, invalidVersion, ifname, sandboxDirectory, netnsSetupExecutable)
 	args := testSetArgs(cniConf)
 
 	err := f(args)
@@ -170,7 +174,7 @@ func testCmdInvalidVersion(t *testing.T, f func(args *skel.CmdArgs) error) {
 }
 
 func testCmdAdd(t *testing.T) {
-	cniConf := fmt.Sprintf(conf, currentVersion, ifname, sandboxDirectory)
+	cniConf := fmt.Sprintf(conf, currentVersion, ifname, sandboxDirectory, netnsSetupExecutable)
 	testCmdAddWithStdinData(t, cniConf)
 }
 
@@ -211,6 +215,16 @@ func TestLoadArgs(t *testing.T) {
 }
 
 func TestCmdAdd(t *testing.T) {
+	defer resetGlobalTestVariables()
+
+	netnsSetupExecutable = "custom-istio-iptables"
+	testCmdAdd(t)
+	if nsSetupProg != "custom-istio-iptables" {
+		t.Fatalf("expected nsSetupProg to have value 'custom-istio-iptables' set via netns_setup_executable, actual: %v", nsSetupProg)
+	}
+}
+
+func TestCmdAddWithCustomNetnsSetupExecutable(t *testing.T) {
 	defer resetGlobalTestVariables()
 
 	testCmdAdd(t)
@@ -391,7 +405,7 @@ func TestCmdAddInvalidK8sArgsKeyword(t *testing.T) {
 
 	k8Args = "K8S_POD_NAMESPACE_InvalidKeyword=istio-system"
 
-	cniConf := fmt.Sprintf(conf, currentVersion, ifname, sandboxDirectory)
+	cniConf := fmt.Sprintf(conf, currentVersion, ifname, sandboxDirectory, netnsSetupExecutable)
 	args := testSetArgs(cniConf)
 
 	err := cmdAdd(args)
@@ -431,7 +445,7 @@ func TestCmdAddNoPrevResult(t *testing.T) {
 }
 
 func TestCmdDel(t *testing.T) {
-	cniConf := fmt.Sprintf(conf, currentVersion, ifname, sandboxDirectory)
+	cniConf := fmt.Sprintf(conf, currentVersion, ifname, sandboxDirectory, netnsSetupExecutable)
 	args := testSetArgs(cniConf)
 
 	err := cmdDel(args)
