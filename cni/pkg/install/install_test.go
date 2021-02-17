@@ -37,6 +37,7 @@ func TestCheckInstall(t *testing.T) {
 		chainedCNIPlugin  bool
 		skipInstall       bool
 		existingConfFiles map[string]string // {srcFilename: targetFilename, ...}
+		cniBinariesPrefix string
 	}{
 		{
 			name:              "preempted config",
@@ -95,6 +96,12 @@ func TestCheckInstall(t *testing.T) {
 			cniConfigFilename: "istio-cni.conf",
 			existingConfFiles: map[string]string{"istio-cni.conf": "istio-cni.conf"},
 		},
+		{
+			name:              "custom binaries prefix",
+			cniConfigFilename: "istio-cni.conf",
+			cniBinariesPrefix: "prefix-",
+			existingConfFiles: map[string]string{"istio-cni-prefixed.conf": "istio-cni.conf"},
+		},
 	}
 
 	for _, c := range cases {
@@ -110,10 +117,11 @@ func TestCheckInstall(t *testing.T) {
 			}
 
 			cfg := &config.InstallConfig{
-				MountedCNINetDir: tempDir,
-				CNIConfName:      c.cniConfName,
-				ChainedCNIPlugin: c.chainedCNIPlugin,
-				CNIEnableInstall: !c.skipInstall,
+				MountedCNINetDir:  tempDir,
+				CNIConfName:       c.cniConfName,
+				ChainedCNIPlugin:  c.chainedCNIPlugin,
+				CNIEnableInstall:  !c.skipInstall,
+				CNIBinariesPrefix: c.cniBinariesPrefix,
 			}
 			err := checkInstall(cfg, filepath.Join(tempDir, c.cniConfigFilename))
 			if (c.expectedFailure && err == nil) || (!c.expectedFailure && err != nil) {
@@ -257,6 +265,7 @@ func TestCleanup(t *testing.T) {
 		configFilename         string
 		existingConfigFilename string
 		expectedConfigFilename string
+		cniBinariesPrefix      string
 	}{
 		{
 			name:                   "chained CNI plugin",
@@ -269,6 +278,13 @@ func TestCleanup(t *testing.T) {
 			name:                   "standalone CNI plugin",
 			configFilename:         "istio-cni.conf",
 			existingConfigFilename: "istio-cni.conf",
+		},
+		{
+			name:                   "prefix",
+			cniBinariesPrefix:      "prefix-",
+			configFilename:         "list-cni-prefixed.conf",
+			existingConfigFilename: "list-with-istio.conflist",
+			expectedConfigFilename: "list-no-istio.conflist",
 		},
 	}
 
@@ -285,7 +301,8 @@ func TestCleanup(t *testing.T) {
 			}
 
 			// Create existing binary files
-			if err := os.WriteFile(filepath.Join(cniBinDir, "istio-cni"), []byte{1, 2, 3}, 0o755); err != nil {
+			filename := c.cniBinariesPrefix + "istio-cni"
+			if err := os.WriteFile(filepath.Join(cniBinDir, filename), []byte{1, 2, 3}, 0o755); err != nil {
 				t.Fatal(err)
 			}
 
@@ -296,9 +313,10 @@ func TestCleanup(t *testing.T) {
 			}
 
 			cfg := &config.InstallConfig{
-				MountedCNINetDir: cniNetDir,
-				ChainedCNIPlugin: c.chainedCNIPlugin,
-				CNIBinTargetDirs: []string{cniBinDir},
+				MountedCNINetDir:  cniNetDir,
+				ChainedCNIPlugin:  c.chainedCNIPlugin,
+				CNIBinariesPrefix: c.cniBinariesPrefix,
+				CNIBinTargetDirs:  []string{cniBinDir},
 			}
 
 			isReady := &atomic.Value{}

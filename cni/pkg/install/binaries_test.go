@@ -15,6 +15,8 @@
 package install
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,6 +30,7 @@ func TestCopyBinaries(t *testing.T) {
 		expectedFiles  map[string]string // {filename: contents. ...}
 		updateBinaries bool
 		skipBinaries   []string
+		prefix         string
 	}{
 		{
 			name:          "basic",
@@ -54,33 +57,55 @@ func TestCopyBinaries(t *testing.T) {
 			srcFiles:      map[string]string{"istio-cni": "cni111", "istio-iptables": "iptables111"},
 			expectedFiles: map[string]string{"istio-cni": "cni111"},
 		},
+		{
+			name:          "binaries prefix",
+			prefix:        "prefix-",
+			srcFiles:      map[string]string{"istio-cni": "cni111", "istio-iptables": "iptables111"},
+			expectedFiles: map[string]string{"prefix-istio-cni": "cni111", "prefix-istio-iptables": "iptables111"},
+		},
 	}
 
-	for _, c := range cases {
+	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			srcDir := t.TempDir()
+			srcDir, err := ioutil.TempDir("", fmt.Sprintf("test-case-%d-src-", i))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := os.RemoveAll(srcDir); err != nil {
+					t.Fatal(err)
+				}
+			}()
 			for filename, contents := range c.srcFiles {
-				err := os.WriteFile(filepath.Join(srcDir, filename), []byte(contents), os.ModePerm)
+				err := ioutil.WriteFile(filepath.Join(srcDir, filename), []byte(contents), os.ModePerm)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			targetDir := t.TempDir()
+			targetDir, err := ioutil.TempDir("", fmt.Sprintf("test-case-%d-target-", i))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := os.RemoveAll(targetDir); err != nil {
+					t.Fatal(err)
+				}
+			}()
 			for filename, contents := range c.existingFiles {
-				err := os.WriteFile(filepath.Join(targetDir, filename), []byte(contents), os.ModePerm)
+				err := ioutil.WriteFile(filepath.Join(targetDir, filename), []byte(contents), os.ModePerm)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			err := copyBinaries(srcDir, []string{targetDir}, c.updateBinaries, c.skipBinaries)
+			err = copyBinaries(srcDir, []string{targetDir}, c.updateBinaries, c.skipBinaries, c.prefix)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			for filename, expectedContents := range c.expectedFiles {
-				contents, err := os.ReadFile(filepath.Join(targetDir, filename))
+				contents, err := ioutil.ReadFile(filepath.Join(targetDir, filename))
 				if err != nil {
 					t.Fatal(err)
 				}
