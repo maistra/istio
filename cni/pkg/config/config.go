@@ -68,6 +68,8 @@ type InstallConfig struct {
 	CNIBinSourceDir string
 	// Directories into which to copy the CNI binaries
 	CNIBinTargetDirs []string
+	// The prefix to add to the name of each CNI binary
+	CNIBinariesPrefix string
 	// Whether to override existing CNI binaries
 	UpdateCNIBinaries bool
 

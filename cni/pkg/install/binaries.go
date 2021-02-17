@@ -21,7 +21,7 @@ import (
 	"istio.io/istio/pkg/file"
 )
 
-func copyBinaries(srcDir string, targetDirs []string, updateBinaries bool, skipBinaries []string) error {
+func copyBinaries(srcDir string, targetDirs []string, updateBinaries bool, skipBinaries []string, binariesPrefix string) error {
 	skipBinariesSet := arrToSet(skipBinaries)
 
 	for _, targetDir := range targetDirs {
@@ -42,18 +42,19 @@ func copyBinaries(srcDir string, targetDirs []string, updateBinaries bool, skipB
 				continue
 			}
 
-			targetFilepath := filepath.Join(targetDir, filename)
+			targetFilename := binariesPrefix + filename
+			targetFilepath := filepath.Join(targetDir, targetFilename)
 			if _, err := os.Stat(targetFilepath); err == nil && !updateBinaries {
 				installLog.Infof("%s is already here and UPDATE_CNI_BINARIES isn't true, skipping", targetFilepath)
 				continue
 			}
 
 			srcFilepath := filepath.Join(srcDir, filename)
-			err := file.AtomicCopy(srcFilepath, targetDir, filename)
+			err := file.AtomicCopy(srcFilepath, targetDir, targetFilename)
 			if err != nil {
 				return err
 			}
-			installLog.Infof("Copied %s to %s.", filename, targetDir)
+			installLog.Infof("Copied %s to %s.", filename, targetFilepath)
 		}
 	}
 
