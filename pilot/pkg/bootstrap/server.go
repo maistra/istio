@@ -60,6 +60,7 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/gvk"
+	tls_features "istio.io/istio/pkg/features"
 	"istio.io/istio/pkg/jwt"
 	istiokeepalive "istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
@@ -707,9 +708,13 @@ func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 	log.Info("initializing secure discovery service")
 
 	cfg := &tls.Config{
-		GetCertificate: s.getIstiodCertificate,
-		ClientAuth:     tls.VerifyClientCertIfGiven,
-		ClientCAs:      s.peerCertVerifier.GetGeneralCertPool(),
+		GetCertificate:   s.getIstiodCertificate,
+		ClientAuth:       tls.VerifyClientCertIfGiven,
+		ClientCAs:        s.peerCertVerifier.GetGeneralCertPool(),
+		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 			err := s.peerCertVerifier.VerifyPeerCert(rawCerts, verifiedChains)
 			if err != nil {

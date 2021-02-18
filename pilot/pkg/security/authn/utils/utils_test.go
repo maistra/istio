@@ -15,6 +15,8 @@
 package utils
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,22 +27,89 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/networking"
 	authn_model "istio.io/istio/pilot/pkg/security/model"
+	tls_features "istio.io/istio/pkg/features"
 	protovalue "istio.io/istio/pkg/proto"
 	"istio.io/istio/pkg/spiffe"
 )
 
 func TestBuildInboundFilterChain(t *testing.T) {
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{})
+}
+
+func TestTLSProtocolVersionBuildInboundFilterChain(t *testing.T) {
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+	})
+}
+
+func TestTLSCipherSuitesBuildInboundFilterChain(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TLSCipherSuites.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TLSCipherSuites.Reset()
+	}()
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTLSCipherSuitesProtocolVersionBuildInboundFilterChain(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	tls_features.TLSCipherSuites.Reset()
+	_ = os.Setenv("TLS_MIN_PROTOCOL_VERSION", "TLSv1_2")
+	_ = os.Setenv("TLS_MAX_PROTOCOL_VERSION", "TLSv1_3")
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		tls_features.TLSCipherSuites.Reset()
+		_ = os.Unsetenv("TLS_MIN_PROTOCOL_VERSION")
+		_ = os.Unsetenv("TLS_MAX_PROTOCOL_VERSION")
+	}()
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
+		TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
+		TlsMaximumProtocolVersion: auth.TlsParameters_TLSv1_3,
+		CipherSuites:              tls_features.SupportedOpenSSLCiphers,
+	})
+}
+
+func TestTLSCipherSuitesEcdhCurvesBuildInboundFilterChain(t *testing.T) {
+	_ = os.Setenv("TLS_CIPHER_SUITES", strings.Join(tls_features.SupportedGolangCiphers, ", "))
+	_ = os.Setenv("TLS_ECDH_CURVES", strings.Join(tls_features.SupportedGolangECDHCurves, ", "))
+	tls_features.TLSCipherSuites.Reset()
+	tls_features.TLSECDHCurves.Reset()
+
+	defer func() {
+		_ = os.Unsetenv("TLS_CIPHER_SUITES")
+		_ = os.Unsetenv("TLS_ECDH_CURVES")
+		tls_features.TLSCipherSuites.Reset()
+		tls_features.TLSECDHCurves.Reset()
+	}()
+	runTestBuildInboundFilterChain(t, &auth.TlsParameters{
+		CipherSuites: tls_features.SupportedOpenSSLCiphers,
+		EcdhCurves:   tls_features.SupportedOpenSSLECDHCurves,
+	})
+}
+
+func runTestBuildInboundFilterChain(t *testing.T, tlsParam *auth.TlsParameters) {
 	type args struct {
 		mTLSMode         model.MutualTLSMode
 		sdsUdsPath       string
 		node             *model.Proxy
 		listenerProtocol networking.ListenerProtocol
 		trustDomains     []string
-		tlsV2Enabled     bool
 	}
 	tests := []struct {
 		name string
@@ -55,7 +124,6 @@ func TestBuildInboundFilterChain(t *testing.T) {
 					Metadata: &model.NodeMetadata{},
 				},
 				listenerProtocol: networking.ListenerProtocolAuto,
-				tlsV2Enabled:     false,
 			},
 			// No need to set up filter chain, default one is okay.
 			want: nil,
@@ -68,7 +136,6 @@ func TestBuildInboundFilterChain(t *testing.T) {
 					Metadata: &model.NodeMetadata{},
 				},
 				listenerProtocol: networking.ListenerProtocolAuto,
-				tlsV2Enabled:     false,
 			},
 			want: nil,
 		},
@@ -81,7 +148,6 @@ func TestBuildInboundFilterChain(t *testing.T) {
 					Metadata: &model.NodeMetadata{},
 				},
 				listenerProtocol: networking.ListenerProtocolHTTP,
-				tlsV2Enabled:     true,
 			},
 			want: []networking.FilterChain{
 				{
@@ -135,17 +201,7 @@ func TestBuildInboundFilterChain(t *testing.T) {
 								},
 							},
 							AlpnProtocols: []string{"h2", "http/1.1"},
-							TlsParams: &auth.TlsParameters{
-								TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
-								CipherSuites: []string{
-									"ECDHE-ECDSA-AES256-GCM-SHA384",
-									"ECDHE-RSA-AES256-GCM-SHA384",
-									"ECDHE-ECDSA-AES128-GCM-SHA256",
-									"ECDHE-RSA-AES128-GCM-SHA256",
-									"AES256-GCM-SHA384",
-									"AES128-GCM-SHA256",
-								},
-							},
+							TlsParams:     tlsParam,
 						},
 						RequireClientCertificate: protovalue.BoolTrue,
 					},
@@ -162,7 +218,6 @@ func TestBuildInboundFilterChain(t *testing.T) {
 				},
 				listenerProtocol: networking.ListenerProtocolHTTP,
 				trustDomains:     []string{"cluster.local"},
-				tlsV2Enabled:     true,
 			},
 			want: []networking.FilterChain{
 				{
@@ -218,17 +273,7 @@ func TestBuildInboundFilterChain(t *testing.T) {
 								},
 							},
 							AlpnProtocols: []string{"h2", "http/1.1"},
-							TlsParams: &auth.TlsParameters{
-								TlsMinimumProtocolVersion: auth.TlsParameters_TLSv1_2,
-								CipherSuites: []string{
-									"ECDHE-ECDSA-AES256-GCM-SHA384",
-									"ECDHE-RSA-AES256-GCM-SHA384",
-									"ECDHE-ECDSA-AES128-GCM-SHA256",
-									"ECDHE-RSA-AES128-GCM-SHA256",
-									"AES256-GCM-SHA384",
-									"AES128-GCM-SHA256",
-								},
-							},
+							TlsParams:     tlsParam,
 						},
 						RequireClientCertificate: protovalue.BoolTrue,
 					},
@@ -245,7 +290,6 @@ func TestBuildInboundFilterChain(t *testing.T) {
 				},
 				listenerProtocol: networking.ListenerProtocolHTTP,
 				trustDomains:     []string{"cluster.local"},
-				tlsV2Enabled:     false,
 			},
 			want: []networking.FilterChain{
 				{
@@ -301,6 +345,7 @@ func TestBuildInboundFilterChain(t *testing.T) {
 								},
 							},
 							AlpnProtocols: []string{"h2", "http/1.1"},
+							TlsParams:     tlsParam,
 						},
 						RequireClientCertificate: protovalue.BoolTrue,
 					},
@@ -310,11 +355,6 @@ func TestBuildInboundFilterChain(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defaultValue := features.EnableTLSv2OnInboundPath
-			features.EnableTLSv2OnInboundPath = tt.args.tlsV2Enabled
-			defer func() {
-				features.EnableTLSv2OnInboundPath = defaultValue
-			}()
 			got := BuildInboundFilterChain(tt.args.mTLSMode, tt.args.sdsUdsPath, tt.args.node, tt.args.listenerProtocol, tt.args.trustDomains)
 			if diff := cmp.Diff(got, tt.want, protocmp.Transform()); diff != "" {
 				t.Errorf("BuildInboundFilterChain() = %v", diff)
