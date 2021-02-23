@@ -127,7 +127,7 @@ func (r *route) syncGatewaysAndRoutes() error {
 			for _, host := range server.Hosts {
 				_, ok := routesMap[host]
 				if !ok {
-					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server.Tls != nil))
+					result = multierror.Append(r.createRoute(cfg.ConfigMeta, gateway, host, server.Tls))
 				}
 
 			}
@@ -157,7 +157,7 @@ func (r *route) deleteRoute(route *v1.Route) error {
 }
 
 // must be called with lock held
-func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway, originalHost string, tls bool) error {
+func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gateway, originalHost string, tls *networking.ServerTLSSettings) error {
 	var wildcard = v1.WildcardPolicyNone
 	actualHost := originalHost
 
@@ -177,9 +177,12 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 
 	var tlsConfig *v1.TLSConfig
 	targetPort := "http2"
-	if tls {
+	if tls != nil {
 		tlsConfig = &v1.TLSConfig{Termination: v1.TLSTerminationPassthrough}
 		targetPort = "https"
+		if tls.HttpsRedirect {
+			tlsConfig.InsecureEdgeTerminationPolicy = v1.InsecureEdgeTerminationPolicyRedirect
+		}
 	}
 
 	serviceNamespace, serviceName, err := r.findService(gateway)
