@@ -144,7 +144,7 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 	if features.EnableIOR {
 		s.addStartFunc(func(stop <-chan struct{}) error {
 			go leaderelection.
-				NewLeaderElection(args.Namespace, args.PodName, leaderelection.StatusController, s.kubeClient).
+				NewLeaderElection(args.Namespace, args.PodName, leaderelection.IORController, s.kubeClient).
 				AddRunFunction(func(stop <-chan struct{}) {
 					ior.Register(s.kubeClient, s.configController, args.Namespace, s.mrc, stop)
 				}).Run(stop)
