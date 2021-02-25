@@ -666,12 +666,18 @@ func (s *DiscoveryServer) edsz(w http.ResponseWriter, req *http.Request) {
 		AdsPushAll(s)
 	}
 
-	edsClusterMutex.RLock()
-	defer edsClusterMutex.RUnlock()
+	edsClusterMutex.Lock()
+	// Create a temp map to avoid locking the add/remove
+	cMap := make(map[string]*EdsCluster, len(edsClusters))
+	for k, v := range edsClusters {
+		cMap[k] = v
+	}
+	edsClusterMutex.Unlock()
+
 	comma := false
-	if len(edsClusters) > 0 {
+	if len(cMap) > 0 {
 		_, _ = fmt.Fprintln(w, "[")
-		for cluster := range edsClusters {
+		for cluster := range cMap {
 			if comma {
 				_, _ = fmt.Fprint(w, ",\n")
 			} else {
