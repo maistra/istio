@@ -36,6 +36,7 @@ const (
 	IngressController = "istio-leader"
 	StatusController  = "istio-status-leader"
 	AnalyzeController = "istio-analyze-leader"
+	IORController     = "ior-leader"
 )
 
 type LeaderElection struct {
