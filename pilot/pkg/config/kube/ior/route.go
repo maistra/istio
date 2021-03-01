@@ -15,6 +15,8 @@
 package ior
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -201,7 +203,7 @@ func (r *route) createRoute(metadata model.ConfigMeta, gateway *networking.Gatew
 
 	nr, err := r.client.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: fmt.Sprintf("%s-%s-", metadata.Namespace, metadata.Name),
+			Name: fmt.Sprintf("%s-%s-%s", metadata.Namespace, metadata.Name, hostHash(actualHost)),
 			Labels: map[string]string{
 				generatedByLabel:            generatedByValue,
 				gatewayNamespaceLabel:       metadata.Namespace,
@@ -297,4 +299,15 @@ func findConfig(list []model.Config, name, namespace, resourceVersion string) (m
 		}
 	}
 	return model.Config{}, fmt.Errorf("config not found")
+}
+
+// hostHash applies a sha256 on the host and truncate it to the first 8 bytes
+// This gives enough uniqueness for a given hostname
+func hostHash(name string) string {
+	if name == "" {
+		name = "star"
+	}
+
+	hash := sha256.Sum256([]byte(name))
+	return hex.EncodeToString(hash[:8])
 }

@@ -35,6 +35,7 @@ const (
 	// doing the ingress syncing.
 	IngressController = "istio-leader"
 	StatusController  = "istio-status-leader"
+	IORController     = "ior-leader"
 )
 
 type LeaderElection struct {
