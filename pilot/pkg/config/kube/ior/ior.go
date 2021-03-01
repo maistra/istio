@@ -30,7 +30,7 @@ import (
 var iorLog = log.RegisterScope("ior", "IOR logging", 0)
 
 // Register configures IOR component to respond to Gateway creations and removals
-func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNamespace string, mrc controller.MemberRollController) {
+func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNamespace string, mrc controller.MemberRollController, stop <-chan struct{}) {
 	iorLog.Info("Registering IOR component")
 
 	if !isRouteSupported(client) {
@@ -44,8 +44,23 @@ func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNa
 		return
 	}
 
+	alive := true
+	go func(stop <-chan struct{}) {
+		// Stop responding to events when we are no longer a leader.
+		// Two notes here:
+		// (1) There's no such method "UnregisterEventHandler()"
+		// (2) It might take a few seconds to this channel to be closed. So, both pods might be leader for a few seconds.
+		<-stop
+		iorLog.Info("This pod is no longer a leader. IOR stopped responding")
+		alive = false
+	}(stop)
+
 	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
 	store.RegisterEventHandler(kind, func(_, curr config.Config, event model.Event) {
+		if !alive {
+			return
+		}
+
 		// encapsulate in goroutine to not slow down processing because of waiting for mutex
 		go func() {
 			_, ok := curr.Spec.(*networking.Gateway)
