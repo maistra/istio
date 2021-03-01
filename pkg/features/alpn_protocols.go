@@ -1,12 +1,12 @@
 package features
 
 import (
+	"strings"
+
 	"istio.io/istio/pilot/pkg/networking/util"
 	"istio.io/pkg/env"
 	"istio.io/pkg/log"
-	"strings"
 
-	//"strings"
 	"sync"
 )
 
@@ -16,22 +16,22 @@ var (
 		"",
 		"The supported ALPN Protocols",
 	)
-	elock = &sync.Mutex{}
 )
 
 type ALPNProtocolsVar struct {
 	env.StringVar
-	protocols []string
+	protocols        []string
+	alpnProtocolLock *sync.Mutex
 }
 
 func RegisterALPNProtocolsVar(name string, defaultValue string, description string) ALPNProtocolsVar {
 	v := env.RegisterStringVar(name, defaultValue, description)
-	return ALPNProtocolsVar{v, nil }
+	return ALPNProtocolsVar{v, nil, &sync.Mutex{}}
 }
 
 func (v *ALPNProtocolsVar) initAlpnProtocols() {
-	lock.Lock()
-	defer lock.Unlock()
+	v.alpnProtocolLock.Lock()
+	defer v.alpnProtocolLock.Unlock()
 	if v.protocols == nil {
 		protocols := []string{}
 		protocolsParam, _ := v.Lookup()
@@ -57,8 +57,8 @@ func (v *ALPNProtocolsVar) initAlpnProtocols() {
 }
 
 func (v *ALPNProtocolsVar) Reset() {
-	elock.Lock()
-	defer elock.Unlock()
+	v.alpnProtocolLock.Lock()
+	defer v.alpnProtocolLock.Unlock()
 	v.protocols = nil
 }
 
