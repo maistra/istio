@@ -307,7 +307,8 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		syncInterval:                options.GetSyncInterval(),
 	}
 
-	if options.SystemNamespace != "" {
+	// Don't start the namespace informer if Maistra's MemberRoll is in use.
+	if options.SystemNamespace != "" && options.MemberRollName == "" {
 		c.nsInformer = informers.NewSharedInformerFactoryWithOptions(c.client, options.ResyncPeriod,
 			informers.WithTweakListOptions(func(listOpts *metav1.ListOptions) {
 				listOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", options.SystemNamespace).String()
