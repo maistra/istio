@@ -1100,6 +1100,27 @@ func potentialPodName(metadata *metav1.ObjectMeta) string {
 	return ""
 }
 
+// rewriteCniPodSpec will check if values from the sidecar injector Helm
+// values need to be inserted as Pod annotations so the CNI will apply
+// the proper redirection rules.
+func rewriteCniPodSpec(annotations map[string]string, spec *SidecarInjectionSpec) {
+
+	if spec == nil {
+		return
+	}
+	if len(spec.PodRedirectAnnot) == 0 {
+		return
+	}
+	for k := range AnnotationValidation {
+		if spec.PodRedirectAnnot[k] != "" {
+			if annotations[k] == spec.PodRedirectAnnot[k] {
+				continue
+			}
+			annotations[k] = spec.PodRedirectAnnot[k]
+		}
+	}
+}
+
 // overwriteClusterInfo updates cluster name and network from url path
 // This is needed when webconfig config runs on a different cluster than webhook
 func overwriteClusterInfo(containers []corev1.Container, params InjectionParameters) {
