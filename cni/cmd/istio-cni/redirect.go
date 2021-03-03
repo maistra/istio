@@ -31,6 +31,7 @@ const (
 	defaultProxyStatusPort       = "15020"
 	defaultRedirectToPort        = "15001"
 	defaultNoRedirectUID         = "1337"
+	defaultNoRedirectGID         = "1337"
 	defaultRedirectMode          = redirectModeREDIRECT
 	defaultRedirectIPCidr        = "*"
 	defaultRedirectExcludeIPCidr = ""
@@ -69,12 +70,14 @@ type Redirect struct {
 	targetPort           string
 	redirectMode         string
 	noRedirectUID        string
+	noRedirectGID        string
 	includeIPCidrs       string
 	includePorts         string
 	excludeIPCidrs       string
 	excludeInboundPorts  string
 	excludeOutboundPorts string
 	kubevirtInterfaces   string
+	redirectDNS          bool
 }
 
 type annotationValidationFunc func(value string) error
@@ -204,6 +207,7 @@ func NewRedirect(annotations map[string]string) (*Redirect, error) {
 		return nil, valErr
 	}
 	redir.noRedirectUID = defaultNoRedirectUID
+	redir.noRedirectGID = defaultNoRedirectGID
 	isFound, redir.includeIPCidrs, valErr = getAnnotationOrDefault("includeIPCidrs", annotations)
 	if valErr != nil {
 		log.Errorf("Annotation value error for value %s; annotationFound = %t: %v",

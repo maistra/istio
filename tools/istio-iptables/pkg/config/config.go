@@ -47,6 +47,7 @@ type Config struct {
 	SkipRuleApply           bool          `json:"SKIP_RULE_APPLY"`
 	RunValidation           bool          `json:"RUN_VALIDATION"`
 	EnableInboundIPv6       bool          `json:"ENABLE_INBOUND_IPV6"`
+	RedirectDNS             bool          `json:"REDIRECT_DNS"`
 }
 
 func (c *Config) String() string {
@@ -65,6 +66,7 @@ func (c *Config) Print() {
 	fmt.Printf("PROXY_TUNNEL_PORT=%s\n", c.InboundTunnelPort)
 	fmt.Printf("PROXY_UID=%s\n", c.ProxyUID)
 	fmt.Printf("PROXY_GID=%s\n", c.ProxyGID)
+	fmt.Printf("REDIRECT_DNS=%v\n", c.RedirectDNS)
 	fmt.Printf("INBOUND_INTERCEPTION_MODE=%s\n", c.InboundInterceptionMode)
 	fmt.Printf("INBOUND_TPROXY_MARK=%s\n", c.InboundTProxyMark)
 	fmt.Printf("INBOUND_TPROXY_ROUTE_TABLE=%s\n", c.InboundTProxyRouteTable)

@@ -36,8 +36,9 @@ import (
 var (
 	envoyUserVar = env.RegisterStringVar(constants.EnvoyUser, "istio-proxy", "Envoy proxy username")
 	// Enable interception of DNS.
-	dnsCaptureByAgent = env.RegisterBoolVar("ISTIO_META_DNS_CAPTURE", false,
-		"If set to true, enable the capture of outgoing DNS packets on port 53, redirecting to istio-agent on :15053").Get()
+	// managed through viper, as it's mapped to a cli option
+	//dnsCaptureByAgent = env.RegisterBoolVar("ISTIO_META_DNS_CAPTURE", false,
+	//	"If set to true, enable the capture of outgoing DNS packets on port 53, redirecting to istio-agent on :15053").Get()
 )
 
 var rootCmd = &cobra.Command{
@@ -95,6 +96,7 @@ func constructConfig() *config.Config {
 		ProbeTimeout:            viper.GetDuration(constants.ProbeTimeout),
 		SkipRuleApply:           viper.GetBool(constants.SkipRuleApply),
 		RunValidation:           viper.GetBool(constants.RunValidation),
+		RedirectDNS:             viper.GetBool(constants.RedirectDNS),
 	}
 
 	// TODO: Make this more configurable, maybe with an allowlist of users to be captured for output instead of a denylist.
@@ -191,6 +193,16 @@ func init() {
 		handleError(err)
 	}
 	viper.SetDefault(constants.ProxyGID, "")
+
+	rootCmd.Flags().Bool(constants.RedirectDNS, false,
+		"Specify whether or not rules should be created to redirect DNS requests through the proxy.")
+	if err := viper.BindPFlag(constants.RedirectDNS, rootCmd.Flags().Lookup(constants.RedirectDNS)); err != nil {
+		handleError(err)
+	}
+	if err := viper.BindEnv(constants.RedirectDNS, "ISTIO_META_DNS_CAPTURE"); err != nil {
+		handleError(err)
+	}
+	viper.SetDefault(constants.RedirectDNS, false)
 
 	rootCmd.Flags().StringP(constants.InboundInterceptionMode, "m", "",
 		"The mode used to redirect inbound connections to Envoy, either \"REDIRECT\" or \"TPROXY\"")

@@ -363,10 +363,7 @@ func (iptConfigurator *IptablesConfigurator) run() {
 		panic(err)
 	}
 
-	redirectDNS := false
-	if dnsCaptureByAgent {
-		redirectDNS = true
-	}
+	redirectDNS := iptConfigurator.cfg.RedirectDNS
 	iptConfigurator.logConfig()
 
 	if iptConfigurator.cfg.EnableInboundIPv6 {
