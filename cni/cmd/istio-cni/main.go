@@ -174,9 +174,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			var containers []string
 			var initContainersMap map[string]struct{}
 			var annotations map[string]string
+			var proxyUID, proxyGID *int64
+			var redirectDNS bool
 			var k8sErr error
 			for attempt := 1; attempt <= podRetrievalMaxRetries; attempt++ {
-				containers, initContainersMap, _, annotations, k8sErr = getKubePodInfo(client, string(k8sArgs.K8S_POD_NAME), string(k8sArgs.K8S_POD_NAMESPACE))
+				containers, initContainersMap, _, annotations, proxyUID, proxyGID, redirectDNS, k8sErr =
+					getKubePodInfo(client, string(k8sArgs.K8S_POD_NAME), string(k8sArgs.K8S_POD_NAMESPACE))
 				if k8sErr == nil {
 					break
 				}
@@ -227,6 +230,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 						log.Infof("Redirect local ports: %v", redirect.includePorts)
 						// Get the constructor for the configured type of InterceptRuleMgr
 						interceptMgrCtor := GetInterceptRuleMgrCtor(interceptRuleMgrType)
+						if proxyUID != nil {
+							redirect.noRedirectUID = fmt.Sprintf("%d", *proxyUID)
+						}
+						if proxyGID != nil {
+							redirect.noRedirectGID = fmt.Sprintf("%d", *proxyGID)
+						}
+						redirect.redirectDNS = redirectDNS
 						if interceptMgrCtor == nil {
 							log.Errorf("Pod redirect failed due to unavailable InterceptRuleMgr of type %s",
 								interceptRuleMgrType)
