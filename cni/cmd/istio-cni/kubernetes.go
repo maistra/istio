@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -56,11 +57,12 @@ func newK8sClient(conf PluginConf) (*kubernetes.Clientset, error) {
 
 // getK8sPodInfo returns information of a POD
 func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (containers []string,
-	initContainers map[string]struct{}, labels map[string]string, annotations map[string]string, err error) {
+	initContainers map[string]struct{}, labels map[string]string, annotations map[string]string,
+	proxyUID, proxyGID *int64, redirectDNS bool, err error) {
 	pod, err := client.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
 	log.Infof("pod info %+v", pod)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, false, err
 	}
 
 	initContainers = map[string]struct{}{}
@@ -73,10 +75,19 @@ func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (
 		containers[containerIdx] = container.Name
 
 		if container.Name == "istio-proxy" {
+			proxyUID = container.SecurityContext.RunAsUser
+			proxyGID = container.SecurityContext.RunAsGroup
+			redirectDNS = false
+			for _, env := range container.Env {
+				if env.Name == "ISTIO_META_DNS_CAPTURE" {
+					redirectDNS, _ = strconv.ParseBool(env.Value)
+				}
+			}
+
 			// don't include ports from istio-proxy in the redirect ports
 			continue
 		}
 	}
 
-	return containers, initContainers, pod.Labels, pod.Annotations, nil
+	return containers, initContainers, pod.Labels, pod.Annotations, proxyUID, proxyGID, redirectDNS, nil
 }
