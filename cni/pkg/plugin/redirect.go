@@ -33,6 +33,7 @@ const (
 	defaultProxyStatusPort       = "15020"
 	defaultRedirectToPort        = "15001"
 	defaultNoRedirectUID         = "1337"
+	defaultNoRedirectGID         = "1337"
 	defaultRedirectMode          = redirectModeREDIRECT
 	defaultRedirectIPCidr        = "*"
 	defaultRedirectExcludeIPCidr = ""
@@ -75,6 +76,7 @@ type Redirect struct {
 	targetPort           string
 	redirectMode         string
 	noRedirectUID        string
+	noRedirectGID        string
 	includeIPCidrs       string
 	excludeIPCidrs       string
 	excludeInboundPorts  string
@@ -213,6 +215,13 @@ func NewRedirect(pi *PodInfo) (*Redirect, error) {
 			"redirectMode", isFound, valErr)
 	}
 	redir.noRedirectUID = defaultNoRedirectUID
+	if pi.ProxyUID != nil {
+		redir.noRedirectUID = fmt.Sprintf("%d", *pi.ProxyUID)
+	}
+	redir.noRedirectGID = defaultNoRedirectGID
+	if pi.ProxyGID != nil {
+		redir.noRedirectGID = fmt.Sprintf("%d", *pi.ProxyGID)
+	}
 	isFound, redir.includeIPCidrs, valErr = getAnnotationOrDefault("includeIPCidrs", pi.Annotations)
 	if valErr != nil {
 		return nil, fmt.Errorf("annotation value error for value %s; annotationFound = %t: %v",
