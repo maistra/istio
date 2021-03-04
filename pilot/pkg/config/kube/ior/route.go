@@ -51,7 +51,7 @@ const (
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
 	pilotNamespace string
-	client         *routev1.RouteV1Client
+	routerClient   routev1.RouteV1Interface
 	kubeClient     kubernetes.Interface
 	store          model.ConfigStoreCache
 
@@ -61,16 +61,37 @@ type route struct {
 	namespaces    []string
 }
 
-// newRoute returns a new instance of Route object
-func newRoute(kubeClient kubernetes.Interface, store model.ConfigStoreCache, pilotNamespace string, mrc controller.MemberRollController) (*route, error) {
-	r := &route{}
-
-	err := r.initClient()
+// NewRouterClient returns an OpenShift client for Routers
+func NewRouterClient() (routev1.RouteV1Interface, error) {
+	config, err := kube.BuildClientConfig("", "")
 	if err != nil {
 		return nil, err
 	}
 
-	r.kubeClient = kubeClient
+	client, err := routev1.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+// newRoute returns a new instance of Route object
+func newRoute(
+	kubeClient KubeClient,
+	routerClient routev1.RouteV1Interface,
+	store model.ConfigStoreCache,
+	pilotNamespace string,
+	mrc controller.MemberRollController) (*route, error) {
+
+	if !kubeClient.IsRouteSupported() {
+		return nil, fmt.Errorf("routes are not supported in this cluster")
+	}
+
+	r := &route{}
+
+	r.kubeClient = kubeClient.GetActualClient()
+	r.routerClient = routerClient
 	r.pilotNamespace = pilotNamespace
 	r.store = store
 	r.mrc = mrc
@@ -101,7 +122,7 @@ func (r *route) syncGatewaysAndRoutes() error {
 	var routes []v1.Route
 
 	for _, ns := range r.namespaces {
-		routeList, err := r.client.Routes(ns).List(context.TODO(), metav1.ListOptions{
+		routeList, err := r.routerClient.Routes(ns).List(context.TODO(), metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
 		})
 		if err != nil {
@@ -123,7 +144,7 @@ func (r *route) syncGatewaysAndRoutes() error {
 
 	for _, cfg := range configs {
 		gateway := cfg.Spec.(*networking.Gateway)
-		iorLog.Debugf("Found Gateway: %s/%s", cfg.Namespace, cfg.Name)
+		IORLog.Debugf("Found Gateway: %s/%s", cfg.Namespace, cfg.Name)
 
 		for _, server := range gateway.Servers {
 			for _, host := range server.Hosts {
@@ -149,12 +170,12 @@ func getHost(route v1.Route) string {
 func (r *route) deleteRoute(route *v1.Route) error {
 	var immediate int64
 	host := getHost(*route)
-	err := r.client.Routes(route.Namespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
+	err := r.routerClient.Routes(route.Namespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
 	if err != nil {
 		return fmt.Errorf("error deleting route %s/%s: %s", route.ObjectMeta.Namespace, route.ObjectMeta.Name, err)
 	}
 
-	iorLog.Infof("Deleted route %s/%s (gateway hostname: %s)", route.ObjectMeta.Namespace, route.ObjectMeta.Name, host)
+	IORLog.Infof("Deleted route %s/%s (gateway hostname: %s)", route.ObjectMeta.Namespace, route.ObjectMeta.Name, host)
 	return nil
 }
 
@@ -163,10 +184,10 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 	var wildcard = v1.WildcardPolicyNone
 	actualHost := originalHost
 
-	iorLog.Debugf("Creating route for hostname %s", originalHost)
+	IORLog.Debugf("Creating route for hostname %s", originalHost)
 
 	if originalHost == "*" {
-		iorLog.Warnf("Gateway %s/%s: Hostname * is not supported at the moment. Letting OpenShift create it instead.", metadata.Namespace, metadata.Name)
+		IORLog.Warnf("Gateway %s/%s: Hostname * is not supported at the moment. Letting OpenShift create it instead.", metadata.Namespace, metadata.Name)
 		actualHost = ""
 	} else if strings.HasPrefix(originalHost, "*.") {
 		// FIXME: Update link below to version 4.5 when it's out
@@ -201,9 +222,10 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 		}
 	}
 
-	nr, err := r.client.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
+	nr, err := r.routerClient.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-%s", metadata.Namespace, metadata.Name, hostHash(actualHost)),
+			Name:      fmt.Sprintf("%s-%s-%s", metadata.Namespace, metadata.Name, hostHash(actualHost)),
+			Namespace: serviceNamespace,
 			Labels: map[string]string{
 				generatedByLabel:            generatedByValue,
 				gatewayNamespaceLabel:       metadata.Namespace,
@@ -232,7 +254,7 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 		return fmt.Errorf("error creating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
 	}
 
-	iorLog.Infof("Created route %s/%s for hostname %s (gateway: %s/%s)",
+	IORLog.Infof("Created route %s/%s for hostname %s (gateway: %s/%s)",
 		nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
 		nr.Spec.Host,
 		metadata.Namespace, metadata.Name)
@@ -240,23 +262,7 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 	return nil
 }
 
-func (r *route) initClient() error {
-	config, err := kube.BuildClientConfig("", "")
-	if err != nil {
-		return fmt.Errorf("error creating a Kubernetes client: %v", err)
-	}
-
-	client, err := routev1.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("error creating an OpenShift route client: %v", err)
-	}
-
-	r.client = client
-
-	return nil
-}
-
-// findService tries to find a service that matches with the given gateway selector, in the given namespaces
+// findService tries to find a service that matches with the given gateway selector
 // Returns the namespace and service name that is a match, or an error
 // must be called with lock held
 func (r *route) findService(gateway *networking.Gateway) (string, string, error) {
