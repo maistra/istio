@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -39,10 +40,12 @@ type controller struct {
 	client kubernetes.Interface
 	cache  model.ConfigStoreCache
 	domain string
+
+	namespaces xnsinformers.NamespaceSet
 }
 
-func NewController(client kubernetes.Interface, c model.ConfigStoreCache, options controller2.Options) model.ConfigStoreCache {
-	return &controller{client, c, options.DomainSuffix}
+func NewController(client kubernetes.Interface, c model.ConfigStoreCache, ns xnsinformers.NamespaceSet, options controller2.Options) model.ConfigStoreCache {
+	return &controller{client, c, options.DomainSuffix, ns}
 }
 
 func (c *controller) Schemas() collection.Schemas {
@@ -102,14 +105,27 @@ func (c controller) List(typ config.GroupVersionKind, namespace string) ([]confi
 		return nil, nil
 	}
 
-	nsl, err := c.client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list type Namespaces: %v", err)
-	}
 	namespaces := map[string]*corev1.Namespace{}
-	for i, ns := range nsl.Items {
-		namespaces[ns.Name] = &nsl.Items[i]
+
+	// If we have a NamespaceSet kept up-to-date by the MemberRoll controller,
+	// use that to constuct the list of namespaces -- igoring any data other
+	// than the namespace name. Otherwise, try to list namespaces from the API
+	// server.
+	if c.namespaces != nil {
+		for _, ns := range c.namespaces.List() {
+			namespaces[ns] = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}
+		}
+	} else {
+		nsl, err := c.client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list type Namespaces: %v", err)
+		}
+
+		for i, ns := range nsl.Items {
+			namespaces[ns.Name] = &nsl.Items[i]
+		}
 	}
+
 	input.Namespaces = namespaces
 	output := convertResources(input)
 

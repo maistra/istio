@@ -79,7 +79,7 @@ func TestListInvalidGroupVersionKind(t *testing.T) {
 	g := NewWithT(t)
 	clientSet := fake.NewSimpleClientset()
 	store := memory.NewController(memory.Make(collections.All))
-	controller := NewController(clientSet, store, controller2.Options{})
+	controller := NewController(clientSet, store, nil, controller2.Options{})
 
 	typ := config.GroupVersionKind{Kind: "wrong-kind"}
 	c, err := controller.List(typ, "ns1")
@@ -92,7 +92,7 @@ func TestListGatewayResourceType(t *testing.T) {
 
 	clientSet := fake.NewSimpleClientset()
 	store := memory.NewController(memory.Make(collections.All))
-	controller := NewController(clientSet, store, controller2.Options{})
+	controller := NewController(clientSet, store, nil, controller2.Options{})
 
 	gwClassType := collections.K8SServiceApisV1Alpha1Gatewayclasses.Resource()
 	gwSpecType := collections.K8SServiceApisV1Alpha1Gateways.Resource()
@@ -141,7 +141,7 @@ func TestListVirtualServiceResourceType(t *testing.T) {
 
 	clientSet := fake.NewSimpleClientset()
 	store := memory.NewController(memory.Make(collections.All))
-	controller := NewController(clientSet, store, controller2.Options{})
+	controller := NewController(clientSet, store, nil, controller2.Options{})
 
 	gwClassType := collections.K8SServiceApisV1Alpha1Gatewayclasses.Resource()
 	gwSpecType := collections.K8SServiceApisV1Alpha1Gateways.Resource()

@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 
@@ -154,7 +155,17 @@ func (s *Server) initK8SConfigStore(args *PilotArgs) error {
 	}
 	s.ConfigStores = append(s.ConfigStores, configController)
 	if features.EnableServiceApis {
-		s.ConfigStores = append(s.ConfigStores, gateway.NewController(s.kubeClient, configController, args.RegistryOptions.KubeOptions))
+		var namespaces xnsinformers.NamespaceSet
+
+		// If we have a MemberRoll, use it to provide the namespaces to the
+		// gateway controller rahter than hitting the API server to list them.
+		if memberRoll := s.kubeClient.GetMemberRoll(); memberRoll != nil {
+			namespaces = xnsinformers.NewNamespaceSet()
+			memberRoll.Register(namespaces, "gateway-controller")
+		}
+
+		gwController := gateway.NewController(s.kubeClient, configController, namespaces, args.RegistryOptions.KubeOptions)
+		s.ConfigStores = append(s.ConfigStores, gwController)
 	}
 	if features.EnableAnalysis {
 		if err := s.initInprocessAnalysisController(args); err != nil {
