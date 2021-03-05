@@ -152,15 +152,19 @@ func (s *DiscoveryServer) registryz(w http.ResponseWriter, req *http.Request) {
 	_, _ = fmt.Fprintln(w, "{}]")
 }
 
+func (s *DiscoveryServer) marshallEndpoints() ([]byte, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return json.MarshalIndent(s.EndpointShardsByService, " ", " ")
+}
+
 // Dumps info about the endpoint shards, tracked using the new direct interface.
 // Legacy registry provides are synced to the new data structure as well, during
 // the full push.
 func (s *DiscoveryServer) endpointShardz(w http.ResponseWriter, req *http.Request) {
 	_ = req.ParseForm()
 	w.Header().Add("Content-Type", "application/json")
-	s.mutex.RLock()
-	out, _ := json.MarshalIndent(s.EndpointShardsByService, " ", " ")
-	s.mutex.RUnlock()
+	out, _ := s.marshallEndpoints()
 	_, _ = w.Write(out)
 }
 
@@ -218,6 +222,34 @@ type SyncedVersions struct {
 	RouteVersion    string `json:"route_acked,omitempty"`
 }
 
+func (s *DiscoveryServer) getSyncedVersion(con *XdsConnection, knownVersions map[string]string, proxyNamespace string, resourceID string) (syncedVersion *SyncedVersions){
+	con.mu.RLock()
+	defer con.mu.RUnlock()
+	if con.node != nil && (proxyNamespace == "" || proxyNamespace == con.node.ConfigNamespace) {
+		// TODO: handle skipped nodes
+		syncedVersion = &SyncedVersions{
+			ProxyID:         con.node.ID,
+			ClusterVersion:  s.getResourceVersion(con.ClusterNonceAcked, resourceID, knownVersions),
+			ListenerVersion: s.getResourceVersion(con.ListenerNonceAcked, resourceID, knownVersions),
+			RouteVersion:    s.getResourceVersion(con.RouteNonceAcked, resourceID, knownVersions),
+		}
+	}
+	return
+}
+
+func (s *DiscoveryServer) getSyncedVersions(proxyNamespace string, resourceID string) (results []*SyncedVersions){
+	knownVersions := make(map[string]string)
+	adsClientsMutex.RLock()
+	defer adsClientsMutex.RUnlock()
+	for _, con := range adsClients {
+		syncedVersion := s.getSyncedVersion(con, knownVersions, proxyNamespace, resourceID)
+		if syncedVersion != nil {
+			results = append(results, syncedVersion)
+		}
+	}
+	return
+}
+
 func (s *DiscoveryServer) distributedVersions(w http.ResponseWriter, req *http.Request) {
 	if !features.EnableDistributionTracking {
 		w.WriteHeader(http.StatusConflict)
@@ -227,23 +259,7 @@ func (s *DiscoveryServer) distributedVersions(w http.ResponseWriter, req *http.R
 	}
 	if resourceID := req.URL.Query().Get("resource"); resourceID != "" {
 		proxyNamespace := req.URL.Query().Get("proxy_namespace")
-		knownVersions := make(map[string]string)
-		var results []SyncedVersions
-		adsClientsMutex.RLock()
-		for _, con := range adsClients {
-			con.mu.RLock()
-			if con.node != nil && (proxyNamespace == "" || proxyNamespace == con.node.ConfigNamespace) {
-				// TODO: handle skipped nodes
-				results = append(results, SyncedVersions{
-					ProxyID:         con.node.ID,
-					ClusterVersion:  s.getResourceVersion(con.ClusterNonceAcked, resourceID, knownVersions),
-					ListenerVersion: s.getResourceVersion(con.ListenerNonceAcked, resourceID, knownVersions),
-					RouteVersion:    s.getResourceVersion(con.RouteNonceAcked, resourceID, knownVersions),
-				})
-			}
-			con.mu.RUnlock()
-		}
-		adsClientsMutex.RUnlock()
+		results := s.getSyncedVersions(proxyNamespace, resourceID)
 
 		out, err := json.MarshalIndent(&results, "", "    ")
 		if err != nil {
@@ -265,6 +281,9 @@ func (s *DiscoveryServer) distributedVersions(w http.ResponseWriter, req *http.R
 const VersionLen = 12
 
 func (s *DiscoveryServer) getResourceVersion(nonce, key string, cache map[string]string) string {
+	if len(nonce) < VersionLen {
+		return ""
+	}
 	configVersion := nonce[:VersionLen]
 	result, ok := cache[configVersion]
 	if !ok {
@@ -501,8 +520,9 @@ func (s *DiscoveryServer) adsz(w http.ResponseWriter, req *http.Request) {
 	if req.Form.Get("push") != "" {
 		AdsPushAll(s)
 		adsClientsMutex.RLock()
-		_, _ = fmt.Fprintf(w, "Pushed to %d servers", len(adsClients))
+		numClients := len(adsClients)
 		adsClientsMutex.RUnlock()
+		_, _ = fmt.Fprintf(w, "Pushed to %d servers", numClients)
 		return
 	}
 	writeAllADS(w)
@@ -703,6 +723,7 @@ func cdsz(w http.ResponseWriter, req *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
 	adsClientsMutex.RLock()
+	defer adsClientsMutex.RUnlock()
 
 	_, _ = fmt.Fprint(w, "[\n")
 	comma := false
@@ -717,8 +738,6 @@ func cdsz(w http.ResponseWriter, req *http.Request) {
 		_, _ = fmt.Fprint(w, "]}\n")
 	}
 	_, _ = fmt.Fprint(w, "]\n")
-
-	adsClientsMutex.RUnlock()
 }
 
 func printListeners(w io.Writer, c *XdsConnection) {
