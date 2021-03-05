@@ -15,9 +15,7 @@
 package ior
 
 import (
-	"strings"
-
-	"k8s.io/client-go/kubernetes"
+	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/model"
@@ -27,21 +25,24 @@ import (
 	"istio.io/pkg/log"
 )
 
-var iorLog = log.RegisterScope("ior", "IOR logging", 0)
+// IORLog is IOR-scoped log
+var IORLog = log.RegisterScope("ior", "IOR logging", 0)
 
 // Register configures IOR component to respond to Gateway creations and removals
-func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNamespace string, mrc controller.MemberRollController, stop <-chan struct{}) {
-	iorLog.Info("Registering IOR component")
+func Register(
+	k8sClient KubeClient,
+	routerClient routev1.RouteV1Interface,
+	store model.ConfigStoreCache,
+	pilotNamespace string,
+	mrc controller.MemberRollController,
+	stop <-chan struct{},
+	errorChannel chan error) error {
 
-	if !isRouteSupported(client) {
-		iorLog.Error("OpenShift routes are not supported in this cluster. IOR is not enabled.")
-		return
-	}
+	IORLog.Info("Registering IOR component")
 
-	r, err := newRoute(client, store, pilotNamespace, mrc)
+	r, err := newRoute(k8sClient, routerClient, store, pilotNamespace, mrc)
 	if err != nil {
-		iorLog.Errora(err)
-		return
+		return err
 	}
 
 	alive := true
@@ -51,7 +52,7 @@ func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNa
 		// (1) There's no such method "UnregisterEventHandler()"
 		// (2) It might take a few seconds to this channel to be closed. So, both pods might be leader for a few seconds.
 		<-stop
-		iorLog.Info("This pod is no longer a leader. IOR stopped responding")
+		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
 		alive = false
 	}(stop)
 
@@ -65,27 +66,19 @@ func Register(client kubernetes.Interface, store model.ConfigStoreCache, pilotNa
 		go func() {
 			_, ok := curr.Spec.(*networking.Gateway)
 			if !ok {
-				iorLog.Errorf("could not decode object as Gateway. Object = %v", curr)
+				IORLog.Errorf("could not decode object as Gateway. Object = %v", curr)
 				return
 			}
 
-			iorLog.Debugf("Event %v arrived. Object: %v", event, curr)
+			IORLog.Debugf("Event %v arrived. Object: %v", event, curr)
 			if err := r.syncGatewaysAndRoutes(); err != nil {
-				iorLog.Errora(err)
+				IORLog.Errora(err)
+				if errorChannel != nil {
+					errorChannel <- err
+				}
 			}
 		}()
 	})
-}
 
-func isRouteSupported(client kubernetes.Interface) bool {
-	_, s, _ := client.Discovery().ServerGroupsAndResources()
-	// This may fail if any api service is down, but the result will still be populated, so we skip the error
-	for _, res := range s {
-		for _, api := range res.APIResources {
-			if api.Kind == "Route" && strings.HasPrefix(res.GroupVersion, "route.openshift.io/") {
-				return true
-			}
-		}
-	}
-	return false
+	return nil
 }
