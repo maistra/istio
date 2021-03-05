@@ -104,8 +104,8 @@ func (v *TlsEcdhCurvesVar) initEcdhCurves() {
 }
 
 func (v *TlsEcdhCurvesVar) Reset() {
-	lock.Lock()
-	defer lock.Unlock()
+	eclock.Lock()
+	defer eclock.Unlock()
 	v.ecdhCurves = nil
 	v.goEcdhCurves = nil
 }
