@@ -119,8 +119,8 @@ func (v *TLSECDHCurvesVar) initECDHCurves() {
 }
 
 func (v *TLSECDHCurvesVar) Reset() {
-	lock.Lock()
-	defer lock.Unlock()
+	eclock.Lock()
+	defer eclock.Unlock()
 	v.ecdhCurves = nil
 	v.goECDHCurves = nil
 }
