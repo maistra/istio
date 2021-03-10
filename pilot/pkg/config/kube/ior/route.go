@@ -48,12 +48,19 @@ const (
 	gatewayResourceVersionLabel = maistraPrefix + "gateway-resourceVersion"
 )
 
+type syncRoutes struct {
+	gateway *networking.Gateway
+	routes  []*v1.Route
+}
+
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
 	pilotNamespace string
 	routerClient   routev1.RouteV1Interface
 	kubeClient     kubernetes.Interface
 	store          model.ConfigStoreCache
+	gatewaysMap    map[string]*syncRoutes
+	gatewaysLock   sync.Mutex
 
 	// memberroll functionality
 	mrc           controller.MemberRollController
@@ -97,6 +104,10 @@ func newRoute(
 	r.mrc = mrc
 	r.namespaces = []string{pilotNamespace}
 
+	if err := r.initGateways(); err != nil {
+		return nil, err
+	}
+
 	if r.mrc != nil {
 		r.mrc.Register(r, "ior")
 	}
@@ -104,10 +115,119 @@ func newRoute(
 	return r, nil
 }
 
+func (r *route) initGateways() error {
+	r.gatewaysMap = make(map[string]*syncRoutes)
+
+	configs, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
+	if err != nil {
+		return fmt.Errorf("could not get list of Gateways: %s", err)
+	}
+	for _, cfg := range configs {
+		gw := cfg.Spec.(*networking.Gateway)
+		IORLog.Debugf("Parsing Gateway %s/%s", cfg.Namespace, cfg.Name)
+		r.gatewaysMap[gatewaysMapKey(cfg.Namespace, cfg.Name)] = &syncRoutes{
+			gateway: gw,
+		}
+
+		// for _, server := range gw.Servers {
+		// 	for _, host := range server.Hosts {
+		// 	}
+		// }
+	}
+
+	return r.syncNamespaces()
+}
+
+func (r *route) syncNamespaces() error {
+	// r.namespaceLock.Lock()
+	// defer r.namespaceLock.Unlock()
+
+	var routes []v1.Route
+	for _, ns := range r.namespaces {
+		routeList, err := r.routerClient.Routes(ns).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
+		})
+		if err != nil {
+			return fmt.Errorf("could not get list of Routes in namespace %s: %s", ns, err)
+		}
+		routes = append(routes, routeList.Items...)
+	}
+
+	for _, route := range routes {
+		IORLog.Debugf("Parsing Route %s/%s", route.Namespace, route.Name)
+		syncRoute, ok := r.gatewaysMap[gatewaysMapKey(route.Labels[gatewayNamespaceLabel], route.Labels[gatewayNameLabel])]
+		if ok {
+			IORLog.Debugf("Found a Gateway (%s/%s) for this route", route.Labels[gatewayNamespaceLabel], route.Labels[gatewayNameLabel])
+			syncRoute.routes = append(syncRoute.routes, &route)
+			// TODO: Compare route's host with gateway hosts and edit/remove
+		} else {
+			IORLog.Infof("Found a route (%s/%s) created by IOR that does not have a matching Gateway. Removing it.", route.Namespace, route.Name)
+			// TODO: Remove the route
+		}
+	}
+
+	return nil
+}
+
+func gatewaysMapKey(namespace, name string) string {
+	return namespace + "/" + name
+}
+
 func (r *route) SetNamespaces(namespaces ...string) {
 	r.namespaceLock.Lock()
 	defer r.namespaceLock.Unlock()
+
+	IORLog.Debugf("SetNamespaces() called. Namespaces = %v", namespaces)
 	r.namespaces = namespaces
+
+	if err := r.syncNamespaces(); err != nil {
+		IORLog.Error(err)
+	}
+}
+
+func (r *route) syncGatewaysAndRoutes2(event model.Event, curr config.Config) error {
+	r.namespaceLock.Lock()
+	defer r.namespaceLock.Unlock()
+
+	var result *multierror.Error
+
+	switch event {
+	case model.EventAdd:
+		gw := curr.Spec.(*networking.Gateway)
+		syncRoute := &syncRoutes{
+			gateway: gw,
+		}
+		r.gatewaysMap[gatewaysMapKey(curr.Namespace, curr.Name)] = syncRoute
+
+		for _, server := range gw.Servers {
+			for _, host := range server.Hosts {
+				route, err := r.createRoute(curr.Meta, gw, host, server.Tls)
+				if err != nil {
+					result = multierror.Append(result, err)
+				} else {
+					syncRoute.routes = append(syncRoute.routes, route)
+				}
+			}
+		}
+
+	case model.EventUpdate:
+		//TODO
+
+	case model.EventDelete:
+		key := gatewaysMapKey(curr.Namespace, curr.Name)
+		syncRoute, ok := r.gatewaysMap[key]
+		if !ok {
+			result = multierror.Append(result, fmt.Errorf("Could not find gateway %s/%s", curr.Namespace, curr.Name))
+		}
+
+		for _, route := range syncRoute.routes {
+			result = multierror.Append(result, r.deleteRoute(route))
+		}
+
+		delete(r.gatewaysMap, key)
+	}
+
+	return result.ErrorOrNil()
 }
 
 func (r *route) syncGatewaysAndRoutes() error {
@@ -150,7 +270,8 @@ func (r *route) syncGatewaysAndRoutes() error {
 			for _, host := range server.Hosts {
 				_, ok := routesMap[host]
 				if !ok {
-					result = multierror.Append(r.createRoute(cfg.Meta, gateway, host, server.Tls))
+					_, err := r.createRoute(cfg.Meta, gateway, host, server.Tls)
+					result = multierror.Append(err)
 				}
 
 			}
@@ -180,7 +301,7 @@ func (r *route) deleteRoute(route *v1.Route) error {
 }
 
 // must be called with lock held
-func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, originalHost string, tls *networking.ServerTLSSettings) error {
+func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, originalHost string, tls *networking.ServerTLSSettings) (*v1.Route, error) {
 	var wildcard = v1.WildcardPolicyNone
 	actualHost := originalHost
 
@@ -210,7 +331,7 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 
 	serviceNamespace, serviceName, err := r.findService(gateway)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	annotations := map[string]string{
@@ -251,15 +372,15 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 	}, metav1.CreateOptions{})
 
 	if err != nil {
-		return fmt.Errorf("error creating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
+		return nil, fmt.Errorf("error creating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
 	}
 
-	IORLog.Infof("Created route %s/%s for hostname %s (gateway: %s/%s)",
-		nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
-		nr.Spec.Host,
-		metadata.Namespace, metadata.Name)
+	// IORLog.Infof("Created route %s/%s for hostname %s (gateway: %s/%s)",
+	// 	nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
+	// 	nr.Spec.Host,
+	// 	metadata.Namespace, metadata.Name)
 
-	return nil
+	return nr, nil
 }
 
 // findService tries to find a service that matches with the given gateway selector

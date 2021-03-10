@@ -136,6 +136,9 @@ type Client interface {
 	// AddMemberRoll creates a MemberRollController and adds it to the client.
 	AddMemberRoll(namespace, memberRollName string) error
 
+	// SetMemberRoll configures the client to use the given MemberRollController
+	SetMemberRoll(mrc memberroll.MemberRollController)
+
 	// GetMemberRoll returns the member roll for the client, which may be nil.
 	GetMemberRoll() memberroll.MemberRollController
 }
@@ -435,18 +438,23 @@ func (c *client) SetNamespaces(namespaces ...string) {
 }
 
 func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
-	c.memberRoll, err = memberroll.NewMemberRollController(c.config, namespace, memberRollName, resyncInterval)
+	mrc, err := memberroll.NewMemberRollController(c.config, namespace, memberRollName, resyncInterval)
 	if err != nil {
 		return err
 	}
+
+	c.SetMemberRoll(mrc)
+	return nil
+}
+
+func (c *client) SetMemberRoll(mrc memberroll.MemberRollController) {
+	c.memberRoll = mrc
 
 	c.memberRoll.Register(c.kubeInformer, "kubernetes-informers")
 	c.memberRoll.Register(c.istioInformer, "istio-infomrers")
 	c.memberRoll.Register(c.dynamicInformer, "dynamic-informers")
 	c.memberRoll.Register(c.metadataInformer, "metadata-informers")
 	c.memberRoll.Register(c.serviceapisInformers, "service-apis-informers")
-
-	return nil
 }
 
 func (c *client) GetMemberRoll() memberroll.MemberRollController {

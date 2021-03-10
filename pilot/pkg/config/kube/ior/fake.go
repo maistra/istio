@@ -21,6 +21,7 @@ import (
 	v1 "github.com/openshift/api/route/v1"
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	"golang.org/x/net/context"
+	"istio.io/istio/pkg/servicemesh/controller"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -159,4 +160,52 @@ func (fk *FakeRouter) Watch(ctx context.Context, opts metav1.ListOptions) (watch
 func (fk *FakeRouter) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions,
 	subresources ...string) (result *v1.Route, err error) {
 	panic("not implemented")
+}
+
+var a controller.MemberRollController
+
+// fakeMemberRollController implements controller.MemberRollController
+type fakeMemberRollController struct {
+	listeners  []controller.MemberRollListener
+	namespaces []string
+	lock       sync.Mutex
+}
+
+func newFakeMemberRollController() *fakeMemberRollController {
+	return &fakeMemberRollController{}
+}
+
+// Register implements controller.MemberRollController
+func (fk *fakeMemberRollController) Register(listener controller.MemberRollListener, name string) {
+	fk.lock.Lock()
+	defer fk.lock.Unlock()
+
+	if listener == nil {
+		return
+	}
+	fk.listeners = append(fk.listeners, listener)
+}
+
+// Start implements controller.MemberRollController
+func (fk *fakeMemberRollController) Start(stopCh <-chan struct{}) {
+	panic("not implemented")
+}
+
+func (fk *fakeMemberRollController) addNamespaces(namespaces ...string) {
+	fk.namespaces = append(fk.namespaces, namespaces...)
+	fk.invokeListeners()
+}
+
+func (fk *fakeMemberRollController) setNamespaces(namespaces ...string) {
+	fk.namespaces = namespaces
+	fk.invokeListeners()
+}
+
+func (fk *fakeMemberRollController) invokeListeners() {
+	fk.lock.Lock()
+	defer fk.lock.Unlock()
+
+	for _, l := range fk.listeners {
+		l.SetNamespaces(fk.namespaces...)
+	}
 }
