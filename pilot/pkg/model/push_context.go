@@ -67,8 +67,10 @@ type PushContext struct {
 	ServiceAccounts map[host.Name]map[int][]string `json:"-"`
 
 	// VirtualService related
-	privateVirtualServicesByNamespace map[string][]Config
-	publicVirtualServices             []Config
+	// this contains all the virtual services with exportTo "." and current namespace. The keys are namespace,gateway.
+	privateVirtualServicesByNamespaceAndGateway map[string]map[string][]Config
+	// This contains all virtual services whose exportTo is "*", keyed by gateway
+	publicVirtualServicesByGateway map[string][]Config
 
 	// destination rules are of three types:
 	//  namespaceLocalDestRules: all public/private dest rules pertaining to a service defined in a given namespace
@@ -425,8 +427,8 @@ func NewPushContext() *PushContext {
 	return &PushContext{
 		publicServices:                    []*Service{},
 		privateServicesByNamespace:        map[string][]*Service{},
-		publicVirtualServices:             []Config{},
-		privateVirtualServicesByNamespace: map[string][]Config{},
+		publicVirtualServicesByGateway:              map[string][]Config{},
+		privateVirtualServicesByNamespaceAndGateway: map[string]map[string][]Config{},
 		namespaceLocalDestRules:           map[string]*processedDestRules{},
 		namespaceExportedDestRules:        map[string]*processedDestRules{},
 		allExportedDestRules: &processedDestRules{
@@ -501,48 +503,10 @@ func (ps *PushContext) Services(proxy *Proxy) []*Service {
 	return out
 }
 
-// VirtualServices lists all virtual services bound to the specified gateways
-// This replaces store.VirtualServices. Used only by the gateways
-// Sidecars use the egressListener.VirtualServices().
-func (ps *PushContext) VirtualServices(proxy *Proxy, gateways map[string]bool) []Config {
-	configs := make([]Config, 0)
-	out := make([]Config, 0)
-
-	// filter out virtual services not reachable
-	// First private virtual service
-	if proxy == nil {
-		for _, virtualSvcs := range ps.privateVirtualServicesByNamespace {
-			configs = append(configs, virtualSvcs...)
-		}
-	} else {
-		configs = append(configs, ps.privateVirtualServicesByNamespace[proxy.ConfigNamespace]...)
-	}
-	// Second public virtual service
-	configs = append(configs, ps.publicVirtualServices...)
-
-	for _, cfg := range configs {
-		rule := cfg.Spec.(*networking.VirtualService)
-		if len(rule.Gateways) == 0 {
-			// This rule applies only to IstioMeshGateway
-			if gateways[constants.IstioMeshGateway] {
-				out = append(out, cfg)
-			}
-		} else {
-			for _, g := range rule.Gateways {
-				// note: Gateway names do _not_ use wildcard matching, so we do not use Name.Matches here
-				if gateways[resolveGatewayName(g, cfg.ConfigMeta)] {
-					out = append(out, cfg)
-					break
-				} else if g == constants.IstioMeshGateway && gateways[g] {
-					// "mesh" gateway cannot be expanded into FQDN
-					out = append(out, cfg)
-					break
-				}
-			}
-		}
-	}
-
-	return out
+func (ps *PushContext) VirtualServicesForGateway(proxy *Proxy, gateway string) []Config {
+	res := ps.privateVirtualServicesByNamespaceAndGateway[proxy.ConfigNamespace][gateway]
+	res = append(res, ps.publicVirtualServicesByGateway[gateway]...)
+	return res
 }
 
 // getSidecarScope returns a SidecarScope object associated with the
@@ -816,8 +780,8 @@ func (ps *PushContext) updateContext(
 			return err
 		}
 	} else {
-		ps.privateVirtualServicesByNamespace = oldPushContext.privateVirtualServicesByNamespace
-		ps.publicVirtualServices = oldPushContext.publicVirtualServices
+		ps.privateVirtualServicesByNamespaceAndGateway = oldPushContext.privateVirtualServicesByNamespaceAndGateway
+		ps.publicVirtualServicesByGateway = oldPushContext.publicVirtualServicesByGateway
 	}
 
 	if destinationRulesChanged {
@@ -998,8 +962,9 @@ func (ps *PushContext) addAuthnPolicy(hostname host.Name, selector *authn.PortSe
 
 // Caches list of virtual services
 func (ps *PushContext) initVirtualServices(env *Environment) error {
-	ps.privateVirtualServicesByNamespace = map[string][]Config{}
-	ps.publicVirtualServices = []Config{}
+	ps.privateVirtualServicesByNamespaceAndGateway = map[string]map[string][]Config{}
+	ps.publicVirtualServicesByGateway = map[string][]Config{}
+
 	virtualServices, err := env.List(schemas.VirtualService.Type, NamespaceAll)
 	if err != nil {
 		return err
@@ -1081,30 +1046,63 @@ func (ps *PushContext) initVirtualServices(env *Environment) error {
 	for _, virtualService := range vservices {
 		ns := virtualService.Namespace
 		rule := virtualService.Spec.(*networking.VirtualService)
+		gwNames := getGatewayNames(rule, virtualService.ConfigMeta)
 		if len(rule.ExportTo) == 0 {
 			// No exportTo in virtualService. Use the global default
 			// TODO: We currently only honor ., * and ~
 			if ps.defaultVirtualServiceExportTo[visibility.Private] {
+				if _, f := ps.privateVirtualServicesByNamespaceAndGateway[ns]; !f {
+					ps.privateVirtualServicesByNamespaceAndGateway[ns] = map[string][]Config{}
+				}
 				// add to local namespace only
-				ps.privateVirtualServicesByNamespace[ns] = append(ps.privateVirtualServicesByNamespace[ns], virtualService)
+				for _, gw := range gwNames {
+					ps.privateVirtualServicesByNamespaceAndGateway[ns][gw] = append(ps.privateVirtualServicesByNamespaceAndGateway[ns][gw], virtualService)
+				}
 			} else if ps.defaultVirtualServiceExportTo[visibility.Public] {
-				ps.publicVirtualServices = append(ps.publicVirtualServices, virtualService)
+				for _, gw := range gwNames {
+					ps.publicVirtualServicesByGateway[gw] = append(ps.publicVirtualServicesByGateway[gw], virtualService)
+				}
 			}
 		} else {
 			// TODO: we currently only process the first element in the array
 			// and currently only consider . or * which maps to public/private
 			if visibility.Instance(rule.ExportTo[0]) == visibility.Private {
+				if _, f := ps.privateVirtualServicesByNamespaceAndGateway[ns]; !f {
+					ps.privateVirtualServicesByNamespaceAndGateway[ns] = map[string][]Config{}
+				}
 				// add to local namespace only
-				ps.privateVirtualServicesByNamespace[ns] = append(ps.privateVirtualServicesByNamespace[ns], virtualService)
+				for _, gw := range gwNames {
+					ps.privateVirtualServicesByNamespaceAndGateway[ns][gw] = append(ps.privateVirtualServicesByNamespaceAndGateway[ns][gw], virtualService)
+				}
 			} else {
 				// ~ is not valid in the exportTo fields in virtualServices, services, destination rules
 				// and we currently only allow . or *. So treat this as public export
-				ps.publicVirtualServices = append(ps.publicVirtualServices, virtualService)
+				for _, gw := range gwNames {
+					ps.publicVirtualServicesByGateway[gw] = append(ps.publicVirtualServicesByGateway[gw], virtualService)
+				}
 			}
 		}
 	}
 
 	return nil
+}
+
+var meshGateways = []string{constants.IstioMeshGateway}
+
+func getGatewayNames(vs *networking.VirtualService, meta ConfigMeta) []string {
+	if len(vs.Gateways) == 0 {
+		return meshGateways
+	}
+	res := make([]string, 0, len(vs.Gateways))
+	for _, g := range vs.Gateways {
+		if g == constants.IstioMeshGateway {
+			res = append(res, constants.IstioMeshGateway)
+		} else {
+			name := resolveGatewayName(g, meta)
+			res = append(res, name)
+		}
+	}
+	return res
 }
 
 func (ps *PushContext) initDefaultExportMaps() {
