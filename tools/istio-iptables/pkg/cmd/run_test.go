@@ -119,11 +119,11 @@ func TestRulesWithIpRange(t *testing.T) {
 	cfg.OutboundIPRangesExclude = "1.1.0.0/16"
 	cfg.OutboundIPRangesInclude = "9.9.0.0/16"
 	cfg.DryRun = true
-	dnsCaptureByAgent = true
 	iptConfigurator := NewIptablesConfigurator(cfg, &dep.StdoutStubDependencies{})
 	iptConfigurator.cfg.EnableInboundIPv6 = false
 	iptConfigurator.cfg.ProxyGID = "1,2"
 	iptConfigurator.cfg.ProxyUID = "3,4"
+	iptConfigurator.cfg.RedirectDNS = true
 	iptConfigurator.run()
 	actual := FormatIptablesCommands(iptConfigurator.iptables.BuildV4())
 	expected := []string{
@@ -619,11 +619,11 @@ func TestHandleInboundPortsIncludeWithWildcardInboundPortsAndTproxy(t *testing.T
 func TestHandleInboundIpv4RulesWithUidGid(t *testing.T) {
 	cfg := constructConfig()
 	cfg.DryRun = true
-	dnsCaptureByAgent = true
 	iptConfigurator := NewIptablesConfigurator(cfg, &dep.StdoutStubDependencies{})
 	iptConfigurator.cfg.EnableInboundIPv6 = false
 	iptConfigurator.cfg.ProxyGID = "1,2"
 	iptConfigurator.cfg.ProxyUID = "3,4"
+	iptConfigurator.cfg.RedirectDNS = true
 	iptConfigurator.run()
 	actual := FormatIptablesCommands(iptConfigurator.iptables.BuildV4())
 	expected := []string{
@@ -666,11 +666,11 @@ func TestHandleInboundIpv4RulesWithUidGid(t *testing.T) {
 func TestGenerateEmptyV6ConfigOnV4OnlyEnv(t *testing.T) {
 	cfg := constructConfig()
 	cfg.DryRun = true
-	dnsCaptureByAgent = true
 	iptConfigurator := NewIptablesConfigurator(cfg, &dep.StdoutStubDependencies{})
 	iptConfigurator.cfg.EnableInboundIPv6 = false
 	iptConfigurator.cfg.ProxyGID = "1,2"
 	iptConfigurator.cfg.ProxyUID = "3,4"
+	iptConfigurator.cfg.RedirectDNS = true
 	iptConfigurator.run()
 	actual := FormatIptablesCommands(iptConfigurator.iptables.BuildV6())
 	expected := []string{}
@@ -705,11 +705,11 @@ func TestRulesWithLoopbackIpInOutboundIpRanges(t *testing.T) {
 	cfg := constructTestConfig()
 	cfg.OutboundIPRangesInclude = "127.1.2.3/32"
 	cfg.DryRun = true
-	dnsCaptureByAgent = true
 	iptConfigurator := NewIptablesConfigurator(cfg, &dep.StdoutStubDependencies{})
 	iptConfigurator.cfg.EnableInboundIPv6 = false
 	iptConfigurator.cfg.ProxyGID = "1,2"
 	iptConfigurator.cfg.ProxyUID = "3,4"
+	iptConfigurator.cfg.RedirectDNS = true
 	iptConfigurator.run()
 	actual := FormatIptablesCommands(iptConfigurator.iptables.BuildV4())
 	expected := []string{

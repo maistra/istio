@@ -45,6 +45,7 @@ func (ipt *iptables) Program(netns string, rdrct *Redirect) error {
 		nsSetupExecutable,
 		"-p", rdrct.targetPort,
 		"-u", rdrct.noRedirectUID,
+		"-g", rdrct.noRedirectGID,
 		"-m", rdrct.redirectMode,
 		"-i", rdrct.includeIPCidrs,
 		"-b", rdrct.includePorts,
@@ -52,6 +53,9 @@ func (ipt *iptables) Program(netns string, rdrct *Redirect) error {
 		"-o", rdrct.excludeOutboundPorts,
 		"-x", rdrct.excludeIPCidrs,
 		"-k", rdrct.kubevirtInterfaces,
+	}
+	if rdrct.redirectDNS {
+		nsenterArgs = append(nsenterArgs, "--redirect-dns")
 	}
 	log.Infof("nsenter args: %s", strings.Join(nsenterArgs, " "))
 	out, err := exec.Command("nsenter", nsenterArgs...).CombinedOutput()

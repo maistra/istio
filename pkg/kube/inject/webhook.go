@@ -714,6 +714,8 @@ func injectPod(req InjectionParameters, partialInjection bool) ([]byte, error) {
 		annotations[k] = v
 	}
 
+	rewriteCniPodSpec(annotations, spec)
+
 	var patchBytes []byte
 	if partialInjection {
 		patchBytes, err = createPartialPatch(pod, req.injectedAnnotations, req.proxyUID)

@@ -79,6 +79,7 @@ const (
 	InboundTunnelPort         = "inbound-tunnel-port"
 	ProxyUID                  = "proxy-uid"
 	ProxyGID                  = "proxy-gid"
+	RedirectDNS               = "redirect-dns"
 	KubeVirtInterfaces        = "kube-virt-interfaces"
 	DryRun                    = "dry-run"
 	Clean                     = "clean"

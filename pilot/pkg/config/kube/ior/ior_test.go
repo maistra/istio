@@ -154,11 +154,10 @@ func TestCreate(t *testing.T) {
 					t.Fatalf("expected error message containing `%s', got: %s", c.expectedError, err.Error())
 				}
 
-				// Error is expected and matches the golden string
-				return
+				// Error is expected and matches the golden string, nothing to do
+			} else {
+				validateRoutes(t, c.hosts, list, gatewayName, c.tls)
 			}
-
-			validateRoutes(t, c.hosts, list, gatewayName, c.tls)
 
 			// Remove the gateway and expect all routes get removed
 			deleteGateway(t, store, c.ns, gatewayName)

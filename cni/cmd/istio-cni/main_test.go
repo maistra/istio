@@ -116,14 +116,23 @@ func mocknewK8sClient(conf PluginConf) (*kubernetes.Clientset, error) {
 }
 
 func mockgetK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (containers []string,
-	initContainers map[string]struct{}, labels map[string]string, annotations map[string]string, err error) {
+	initContainers map[string]struct{}, labels map[string]string, annotations map[string]string,
+	proxyUID, proxyGID *int64, redirectDNS bool, err error) {
 
 	containers = testContainers
 	labels = testLabels
 	annotations = testAnnotations
 	initContainers = testInitContainers
 
-	return containers, initContainers, labels, annotations, nil
+	uid := int64(1337)
+	gid := int64(1337)
+
+	proxyUID = &uid
+	proxyGID = &gid
+
+	redirectDNS = false
+
+	return containers, initContainers, labels, annotations, proxyUID, proxyGID, redirectDNS, nil
 }
 
 func resetGlobalTestVariables() {
