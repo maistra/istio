@@ -38,7 +38,10 @@ import (
 	"istio.io/istio/pkg/test/util/retry"
 )
 
-func initClients(t *testing.T, stop <-chan struct{}, errorChannel chan error, mrc memberroll.MemberRollController) (model.ConfigStoreCache, kube.Client, routev1.RouteV1Interface) {
+func initClients(t *testing.T,
+	stop <-chan struct{},
+	errorChannel chan error,
+	mrc memberroll.MemberRollController) (model.ConfigStoreCache, kube.Client, routev1.RouteV1Interface) {
 	t.Helper()
 
 	k8sClient := kube.NewFakeClient()
@@ -305,8 +308,8 @@ func TestPerf(t *testing.T) {
 	createGateways(t, store, qty)
 	mrc.setNamespaces(generateNamespaces(qty)...)
 
-	// It takes ~ 6s on my laptop
-	_ = getRoutes(t, routerClient, "istio-system", qty, time.Second*10)
+	// It takes ~ 6s on my laptop, should we adopt different timeouts based on env?
+	_ = getRoutes(t, routerClient, "istio-system", qty, time.Second*30)
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +341,13 @@ func generateNamespaces(qty int) []string {
 
 func createGateways(t *testing.T, store model.ConfigStoreCache, qty int) {
 	for i := 1; i <= qty; i++ {
-		createGateway(t, store, fmt.Sprintf("ns%d", i), fmt.Sprintf("gw-ns%d", i), []string{fmt.Sprintf("d%d.com", i)}, map[string]string{"istio": "ingressgateway"}, false)
+		createGateway(t,
+			store,
+			fmt.Sprintf("ns%d", i),
+			fmt.Sprintf("gw-ns%d", i),
+			[]string{fmt.Sprintf("d%d.com", i)},
+			map[string]string{"istio": "ingressgateway"},
+			false)
 	}
 }
 

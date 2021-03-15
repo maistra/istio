@@ -229,17 +229,17 @@ func (r *route) addNewSyncRoute(cfg config.Config) *syncRoutes {
 	return syncRoute
 }
 
-func (r *route) handleAdd(event model.Event, curr config.Config) error {
+func (r *route) handleAdd(cfg config.Config) error {
 	var result *multierror.Error
 
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
 
-	syncRoute := r.addNewSyncRoute(curr)
+	syncRoute := r.addNewSyncRoute(cfg)
 
 	for _, server := range syncRoute.gateway.Servers {
 		for _, host := range server.Hosts {
-			route, err := r.createRoute(curr.Meta, syncRoute.gateway, host, server.Tls)
+			route, err := r.createRoute(cfg.Meta, syncRoute.gateway, host, server.Tls)
 			if err != nil {
 				result = multierror.Append(result, err)
 			} else {
@@ -251,19 +251,19 @@ func (r *route) handleAdd(event model.Event, curr config.Config) error {
 	return result.ErrorOrNil()
 }
 
-func (r *route) handleDel(event model.Event, curr config.Config) error {
+func (r *route) handleDel(cfg config.Config) error {
 	var result *multierror.Error
 
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
 
-	key := gatewaysMapKey(curr.Namespace, curr.Name)
+	key := gatewaysMapKey(cfg.Namespace, cfg.Name)
 	syncRoute, ok := r.gatewaysMap[key]
 	if !ok {
-		return fmt.Errorf("Could not find an internal reference to gateway %s/%s", curr.Namespace, curr.Name)
+		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
 	}
 
-	IORLog.Debugf("The gateway %s/%s has %d route(s) associated with it. Removing them now.", curr.Namespace, curr.Name, len(syncRoute.routes))
+	IORLog.Debugf("The gateway %s/%s has %d route(s) associated with it. Removing them now.", cfg.Namespace, cfg.Name, len(syncRoute.routes))
 	for _, route := range syncRoute.routes {
 		result = multierror.Append(result, r.deleteRoute(route))
 	}
@@ -273,7 +273,7 @@ func (r *route) handleDel(event model.Event, curr config.Config) error {
 	return result.ErrorOrNil()
 }
 
-func (r *route) handleEvent(event model.Event, curr config.Config) error {
+func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 	r.initialSyncLock.Lock()
 	initialSyncRun := r.initialSyncRun
 	r.initialSyncLock.Unlock()
@@ -288,19 +288,19 @@ func (r *route) handleEvent(event model.Event, curr config.Config) error {
 
 	switch event {
 	case model.EventAdd:
-		return r.handleAdd(event, curr)
+		return r.handleAdd(cfg)
 
 	case model.EventUpdate:
 		var result *multierror.Error
-		result = multierror.Append(result, r.handleDel(event, curr))
-		result = multierror.Append(result, r.handleAdd(event, curr))
+		result = multierror.Append(result, r.handleDel(cfg))
+		result = multierror.Append(result, r.handleAdd(cfg))
 		return result.ErrorOrNil()
 
 	case model.EventDelete:
-		return r.handleDel(event, curr)
+		return r.handleDel(cfg)
 	}
 
-	return fmt.Errorf("unkown event type %s", event)
+	return fmt.Errorf("unknown event type %s", event)
 }
 
 // Trigerred by SMMR controller when SMMR changes
@@ -466,15 +466,6 @@ func (r *route) findService(gateway *networking.Gateway) (string, string, error)
 
 	return "", "", fmt.Errorf("could not find a service that matches the gateway selector `%s'. Namespaces where we looked at: %v",
 		gwSelector.String(), namespaces)
-}
-
-func findConfig(list []config.Config, name, namespace, resourceVersion string) (config.Config, error) {
-	for _, item := range list {
-		if item.Name == name && item.Namespace == namespace && item.ResourceVersion == resourceVersion {
-			return item, nil
-		}
-	}
-	return config.Config{}, fmt.Errorf("config not found")
 }
 
 func getRouteName(namespace, name, actualHost string) string {
