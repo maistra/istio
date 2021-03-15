@@ -21,12 +21,13 @@ import (
 	v1 "github.com/openshift/api/route/v1"
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	"golang.org/x/net/context"
-	"istio.io/istio/pkg/servicemesh/controller"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"istio.io/istio/pkg/servicemesh/controller"
 )
 
 // FakeRouter implements routev1.RouteInterface
