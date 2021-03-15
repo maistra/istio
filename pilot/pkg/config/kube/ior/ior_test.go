@@ -66,22 +66,6 @@ func initClients(t *testing.T, stop <-chan struct{}, errorChannel chan error, mr
 	return store, k8sClient, routerClient
 }
 
-func generateNamespaces(qty int) []string {
-	var result []string
-
-	for i := 1; i <= qty; i++ {
-		result = append(result, fmt.Sprintf("ns%d", i))
-	}
-
-	return append(result, "istio-system")
-}
-
-func createGateways(t *testing.T, store model.ConfigStoreCache, qty int) {
-	for i := 1; i <= qty; i++ {
-		createGateway(t, store, fmt.Sprintf("ns%d", i), fmt.Sprintf("gw-ns%d", i), []string{fmt.Sprintf("d%d.com", i)}, map[string]string{"istio": "ingressgateway"}, false)
-	}
-}
-
 func TestCreate(t *testing.T) {
 	cases := []struct {
 		testName       string
@@ -340,7 +324,22 @@ func TestPerf(t *testing.T) {
 	if duration := time.Since(start); duration > limit {
 		t.Fatalf("Time to add the a single router (%v) exceeded %v", duration, limit)
 	}
+}
 
+func generateNamespaces(qty int) []string {
+	var result []string
+
+	for i := 1; i <= qty; i++ {
+		result = append(result, fmt.Sprintf("ns%d", i))
+	}
+
+	return append(result, "istio-system")
+}
+
+func createGateways(t *testing.T, store model.ConfigStoreCache, qty int) {
+	for i := 1; i <= qty; i++ {
+		createGateway(t, store, fmt.Sprintf("ns%d", i), fmt.Sprintf("gw-ns%d", i), []string{fmt.Sprintf("d%d.com", i)}, map[string]string{"istio": "ingressgateway"}, false)
+	}
 }
 
 func getError(errorChannel chan error) error {
