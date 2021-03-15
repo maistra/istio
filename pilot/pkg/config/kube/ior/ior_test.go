@@ -42,9 +42,6 @@ func initClients(t *testing.T, stop <-chan struct{}, errorChannel chan error, mr
 	t.Helper()
 
 	k8sClient := kube.NewFakeClient()
-	// if mrc != nil {
-	// 	k8sClient.SetMemberRoll(mrc)
-	// }
 	iorKubeClient := NewFakeKubeClient(k8sClient)
 	routerClient := NewFakeRouterClient()
 	store, err := crdclient.New(k8sClient, "", controller.Options{EnableCRDScan: false})
@@ -62,10 +59,7 @@ func initClients(t *testing.T, stop <-chan struct{}, errorChannel chan error, mr
 		return nil
 	}, retry.Timeout(time.Second))
 
-	// if err := Register(iorKubeClient, routerClient, store, "istio-system", k8sClient.GetMemberRoll(), stop, errorChannel); err != nil {
-	// 	t.Fatal(err)
-	// }
-	if err := Register2(iorKubeClient, routerClient, store, "istio-system", mrc, stop, errorChannel); err != nil {
+	if err := Register(iorKubeClient, routerClient, store, "istio-system", mrc, stop, errorChannel); err != nil {
 		t.Fatal(err)
 	}
 
@@ -86,27 +80,6 @@ func createGateways(t *testing.T, store model.ConfigStoreCache, qty int) {
 	for i := 1; i <= qty; i++ {
 		createGateway(t, store, fmt.Sprintf("ns%d", i), fmt.Sprintf("gw-ns%d", i), []string{fmt.Sprintf("d%d.com", i)}, map[string]string{"istio": "ingressgateway"}, false)
 	}
-}
-
-func TestXuxa(t *testing.T) {
-	stop := make(chan struct{})
-	defer func() { close(stop) }()
-	errorChannel := make(chan error)
-	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc)
-
-	createIngressGateway(t, k8sClient, "istio-system", map[string]string{"istio": "ingressgateway"})
-	qty := 10
-	createGateways(t, store, qty)
-	mrc.setNamespaces(generateNamespaces(qty)...)
-
-	//createGateway(t, store, "ns4", "gw-ns1", []string{"abc.com"}, map[string]string{"istio": "ingressgateway"}, false)
-	start := time.Now()
-	_ = getRoutes(t, routerClient, "istio-system", qty, time.Second*20)
-	if err := getError(errorChannel); err != nil {
-		t.Fatal(err)
-	}
-	IORLog.Infof("Elapsed time : %v", time.Since(start))
 }
 
 func TestCreate(t *testing.T) {
@@ -178,7 +151,9 @@ func TestCreate(t *testing.T) {
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
-	store, k8sClient, routerClient := initClients(t, stop, errorChannel, nil)
+	mrc := newFakeMemberRollController()
+	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc)
+	mrc.setNamespaces("istio-system")
 
 	controlPlane := "istio-system"
 	createIngressGateway(t, k8sClient, controlPlane, map[string]string{"istio": "ingressgateway"})
@@ -247,7 +222,7 @@ func validateRoutes(t *testing.T, hosts []string, list *routeapiv1.RouteList, ga
 
 }
 
-func xTestEdit(t *testing.T) {
+func TestEdit(t *testing.T) {
 	cases := []struct {
 		testName       string
 		ns             string
@@ -307,11 +282,13 @@ func xTestEdit(t *testing.T) {
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
-	store, k8sClient, routerClient := initClients(t, stop, errorChannel, nil)
+	mrc := newFakeMemberRollController()
+	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc)
 
 	controlPlane := "istio-system"
 	createIngressGateway(t, k8sClient, controlPlane, map[string]string{"istio": "ingressgateway"})
 	createGateway(t, store, controlPlane, "gw", []string{"abc.com"}, map[string]string{"istio": "ingressgateway"}, false)
+	mrc.setNamespaces("istio-system")
 
 	list := getRoutes(t, routerClient, controlPlane, 1, time.Second)
 	if err := getError(errorChannel); err != nil {
@@ -331,6 +308,41 @@ func xTestEdit(t *testing.T) {
 	}
 }
 
+func TestPerf(t *testing.T) {
+	stop := make(chan struct{})
+	defer func() { close(stop) }()
+	errorChannel := make(chan error)
+	mrc := newFakeMemberRollController()
+	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc)
+
+	// Create a bunch of namespaces and gateways, and make sure they don't take too long to be created
+	createIngressGateway(t, k8sClient, "istio-system", map[string]string{"istio": "ingressgateway"})
+	qty := 200
+	createGateways(t, store, qty)
+	mrc.setNamespaces(generateNamespaces(qty)...)
+
+	// It takes ~ 6s on my laptop
+	_ = getRoutes(t, routerClient, "istio-system", qty, time.Second*10)
+	if err := getError(errorChannel); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now we have a lot of routes created, let's create one more gateway. The route creation should be fast and not linear.
+	start := time.Now()
+	createGateway(t, store, "ns1", "gw-ns1-1", []string{"instant.com"}, map[string]string{"istio": "ingressgateway"}, false)
+	_ = getRoutes(t, routerClient, "istio-system", qty+1, time.Second)
+	if err := getError(errorChannel); err != nil {
+		t.Fatal(err)
+	}
+
+	// It takes ~ 100ms on my laptop
+	limit := time.Millisecond * 500
+	if duration := time.Since(start); duration > limit {
+		t.Fatalf("Time to add the a single router (%v) exceeded %v", duration, limit)
+	}
+
+}
+
 func getError(errorChannel chan error) error {
 	select {
 	case err := <-errorChannel:
@@ -343,6 +355,7 @@ func getError(errorChannel chan error) error {
 func getRoutes(t *testing.T, routerClient routev1.RouteV1Interface, ns string, size int, timeout time.Duration) *routeapiv1.RouteList {
 	var list *routeapiv1.RouteList
 
+	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		var err error
 
@@ -370,6 +383,7 @@ func findRouteByHost(list *routeapiv1.RouteList, host string) *routeapiv1.Route 
 }
 
 func createIngressGateway(t *testing.T, client kube.Client, ns string, labels map[string]string) {
+	t.Helper()
 	createPod(t, client, ns, labels)
 	createService(t, client, ns, labels)
 }

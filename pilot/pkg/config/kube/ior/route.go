@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/model"
@@ -49,23 +50,29 @@ const (
 )
 
 type syncRoutes struct {
-	gateway *networking.Gateway
-	routes  []*v1.Route
+	metadata config.Meta
+	gateway  *networking.Gateway
+	routes   []*v1.Route
 }
 
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
-	pilotNamespace string
-	routerClient   routev1.RouteV1Interface
-	kubeClient     kubernetes.Interface
-	store          model.ConfigStoreCache
-	gatewaysMap    map[string]*syncRoutes
-	gatewaysLock   sync.Mutex
+	pilotNamespace  string
+	routerClient    routev1.RouteV1Interface
+	kubeClient      kubernetes.Interface
+	store           model.ConfigStoreCache
+	gatewaysMap     map[string]*syncRoutes
+	gatewaysLock    sync.Mutex
+	initialSyncRun  bool
+	initialSyncLock sync.Mutex
+	alive           bool
+	stop            <-chan struct{}
 
 	// memberroll functionality
-	mrc           controller.MemberRollController
-	namespaceLock sync.Mutex
-	namespaces    []string
+	mrc              controller.MemberRollController
+	namespaceLock    sync.Mutex
+	namespaces       []string
+	gotInitialUpdate bool
 }
 
 // NewRouterClient returns an OpenShift client for Routers
@@ -89,7 +96,8 @@ func newRoute(
 	routerClient routev1.RouteV1Interface,
 	store model.ConfigStoreCache,
 	pilotNamespace string,
-	mrc controller.MemberRollController) (*route, error) {
+	mrc controller.MemberRollController,
+	stop <-chan struct{}) (*route, error) {
 
 	if !kubeClient.IsRouteSupported() {
 		return nil, fmt.Errorf("routes are not supported in this cluster")
@@ -103,182 +111,235 @@ func newRoute(
 	r.store = store
 	r.mrc = mrc
 	r.namespaces = []string{pilotNamespace}
-
-	if err := r.initGateways(); err != nil {
-		return nil, err
-	}
+	r.stop = stop
 
 	if r.mrc != nil {
+		IORLog.Debugf("Registering IOR into SMMR broadcast")
+		r.alive = true
 		r.mrc.Register(r, "ior")
+
+		go func(stop <-chan struct{}) {
+			<-stop
+			r.alive = false
+			IORLog.Debugf("Unregistering IOR from SMMR broadcast")
+		}(stop)
 	}
 
 	return r, nil
 }
 
-func (r *route) initGateways() error {
+// initialSync runs on initialization only.
+//
+// It lists all Istio Gateways (source of truth) and OpenShift Routes, compares them and makes the necessary adjustments
+// (creation and/or removal of routes) so that gateways and routes be in sync.
+func (r *route) initialSync() error {
+	var result *multierror.Error
 	r.gatewaysMap = make(map[string]*syncRoutes)
 
+	r.gatewaysLock.Lock()
+	defer r.gatewaysLock.Unlock()
+
+	// List the gateways and put them into the gatewaysMap
+	// The store must be synced otherwise we might get an empty list
+	// We enforce this before calling this function in UpdateNamespaces()
 	configs, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
 	if err != nil {
 		return fmt.Errorf("could not get list of Gateways: %s", err)
 	}
-	for _, cfg := range configs {
-		gw := cfg.Spec.(*networking.Gateway)
-		IORLog.Debugf("Parsing Gateway %s/%s", cfg.Namespace, cfg.Name)
-		r.gatewaysMap[gatewaysMapKey(cfg.Namespace, cfg.Name)] = &syncRoutes{
-			gateway: gw,
-		}
+	IORLog.Debugf("initialSync() - Got %d Gateway(s)", len(configs))
 
-		// for _, server := range gw.Servers {
-		// 	for _, host := range server.Hosts {
-		// 	}
-		// }
+	for i, cfg := range configs {
+		IORLog.Debugf("initialSync() - Parsing Gateway [%d] %s/%s", i+1, cfg.Namespace, cfg.Name)
+		r.addNewSyncRoute(cfg)
 	}
 
-	return r.syncNamespaces()
-}
-
-func (r *route) syncNamespaces() error {
-	// r.namespaceLock.Lock()
-	// defer r.namespaceLock.Unlock()
-
-	var routes []v1.Route
+	// List the routes and put them into a map. Map key is the route object name
+	routes := map[string]v1.Route{}
 	for _, ns := range r.namespaces {
+		IORLog.Debugf("initialSync() - Listing routes in ns %s", ns)
 		routeList, err := r.routerClient.Routes(ns).List(context.TODO(), metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
 		})
 		if err != nil {
 			return fmt.Errorf("could not get list of Routes in namespace %s: %s", ns, err)
 		}
-		routes = append(routes, routeList.Items...)
+		for _, route := range routeList.Items {
+			routes[route.Name] = route
+		}
 	}
+	IORLog.Debugf("initialSync() - Got %d route(s) across all %d namespace(s)", len(routes), len(r.namespaces))
 
-	for _, route := range routes {
-		IORLog.Debugf("Parsing Route %s/%s", route.Namespace, route.Name)
-		syncRoute, ok := r.gatewaysMap[gatewaysMapKey(route.Labels[gatewayNamespaceLabel], route.Labels[gatewayNameLabel])]
-		if ok {
-			IORLog.Debugf("Found a Gateway (%s/%s) for this route", route.Labels[gatewayNamespaceLabel], route.Labels[gatewayNameLabel])
-			syncRoute.routes = append(syncRoute.routes, &route)
-			// TODO: Compare route's host with gateway hosts and edit/remove
-		} else {
-			IORLog.Infof("Found a route (%s/%s) created by IOR that does not have a matching Gateway. Removing it.", route.Namespace, route.Name)
-			// TODO: Remove the route
+	// Now that we have maps and routes mapped we can compare them (Gateways are the source of truth)
+	for _, syncRoute := range r.gatewaysMap {
+		for _, server := range syncRoute.gateway.Servers {
+			for _, host := range server.Hosts {
+				actualHost, _ := getActualHost(host, false)
+				routeName := getRouteName(syncRoute.metadata.Namespace, syncRoute.metadata.Name, actualHost)
+				route, ok := routes[routeName]
+				if ok {
+					// A route for this host was found, remove its entry in this map so that in the end only orphan routes are left
+					delete(routes, routeName)
+
+					// Route matches, no need to create one. Put it in the gatewaysMap and move to the next one
+					if syncRoute.metadata.ResourceVersion == route.Labels[gatewayResourceVersionLabel] {
+						syncRoute.routes = append(syncRoute.routes, &route)
+						continue
+					}
+
+					// Route does not match, remove it.
+					result = multierror.Append(result, r.deleteRoute(&route))
+				}
+
+				// Route is not found or was removed above because it didn't match. We need to create one now.
+				route2, err := r.createRoute(syncRoute.metadata, syncRoute.gateway, host, server.Tls)
+				if err != nil {
+					result = multierror.Append(result, err)
+				} else {
+					// Put it in the gatewaysMap and move to the next one
+					syncRoute.routes = append(syncRoute.routes, route2)
+				}
+			}
 		}
 	}
 
-	return nil
+	// At this point there are routes for every hostname in every Gateway.
+	// The `routes` map should only contain "orphan" routes, i.e., routes that do not belong to any Gateway
+	//
+	for _, route := range routes {
+		result = multierror.Append(result, r.deleteRoute(&route))
+	}
+
+	return result.ErrorOrNil()
 }
 
 func gatewaysMapKey(namespace, name string) string {
 	return namespace + "/" + name
 }
 
-func (r *route) SetNamespaces(namespaces ...string) {
-	r.namespaceLock.Lock()
-	defer r.namespaceLock.Unlock()
-
-	IORLog.Debugf("SetNamespaces() called. Namespaces = %v", namespaces)
-	r.namespaces = namespaces
-
-	if err := r.syncNamespaces(); err != nil {
-		IORLog.Error(err)
+// addNewSyncRoute creates a new syncRoutes and adds it to the gatewaysMap
+// Must be called with gatewaysLock locked
+func (r *route) addNewSyncRoute(cfg config.Config) *syncRoutes {
+	gw := cfg.Spec.(*networking.Gateway)
+	syncRoute := &syncRoutes{
+		metadata: cfg.Meta,
+		gateway:  gw,
 	}
+
+	r.gatewaysMap[gatewaysMapKey(cfg.Namespace, cfg.Name)] = syncRoute
+	return syncRoute
 }
 
-func (r *route) syncGatewaysAndRoutes2(event model.Event, curr config.Config) error {
-	r.namespaceLock.Lock()
-	defer r.namespaceLock.Unlock()
-
+func (r *route) handleAdd(event model.Event, curr config.Config) error {
 	var result *multierror.Error
+
+	r.gatewaysLock.Lock()
+	defer r.gatewaysLock.Unlock()
+
+	syncRoute := r.addNewSyncRoute(curr)
+
+	for _, server := range syncRoute.gateway.Servers {
+		for _, host := range server.Hosts {
+			route, err := r.createRoute(curr.Meta, syncRoute.gateway, host, server.Tls)
+			if err != nil {
+				result = multierror.Append(result, err)
+			} else {
+				syncRoute.routes = append(syncRoute.routes, route)
+			}
+		}
+	}
+
+	return result.ErrorOrNil()
+}
+
+func (r *route) handleDel(event model.Event, curr config.Config) error {
+	var result *multierror.Error
+
+	r.gatewaysLock.Lock()
+	defer r.gatewaysLock.Unlock()
+
+	key := gatewaysMapKey(curr.Namespace, curr.Name)
+	syncRoute, ok := r.gatewaysMap[key]
+	if !ok {
+		return fmt.Errorf("Could not find an internal reference to gateway %s/%s", curr.Namespace, curr.Name)
+	}
+
+	IORLog.Debugf("The gateway %s/%s has %d route(s) associated with it. Removing them now.", curr.Namespace, curr.Name, len(syncRoute.routes))
+	for _, route := range syncRoute.routes {
+		result = multierror.Append(result, r.deleteRoute(route))
+	}
+
+	delete(r.gatewaysMap, key)
+
+	return result.ErrorOrNil()
+}
+
+func (r *route) handleEvent(event model.Event, curr config.Config) error {
+	r.initialSyncLock.Lock()
+	initialSyncRun := r.initialSyncRun
+	r.initialSyncLock.Unlock()
+
+	// Only handle event updates after initial sync has run
+	// This is to prevent having to deal with lots of Add's sent by the store on their first sync
+	// We handle this initial state in UpdateNamespaces() below
+	if !initialSyncRun {
+		IORLog.Debug("Ignoring event because we did not run the initial sync yet")
+		return nil
+	}
 
 	switch event {
 	case model.EventAdd:
-		gw := curr.Spec.(*networking.Gateway)
-		syncRoute := &syncRoutes{
-			gateway: gw,
-		}
-		r.gatewaysMap[gatewaysMapKey(curr.Namespace, curr.Name)] = syncRoute
-
-		for _, server := range gw.Servers {
-			for _, host := range server.Hosts {
-				route, err := r.createRoute(curr.Meta, gw, host, server.Tls)
-				if err != nil {
-					result = multierror.Append(result, err)
-				} else {
-					syncRoute.routes = append(syncRoute.routes, route)
-				}
-			}
-		}
+		return r.handleAdd(event, curr)
 
 	case model.EventUpdate:
-		//TODO
+		var result *multierror.Error
+		result = multierror.Append(result, r.handleDel(event, curr))
+		result = multierror.Append(result, r.handleAdd(event, curr))
+		return result.ErrorOrNil()
 
 	case model.EventDelete:
-		key := gatewaysMapKey(curr.Namespace, curr.Name)
-		syncRoute, ok := r.gatewaysMap[key]
-		if !ok {
-			result = multierror.Append(result, fmt.Errorf("Could not find gateway %s/%s", curr.Namespace, curr.Name))
-		}
-
-		for _, route := range syncRoute.routes {
-			result = multierror.Append(result, r.deleteRoute(route))
-		}
-
-		delete(r.gatewaysMap, key)
+		return r.handleDel(event, curr)
 	}
 
-	return result.ErrorOrNil()
+	return fmt.Errorf("unkown event type %s", event)
 }
 
-func (r *route) syncGatewaysAndRoutes() error {
+// Trigerred by SMMR controller when SMMR changes
+func (r *route) SetNamespaces(namespaces ...string) {
+	if !r.alive {
+		return
+	}
+
+	IORLog.Debugf("UpdateNamespaces(%v)", namespaces)
 	r.namespaceLock.Lock()
-	defer r.namespaceLock.Unlock()
+	r.namespaces = namespaces
+	r.namespaceLock.Unlock()
 
-	configs, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
-	if err != nil {
-		return fmt.Errorf("could not get list of Gateways: %s", err)
+	if r.gotInitialUpdate {
+		return
 	}
+	r.gotInitialUpdate = true
 
-	var routes []v1.Route
+	// In the first update we perform an initial sync
+	go func() {
+		r.initialSyncLock.Lock()
+		initialSyncRun := r.initialSyncRun
+		r.initialSyncLock.Unlock()
 
-	for _, ns := range r.namespaces {
-		routeList, err := r.routerClient.Routes(ns).List(context.TODO(), metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
-		})
-		if err != nil {
-			return fmt.Errorf("could not get list of Routes in namespace %s: %s", ns, err)
-		}
-		routes = append(routes, routeList.Items...)
-	}
+		if !initialSyncRun {
+			// But only after gateway store cache is synced
+			IORLog.Debug("Waiting for the Gateway store cache to sync before performing our initial sync")
+			cache.WaitForNamedCacheSync("Gateways", r.stop, r.store.HasSynced)
+			IORLog.Debug("Gateway store cache synced. Performing our initial sync now")
 
-	var result *multierror.Error
-	routesMap := make(map[string]*v1.Route, len(routes))
-	for _, route := range routes {
-		_, err := findConfig(configs, route.Labels[gatewayNameLabel], route.Labels[gatewayNamespaceLabel], route.Labels[gatewayResourceVersionLabel])
-		if err != nil {
-			result = multierror.Append(r.deleteRoute(&route))
-		} else {
-			routesMap[getHost(route)] = &route
-		}
-	}
-
-	for _, cfg := range configs {
-		gateway := cfg.Spec.(*networking.Gateway)
-		IORLog.Debugf("Found Gateway: %s/%s", cfg.Namespace, cfg.Name)
-
-		for _, server := range gateway.Servers {
-			for _, host := range server.Hosts {
-				_, ok := routesMap[host]
-				if !ok {
-					_, err := r.createRoute(cfg.Meta, gateway, host, server.Tls)
-					result = multierror.Append(err)
-				}
-
+			if err := r.initialSync(); err != nil {
+				IORLog.Errora(err)
 			}
-		}
-	}
 
-	return result.ErrorOrNil()
+			r.initialSyncLock.Lock()
+			r.initialSyncRun = true
+			r.initialSyncLock.Unlock()
+		}
+	}()
 }
 
 func getHost(route v1.Route) string {
@@ -300,24 +361,9 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
-// must be called with lock held
 func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, originalHost string, tls *networking.ServerTLSSettings) (*v1.Route, error) {
-	var wildcard = v1.WildcardPolicyNone
-	actualHost := originalHost
-
 	IORLog.Debugf("Creating route for hostname %s", originalHost)
-
-	if originalHost == "*" {
-		IORLog.Warnf("Gateway %s/%s: Hostname * is not supported at the moment. Letting OpenShift create it instead.", metadata.Namespace, metadata.Name)
-		actualHost = ""
-	} else if strings.HasPrefix(originalHost, "*.") {
-		// FIXME: Update link below to version 4.5 when it's out
-		// Wildcards are not enabled by default in OCP 3.x.
-		// See https://docs.openshift.com/container-platform/3.11/install_config/router/default_haproxy_router.html#using-wildcard-routes
-		// FIXME(2): Is there a way to check if OCP supports wildcard and print out a warning if not?
-		wildcard = v1.WildcardPolicySubdomain
-		actualHost = "wildcard." + strings.TrimPrefix(originalHost, "*.")
-	}
+	actualHost, wildcard := getActualHost(originalHost, true)
 
 	var tlsConfig *v1.TLSConfig
 	targetPort := "http2"
@@ -345,7 +391,7 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 
 	nr, err := r.routerClient.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s-%s", metadata.Namespace, metadata.Name, hostHash(actualHost)),
+			Name:      getRouteName(metadata.Namespace, metadata.Name, actualHost),
 			Namespace: serviceNamespace,
 			Labels: map[string]string{
 				generatedByLabel:            generatedByValue,
@@ -375,21 +421,24 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 		return nil, fmt.Errorf("error creating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
 	}
 
-	// IORLog.Infof("Created route %s/%s for hostname %s (gateway: %s/%s)",
-	// 	nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
-	// 	nr.Spec.Host,
-	// 	metadata.Namespace, metadata.Name)
+	IORLog.Infof("Created route %s/%s for hostname %s (gateway: %s/%s)",
+		nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
+		nr.Spec.Host,
+		metadata.Namespace, metadata.Name)
 
 	return nr, nil
 }
 
 // findService tries to find a service that matches with the given gateway selector
 // Returns the namespace and service name that is a match, or an error
-// must be called with lock held
 func (r *route) findService(gateway *networking.Gateway) (string, string, error) {
+	r.namespaceLock.Lock()
+	namespaces := r.namespaces
+	r.namespaceLock.Unlock()
+
 	gwSelector := labels.SelectorFromSet(gateway.Selector)
 
-	for _, ns := range r.namespaces {
+	for _, ns := range namespaces {
 		// Get the list of pods that match the gateway selector
 		podList, err := r.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{LabelSelector: gwSelector.String()})
 		if err != nil {
@@ -416,7 +465,7 @@ func (r *route) findService(gateway *networking.Gateway) (string, string, error)
 	}
 
 	return "", "", fmt.Errorf("could not find a service that matches the gateway selector `%s'. Namespaces where we looked at: %v",
-		gwSelector.String(), r.namespaces)
+		gwSelector.String(), namespaces)
 }
 
 func findConfig(list []config.Config, name, namespace, resourceVersion string) (config.Config, error) {
@@ -426,6 +475,34 @@ func findConfig(list []config.Config, name, namespace, resourceVersion string) (
 		}
 	}
 	return config.Config{}, fmt.Errorf("config not found")
+}
+
+func getRouteName(namespace, name, actualHost string) string {
+	return fmt.Sprintf("%s-%s-%s", namespace, name, hostHash(actualHost))
+}
+
+// getActualHost returns the actual hostname to be used in the route
+// `emitWarning` should be false when this function is used internally, without user interaction
+// It also returns the route's WildcardPolicy based on the hostname
+func getActualHost(originalHost string, emitWarning bool) (string, v1.WildcardPolicyType) {
+	wildcard := v1.WildcardPolicyNone
+	actualHost := originalHost
+
+	if originalHost == "*" {
+		actualHost = ""
+		if emitWarning {
+			IORLog.Warn("Hostname * is not supported at the moment. Letting OpenShift create it instead.")
+		}
+	} else if strings.HasPrefix(originalHost, "*.") {
+		// FIXME: Update link below to version 4.5 when it's out
+		// Wildcards are not enabled by default in OCP 3.x.
+		// See https://docs.openshift.com/container-platform/3.11/install_config/router/default_haproxy_router.html#using-wildcard-routes
+		// FIXME(2): Is there a way to check if OCP supports wildcard and print out a warning if not?
+		wildcard = v1.WildcardPolicySubdomain
+		actualHost = "wildcard." + strings.TrimPrefix(originalHost, "*.")
+	}
+
+	return actualHost, wildcard
 }
 
 // hostHash applies a sha256 on the host and truncate it to the first 8 bytes

@@ -162,8 +162,6 @@ func (fk *FakeRouter) Patch(ctx context.Context, name string, pt types.PatchType
 	panic("not implemented")
 }
 
-var a controller.MemberRollController
-
 // fakeMemberRollController implements controller.MemberRollController
 type fakeMemberRollController struct {
 	listeners  []controller.MemberRollListener

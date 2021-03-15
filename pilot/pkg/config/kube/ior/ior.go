@@ -15,6 +15,8 @@
 package ior
 
 import (
+	"sync"
+
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	networking "istio.io/api/networking/v1alpha3"
@@ -38,15 +40,15 @@ func Register(
 	stop <-chan struct{},
 	errorChannel chan error) error {
 
-	//IORLog.SetOutputLevel(log.DebugLevel)
 	IORLog.Info("Registering IOR component")
 
-	r, err := newRoute(k8sClient, routerClient, store, pilotNamespace, mrc)
+	r, err := newRoute(k8sClient, routerClient, store, pilotNamespace, mrc, stop)
 	if err != nil {
 		return err
 	}
 
 	alive := true
+	var aliveLock sync.Mutex
 	go func(stop <-chan struct{}) {
 		// Stop responding to events when we are no longer a leader.
 		// Two notes here:
@@ -54,11 +56,16 @@ func Register(
 		// (2) It might take a few seconds to this channel to be closed. So, both pods might be leader for a few seconds.
 		<-stop
 		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
+		aliveLock.Lock()
 		alive = false
+		aliveLock.Unlock()
 	}(stop)
 
+	IORLog.Debugf("Registering IOR into Istio's Gateway broadcast")
 	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
 	store.RegisterEventHandler(kind, func(_, curr config.Config, event model.Event) {
+		aliveLock.Lock()
+		defer aliveLock.Unlock()
 		if !alive {
 			return
 		}
@@ -72,63 +79,7 @@ func Register(
 			}
 
 			IORLog.Debugf("Event %v arrived. Object: %v", event, curr)
-			if err := r.syncGatewaysAndRoutes(); err != nil {
-				IORLog.Errora(err)
-				if errorChannel != nil {
-					errorChannel <- err
-				}
-			}
-		}()
-	})
-
-	return nil
-}
-
-// Register2 configures IOR component to respond to Gateway creations and removals
-func Register2(
-	k8sClient KubeClient,
-	routerClient routev1.RouteV1Interface,
-	store model.ConfigStoreCache,
-	pilotNamespace string,
-	mrc controller.MemberRollController,
-	stop <-chan struct{},
-	errorChannel chan error) error {
-
-	IORLog.SetOutputLevel(log.DebugLevel)
-	IORLog.Info("Registering IOR component")
-
-	r, err := newRoute(k8sClient, routerClient, store, pilotNamespace, mrc)
-	if err != nil {
-		return err
-	}
-
-	alive := true
-	go func(stop <-chan struct{}) {
-		// Stop responding to events when we are no longer a leader.
-		// Two notes here:
-		// (1) There's no such method "UnregisterEventHandler()"
-		// (2) It might take a few seconds to this channel to be closed. So, both pods might be leader for a few seconds.
-		<-stop
-		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
-		alive = false
-	}(stop)
-
-	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
-	store.RegisterEventHandler(kind, func(_, curr config.Config, event model.Event) {
-		if !alive {
-			return
-		}
-
-		// encapsulate in goroutine to not slow down processing because of waiting for mutex
-		go func() {
-			_, ok := curr.Spec.(*networking.Gateway)
-			if !ok {
-				IORLog.Errorf("could not decode object as Gateway. Object = %v", curr)
-				return
-			}
-
-			IORLog.Debugf("Event %v arrived. Object: %v", event, curr)
-			if err := r.syncGatewaysAndRoutes2(event, curr); err != nil {
+			if err := r.handleEvent(event, curr); err != nil {
 				IORLog.Errora(err)
 				if errorChannel != nil {
 					errorChannel <- err
