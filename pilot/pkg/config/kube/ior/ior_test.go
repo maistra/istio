@@ -23,6 +23,7 @@ import (
 
 	routeapiv1 "github.com/openshift/api/route/v1"
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+	"github.com/stretchr/testify/assert"
 	k8sioapicorev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -150,7 +151,7 @@ func TestCreate(t *testing.T) {
 			gatewayName := fmt.Sprintf("gw%d", i)
 			createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls)
 
-			list := getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
+			list, _ := getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
 			if err := getError(errorChannel); err != nil {
 				if c.expectedError == "" {
 					t.Fatal(err)
@@ -167,7 +168,7 @@ func TestCreate(t *testing.T) {
 
 			// Remove the gateway and expect all routes get removed
 			deleteGateway(t, store, c.ns, gatewayName)
-			_ = getRoutes(t, routerClient, c.ns, 0, time.Second)
+			_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
 		})
 	}
 }
@@ -277,7 +278,7 @@ func TestEdit(t *testing.T) {
 	createGateway(t, store, controlPlane, "gw", []string{"abc.com"}, map[string]string{"istio": "ingressgateway"}, false)
 	mrc.setNamespaces("istio-system")
 
-	list := getRoutes(t, routerClient, controlPlane, 1, time.Second)
+	list, _ := getRoutes(t, routerClient, controlPlane, 1, time.Second)
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +286,7 @@ func TestEdit(t *testing.T) {
 	for i, c := range cases {
 		t.Run(c.testName, func(t *testing.T) {
 			editGateway(t, store, c.ns, "gw", c.hosts, c.gwSelector, c.tls, fmt.Sprintf("%d", i+2))
-			list = getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
+			list, _ = getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
 			if err := getError(errorChannel); err != nil {
 				t.Fatal(err)
 			}
@@ -295,7 +296,10 @@ func TestEdit(t *testing.T) {
 	}
 }
 
+// TestPerf makes sure we are not doing more API calls than necessary
 func TestPerf(t *testing.T) {
+	countCallsReset()
+
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
@@ -305,28 +309,44 @@ func TestPerf(t *testing.T) {
 	// Create a bunch of namespaces and gateways, and make sure they don't take too long to be created
 	createIngressGateway(t, k8sClient, "istio-system", map[string]string{"istio": "ingressgateway"})
 	qty := 200
+	qtyNamespaces := qty + 1
 	createGateways(t, store, qty)
 	mrc.setNamespaces(generateNamespaces(qty)...)
 
-	// It takes ~ 6s on my laptop, should we adopt different timeouts based on env?
-	_ = getRoutes(t, routerClient, "istio-system", qty, time.Second*30)
+	// It takes ~ 6s on my laptop, it's slower on prow
+	_, ignore := getRoutes(t, routerClient, "istio-system", qty, time.Minute)
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, qty, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
+	assert.Equal(t, 0, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
+	assert.Equal(t, qtyNamespaces, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
+	// qty=number of Create() calls; qtyNamespaces=number of List() calls
+	assert.Equal(t, qty+qtyNamespaces, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
 
-	// Now we have a lot of routes created, let's create one more gateway. The route creation should be fast and not linear.
-	start := time.Now()
+	// Now we have a lot of routes created, let's create one more gateway. We don't expect a lot of new API calls
+	countCallsReset()
 	createGateway(t, store, "ns1", "gw-ns1-1", []string{"instant.com"}, map[string]string{"istio": "ingressgateway"}, false)
-	_ = getRoutes(t, routerClient, "istio-system", qty+1, time.Second)
+	_, ignore = getRoutes(t, routerClient, "istio-system", qty+1, time.Second)
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, 1, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
+	assert.Equal(t, 0, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
+	assert.Equal(t, 0, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
+	assert.Equal(t, 1, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
 
-	// It takes ~ 100ms on my laptop
-	limit := time.Millisecond * 500
-	if duration := time.Since(start); duration > limit {
-		t.Fatalf("Time to add the a single router (%v) exceeded %v", duration, limit)
+	// Same for deletion. We don't expect a lot of new API calls
+	countCallsReset()
+	deleteGateway(t, store, "ns1", "gw-ns1-1")
+	_, ignore = getRoutes(t, routerClient, "istio-system", qty, time.Second)
+	if err := getError(errorChannel); err != nil {
+		t.Fatal(err)
 	}
+	assert.Equal(t, 0, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
+	assert.Equal(t, 1, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
+	assert.Equal(t, 0, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
+	assert.Equal(t, 1, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
 }
 
 func generateNamespaces(qty int) []string {
@@ -360,15 +380,20 @@ func getError(errorChannel chan error) error {
 	}
 }
 
-func getRoutes(t *testing.T, routerClient routev1.RouteV1Interface, ns string, size int, timeout time.Duration) *routeapiv1.RouteList {
+// getRoutes is a helper function that keeps trying getting a list of routes until it gets `size` items.
+// It returns the list of routes itself and the number of retries it run
+func getRoutes(t *testing.T, routerClient routev1.RouteV1Interface, ns string, size int, timeout time.Duration) (*routeapiv1.RouteList, int) {
 	var list *routeapiv1.RouteList
 
 	t.Helper()
+	count := 0
+
 	retry.UntilSuccessOrFail(t, func() error {
 		var err error
 
 		time.Sleep(time.Millisecond * 100)
 		list, err = routerClient.Routes(ns).List(context.TODO(), v1.ListOptions{})
+		count++
 		if err != nil {
 			return err
 		}
@@ -378,7 +403,7 @@ func getRoutes(t *testing.T, routerClient routev1.RouteV1Interface, ns string, s
 		return nil
 	}, retry.Timeout(timeout))
 
-	return list
+	return list, count
 }
 
 func findRouteByHost(list *routeapiv1.RouteList, host string) *routeapiv1.Route {

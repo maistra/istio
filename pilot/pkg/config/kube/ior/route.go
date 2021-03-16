@@ -235,6 +235,13 @@ func (r *route) handleAdd(cfg config.Config) error {
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
 
+	if _, ok := r.gatewaysMap[gatewaysMapKey(cfg.Namespace, cfg.Name)]; ok {
+		// This usually occurs in unit tests, when sync is so fast that when the first add events come the sync is already done
+		// Just logging a debug message, as this is not really an error
+		IORLog.Debugf("gateway %s/%s already exists, not creating route(s) for it", cfg.Namespace, cfg.Name)
+		return nil
+	}
+
 	syncRoute := r.addNewSyncRoute(cfg)
 
 	for _, server := range syncRoute.gateway.Servers {

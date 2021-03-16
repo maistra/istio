@@ -86,6 +86,8 @@ func (rc *FakeRouterClient) Routes(namespace string) routev1.RouteInterface {
 	if _, ok := rc.routesByNamespace[namespace]; !ok {
 		rc.routesByNamespace[namespace] = NewFakeRouter()
 	}
+
+	countCallsIncrement("routes")
 	return rc.routesByNamespace[namespace]
 }
 
@@ -102,6 +104,8 @@ func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.C
 	}
 
 	fk.routes[route.Name] = route
+
+	countCallsIncrement("create")
 	return route, nil
 }
 
@@ -125,6 +129,8 @@ func (fk *FakeRouter) Delete(ctx context.Context, name string, opts metav1.Delet
 	}
 
 	delete(fk.routes, name)
+
+	countCallsIncrement("delete")
 	return nil
 }
 
@@ -149,6 +155,7 @@ func (fk *FakeRouter) List(ctx context.Context, opts metav1.ListOptions) (*v1.Ro
 	}
 	result := &v1.RouteList{Items: items}
 
+	countCallsIncrement("list")
 	return result, nil
 }
 
@@ -207,4 +214,29 @@ func (fk *fakeMemberRollController) invokeListeners() {
 	for _, l := range fk.listeners {
 		l.SetNamespaces(fk.namespaces...)
 	}
+}
+
+var countCalls map[string]int = map[string]int{}
+var countCallsLock sync.Mutex
+
+func countCallsReset() {
+	countCallsLock.Lock()
+	defer countCallsLock.Unlock()
+	countCalls = map[string]int{}
+}
+
+func countCallsGet(k string) int {
+	countCallsLock.Lock()
+	defer countCallsLock.Unlock()
+	v, ok := countCalls[k]
+	if !ok {
+		v = 0
+	}
+	return v
+}
+
+func countCallsIncrement(k string) {
+	countCallsLock.Lock()
+	defer countCallsLock.Unlock()
+	countCalls[k] += 1
 }
