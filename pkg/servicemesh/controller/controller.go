@@ -15,7 +15,6 @@
 package controller
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -30,12 +29,15 @@ import (
 	"istio.io/pkg/log"
 )
 
+var smmrLog = log.RegisterScope("smmr", "SMMR controller", 0)
+
 type serviceMeshMemberRollController struct {
 	informer       cache.SharedIndexInformer
 	namespace      string
 	memberRollName string
 	started        bool
 	lock           sync.Mutex
+	cacheWarmed    bool
 }
 
 type MemberRollListener interface {
@@ -50,7 +52,6 @@ type MemberRollController interface {
 func NewMemberRollController(config *rest.Config, namespace string, memberRollName string, resync time.Duration) (MemberRollController, error) {
 	cs, err := versioned_v1.NewForConfig(config)
 	if err != nil {
-		fmt.Printf("Could not create k8s clientset: %v", err)
 		return nil, err
 	}
 
@@ -76,6 +77,19 @@ func (smmrc *serviceMeshMemberRollController) Start(stopCh <-chan struct{}) {
 	if !smmrc.started {
 		go smmrc.informer.Run(stopCh)
 		smmrc.started = true
+
+		smmrLog.Debug("Controller started, waiting for cache to warm up")
+		go func() {
+			for {
+				if cache.WaitForNamedCacheSync("SMMR", stopCh, smmrc.informer.HasSynced) {
+					smmrLog.Debug("Cache warmed up. From now on will send the initial update to listeners")
+					smmrc.cacheWarmed = true
+					return
+				}
+				smmrLog.Debug("Cache not synced, trying again")
+				time.Sleep(time.Second)
+			}
+		}()
 	}
 }
 
@@ -106,7 +120,21 @@ func (smmrc *serviceMeshMemberRollController) newServiceMeshMemberRollListener(l
 		currentNamespaces: nil,
 		name:              name,
 	}
-	handler.updateNamespaces("add", smmrc.memberRollName, smmrc.getNamespaces(nil))
+
+	if smmrc.cacheWarmed {
+		smmrLog.Debugf("Listener for %q created. Ready to send an initial update", name)
+
+		var members []string
+		for _, item := range smmrc.informer.GetIndexer().List() {
+			smmr := item.(*v1.ServiceMeshMemberRoll)
+			members = smmr.Status.ConfiguredMembers
+		}
+		members = smmrc.getNamespaces(members)
+		handler.updateNamespaces("added", smmrc.memberRollName, members)
+	} else {
+		smmrLog.Debugf("Listener for %q created. Not sending an initial update", name)
+	}
+
 	return handler
 }
 
@@ -134,14 +162,12 @@ func (smmrl *serviceMeshMemberRollListener) checkEquality(lhs, rhs []string) boo
 
 func (smmrl *serviceMeshMemberRollListener) updateNamespaces(operation string, memberRollName string, members []string) {
 	if smmrl.smmrc.memberRollName != memberRollName {
-		log.Infof("ServiceMeshMemberRoll using incorrect name %v, ignoring", memberRollName)
+		smmrLog.Errorf("ServiceMeshMemberRoll using incorrect name %v, ignoring", memberRollName)
 	} else {
 		namespaces := smmrl.smmrc.getNamespaces(members)
 		sort.Strings(namespaces)
 		smmrl.currentNamespaces = namespaces
-		log.Infof("ServiceMeshMemberRoll %v %s, namespaces for listener %s now %q",
-			memberRollName, operation, smmrl.name, smmrl.currentNamespaces)
-
+		smmrLog.Debugf("Sending [%s] update to listener %q with %d member(s): %v", operation, smmrl.name, len(namespaces), namespaces)
 		smmrl.listener.SetNamespaces(smmrl.currentNamespaces...)
 	}
 }
@@ -161,12 +187,12 @@ func (smmrl *serviceMeshMemberRollListener) OnDelete(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			log.Errorf("Couldn't get object from tombstone %#v", obj)
+			smmrLog.Errorf("Couldn't get object from tombstone %#v", obj)
 			return
 		}
 		serviceMeshMemberRoll, ok = tombstone.Obj.(*v1.ServiceMeshMemberRoll)
 		if !ok {
-			log.Errorf("Tombstone contained object that is not a service mesh member roll %#v", obj)
+			smmrLog.Errorf("Tombstone contained object that is not a service mesh member roll %#v", obj)
 			return
 		}
 	}
