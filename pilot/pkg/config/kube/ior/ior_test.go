@@ -338,6 +338,18 @@ func TestPerf(t *testing.T) {
 	assert.Equal(t, 0, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
 	assert.Equal(t, 1, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
 
+	// Editing. We don't expect a lot of new API calls
+	countCallsReset()
+	editGateway(t, store, "ns1", "gw-ns1-1", []string{"edited.com", "edited-other.com"}, map[string]string{"istio": "ingressgateway"}, false, "2")
+	_, ignore = getRoutes(t, routerClient, "istio-system", qty+2, time.Second)
+	if err := getError(errorChannel); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 2, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
+	assert.Equal(t, 1, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
+	assert.Equal(t, 0, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
+	assert.Equal(t, 3, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
+
 	// Same for deletion. We don't expect a lot of new API calls
 	countCallsReset()
 	deleteGateway(t, store, "ns1", "gw-ns1-1")
@@ -346,9 +358,9 @@ func TestPerf(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
-	assert.Equal(t, 1, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
+	assert.Equal(t, 2, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
 	assert.Equal(t, 0, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
-	assert.Equal(t, 1, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
+	assert.Equal(t, 2, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
 }
 
 func generateNamespaces(qty int) []string {
