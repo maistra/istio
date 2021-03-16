@@ -238,5 +238,5 @@ func countCallsGet(k string) int {
 func countCallsIncrement(k string) {
 	countCallsLock.Lock()
 	defer countCallsLock.Unlock()
-	countCalls[k] += 1
+	countCalls[k]++
 }

@@ -37,6 +37,7 @@ import (
 	"istio.io/istio/pkg/kube"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/test/util/retry"
+	"istio.io/pkg/log"
 )
 
 func initClients(t *testing.T,
@@ -298,6 +299,7 @@ func TestEdit(t *testing.T) {
 
 // TestPerf makes sure we are not doing more API calls than necessary
 func TestPerf(t *testing.T) {
+	IORLog.SetOutputLevel(log.DebugLevel)
 	countCallsReset()
 
 	stop := make(chan struct{})
@@ -308,12 +310,12 @@ func TestPerf(t *testing.T) {
 
 	// Create a bunch of namespaces and gateways, and make sure they don't take too long to be created
 	createIngressGateway(t, k8sClient, "istio-system", map[string]string{"istio": "ingressgateway"})
-	qty := 200
+	qty := 100
 	qtyNamespaces := qty + 1
 	createGateways(t, store, qty)
 	mrc.setNamespaces(generateNamespaces(qty)...)
 
-	// It takes ~ 6s on my laptop, it's slower on prow
+	// It takes ~ 2s on my laptop, it's slower on prow
 	_, ignore := getRoutes(t, routerClient, "istio-system", qty, time.Minute)
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
