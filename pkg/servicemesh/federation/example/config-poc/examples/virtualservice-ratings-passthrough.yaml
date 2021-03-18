@@ -1,0 +1,19 @@
+# VirtualService resource that redirects the local service to the remote
+# services.  This only works with passthrough.
+
+kind: VirtualService
+apiVersion: networking.istio.io/v1alpha3
+metadata:
+  name: ratings-remote
+  namespace: mesh2-bookinfo
+spec:
+  hosts:
+    - ratings.mesh2-bookinfo.svc.cluster.local
+  http:
+    - match:
+        - port: 9080
+      route:
+        - destination:
+            host: ratings.mesh1-bookinfo.svc.cluster.local
+            port:
+              number: 9080
