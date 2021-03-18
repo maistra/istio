@@ -1,0 +1,14 @@
+apiVersion: maistra.io/v1alpha1
+kind: MeshFederation
+metadata:
+  name: mesh2
+  namespace: mesh1-system
+spec:
+  networkAddress: federation-ingress.mesh2-system.svc.cluster.local
+  gateways:
+    ingress:
+      name: federation-ingress
+    egress:
+      name: federation-egress
+  security:
+    clientID: cluster.local/ns/mesh2-system/sa/federation-egress-service-account

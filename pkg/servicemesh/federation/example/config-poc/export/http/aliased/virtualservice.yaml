@@ -1,0 +1,26 @@
+kind: VirtualService
+apiVersion: networking.istio.io/v1alpha3
+metadata:
+  # exports-<service-name>-<namespace>
+  name: exports-ratings-mesh1-bookinfo
+  namespace: mesh1-system
+spec:
+  hosts:
+      # exported service name (fqdn)
+    - ratings-aliased.mesh1-exports.svc.cluster.local
+  gateways:
+      # exports-<service-name>-<namespace>
+    - mesh1-system/exports-ratings-mesh1-bookinfo
+  http:
+    - match:
+          # gateway port
+        - port: 15443
+      route:
+        - destination:
+            # local service being exported
+            host: ratings.mesh1-bookinfo.svc.cluster.local
+            port:
+              number: 9080
+          # XXX: what if service exposes multiple ports?
+  exportTo:
+    - .

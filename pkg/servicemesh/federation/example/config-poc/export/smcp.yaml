@@ -1,0 +1,85 @@
+apiVersion: maistra.io/v2
+kind: ServiceMeshControlPlane
+metadata:
+  name: fed-export
+  namespace: mesh1-system
+spec:
+  version: v2.1
+  cluster:
+    name: cluster1
+    network: network1
+  runtime:
+    defaults:
+      container:
+        imagePullPolicy: Always
+  addons:
+    grafana:
+      enabled: true
+    kiali:
+      enabled: true
+  tracing:
+    type: Jaeger
+    sampling: 10000
+  proxy:
+    accessLogging:
+      file:
+        name: /dev/stdout
+  techPreview:
+    meshConfig:
+      defaultConfig:
+        holdApplicationUntilProxyStarts: false
+        proxyMetadata:
+          ISTIO_META_DNS_CAPTURE: "true"
+          PROXY_XDS_VIA_AGENT: "true"
+  gateways:
+    additionalEgress:
+      federation-egress:
+        enabled: true
+        requestedNetworkView:
+        - network-mesh2
+        routerMode: sni-dnat
+        service:
+          metadata:
+            labels:
+              federation.maistra.io/proxy: mesh2
+          ports:
+          - port: 15443
+            name: tls
+          - port: 8188
+            name: http-discovery
+        runtime:
+          deployment:
+            autoScaling:
+              enabled: false
+          container:
+            # constrain resources for use in smaller environments
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits: {}
+    additionalIngress:
+      federation-ingress:
+        enabled: true
+        routerMode: sni-dnat
+        service:
+          type: LoadBalancer
+          metadata:
+            labels:
+              federation.maistra.io/proxy: mesh2
+          ports:
+          - port: 15443
+            name: tls
+          - port: 8188
+            name: https-discovery
+        runtime:
+          deployment:
+            autoScaling:
+              enabled: false
+          container:
+            # constrain resources for use in smaller environments
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits: {}
