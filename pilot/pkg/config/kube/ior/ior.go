@@ -15,6 +15,8 @@
 package ior
 
 import (
+	"sync"
+
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	networking "istio.io/api/networking/v1alpha3"
@@ -40,12 +42,13 @@ func Register(
 
 	IORLog.Info("Registering IOR component")
 
-	r, err := newRoute(k8sClient, routerClient, store, pilotNamespace, mrc)
+	r, err := newRoute(k8sClient, routerClient, store, pilotNamespace, mrc, stop)
 	if err != nil {
 		return err
 	}
 
 	alive := true
+	var aliveLock sync.Mutex
 	go func(stop <-chan struct{}) {
 		// Stop responding to events when we are no longer a leader.
 		// Two notes here:
@@ -53,11 +56,16 @@ func Register(
 		// (2) It might take a few seconds to this channel to be closed. So, both pods might be leader for a few seconds.
 		<-stop
 		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
+		aliveLock.Lock()
 		alive = false
+		aliveLock.Unlock()
 	}(stop)
 
+	IORLog.Debugf("Registering IOR into Istio's Gateway broadcast")
 	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
 	store.RegisterEventHandler(kind, func(_, curr config.Config, event model.Event) {
+		aliveLock.Lock()
+		defer aliveLock.Unlock()
 		if !alive {
 			return
 		}
@@ -71,7 +79,7 @@ func Register(
 			}
 
 			IORLog.Debugf("Event %v arrived. Object: %v", event, curr)
-			if err := r.syncGatewaysAndRoutes(); err != nil {
+			if err := r.handleEvent(event, curr); err != nil {
 				IORLog.Errora(err)
 				if errorChannel != nil {
 					errorChannel <- err
