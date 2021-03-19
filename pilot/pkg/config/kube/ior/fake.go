@@ -26,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"istio.io/istio/pkg/servicemesh/controller"
 )
 
 // FakeRouter implements routev1.RouteInterface
@@ -84,6 +86,8 @@ func (rc *FakeRouterClient) Routes(namespace string) routev1.RouteInterface {
 	if _, ok := rc.routesByNamespace[namespace]; !ok {
 		rc.routesByNamespace[namespace] = NewFakeRouter()
 	}
+
+	countCallsIncrement("routes")
 	return rc.routesByNamespace[namespace]
 }
 
@@ -100,6 +104,8 @@ func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.C
 	}
 
 	fk.routes[route.Name] = route
+
+	countCallsIncrement("create")
 	return route, nil
 }
 
@@ -123,6 +129,8 @@ func (fk *FakeRouter) Delete(ctx context.Context, name string, opts metav1.Delet
 	}
 
 	delete(fk.routes, name)
+
+	countCallsIncrement("delete")
 	return nil
 }
 
@@ -147,6 +155,7 @@ func (fk *FakeRouter) List(ctx context.Context, opts metav1.ListOptions) (*v1.Ro
 	}
 	result := &v1.RouteList{Items: items}
 
+	countCallsIncrement("list")
 	return result, nil
 }
 
@@ -159,4 +168,75 @@ func (fk *FakeRouter) Watch(ctx context.Context, opts metav1.ListOptions) (watch
 func (fk *FakeRouter) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions,
 	subresources ...string) (result *v1.Route, err error) {
 	panic("not implemented")
+}
+
+// fakeMemberRollController implements controller.MemberRollController
+type fakeMemberRollController struct {
+	listeners  []controller.MemberRollListener
+	namespaces []string
+	lock       sync.Mutex
+}
+
+func newFakeMemberRollController() *fakeMemberRollController {
+	return &fakeMemberRollController{}
+}
+
+// Register implements controller.MemberRollController
+func (fk *fakeMemberRollController) Register(listener controller.MemberRollListener, name string) {
+	fk.lock.Lock()
+	defer fk.lock.Unlock()
+
+	if listener == nil {
+		return
+	}
+	fk.listeners = append(fk.listeners, listener)
+}
+
+// Start implements controller.MemberRollController
+func (fk *fakeMemberRollController) Start(stopCh <-chan struct{}) {
+	panic("not implemented")
+}
+
+func (fk *fakeMemberRollController) addNamespaces(namespaces ...string) {
+	fk.namespaces = append(fk.namespaces, namespaces...)
+	fk.invokeListeners()
+}
+
+func (fk *fakeMemberRollController) setNamespaces(namespaces ...string) {
+	fk.namespaces = namespaces
+	fk.invokeListeners()
+}
+
+func (fk *fakeMemberRollController) invokeListeners() {
+	fk.lock.Lock()
+	defer fk.lock.Unlock()
+
+	for _, l := range fk.listeners {
+		l.SetNamespaces(fk.namespaces...)
+	}
+}
+
+var countCalls map[string]int = map[string]int{}
+var countCallsLock sync.Mutex
+
+func countCallsReset() {
+	countCallsLock.Lock()
+	defer countCallsLock.Unlock()
+	countCalls = map[string]int{}
+}
+
+func countCallsGet(k string) int {
+	countCallsLock.Lock()
+	defer countCallsLock.Unlock()
+	v, ok := countCalls[k]
+	if !ok {
+		v = 0
+	}
+	return v
+}
+
+func countCallsIncrement(k string) {
+	countCallsLock.Lock()
+	defer countCallsLock.Unlock()
+	countCalls[k]++
 }
