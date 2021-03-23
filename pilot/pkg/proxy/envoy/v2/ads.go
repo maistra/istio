@@ -176,6 +176,16 @@ func receiveThread(con *XdsConnection, reqChannel chan *xdsapi.DiscoveryRequest,
 
 // StreamAggregatedResources implements the ADS interface.
 func (s *DiscoveryServer) StreamAggregatedResources(stream ads.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+	// Check if server is ready to accept clients and process new requests.
+	// Currently ready means caches have been synced and hence can build
+	// clusters correctly. Without this check, InitContext() call below would
+	// initialize with empty config, leading to reconnected Envoys loosing
+	// configuration. This is an additional safety check.
+	// See https://github.com/istio/istio/issues/25495.
+	if !s.IsServerReady() {
+		return errors.New("server is not ready to serve discovery information")
+	}
+
 	peerInfo, ok := peer.FromContext(stream.Context())
 	peerAddr := "0.0.0.0"
 	if ok {
