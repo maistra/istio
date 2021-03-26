@@ -857,35 +857,6 @@ spec:
           - name: inject
             mountPath: /var/lib/istio/inject
             readOnly: true
-      volumes:
-      # Technically not needed on this pod - but it helps debugging/testing SDS
-      # Should be removed after everything works.
-      - emptyDir:
-          medium: Memory
-        name: local-certs
-      - name: istio-token
-        projected:
-          sources:
-            - serviceAccountToken:
-                audience: istio-ca
-                expirationSeconds: 43200
-                path: istio-token
-      # Optional: user-generated root
-      - name: cacerts
-        secret:
-          secretName: cacerts
-          optional: true
-      - name: istio-kubeconfig
-        secret:
-          secretName: istio-kubeconfig
-          optional: true
-      # Optional - image should have
-      - name: inject
-        configMap:
-          name: istio-sidecar-injector
-      - name: config-volume
-        configMap:
-          name: istio
       affinity:      
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -918,7 +889,36 @@ spec:
               - key: kubernetes.io/arch
                 operator: In
                 values:
-                - "s390x"
+                - "s390x"      
+      volumes:
+      # Technically not needed on this pod - but it helps debugging/testing SDS
+      # Should be removed after everything works.
+      - emptyDir:
+          medium: Memory
+        name: local-certs
+      - name: istio-token
+        projected:
+          sources:
+            - serviceAccountToken:
+                audience: istio-ca
+                expirationSeconds: 43200
+                path: istio-token
+      # Optional: user-generated root
+      - name: cacerts
+        secret:
+          secretName: cacerts
+          optional: true
+      - name: istio-kubeconfig
+        secret:
+          secretName: istio-kubeconfig
+          optional: true
+      # Optional - image should have
+      - name: inject
+        configMap:
+          name: istio-sidecar-injector
+      - name: config-volume
+        configMap:
+          name: istio
 ---
 # Source: istio-discovery/templates/autoscale.yaml
 apiVersion: autoscaling/v2beta1
