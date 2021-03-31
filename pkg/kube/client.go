@@ -321,31 +321,45 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	if err != nil {
 		return nil, err
 	}
-	c.kubeInformer = kubeinformer.NewSharedInformerFactory(c.Interface, resyncInterval)
+	c.kubeInformer = kubeinformer.NewSharedInformerFactoryWithOptions(
+		c.Interface,
+		resyncInterval,
+		kubeinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
 	c.metadataInformer = xnsinformers.NewMetadataSharedInformerFactory(c.metadata, resyncInterval)
+	c.metadataInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.dynamic, err = dynamic.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
 	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+	c.dynamicInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.istioInformer = istioinformer.NewSharedInformerFactory(c.istio, resyncInterval)
+	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(
+		c.istio,
+		resyncInterval,
+		istioinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	c.serviceapis, err = serviceapisclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactory(c.serviceapis, resyncInterval)
+	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactoryWithOptions(
+		c.serviceapis,
+		resyncInterval,
+		serviceapisinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+	)
 
 	ext, err := kubeExtClient.NewForConfig(c.config)
 	if err != nil {
