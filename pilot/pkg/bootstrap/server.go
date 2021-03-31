@@ -393,6 +393,9 @@ func (s *Server) Start(stop <-chan struct{}) error {
 
 	// grpcServer is shared by Galley, CA, XDS - must Serve at the end, but before 'wait'
 	go func() {
+		if !s.waitForCacheSync(stop) {
+			return
+		}
 		log.Infof("starting gRPC discovery service at %s", s.GRPCListener.Addr())
 		if err := s.grpcServer.Serve(s.GRPCListener); err != nil {
 			log.Warna(err)
@@ -403,10 +406,8 @@ func (s *Server) Start(stop <-chan struct{}) error {
 		return fmt.Errorf("failed to sync cache")
 	}
 
-	// Trigger a push, so that the global push context is updated with the new config and Pilot's local Envoy
-	// also is updated with new config.
-	log.Infof("All caches have been synced up, triggering a push")
-	s.EnvoyXdsServer.Push(&model.PushRequest{Full: true})
+	// Inform Discovery Server so that it can start accepting connections.
+	s.EnvoyXdsServer.CachesSynced()
 
 	// At this point we are ready - start Http Listener so that it can respond to readiness events.
 	go func() {

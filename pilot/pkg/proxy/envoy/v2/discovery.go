@@ -124,6 +124,9 @@ type DiscoveryServer struct {
 	adsClientsMutex sync.RWMutex
 
 	StatusReporter DistributionStatusCache
+
+	// serverReady indicates caches have been synced up and server is ready to process requests.
+	serverReady bool
 }
 
 // EndpointShards holds the set of endpoint shards of a service. Registries update
@@ -159,6 +162,7 @@ func NewDiscoveryServer(env *model.Environment, plugins []string) *DiscoveryServ
 		DebugConfigs:            features.DebugConfigs,
 		debugHandlers:           map[string]string{},
 		adsClients:              map[string]*XdsConnection{},
+		serverReady:             false,
 	}
 
 	// Flush cached discovery responses when detecting jwt public key change.
@@ -172,6 +176,19 @@ func NewDiscoveryServer(env *model.Environment, plugins []string) *DiscoveryServ
 // Register adds the ADS and EDS handles to the grpc server
 func (s *DiscoveryServer) Register(rpcs *grpc.Server) {
 	ads.RegisterAggregatedDiscoveryServiceServer(rpcs, s)
+}
+
+// CachesSynced is called when caches have been synced so that server can accept connections.
+func (s *DiscoveryServer) CachesSynced() {
+	s.updateMutex.Lock()
+	s.serverReady = true
+	s.updateMutex.Unlock()
+}
+
+func (s *DiscoveryServer) IsServerReady() bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.serverReady
 }
 
 func (s *DiscoveryServer) Start(stopCh <-chan struct{}) {
