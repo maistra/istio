@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
@@ -39,6 +40,7 @@ type serviceMeshMemberRollController struct {
 	started        bool
 	lock           sync.Mutex
 	cacheWarmed    bool
+	cacheLock      sync.RWMutex
 }
 
 type Listener interface {
@@ -79,23 +81,24 @@ func (smmrc *serviceMeshMemberRollController) Start(stop chan struct{}) {
 	smmrc.lock.Lock()
 	defer smmrc.lock.Unlock()
 
-	if !smmrc.started {
-		go smmrc.informer.Run(stop)
-		smmrc.started = true
-
-		smmrLog.Debug("Controller started, waiting for cache to warm up")
-		go func() {
-			for {
-				if cache.WaitForNamedCacheSync("SMMR", stop, smmrc.informer.HasSynced) {
-					smmrLog.Debug("Cache warmed up. From now on will send the initial update to listeners")
-					smmrc.cacheWarmed = true
-					return
-				}
-				smmrLog.Debug("Cache not synced, trying again")
-				time.Sleep(time.Second)
-			}
-		}()
+	if smmrc.started {
+		return
 	}
+
+	go smmrc.informer.Run(stop)
+	smmrc.started = true
+
+	smmrLog.Debug("Controller started, waiting for cache to warm up")
+	go func() {
+		if cache.WaitForNamedCacheSync("smmr", stop, smmrc.informer.HasSynced) {
+			smmrLog.Debug("Cache synced. Will update listeners.")
+
+			smmrc.cacheLock.Lock()
+			defer smmrc.cacheLock.Unlock()
+
+			smmrc.cacheWarmed = true
+		}
+	}()
 }
 
 func (smmrc *serviceMeshMemberRollController) Register(listener Listener, name string) {
@@ -124,21 +127,40 @@ func (smmrc *serviceMeshMemberRollController) newserviceMeshMemberRollListener(l
 		listener:          listener,
 		currentNamespaces: nil,
 		name:              name,
+		seedCh:            make(chan struct{}),
 	}
 
-	if smmrc.cacheWarmed {
-		smmrLog.Debugf("Listener for %q created. Ready to send an initial update", name)
+	// Previously we sent an immediate initial update to all listeners when they
+	// were registered that included only the Istio system namespace.  That
+	// caused problems with some controllers, e.g. IOR, because they expect the
+	// callback to be called with the full authoritative set of namespaces and
+	// may remove resources for namespaces not in the list.
+	//
+	// This instead waits for the informer's cache to sync, then sends an
+	// initial update only if the expected SMMR is not found in the cache.
+	go func() {
+		_ = wait.PollImmediateInfinite(100*time.Millisecond, func() (done bool, err error) {
+			smmrc.cacheLock.RLock()
+			defer smmrc.cacheLock.RUnlock()
 
-		var members []string
-		for _, item := range smmrc.informer.GetIndexer().List() {
-			smmr := item.(*v1.ServiceMeshMemberRoll)
-			members = smmr.Status.ConfiguredMembers
+			return smmrc.cacheWarmed, nil
+		})
+
+		smmrLog.Infof("Cache synced for listener %q", name)
+
+		// Closing seedCh allows the handler to start processing events.
+		defer close(handler.seedCh)
+
+		cacheKey := smmrc.namespace + "/" + smmrc.memberRollName
+		_, exists, _ := smmrc.informer.GetStore().GetByKey(cacheKey)
+		if exists {
+			// No need to send initial update.  The informer will do it.
+			return
 		}
-		members = smmrc.getNamespaces(members)
-		handler.updateNamespaces("added", smmrc.memberRollName, members)
-	} else {
-		smmrLog.Debugf("Listener for %q created. Not sending an initial update", name)
-	}
+
+		smmrLog.Infof("Seeding listener %q with system namespace.", name)
+		handler.updateNamespaces("seed", smmrc.memberRollName, nil)
+	}()
 
 	return handler
 }
@@ -148,6 +170,7 @@ type serviceMeshMemberRollListener struct {
 	listener          Listener
 	currentNamespaces []string
 	name              string
+	seedCh            chan struct{}
 }
 
 func (smmrl *serviceMeshMemberRollListener) checkEquality(lhs, rhs []string) bool {
@@ -180,16 +203,22 @@ func (smmrl *serviceMeshMemberRollListener) updateNamespaces(operation string, m
 }
 
 func (smmrl *serviceMeshMemberRollListener) OnAdd(obj interface{}) {
+	<-smmrl.seedCh // Block events until we've sent the initial update.
+
 	serviceMeshMemberRoll := obj.(*v1.ServiceMeshMemberRoll)
 	smmrl.updateNamespaces("added", serviceMeshMemberRoll.Name, serviceMeshMemberRoll.Status.ConfiguredMembers)
 }
 
 func (smmrl *serviceMeshMemberRollListener) OnUpdate(oldObj, newObj interface{}) {
+	<-smmrl.seedCh // Block events until we've sent the initial update.
+
 	serviceMeshMemberRoll := newObj.(*v1.ServiceMeshMemberRoll)
 	smmrl.updateNamespaces("updated", serviceMeshMemberRoll.Name, serviceMeshMemberRoll.Status.ConfiguredMembers)
 }
 
 func (smmrl *serviceMeshMemberRollListener) OnDelete(obj interface{}) {
+	<-smmrl.seedCh // Block events until we've sent the initial update.
+
 	serviceMeshMemberRoll, ok := obj.(*v1.ServiceMeshMemberRoll)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
