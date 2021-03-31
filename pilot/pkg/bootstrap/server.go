@@ -361,6 +361,12 @@ func (s *Server) Start(stop <-chan struct{}) error {
 			return err
 		}
 	}
+	if !s.waitForCacheSync(stop) {
+		return fmt.Errorf("failed to sync cache")
+	}
+
+	// Inform Discovery Server so that it can start accepting connections.
+	s.EnvoyXdsServer.CachesSynced()
 
 	return nil
 }
