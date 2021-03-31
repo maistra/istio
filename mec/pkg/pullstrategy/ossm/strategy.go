@@ -35,6 +35,8 @@ import (
 	"istio.io/pkg/log"
 )
 
+var strategylog = log.RegisterScope("strategy", "Strategy", 0)
+
 const (
 	imageStreamPrefix = "ossm-extension-"
 )
@@ -48,7 +50,7 @@ type ossmPullStrategy struct {
 func NewOSSMPullStrategy(config *rest.Config, namespace string) (model.ImagePullStrategy, error) {
 	cl, err := imagev1client.NewForConfig(config)
 	if err != nil {
-		log.Errorf("Failed to create imagev1 client: %s", err)
+		strategylog.Errorf("Failed to create imagev1 client: %s", err)
 		return nil, err
 	}
 
@@ -111,7 +113,7 @@ func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) 
 	}
 	manifest, err := p.extractManifest(imageID)
 	if err != nil {
-		log.Errorf("failed to extract manifest from container image: %s", err)
+		strategylog.Errorf("failed to extract manifest from container image: %s", err)
 		return nil, err
 	}
 	return &ossmImage{
@@ -133,13 +135,13 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error)
 		if errors.IsNotFound(err) {
 			createdIsi, err := p.createImageStreamImport(imageStreamName, image)
 			if err != nil {
-				log.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
+				strategylog.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
 				continue
 			}
-			log.Infof("Created ImageStreamImport %s", createdIsi.Name)
+			strategylog.Infof("Created ImageStreamImport %s", createdIsi.Name)
 			continue
 		} else if err != nil {
-			log.Warnf("failed to Get() ImageStream: %s, attempt %d", err, attempt)
+			strategylog.Warnf("failed to Get() ImageStream: %s, attempt %d", err, attempt)
 			continue
 		}
 		if imageStream != nil {
@@ -153,10 +155,10 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error)
 			if !tagFound {
 				createdIsi, err := p.createImageStreamImport(imageStreamName, image)
 				if err != nil {
-					log.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
+					strategylog.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
 					continue
 				}
-				log.Infof("Created ImageStreamImport %s", createdIsi.Name)
+				strategylog.Infof("Created ImageStreamImport %s", createdIsi.Name)
 			}
 		}
 	}
@@ -175,16 +177,16 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error)
 	// TODO implement importing always when ImagePullPolicy == Always
 	repo := imageStream.Status.DockerImageRepository
 	sha := imageStream.Status.Tags[0].Items[0].Image
-	log.Infof("Pulling container image %s", repo+"@"+sha)
+	strategylog.Infof("Pulling container image %s", repo+"@"+sha)
 	imageID, err := p.podman.Pull(repo + "@" + sha)
 	if err != nil {
-		log.Errorf("failed to pull image: %s", err)
+		strategylog.Errorf("failed to pull image: %s", err)
 		return nil, err
 	}
-	log.Infof("Pulled container image with ID %s", imageID)
+	strategylog.Infof("Pulled container image with ID %s", imageID)
 	manifest, err := p.extractManifest(imageID)
 	if err != nil {
-		log.Errorf("failed to extract manifest from container image: %s", err)
+		strategylog.Errorf("failed to extract manifest from container image: %s", err)
 		return nil, err
 	}
 	return &ossmImage{
@@ -212,11 +214,11 @@ func getImageStreamName(image *model.ImageRef) string {
 func (p *ossmPullStrategy) extractManifest(imageID string) (*model.Manifest, error) {
 	containerID, err := p.podman.Create(imageID)
 	if err != nil {
-		log.Errorf("failed to create an image: %s", err)
+		strategylog.Errorf("failed to create an image: %s", err)
 		return nil, err
 	}
-	log.Infof("Created container with ID %s", containerID)
-	log.Infof("Extracting manifest from container with ID %s", containerID)
+	strategylog.Infof("Created container with ID %s", containerID)
+	strategylog.Infof("Extracting manifest from container with ID %s", containerID)
 
 	tmpDir, err := ioutil.TempDir("", containerID)
 	if err != nil {
@@ -225,7 +227,7 @@ func (p *ossmPullStrategy) extractManifest(imageID string) (*model.Manifest, err
 	manifestFile := path.Join(tmpDir, "manifest.yaml")
 	_, err = p.podman.Copy(containerID+":/manifest.yaml", manifestFile)
 	if err != nil {
-		log.Errorf("failed to copy an image: %s", err)
+		strategylog.Errorf("failed to copy an image: %s", err)
 		return nil, err
 	}
 	manifestBytes, err := ioutil.ReadFile(manifestFile)
@@ -241,7 +243,7 @@ func (p *ossmPullStrategy) extractManifest(imageID string) (*model.Manifest, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to remove container: %s", err)
 	}
-	log.Infof("Deleted container with ID %s", containerID)
+	strategylog.Infof("Deleted container with ID %s", containerID)
 	return manifest, nil
 }
 
@@ -250,8 +252,8 @@ func (ref *ossmImage) CopyWasmModule(outputFile string) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("Created container with ID %s", containerID)
-	log.Infof("Extracting WASM module from container with ID %s", containerID)
+	strategylog.Infof("Created container with ID %s", containerID)
+	strategylog.Infof("Extracting WASM module from container with ID %s", containerID)
 	_, err = ref.podman.Copy(containerID+":/"+ref.manifest.Module, outputFile)
 	if err != nil {
 		return err
@@ -260,7 +262,7 @@ func (ref *ossmImage) CopyWasmModule(outputFile string) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("Deleted container with ID %s", containerID)
+	strategylog.Infof("Deleted container with ID %s", containerID)
 	return nil
 }
 

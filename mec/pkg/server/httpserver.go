@@ -27,6 +27,8 @@ import (
 	"istio.io/pkg/log"
 )
 
+var httplog = log.RegisterScope("http", "HTTP Server", 0)
+
 type HTTPServer struct {
 	serveDirectory string
 	mux            *http.ServeMux
@@ -36,33 +38,33 @@ type HTTPServer struct {
 func (s *HTTPServer) handleRequest(res http.ResponseWriter, req *http.Request) {
 	uuid, err := uuid.Parse(filepath.Base(req.URL.Path))
 	if err != nil {
-		log.Errorf("Could not parse request path '%s' as UUID: %s", req.URL.Path, err)
+		httplog.Errorf("Could not parse request path '%s' as UUID: %s", req.URL.Path, err)
 		res.WriteHeader(404)
 		return
 	}
 	filename := path.Join(s.serveDirectory, uuid.String())
 	if _, err := os.Stat(filename); err != nil {
 
-		log.Errorf("Failed to open file %s: %s", filename, err)
+		httplog.Errorf("Failed to open file %s: %s", filename, err)
 		res.WriteHeader(404)
 		return
 	}
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		log.Errorf("Failed to read file %s: %s", filename, err)
+		httplog.Errorf("Failed to read file %s: %s", filename, err)
 		res.WriteHeader(404)
 		return
 	}
 	res.WriteHeader(200)
 	if _, err := res.Write(data); err != nil {
-		log.Errorf("error writing response: %s", err)
+		httplog.Errorf("error writing response: %s", err)
 	}
 }
 
 func (s *HTTPServer) Start(stopChan <-chan struct{}) {
 	go func() {
 		if err := s.srv.ListenAndServe(); err != nil {
-			log.Errorf("error listening and serving: %s", err)
+			httplog.Errorf("error listening and serving: %s", err)
 		}
 	}()
 }
