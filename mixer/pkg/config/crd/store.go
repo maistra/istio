@@ -154,7 +154,7 @@ func (s *Store) checkAndCreateCaches(
 						return cl.Watch(context.TODO(), options)
 					},
 				}
-			})
+			}, &unstructured.Unstructured{}, 0)
 			if s.mrc != nil {
 				s.mrc.Register(mlw, fmt.Sprintf("mixer-cache-%s", res.Kind))
 			}

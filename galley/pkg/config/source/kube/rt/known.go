@@ -65,13 +65,13 @@ func (p *Provider) initKnownAdapters() {
 								return client.CoreV1().Services(namespace).Watch(context.TODO(), opts)
 							},
 						}
-					})
+					}, &v1.Service{}, p.resyncPeriod)
 
 				if p.mrc != nil {
 					p.mrc.Register(mlw, "galley-service")
 				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.Service{}, p.resyncPeriod,
+				informer := cache.NewSharedIndexInformer(mlw, &v1.Service{}, 0,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 				return informer, nil
@@ -174,13 +174,13 @@ func (p *Provider) initKnownAdapters() {
 								return client.CoreV1().Pods(namespace).Watch(context.TODO(), opts)
 							},
 						}
-					})
+					}, &v1.Pod{}, p.resyncPeriod)
 
 				if p.mrc != nil {
 					p.mrc.Register(mlw, "galley-pods")
 				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, p.resyncPeriod,
+				informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, 0,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 				return informer, nil
@@ -223,13 +223,13 @@ func (p *Provider) initKnownAdapters() {
 								return client.CoreV1().Secrets(namespace).Watch(context.TODO(), opts)
 							},
 						}
-					})
+					}, &v1.Secret{}, p.resyncPeriod)
 
 				if p.mrc != nil {
 					p.mrc.Register(mlw, "galley-secrets")
 				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.Secret{}, p.resyncPeriod,
+				informer := cache.NewSharedIndexInformer(mlw, &v1.Secret{}, 0,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 				return informer, nil
@@ -271,13 +271,13 @@ func (p *Provider) initKnownAdapters() {
 								return client.CoreV1().Endpoints(namespace).Watch(context.TODO(), opts)
 							},
 						}
-					})
+					}, &v1.Endpoints{}, p.resyncPeriod)
 
 				if p.mrc != nil {
 					p.mrc.Register(mlw, "galley-endpoints")
 				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, p.resyncPeriod,
+				informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, 0,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 				return informer, nil
@@ -331,13 +331,13 @@ func (p *Provider) initKnownAdapters() {
 								return client.ExtensionsV1beta1().Ingresses(namespace).Watch(context.TODO(), opts)
 							},
 						}
-					})
+					}, &v1beta1.Ingress{}, p.resyncPeriod)
 
 				if p.mrc != nil {
 					p.mrc.Register(mlw, "galley-ingresses")
 				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, p.resyncPeriod,
+				informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, 0,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 				return informer, nil
@@ -418,13 +418,13 @@ func (p *Provider) initKnownAdapters() {
 								return client.AppsV1().Deployments(namespace).Watch(context.TODO(), opts)
 							},
 						}
-					})
+					}, &appsv1.Deployment{}, p.resyncPeriod)
 
 				if p.mrc != nil {
 					p.mrc.Register(mlw, "galley-deployments")
 				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &appsv1.Deployment{}, p.resyncPeriod,
+				informer := cache.NewSharedIndexInformer(mlw, &appsv1.Deployment{}, 0,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 				return informer, nil
@@ -465,13 +465,13 @@ func (p *Provider) initKnownAdapters() {
 								return client.CoreV1().ConfigMaps(namespace).Watch(context.TODO(), opts)
 							},
 						}
-					})
+					}, &v1.ConfigMap{}, p.resyncPeriod)
 
 				if p.mrc != nil {
 					p.mrc.Register(mlw, "galley-configmaps")
 				}
 
-				informer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, p.resyncPeriod,
+				informer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, 0,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 				return informer, nil

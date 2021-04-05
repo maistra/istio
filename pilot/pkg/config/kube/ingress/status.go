@@ -98,13 +98,13 @@ func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 				return client.NetworkingV1beta1().Ingresses(namespace).Watch(context.TODO(), opts)
 			},
 		}
-	})
+	}, &v1beta1.Ingress{}, options.ResyncPeriod)
 
 	if mrc != nil {
 		mrc.Register(mlw, "pilot-ingress-status")
 	}
 
-	informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, options.ResyncPeriod,
+	informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, 0,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 	st := StatusSyncer{

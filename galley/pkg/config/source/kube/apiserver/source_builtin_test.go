@@ -75,7 +75,7 @@ func TestBasic(t *testing.T) {
 	acc := start(s)
 	defer s.Stop()
 
-	g.Eventually(acc.EventsWithoutOrigins).Should(HaveLen(7))
+	g.Eventually(acc.EventsWithoutOrigins, 2*time.Second).Should(HaveLen(7))
 	for i := 0; i < 7; i++ {
 		g.Expect(acc.EventsWithoutOrigins()[i].Kind).Should(Equal(event.FullSync))
 	}
@@ -116,7 +116,7 @@ func TestNodes(t *testing.T) {
 	acc := start(s)
 	defer s.Stop()
 
-	g.Eventually(acc.EventsWithoutOrigins).Should(HaveLen(7))
+	g.Eventually(acc.EventsWithoutOrigins, 2*time.Second).Should(HaveLen(7))
 	for i := 0; i < 7; i++ {
 		g.Expect(acc.EventsWithoutOrigins()[i].Kind).Should(Equal(event.FullSync))
 	}
@@ -184,7 +184,7 @@ func TestPods(t *testing.T) {
 	acc := start(s)
 	defer s.Stop()
 
-	g.Eventually(acc.EventsWithoutOrigins).Should(HaveLen(7))
+	g.Eventually(acc.EventsWithoutOrigins, 2*time.Second).Should(HaveLen(7))
 	for i := 0; i < 7; i++ {
 		g.Expect(acc.EventsWithoutOrigins()[i].Kind).Should(Equal(event.FullSync))
 	}
@@ -262,7 +262,7 @@ func TestServices(t *testing.T) {
 	acc := start(s)
 	defer s.Stop()
 
-	g.Eventually(acc.EventsWithoutOrigins).Should(HaveLen(7))
+	g.Eventually(acc.EventsWithoutOrigins, 2*time.Second).Should(HaveLen(7))
 	for i := 0; i < 7; i++ {
 		g.Expect(acc.EventsWithoutOrigins()[i].Kind).Should(Equal(event.FullSync))
 	}
@@ -335,7 +335,7 @@ func TestEndpoints(t *testing.T) {
 	acc := start(s)
 	defer s.Stop()
 
-	g.Eventually(acc.EventsWithoutOrigins).Should(HaveLen(7))
+	g.Eventually(acc.EventsWithoutOrigins, 2*time.Second).Should(HaveLen(7))
 	for i := 0; i < 7; i++ {
 		g.Expect(acc.EventsWithoutOrigins()[i].Kind).Should(Equal(event.FullSync))
 	}

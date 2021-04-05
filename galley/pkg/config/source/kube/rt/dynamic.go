@@ -71,13 +71,13 @@ func (p *Provider) getDynamicAdapter(r resource.Schema) *Adapter {
 						return d.Namespace(namespace).Watch(context.TODO(), options)
 					},
 				}
-			})
+			}, &unstructured.Unstructured{}, p.resyncPeriod)
 
 			if p.mrc != nil {
 				p.mrc.Register(mlw, fmt.Sprintf("galley-%s", r.GroupVersionKind().String()))
 			}
 
-			informer := cache.NewSharedIndexInformer(mlw, &unstructured.Unstructured{}, p.resyncPeriod,
+			informer := cache.NewSharedIndexInformer(mlw, &unstructured.Unstructured{}, 0,
 				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 			return informer, nil

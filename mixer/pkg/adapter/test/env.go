@@ -133,6 +133,6 @@ func (e *Env) NewInformer(
 	listerWatcher func(namespace string) cache.ListerWatcher,
 	indexers cache.Indexers) cache.SharedIndexInformer {
 
-	mlw := listwatch.MultiNamespaceListerWatcher([]string{""}, listerWatcher)
-	return cache.NewSharedIndexInformer(mlw, objType, duration, indexers)
+	mlw := listwatch.MultiNamespaceListerWatcher([]string{""}, listerWatcher, objType, duration)
+	return cache.NewSharedIndexInformer(mlw, objType, 0, indexers)
 }

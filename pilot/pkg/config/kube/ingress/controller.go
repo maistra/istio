@@ -150,13 +150,13 @@ func NewController(client kubernetes.Interface, mrc meshcontroller.Controller, m
 				return client.NetworkingV1beta1().Ingresses(namespace).Watch(context.TODO(), opts)
 			},
 		}
-	})
+	}, &ingress.Ingress{}, options.ResyncPeriod)
 
 	if mrc != nil {
 		mrc.Register(mlw, "pilot-ingress-controller")
 	}
 
-	informer := cache.NewSharedIndexInformer(mlw, &ingress.Ingress{}, options.ResyncPeriod,
+	informer := cache.NewSharedIndexInformer(mlw, &ingress.Ingress{}, 0,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 	var classes *v1beta1.IngressClassInformer
