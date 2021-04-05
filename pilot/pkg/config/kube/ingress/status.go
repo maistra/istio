@@ -112,11 +112,11 @@ func NewStatusSyncer(mesh *meshconfig.MeshConfig,
 				return client.ExtensionsV1beta1().Ingresses(namespace).Watch(opts)
 			},
 		}
-	})
+	}, &v1beta1.Ingress{}, options.ResyncPeriod)
 	if mrc != nil {
 		mrc.Register(mlw)
 	}
-	informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, options.ResyncPeriod, cache.Indexers{})
+	informer := cache.NewSharedIndexInformer(mlw, &v1beta1.Ingress{}, 0, cache.Indexers{})
 
 	st := StatusSyncer{
 		client:              client,

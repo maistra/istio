@@ -103,7 +103,7 @@ func (s *source) Start(handler resource.EventHandler) error {
 					return s.resourceClient.Namespace(namespace).Watch(options)
 				},
 			}
-		})
+		}, &unstructured.Unstructured{}, s.resyncPeriod)
 
 		if s.mrc != nil {
 			s.mrc.Register(mlw)
@@ -113,7 +113,7 @@ func (s *source) Start(handler resource.EventHandler) error {
 		s.informer = cache.NewSharedIndexInformer(
 			mlw,
 			&unstructured.Unstructured{},
-			s.resyncPeriod,
+			0,
 			cache.Indexers{})
 
 		s.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{

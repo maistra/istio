@@ -68,11 +68,11 @@ var (
 							return cl.CoreV1().Services(namespace).Watch(opts)
 						},
 					}
-				})
+				}, &v1.Service{}, resyncPeriod)
 				if mrc != nil {
 					mrc.Register(mlw)
 				}
-				return cache.NewSharedIndexInformer(mlw, &v1.Service{}, resyncPeriod, cache.Indexers{})
+				return cache.NewSharedIndexInformer(mlw, &v1.Service{}, 0, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Service{}
@@ -140,11 +140,11 @@ var (
 							return cl.CoreV1().Pods(namespace).Watch(opts)
 						},
 					}
-				})
+				}, &v1.Pod{}, resyncPeriod)
 				if mrc != nil {
 					mrc.Register(mlw)
 				}
-				return cache.NewSharedIndexInformer(mlw, &v1.Pod{}, resyncPeriod, cache.Indexers{})
+				return cache.NewSharedIndexInformer(mlw, &v1.Pod{}, 0, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Pod{}
@@ -193,11 +193,11 @@ var (
 							return cl.CoreV1().Endpoints(namespace).Watch(opts)
 						},
 					}
-				})
+				}, &v1.Endpoints{}, resyncPeriod)
 				if mrc != nil {
 					mrc.Register(mlw)
 				}
-				return cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, resyncPeriod, cache.Indexers{})
+				return cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, 0, cache.Indexers{})
 			},
 			parseJSON: func(input []byte) (interface{}, error) {
 				out := &v1.Endpoints{}

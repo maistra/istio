@@ -147,9 +147,9 @@ func (e env) reportStrayWorkers() {
 
 func (e env) NewInformer(clientset kubernetes.Interface, objType runtime.Object, duration time.Duration, listerWatcher func(namespace string) cache.ListerWatcher,
 	indexers cache.Indexers) cache.SharedIndexInformer {
-	mlw := listwatch.MultiNamespaceListerWatcher(*e.namespaces, listerWatcher)
+	mlw := listwatch.MultiNamespaceListerWatcher(*e.namespaces, listerWatcher, objType, duration)
 	if e.mrc != nil {
 		e.mrc.Register(mlw)
 	}
-	return cache.NewSharedIndexInformer(mlw, objType, duration, indexers)
+	return cache.NewSharedIndexInformer(mlw, objType, 0, indexers)
 }

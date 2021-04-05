@@ -127,6 +127,6 @@ func (e *Env) GetDoneChan() chan struct{} {
 
 func (e *Env) NewInformer(clientset kubernetes.Interface, objType runtime.Object, duration time.Duration, listerWatcher func(namespace string) cache.ListerWatcher,
 	indexers cache.Indexers) cache.SharedIndexInformer {
-	mlw := listwatch.MultiNamespaceListerWatcher([]string{""}, listerWatcher)
-	return cache.NewSharedIndexInformer(mlw, objType, duration, indexers)
+	mlw := listwatch.MultiNamespaceListerWatcher([]string{""}, listerWatcher, objType, duration)
+	return cache.NewSharedIndexInformer(mlw, objType, 0, indexers)
 }

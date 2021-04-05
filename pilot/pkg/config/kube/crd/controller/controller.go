@@ -199,14 +199,14 @@ func (c *controller) createInformer(
 	handler.Append(c.notify)
 
 	// TODO: finer-grained index (perf)
-	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, lwf)
+	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, lwf, o, resyncPeriod)
 	if mrc != nil {
 		mrc.Register(mlw)
 	}
 
 	informer := cache.NewSharedIndexInformer(
 		mlw, o,
-		resyncPeriod, cache.Indexers{})
+		0, cache.Indexers{})
 
 	informer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{

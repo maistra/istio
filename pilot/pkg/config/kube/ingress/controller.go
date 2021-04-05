@@ -116,12 +116,12 @@ func NewController(client kubernetes.Interface, mrc controller2.MemberRollContro
 				return client.ExtensionsV1beta1().Ingresses(namespace).Watch(options)
 			},
 		}
-	})
+	}, &extensionsv1beta1.Ingress{}, options.ResyncPeriod)
 
 	if mrc != nil {
 		mrc.Register(mlw)
 	}
-	informer := cache.NewSharedIndexInformer(mlw, &extensionsv1beta1.Ingress{}, options.ResyncPeriod, cache.Indexers{})
+	informer := cache.NewSharedIndexInformer(mlw, &extensionsv1beta1.Ingress{}, 0, cache.Indexers{})
 
 	informer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
