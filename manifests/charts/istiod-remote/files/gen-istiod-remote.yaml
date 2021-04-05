@@ -42,7 +42,13 @@ data:
   values: |-
     {
       "global": {
+        "arch": {
+          "amd64": 2,
+          "ppc64le": 2,
+          "s390x": 2
+        },
         "caAddress": "",
+        "defaultNodeSelector": {},
         "defaultPodDisruptionBudget": {
           "enabled": true
         },
@@ -51,6 +57,7 @@ data:
             "cpu": "10m"
           }
         },
+        "defaultTolerations": [],
         "externalIstiod": true,
         "hub": "gcr.io/istio-testing",
         "imagePullPolicy": "",
