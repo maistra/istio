@@ -1,5 +1,10 @@
 {
   "global": {
+    "arch": {
+      "amd64": 2,
+      "ppc64le": 2,
+      "s390x": 2
+    },
     "autoscalingv2API": true,
     "caAddress": "",
     "caName": "",
@@ -14,6 +19,7 @@
         "cpu": "10m"
       }
     },
+    "defaultTolerations": [],
     "enabled": false,
     "externalIstiod": false,
     "hub": "gcr.io/istio-testing",
