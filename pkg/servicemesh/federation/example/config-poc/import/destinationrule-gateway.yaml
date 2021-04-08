@@ -1,0 +1,35 @@
+kind: DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+metadata:
+  name: federation-egress
+  namespace: mesh2-system
+spec:
+  # egress gateway service
+  host: federation-egress.mesh2-system.svc.cluster.local
+  subsets:
+    # name = <service>-<target-mesh>
+    - name: ratings-aliased-mesh1
+      trafficPolicy:
+        portLevelSettings:
+          - port:
+              # gateway port
+              number: 15443
+            tls:
+              mode: ISTIO_MUTUAL
+              # sni = exported service name (fqdn)
+              sni: ratings-aliased.mesh1-exports.svc.cluster.local
+              #sni: ratings.mesh1-bookinfo.svc.cluster.local
+    # additional subsets for other services
+    - name: mongodb-aliased-mesh1
+      trafficPolicy:
+        portLevelSettings:
+          - port:
+              # gateway port
+              number: 15443
+            tls:
+              mode: ISTIO_MUTUAL
+              # sni = exported service name (fqdn)
+              sni: mongodb-aliased.mesh1-exports.svc.cluster.local
+              #sni: mongodb.mesh1-bookinfo.svc.cluster.local
+  exportTo:
+    - '*'

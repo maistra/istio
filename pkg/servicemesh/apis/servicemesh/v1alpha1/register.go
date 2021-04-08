@@ -55,6 +55,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		SchemeGroupVersion,
 		&ServiceMeshExtension{},
 		&ServiceMeshExtensionList{},
+		&MeshFederation{},
+		&MeshFederationList{},
 	)
 
 	metav1.AddToGroupVersion(

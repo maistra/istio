@@ -1,0 +1,26 @@
+kind: VirtualService
+apiVersion: networking.istio.io/v1alpha3
+metadata:
+  # exports-<service-name>-<namespace>
+  name: exports-mongodb-mesh1-bookinfo
+  namespace: mesh1-system
+spec:
+  hosts:
+      # exported service name (fqdn)
+    - mongodb-aliased.mesh1-exports.svc.cluster.local
+  gateways:
+      # exports-<service-name>-<namespace>
+    - mesh1-system/exports-mongodb-mesh1-bookinfo-passthrough
+  tcp:
+    - match:
+          # gateway port
+        - port: 15443
+      route:
+        - destination:
+            # local service being exported
+            host: mongodb.mesh1-bookinfo.svc.cluster.local
+            port:
+              number: 27017
+          # XXX: what if service exposes multiple ports?
+  exportTo:
+    - .
