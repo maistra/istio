@@ -272,7 +272,7 @@ func TestWorker(t *testing.T) {
 func createWorker(tmpDir string, clientset *fake.Clientset) *Worker {
 	return &Worker{
 		baseURL:        baseURL,
-		client:         clientset.ServicemeshV1alpha1(),
+		client:         clientset.MaistraV1alpha1(),
 		mut:            sync.Mutex{},
 		pullStrategy:   &fakestrategy.PullStrategy{},
 		serveDirectory: tmpDir,

@@ -15,7 +15,6 @@
 package bootstrap
 
 import (
-	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/pkg/log"
 )
@@ -35,9 +34,6 @@ func (s *Server) initClusterRegistries(args *PilotArgs) (err error) {
 		if err != nil {
 			log.Info("Unable to create new Multicluster object")
 			return err
-		}
-		if features.FederationDiscoveryEndpoint != "" {
-			_ = mc.AddFederatedCluster("remote", features.FederationDiscoveryEndpoint)
 		}
 		s.multicluster = mc
 	}
