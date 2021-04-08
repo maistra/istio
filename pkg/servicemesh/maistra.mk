@@ -69,4 +69,4 @@ maistra-gen: maistra-gen-k8s-client vendor
 
 .PHONY: mec
 mec: build
-BINARIES += ./mec/cmd/mec
+STANDARD_BINARIES += ./mec/cmd/mec

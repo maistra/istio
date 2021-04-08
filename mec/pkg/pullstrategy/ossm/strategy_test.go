@@ -25,7 +25,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/openshift/client-go/image/clientset/versioned/fake"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"istio.io/istio/mec/pkg/model"
@@ -317,7 +318,7 @@ func TestPullImage(t *testing.T) {
 				namespace: namespace.Name,
 				podman:    fakePodman,
 			}
-			image, err := strategy.PullImage(tc.imageRef)
+			image, err := strategy.PullImage(tc.imageRef, corev1.PullAlways, nil)
 			if tc.expectedError {
 				if err == nil {
 					t.Error("Expected error but got nil")

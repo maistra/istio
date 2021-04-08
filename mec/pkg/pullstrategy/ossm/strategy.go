@@ -74,9 +74,6 @@ func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, image
 						Kind: "DockerImage",
 						Name: image.String(),
 					},
-					To: &corev1.LocalObjectReference{
-						Name: image.Repository,
-					},
 					ReferencePolicy: imagev1.TagReferencePolicy{
 						Type: imagev1.SourceTagReferencePolicy,
 					},
@@ -90,6 +87,7 @@ func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, image
 		return nil, err
 	}
 
+	strategylog.Infof("Created ImageStreamImport %s", createdIsi.Name)
 	return createdIsi, nil
 }
 
@@ -126,24 +124,33 @@ func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) 
 }
 
 // Pull retrieves an image from a remote registry
-func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error) {
+func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
+	pullPolicy corev1.PullPolicy,
+	pullSecrets []corev1.LocalObjectReference) (model.Image, error) {
+
 	var imageStream *imagev1.ImageStream
 	var err error
 	imageStreamName := getImageStreamName(image)
+
+	if (pullPolicy == corev1.PullAlways) || (pullPolicy == "" && image.Tag == "latest") {
+		_, err := p.createImageStreamImport(imageStreamName, image)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
+		}
+	}
+
 	for attempt := 0; attempt < 2; attempt++ {
 		imageStream, err = p.client.ImageStreams(p.namespace).Get(context.TODO(), imageStreamName, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
-			createdIsi, err := p.createImageStreamImport(imageStreamName, image)
+			_, err := p.createImageStreamImport(imageStreamName, image)
 			if err != nil {
-				strategylog.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
-				continue
+				return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
 			}
-			strategylog.Infof("Created ImageStreamImport %s", createdIsi.Name)
 			continue
 		} else if err != nil {
-			strategylog.Warnf("failed to Get() ImageStream: %s, attempt %d", err, attempt)
-			continue
+			return nil, fmt.Errorf("failed to get ImageStream %s: %s", imageStreamName, err)
 		}
+
 		if imageStream != nil {
 			tagFound := false
 			for _, tag := range imageStream.Spec.Tags {
@@ -153,29 +160,30 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error)
 				}
 			}
 			if !tagFound {
-				createdIsi, err := p.createImageStreamImport(imageStreamName, image)
+				_, err := p.createImageStreamImport(imageStreamName, image)
 				if err != nil {
-					strategylog.Warnf("failed to create ImageStreamImport: %s, attempt %d", err, attempt)
-					continue
+					return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
 				}
-				strategylog.Infof("Created ImageStreamImport %s", createdIsi.Name)
 			}
 		}
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	if len(imageStream.Status.Tags) == 0 || len(imageStream.Status.Tags[0].Items) == 0 || imageStream.Status.DockerImageRepository == "" {
 		return nil, fmt.Errorf("failed to pull Image: ImageStream has not processed image yet")
 	}
+
 	for _, condition := range imageStream.Status.Tags[0].Conditions {
 		if condition.Status == corev1.ConditionFalse {
 			return nil, fmt.Errorf("failed to pull image: %s", condition.Message)
 		}
 	}
 
-	// TODO implement importing always when ImagePullPolicy == Always
 	repo := imageStream.Status.DockerImageRepository
+	// The first item always points to the latest image. This is handy for the PullAlways case.
 	sha := imageStream.Status.Tags[0].Items[0].Image
 	strategylog.Infof("Pulling container image %s", repo+"@"+sha)
 	imageID, err := p.podman.Pull(repo + "@" + sha)
@@ -189,6 +197,7 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef) (model.Image, error)
 		strategylog.Errorf("failed to extract manifest from container image: %s", err)
 		return nil, err
 	}
+
 	return &ossmImage{
 		manifest: manifest,
 		imageID:  imageID,

@@ -32,7 +32,6 @@ import (
 	fakestrategy "istio.io/istio/mec/pkg/pullstrategy/fake"
 	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 	"istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/fake"
-	"istio.io/pkg/log"
 )
 
 const (
@@ -200,17 +199,17 @@ func TestWorker(t *testing.T) {
 				Extension: &tc.extension,
 				Operation: ExtensionEventOperationAdd,
 			}
-			res := <-w.resultChan
-			for _, msg := range res.messages {
-				log.Info(msg)
-			}
-			for _, err := range res.errors {
-				if !res.successful && !tc.expectedError {
-					log.Fatalf("expected no error but got: %s", err)
-				} else {
-					log.Infof("%s", err)
-				}
-			}
+			// res := <-w.resultChan
+			// for _, msg := range res.messages {
+			// 	log.Info(msg)
+			// }
+			// for _, err := range res.errors {
+			// 	if !res.successful && !tc.expectedError {
+			// 		log.Fatalf("expected no error but got: %s", err)
+			// 	} else {
+			// 		log.Infof("%s", err)
+			// 	}
+			// }
 
 			for _, event := range tc.events {
 				ext := event.Extension.DeepCopy()
@@ -231,17 +230,17 @@ func TestWorker(t *testing.T) {
 					Extension: ext,
 					Operation: event.Operation,
 				}
-				res := <-w.resultChan
-				for _, msg := range res.messages {
-					log.Info(msg)
-				}
-				for _, err := range res.errors {
-					if !res.successful && !tc.expectedError {
-						log.Fatalf("expected no error but got: %s", err)
-					} else {
-						log.Infof("%s", err)
-					}
-				}
+				// res := <-w.resultChan
+				// for _, msg := range res.messages {
+				// 	log.Info(msg)
+				// }
+				// for _, err := range res.errors {
+				// 	if !res.successful && !tc.expectedError {
+				// 		log.Fatalf("expected no error but got: %s", err)
+				// 	} else {
+				// 		log.Infof("%s", err)
+				// 	}
+				// }
 			}
 			stopChan <- struct{}{}
 			updatedExtension, err := w.client.ServiceMeshExtensions(tc.extension.Namespace).Get(context.TODO(), tc.extension.Name, metav1.GetOptions{})
@@ -277,7 +276,7 @@ func createWorker(tmpDir string, clientset *fake.Clientset) *Worker {
 		pullStrategy:   &fakestrategy.PullStrategy{},
 		serveDirectory: tmpDir,
 		Queue:          make(chan ExtensionEvent),
-		resultChan:     make(chan workerResult, 100),
-		enableLogger:   false,
+		// resultChan:     make(chan workerResult, 100),
+		// enableLogger:   false,
 	}
 }

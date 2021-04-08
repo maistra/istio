@@ -50,6 +50,19 @@ type ExtensionEvent struct {
 
 type ExtensionEventOperation int
 
+func (op ExtensionEventOperation) String() string {
+	switch op {
+	case ExtensionEventOperationAdd:
+		return "ADD"
+	case ExtensionEventOperationDelete:
+		return "DEL"
+	case ExtensionEventOperationUpdate:
+		return "UPD"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 type Worker struct {
 	baseURL        string
 	serveDirectory string
@@ -80,7 +93,8 @@ func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseUR
 
 func (w *Worker) processEvent(event ExtensionEvent) {
 	extension := event.Extension
-	workerlog.Debugf("Processing %s/%s", extension.Namespace, extension.Name)
+	workerlog.Debugf("Event %s arrived for %s/%s", event.Operation, extension.Namespace, extension.Name)
+	workerlog.Debugf("Extension object: %+v", extension)
 
 	if event.Operation == ExtensionEventOperationDelete {
 		if len(extension.Status.Deployment.URL) > len(w.baseURL) {
@@ -90,16 +104,29 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		}
 		return
 	}
-	imageRef := model.StringToImageRef(extension.Spec.Image)
 
+	// MAISTRA-2252
+	if event.Operation == ExtensionEventOperationUpdate &&
+		extension.Status.Deployment.Ready &&
+		extension.Status.ObservedGeneration == extension.Generation {
+		workerlog.Debug("Skipping update, current extension is up to date.")
+		return
+	}
+
+	imageRef := model.StringToImageRef(extension.Spec.Image)
 	if imageRef == nil {
 		workerlog.Errorf("failed to parse spec.image: '%s'", extension.Spec.Image)
 		return
 	}
+	workerlog.Debugf("Image Ref: %+v", imageRef)
 
 	var img model.Image
 	var err error
+	// Only happens if image is in the format: quay.io/repo/image@sha256:...
 	if imageRef.SHA256 != "" {
+		workerlog.Debug("Trying to get an already pulled image")
+		// FIXME: GetImage() is broken and always returns an error
+		// MAISTRA-2249
 		img, err = w.pullStrategy.GetImage(imageRef)
 		if err != nil {
 			workerlog.Errorf("failed to check whether image is already present: %v", err)
@@ -107,7 +134,7 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	}
 	if img == nil {
 		workerlog.Debugf("Image %s not present. Pulling", imageRef.String())
-		img, err = w.pullStrategy.PullImage(imageRef)
+		img, err = w.pullStrategy.PullImage(imageRef, extension.Spec.ImagePullPolicy, extension.Spec.ImagePullSecrets)
 		if err != nil {
 			workerlog.Errorf("failed to pull image %s: %v", imageRef.String(), err)
 			return
@@ -117,14 +144,19 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	containerImageChanged := false
 
 	if strings.HasPrefix(extension.Status.Deployment.URL, w.baseURL) {
+		workerlog.Debug("Image is already in the http server, retrieving its ID")
 		url, err := url.Parse(extension.Status.Deployment.URL)
 		if err != nil {
 			workerlog.Errorf("failed to parse status.deployment.url: %s", err)
+			return
 		}
 		id = path.Base(url.Path)
+		workerlog.Debugf("Got ID = %s", id)
 	}
 
+	workerlog.Debugf("Checking if SHA's match: %s - %s", img.SHA256(), extension.Status.Deployment.ContainerSHA256)
 	if img.SHA256() != extension.Status.Deployment.ContainerSHA256 {
+		workerlog.Debug("They differ, setting containerImageChanged = true")
 		// if container sha changed, re-generate UUID
 		containerImageChanged = true
 		if id != "" {
@@ -140,10 +172,12 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 			return
 		}
 		id = wasmUUID.String()
+		workerlog.Debugf("Created a new id for this image: %s", id)
 	}
 
 	filename := path.Join(w.serveDirectory, id)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		workerlog.Debugf("Copying the extension to the web server location: %s", filename)
 		err = img.CopyWasmModule(filename)
 		if err != nil {
 			workerlog.Errorf("failed to extract wasm module: %v", err)
@@ -190,7 +224,9 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		workerlog.Debug("Skipping status update")
 		return
 	}
+
 	extension.Status.ObservedGeneration = extension.Generation
+	workerlog.Debugf("Updating extension status with: %v", extension.Status)
 	_, err = w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, v1.UpdateOptions{})
 	if err != nil {
 		workerlog.Errorf("failed to update status of extension: %v", err)

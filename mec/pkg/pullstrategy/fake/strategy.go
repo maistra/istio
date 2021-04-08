@@ -19,6 +19,8 @@ import (
 	"os"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"istio.io/istio/mec/pkg/model"
 	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 )
@@ -78,7 +80,10 @@ type PullStrategy struct {
 	pulledImages map[string]model.Image
 }
 
-func (p *PullStrategy) PullImage(imageRef *model.ImageRef) (model.Image, error) {
+func (p *PullStrategy) PullImage(imageRef *model.ImageRef,
+	pullPolicy corev1.PullPolicy,
+	pullSecrets []corev1.LocalObjectReference) (model.Image, error) {
+
 	if p.pulledImages == nil {
 		p.pulledImages = make(map[string]model.Image)
 	}
