@@ -25,8 +25,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/openshift/client-go/image/clientset/versioned/fake"
-	corev1 "k8s.io/api/core/v1"
-	corev1 "k8s.io/api/core/v1"
+
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"istio.io/istio/mec/pkg/model"
@@ -136,9 +136,9 @@ func TestGetImage(t *testing.T) {
 	}}
 	clientSet := fake.NewSimpleClientset(&namespace)
 	strategy := &ossmPullStrategy{
-		client:    clientSet.ImageV1(),
-		namespace: namespace.Name,
-		podman:    fakePodman,
+		client: clientSet.ImageV1(),
+		//namespace: namespace.Name,
+		podman: fakePodman,
 	}
 
 	for _, tc := range testCases {
@@ -314,11 +314,11 @@ func TestPullImage(t *testing.T) {
 			}
 
 			strategy := &ossmPullStrategy{
-				client:    clientSet.ImageV1(),
-				namespace: namespace.Name,
-				podman:    fakePodman,
+				client: clientSet.ImageV1(),
+				//namespace: namespace.Name,
+				podman: fakePodman,
 			}
-			image, err := strategy.PullImage(tc.imageRef, corev1.PullAlways, nil)
+			image, err := strategy.PullImage(tc.imageRef, "test", v1.PullAlways, nil)
 			if tc.expectedError {
 				if err == nil {
 					t.Error("Expected error but got nil")

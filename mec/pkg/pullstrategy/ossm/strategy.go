@@ -42,26 +42,25 @@ const (
 )
 
 type ossmPullStrategy struct {
-	client    imagev1client.ImageV1Interface
-	namespace string
-	podman    podman.Podman
+	client imagev1client.ImageV1Interface
+	//namespace string
+	podman podman.Podman
 }
 
-func NewOSSMPullStrategy(config *rest.Config, namespace string) (model.ImagePullStrategy, error) {
+func NewOSSMPullStrategy(config *rest.Config /*, namespace string*/) (model.ImagePullStrategy, error) {
 	cl, err := imagev1client.NewForConfig(config)
 	if err != nil {
-		strategylog.Errorf("Failed to create imagev1 client: %s", err)
 		return nil, err
 	}
 
 	return &ossmPullStrategy{
-		client:    cl,
-		namespace: namespace,
-		podman:    podman.NewPodman(),
+		client: cl,
+		//namespace: namespace,
+		podman: podman.NewPodman(),
 	}, nil
 }
 
-func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, image *model.ImageRef) (*imagev1.ImageStreamImport, error) {
+func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, namespace string, image *model.ImageRef) (*imagev1.ImageStreamImport, error) {
 	isi := &imagev1.ImageStreamImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: imageStreamName,
@@ -82,7 +81,7 @@ func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, image
 		},
 	}
 
-	createdIsi, err := p.client.ImageStreamImports(p.namespace).Create(context.TODO(), isi, metav1.CreateOptions{})
+	createdIsi, err := p.client.ImageStreamImports(namespace).Create(context.TODO(), isi, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +124,7 @@ func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) 
 
 // Pull retrieves an image from a remote registry
 func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
+	namespace string,
 	pullPolicy corev1.PullPolicy,
 	pullSecrets []corev1.LocalObjectReference) (model.Image, error) {
 
@@ -133,16 +133,16 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
 	imageStreamName := getImageStreamName(image)
 
 	if (pullPolicy == corev1.PullAlways) || (pullPolicy == "" && image.Tag == "latest") {
-		_, err := p.createImageStreamImport(imageStreamName, image)
+		_, err := p.createImageStreamImport(imageStreamName, namespace, image)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
 		}
 	}
 
 	for attempt := 0; attempt < 2; attempt++ {
-		imageStream, err = p.client.ImageStreams(p.namespace).Get(context.TODO(), imageStreamName, metav1.GetOptions{})
+		imageStream, err = p.client.ImageStreams(namespace).Get(context.TODO(), imageStreamName, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
-			_, err := p.createImageStreamImport(imageStreamName, image)
+			_, err := p.createImageStreamImport(imageStreamName, namespace, image)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
 			}
@@ -160,7 +160,7 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
 				}
 			}
 			if !tagFound {
-				_, err := p.createImageStreamImport(imageStreamName, image)
+				_, err := p.createImageStreamImport(imageStreamName, namespace, image)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
 				}

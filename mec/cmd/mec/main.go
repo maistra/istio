@@ -100,7 +100,7 @@ func createCommand(args []string) *cobra.Command {
 				return fmt.Errorf("failed to create Extension Controller: %v", err)
 			}
 
-			p, err := ossm.NewOSSMPullStrategy(config, namespace)
+			p, err := ossm.NewOSSMPullStrategy(config /*, namespace*/)
 			if err != nil {
 				return fmt.Errorf("failed to create OSSMPullStrategy: %v", err)
 			}

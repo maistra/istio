@@ -134,7 +134,7 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 	}
 	if img == nil {
 		workerlog.Debugf("Image %s not present. Pulling", imageRef.String())
-		img, err = w.pullStrategy.PullImage(imageRef, extension.Spec.ImagePullPolicy, extension.Spec.ImagePullSecrets)
+		img, err = w.pullStrategy.PullImage(imageRef, extension.Namespace, extension.Spec.ImagePullPolicy, extension.Spec.ImagePullSecrets)
 		if err != nil {
 			workerlog.Errorf("failed to pull image %s: %v", imageRef.String(), err)
 			return

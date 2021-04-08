@@ -81,6 +81,7 @@ type PullStrategy struct {
 }
 
 func (p *PullStrategy) PullImage(imageRef *model.ImageRef,
+	namespace string,
 	pullPolicy corev1.PullPolicy,
 	pullSecrets []corev1.LocalObjectReference) (model.Image, error) {
 
