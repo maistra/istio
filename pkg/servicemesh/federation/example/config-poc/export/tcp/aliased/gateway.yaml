@@ -1,0 +1,27 @@
+kind: Gateway
+apiVersion: networking.istio.io/v1alpha3
+metadata:
+  # exports-<service-name>-<namespace>
+  name: exports-mongodb-mesh1-bookinfo
+  namespace: mesh1-system
+spec:
+  selector:
+    federation.maistra.io/proxy: mesh2
+    service.istio.io/canonical-name: federation-ingress
+  servers:
+  - hosts:
+        # match service name (fqdn)
+      - ./mongodb-aliased.mesh1-exports.svc.cluster.local
+      # match ISTIO_MUTUAL sni pattern (e.g. outbound_.27017_._.mongodb-aliased.mesh1-exports.svc.cluster.local)
+      - ./*.mongodb-aliased.mesh1-exports.svc.cluster.local
+    port:
+      # name = (https|tls)-<port>
+      name: mongo-27017
+      # gateway federation port
+      number: 15443
+      # HTTPS for http and https protocols
+      # TLS for tcp based protocols
+      protocol: TLS
+    tls:
+      mode: ISTIO_MUTUAL
+  # additional ports configured the same as above
