@@ -316,7 +316,7 @@ func TestPerf(t *testing.T) {
 	mrc.setNamespaces(generateNamespaces(qty)...)
 
 	// It takes ~ 2s on my laptop, it's slower on prow
-	_, ignore := getRoutes(t, routerClient, "istio-system", qty, time.Minute)
+	_, ignore := getRoutes(t, routerClient, "istio-system", qty, 3*time.Minute)
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
 	}
