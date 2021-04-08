@@ -30,7 +30,9 @@ import (
 )
 
 const (
-	ExportLabel = "maistra.io/exportAs"
+	ExportLabel          = "maistra.io/exportAs"
+	DiscoveryScheme      = "http"
+	DefaultDiscoveryPort = 8188
 )
 
 var (

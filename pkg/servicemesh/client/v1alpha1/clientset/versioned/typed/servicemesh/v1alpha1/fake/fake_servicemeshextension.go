@@ -30,13 +30,13 @@ import (
 
 // FakeServiceMeshExtensions implements ServiceMeshExtensionInterface
 type FakeServiceMeshExtensions struct {
-	Fake *FakeServicemeshV1alpha1
+	Fake *FakeMaistraV1alpha1
 	ns   string
 }
 
-var servicemeshextensionsResource = schema.GroupVersionResource{Group: "servicemesh", Version: "v1alpha1", Resource: "servicemeshextensions"}
+var servicemeshextensionsResource = schema.GroupVersionResource{Group: "maistra.io", Version: "v1alpha1", Resource: "servicemeshextensions"}
 
-var servicemeshextensionsKind = schema.GroupVersionKind{Group: "servicemesh", Version: "v1alpha1", Kind: "ServiceMeshExtension"}
+var servicemeshextensionsKind = schema.GroupVersionKind{Group: "maistra.io", Version: "v1alpha1", Kind: "ServiceMeshExtension"}
 
 // Get takes name of the serviceMeshExtension, and returns the corresponding serviceMeshExtension object, and an error if there is any.
 func (c *FakeServiceMeshExtensions) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ServiceMeshExtension, err error) {

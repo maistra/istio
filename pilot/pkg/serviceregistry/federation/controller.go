@@ -17,9 +17,11 @@ package federation
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -41,14 +43,19 @@ var _ serviceregistry.Instance = &Controller{}
 
 var logger = log.RegisterScope("federation-registry", "federation-registry", 0)
 
+const (
+	federationPort = 15443
+)
+
 // Controller aggregates data across different registries and monitors for changes
 type Controller struct {
-	meshHolder        mesh.Holder
-	discoveryEndpoint string
-	networkName       string
-	clusterID         string
-	resyncPeriod      time.Duration
-	backoffPolicy     *backoff.ExponentialBackOff
+	meshHolder     mesh.Holder
+	networkAddress string
+	discoveryURL   string
+	networkName    string
+	clusterID      string
+	resyncPeriod   time.Duration
+	backoffPolicy  *backoff.ExponentialBackOff
 
 	xdsUpdater model.XDSUpdater
 
@@ -58,15 +65,17 @@ type Controller struct {
 	gatewayStore  []*model.Gateway
 
 	lastMessage *federation.ServiceListMessage
+	stopped     int32
 }
 
 type Options struct {
-	MeshHolder        mesh.Holder
-	DiscoveryEndpoint string
-	NetworkName       string
-	ClusterID         string
-	XDSUpdater        model.XDSUpdater
-	ResyncPeriod      time.Duration
+	MeshHolder     mesh.Holder
+	NetworkAddress string
+	EgressService  string
+	NetworkName    string
+	ClusterID      string
+	XDSUpdater     model.XDSUpdater
+	ResyncPeriod   time.Duration
 }
 
 // NewController creates a new Aggregate controller
@@ -74,13 +83,14 @@ func NewController(opt Options) *Controller {
 	backoffPolicy := backoff.NewExponentialBackOff()
 	backoffPolicy.MaxElapsedTime = 0
 	return &Controller{
-		meshHolder:        opt.MeshHolder,
-		discoveryEndpoint: opt.DiscoveryEndpoint,
-		networkName:       opt.NetworkName,
-		clusterID:         opt.ClusterID,
-		xdsUpdater:        opt.XDSUpdater,
-		resyncPeriod:      opt.ResyncPeriod,
-		backoffPolicy:     backoffPolicy,
+		meshHolder:     opt.MeshHolder,
+		discoveryURL:   fmt.Sprintf("%s://%s:%d", federation.DiscoveryScheme, opt.EgressService, federation.DefaultDiscoveryPort),
+		networkAddress: opt.NetworkAddress,
+		networkName:    opt.NetworkName,
+		clusterID:      opt.ClusterID,
+		xdsUpdater:     opt.XDSUpdater,
+		resyncPeriod:   opt.ResyncPeriod,
+		backoffPolicy:  backoffPolicy,
 	}
 }
 
@@ -92,9 +102,19 @@ func (c *Controller) Provider() serviceregistry.ProviderID {
 	return serviceregistry.Federation
 }
 
+func (c *Controller) NetworkAddress() string {
+	return c.networkAddress
+}
+
 func (c *Controller) pollServices() *federation.ServiceListMessage {
-	url := c.discoveryEndpoint + "/services/"
-	resp, err := http.Get(url)
+	url := c.discoveryURL + "/services/"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		logger.Errorf("Failed to create request: '%s': %s", url, err)
+		return nil
+	}
+	req.Header.Add("discovery-address", c.networkAddress)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.Errorf("Failed to GET URL: '%s': %s", url, err)
 		return nil
@@ -130,8 +150,10 @@ func (c *Controller) convertService(s *federation.ServiceMessage, networkGateway
 	name, namespace := getNameAndNamespaceFromHostname(s.Name)
 	svc := &model.Service{
 		Attributes: model.ServiceAttributes{
-			Name:      name,
-			Namespace: namespace,
+			ServiceRegistry: string(serviceregistry.Federation),
+			Name:            name,
+			Namespace:       namespace,
+			UID:             fmt.Sprintf("istio://%s/services/%s", namespace, name),
 		},
 		Resolution:      model.ClientSideLB,
 		Address:         constants.UnspecifiedIP,
@@ -167,10 +189,36 @@ func (c *Controller) convertService(s *federation.ServiceMessage, networkGateway
 	return svc, instances
 }
 
+func (c *Controller) gatewayForNetworkAddress() []*model.Gateway {
+	var gateways []*model.Gateway
+	gwIP := net.ParseIP(c.networkAddress)
+	if gwIP == nil {
+		addrs, err := net.LookupHost(c.networkAddress)
+		if err != nil {
+			logger.Errorf("error resolving host for federation network %s: %v", c.networkAddress, err)
+		} else {
+			logger.Debugf("adding gateway %s endpoints for cluster %s", c.networkAddress, c.clusterID)
+			for _, ip := range addrs {
+				logger.Debugf("adding gateway %s endpoint %s for cluster %s", c.networkAddress, ip, c.clusterID)
+				gateways = append(gateways, &model.Gateway{
+					Addr: ip,
+					Port: federationPort,
+				})
+			}
+		}
+	} else {
+		logger.Debugf("adding gateway %s for cluster %s", gwIP.String(), c.clusterID)
+		gateways = append(gateways, &model.Gateway{
+			Addr: gwIP.String(),
+		})
+	}
+	return gateways
+}
+
 func (c *Controller) convertServices(serviceList *federation.ServiceListMessage) {
 	services := []*model.Service{}
 	instances := make(map[host.Name][]*model.ServiceInstance)
-	gateways := []*model.Gateway{}
+	gateways := c.gatewayForNetworkAddress()
 	for _, gateway := range serviceList.NetworkGatewayEndpoints {
 		gateways = append(gateways, &model.Gateway{
 			Addr: gateway.Hostname,
@@ -191,13 +239,13 @@ func (c *Controller) convertServices(serviceList *federation.ServiceListMessage)
 }
 
 func autoAllocateIPs(services []*model.Service) []*model.Service {
-	// i is everything from 240.240.0.(j) to 240.240.255.(j)
-	// j is everything from 240.240.(i).1 to 240.240.(i).254
+	// i is everything from 240.241.0.(j) to 240.241.255.(j)
+	// j is everything from 240.241.(i).1 to 240.241.(i).254
 	// we can capture this in one integer variable.
 	// given X, we can compute i by X/255, and j is X%255
-	// To avoid allocating 240.240.(i).255, if X % 255 is 0, increment X.
-	// For example, when X=510, the resulting IP would be 240.240.2.0 (invalid)
-	// So we bump X to 511, so that the resulting IP is 240.240.2.1
+	// To avoid allocating 240.241.(i).255, if X % 255 is 0, increment X.
+	// For example, when X=510, the resulting IP would be 240.241.2.0 (invalid)
+	// So we bump X to 511, so that the resulting IP is 240.241.2.1
 	maxIPs := 255 * 255 // are we going to exceeed this limit by processing 64K services?
 	x := 0
 	for _, svc := range services {
@@ -279,7 +327,7 @@ func (c *Controller) Run(stop <-chan struct{}) {
 	defer refreshTicker.Stop()
 	c.resync()
 	go func() {
-		for {
+		for !c.hasStopped() {
 			logger.Info("starting watch")
 			err := c.watch(eventCh, stop)
 			if err != nil {
@@ -294,14 +342,24 @@ func (c *Controller) Run(stop <-chan struct{}) {
 		select {
 		case <-stop:
 			logger.Info("Federation Controller terminated")
+			c.stop()
 			return
 		case e := <-eventCh:
 			logger.Debugf("watch event received: %s service %s", e.Action, e.Service.Name)
 			c.handleEvent(e)
 		case <-refreshTicker.C:
+			logger.Debugf("performing full resync for cluster %s", c.clusterID)
 			_ = c.resync()
 		}
 	}
+}
+
+func (c *Controller) stop() {
+	atomic.StoreInt32(&c.stopped, 1)
+}
+
+func (c *Controller) hasStopped() bool {
+	return atomic.LoadInt32(&c.stopped) != 0
 }
 
 func (c *Controller) handleEvent(e *federation.WatchEvent) {
@@ -383,10 +441,13 @@ func (c *Controller) handleEvent(e *federation.WatchEvent) {
 }
 
 func (c *Controller) watch(eventCh chan *federation.WatchEvent, stopCh <-chan struct{}) error {
-	req, err := http.NewRequest("GET", c.discoveryEndpoint+"/watch", nil)
+	url := c.discoveryURL + "/watch"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		logger.Errorf("Failed to create request: '%s': %s", url, err)
+		return nil
 	}
+	req.Header.Add("discovery-address", c.networkAddress)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -419,6 +480,7 @@ func (c *Controller) resync() uint64 {
 	if svcList != nil {
 		c.convertServices(svcList)
 		c.storeLock.RLock()
+		defer c.storeLock.RUnlock()
 		for hostname, instanceList := range c.instanceStore {
 			endpoints := []*model.IstioEndpoint{}
 			for _, instance := range instanceList {
@@ -427,7 +489,9 @@ func (c *Controller) resync() uint64 {
 			c.xdsUpdater.SvcUpdate(c.clusterID, string(hostname), instanceList[0].Service.Attributes.Namespace, model.EventUpdate)
 			c.xdsUpdater.EDSUpdate(c.clusterID, string(hostname), instanceList[0].Service.Attributes.Namespace, endpoints)
 		}
-		c.storeLock.RUnlock()
+		c.xdsUpdater.ConfigUpdate(&model.PushRequest{
+			Full: true,
+		})
 		return svcList.Checksum
 	}
 	return 0
