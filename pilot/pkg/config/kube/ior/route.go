@@ -57,16 +57,15 @@ type syncRoutes struct {
 
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
-	pilotNamespace  string
-	client          *routev1.RouteV1Client
-	kubeClient      kubernetes.Interface
-	store           model.ConfigStoreCache
-	gatewaysMap     map[string]*syncRoutes
-	gatewaysLock    sync.Mutex
-	initialSyncRun  bool
-	initialSyncLock sync.Mutex
-	alive           bool
-	stop            <-chan struct{}
+	pilotNamespace string
+	client         *routev1.RouteV1Client
+	kubeClient     kubernetes.Interface
+	store          model.ConfigStoreCache
+	gatewaysMap    map[string]*syncRoutes
+	gatewaysLock   sync.Mutex
+	initialSyncRun chan struct{}
+	alive          bool
+	stop           <-chan struct{}
 
 	// memberroll functionality
 	mrc              memberroll.Controller
@@ -94,6 +93,7 @@ func newRoute(kubeClient kubernetes.Interface,
 	r.mrc = mrc
 	r.namespaces = []string{pilotNamespace}
 	r.stop = stop
+	r.initialSyncRun = make(chan struct{})
 
 	if r.mrc != nil {
 		iorLog.Debugf("Registering IOR into SMMR broadcast")
@@ -114,7 +114,7 @@ func newRoute(kubeClient kubernetes.Interface,
 //
 // It lists all Istio Gateways (source of truth) and OpenShift Routes, compares them and makes the necessary adjustments
 // (creation and/or removal of routes) so that gateways and routes be in sync.
-func (r *route) initialSync() error {
+func (r *route) initialSync(initialNamespaces []string) error {
 	var result *multierror.Error
 	r.gatewaysMap = make(map[string]*syncRoutes)
 
@@ -137,7 +137,7 @@ func (r *route) initialSync() error {
 
 	// List the routes and put them into a map. Map key is the route object name
 	routes := map[string]v1.Route{}
-	for _, ns := range r.namespaces {
+	for _, ns := range initialNamespaces {
 		iorLog.Debugf("initialSync() - Listing routes in ns %s", ns)
 		routeList, err := r.client.Routes(ns).List(context.TODO(), metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
@@ -149,7 +149,7 @@ func (r *route) initialSync() error {
 			routes[route.Name] = route
 		}
 	}
-	iorLog.Debugf("initialSync() - Got %d route(s) across all %d namespace(s)", len(routes), len(r.namespaces))
+	iorLog.Debugf("initialSync() - Got %d route(s) across all %d namespace(s)", len(routes), len(initialNamespaces))
 
 	// Now that we have maps and routes mapped we can compare them (Gateways are the source of truth)
 	for _, syncRoute := range r.gatewaysMap {
@@ -218,9 +218,7 @@ func (r *route) handleAdd(cfg model.Config) error {
 	defer r.gatewaysLock.Unlock()
 
 	if _, ok := r.gatewaysMap[gatewaysMapKey(cfg.Namespace, cfg.Name)]; ok {
-		// This usually occurs in unit tests, when sync is so fast that when the first add events come the sync is already done
-		// Just logging a debug message, as this is not really an error
-		iorLog.Debugf("gateway %s/%s already exists, not creating route(s) for it", cfg.Namespace, cfg.Name)
+		iorLog.Infof("gateway %s/%s already exists, not creating route(s) for it", cfg.Namespace, cfg.Name)
 		return nil
 	}
 
@@ -263,17 +261,8 @@ func (r *route) handleDel(cfg model.Config) error {
 }
 
 func (r *route) handleEvent(event model.Event, cfg model.Config) error {
-	r.initialSyncLock.Lock()
-	initialSyncRun := r.initialSyncRun
-	r.initialSyncLock.Unlock()
-
-	// Only handle event updates after initial sync has run
-	// This is to prevent having to deal with lots of Add's sent by the store on their first sync
-	// We handle this initial state in UpdateNamespaces() below
-	if !initialSyncRun {
-		iorLog.Debug("Ignoring event because we did not run the initial sync yet")
-		return nil
-	}
+	// Block until initial sync has finished
+	<-r.initialSyncRun
 
 	switch event {
 	case model.EventAdd:
@@ -310,24 +299,17 @@ func (r *route) UpdateNamespaces(namespaces []string) {
 
 	// In the first update we perform an initial sync
 	go func() {
-		r.initialSyncLock.Lock()
-		initialSyncRun := r.initialSyncRun
-		r.initialSyncLock.Unlock()
+		// But only after gateway store cache is synced
+		iorLog.Debug("Waiting for the Gateway store cache to sync before performing our initial sync")
+		cache.WaitForNamedCacheSync("Gateways", r.stop, r.store.HasSynced)
+		iorLog.Debug("Gateway store cache synced. Performing our initial sync now")
 
-		if !initialSyncRun {
-			// But only after gateway store cache is synced
-			iorLog.Debug("Waiting for the Gateway store cache to sync before performing our initial sync")
-			cache.WaitForNamedCacheSync("Gateways", r.stop, r.store.HasSynced)
-			iorLog.Debug("Gateway store cache synced. Performing our initial sync now")
-
-			if err := r.initialSync(); err != nil {
-				iorLog.Errora(err)
-			}
-
-			r.initialSyncLock.Lock()
-			r.initialSyncRun = true
-			r.initialSyncLock.Unlock()
+		if err := r.initialSync(namespaces); err != nil {
+			iorLog.Errora(err)
 		}
+		iorLog.Debug("Initial sync finished")
+		close(r.initialSyncRun)
+
 	}()
 }
 
