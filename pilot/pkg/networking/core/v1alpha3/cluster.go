@@ -41,6 +41,7 @@ import (
 	"istio.io/istio/pilot/pkg/util/sets"
 	"istio.io/istio/pkg/config/host"
 	"istio.io/istio/pkg/config/protocol"
+	"istio.io/istio/pkg/servicemesh/federation"
 	"istio.io/istio/pkg/util/gogo"
 	"istio.io/pkg/log"
 )
@@ -238,6 +239,10 @@ func (configgen *ConfigGeneratorImpl) buildOutboundSniDnatClusters(proxy *model.
 				continue
 			}
 			subsetClusters := cb.applyDestinationRule(defaultCluster, SniDnatClusterMode, service, port, networkView)
+			if service.Attributes.Labels[federation.ExportLabel] != "" {
+				defaultCluster.Name = model.BuildDNSSrvSubsetKey(
+					model.TrafficDirectionOutbound, "", host.Name(service.Attributes.Labels[federation.ExportLabel]), port.Port)
+			}
 			clusters = cp.conditionallyAppend(clusters, defaultCluster)
 			clusters = cp.conditionallyAppend(clusters, subsetClusters...)
 		}

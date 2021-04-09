@@ -64,6 +64,7 @@ require (
 	github.com/miekg/dns v1.1.34
 	github.com/mitchellh/copystructure v1.0.0
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/mitchellh/hashstructure/v2 v2.0.1
 	github.com/onsi/gomega v1.10.2
 	github.com/openshift/api v0.0.0-20200929171550-c99a4deebbe5
 	github.com/openshift/client-go v0.0.0-20200929181438-91d71ef2122c

@@ -24,6 +24,8 @@ const (
 	Kubernetes ProviderID = "Kubernetes"
 	// MCP is a service registry backed by MCP ServiceEntries
 	MCP ProviderID = "MCP"
+	// Federation is a service registry backed by Federation
+	Federation ProviderID = "Federation"
 	// External is a service registry for externally provided ServiceEntries
 	External = "External"
 )

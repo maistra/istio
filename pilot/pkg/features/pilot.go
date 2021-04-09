@@ -297,6 +297,9 @@ var (
 	ClusterName = env.RegisterStringVar("CLUSTER_ID", "Kubernetes",
 		"Defines the cluster and service registry that this Istiod instance is belongs to").Get()
 
+	NetworkName = env.RegisterStringVar("NETWORK_NAME", "Kubernetes",
+		"Defines the network that this Istiod instance belongs to").Get()
+
 	EnableIncrementalMCP = env.RegisterBoolVar(
 		"PILOT_ENABLE_INCREMENTAL_MCP",
 		false,
@@ -392,4 +395,8 @@ var (
 
 	EnableIOR = env.RegisterBoolVar("ENABLE_IOR", false,
 		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
+
+	EnableFederationDiscoveryServer = env.RegisterBoolVar("PILOT_ENABLE_FEDERATION_DISCOVERY_SERVER", true, "").Get()
+
+	FederationDiscoveryEndpoint = env.RegisterStringVar("PILOT_REMOTE_FEDERATION_DISCOVERY", "", "").Get()
 )

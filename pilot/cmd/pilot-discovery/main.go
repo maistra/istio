@@ -168,6 +168,8 @@ func init() {
 		"Discovery service secured gRPC address")
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.ServerOptions.MonitoringAddr, "monitoringAddr", ":15014",
 		"HTTP address to use for pilot's self-monitoring information")
+	discoveryCmd.PersistentFlags().StringVar(&serverArgs.ServerOptions.FederationAddr, "federationAddr", ":8188",
+		"Federation Service Discovery HTTP address")
 	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.ServerOptions.EnableProfiling, "profile", true,
 		"Enable profiling via web interface host:port/debug/pprof")
 

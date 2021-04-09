@@ -24,6 +24,7 @@ import (
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
+	"istio.io/istio/pilot/pkg/serviceregistry/federation"
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/gvk"
 	kubelib "istio.io/istio/pkg/kube"
@@ -152,6 +153,27 @@ func (m *Multicluster) AddMemberCluster(clients kubelib.Client, clusterID string
 	}
 
 	clients.RunAndWait(stopCh)
+	return nil
+}
+
+func (m *Multicluster) AddFederatedCluster(clusterID string, discoveryEndpoint string) error {
+	// stopCh to stop controller created here when cluster removed.
+	m.m.Lock()
+	options := federation.Options{
+		DiscoveryEndpoint: discoveryEndpoint,
+		ClusterID:         clusterID,
+		XDSUpdater:        m.XDSUpdater,
+		ResyncPeriod:      time.Minute * 5,
+	}
+	log.Infof("Initializing Federation service registry %q at %s", options.ClusterID, options.DiscoveryEndpoint)
+	kubectl := federation.NewController(options)
+	m.serviceController.AddRegistry(kubectl)
+	m.m.Unlock()
+
+	// Only need to add service handler for kubernetes registry as `initRegistryEventHandlers`,
+	// because when endpoints update `XDSUpdater.EDSUpdate` has already been called.
+	_ = kubectl.AppendServiceHandler(func(svc *model.Service, ev model.Event) { m.updateHandler(svc) })
+
 	return nil
 }
 
