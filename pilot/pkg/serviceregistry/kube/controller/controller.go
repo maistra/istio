@@ -210,11 +210,11 @@ func NewController(client kubernetes.Interface, mrc controller.MemberRollControl
 				return client.CoreV1().Services(namespace).Watch(opts)
 			},
 		}
-	})
+	}, &v1.Service{}, options.ResyncPeriod)
 	if mrc != nil {
 		mrc.Register(svcMlw)
 	}
-	svcInformer := cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, options.ResyncPeriod,
+	svcInformer := cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, 0,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	out.services = out.createCacheHandler(svcInformer, "Services")
 
@@ -227,11 +227,11 @@ func NewController(client kubernetes.Interface, mrc controller.MemberRollControl
 				return client.CoreV1().Endpoints(namespace).Watch(opts)
 			},
 		}
-	})
+	}, &v1.Endpoints{}, options.ResyncPeriod)
 	if mrc != nil {
 		mrc.Register(epMlw)
 	}
-	epInformer := cache.NewSharedIndexInformer(epMlw, &v1.Endpoints{}, options.ResyncPeriod, cache.Indexers{})
+	epInformer := cache.NewSharedIndexInformer(epMlw, &v1.Endpoints{}, 0, cache.Indexers{})
 	out.endpoints = out.createEDSCacheHandler(epInformer, "Endpoints")
 
 	if options.PodLocalitySource == podLocalitySourcePod {
@@ -260,11 +260,11 @@ func NewController(client kubernetes.Interface, mrc controller.MemberRollControl
 				return client.CoreV1().Pods(namespace).Watch(opts)
 			},
 		}
-	})
+	}, &v1.Pod{}, options.ResyncPeriod)
 	if mrc != nil {
 		mrc.Register(podMlw)
 	}
-	podInformer := cache.NewSharedIndexInformer(podMlw, &v1.Pod{}, options.ResyncPeriod, cache.Indexers{})
+	podInformer := cache.NewSharedIndexInformer(podMlw, &v1.Pod{}, 0, cache.Indexers{})
 	out.pods = newPodCache(out.createCacheHandler(podInformer, "Pod"), out)
 
 	return out

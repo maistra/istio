@@ -161,10 +161,10 @@ func NewWebhookController(gracePeriodRatio float32, minGracePeriod time.Duration
 					return core.Secrets(namespace).Watch(options)
 				},
 			}
-		})
+		}, &v1.Secret{}, secretResyncPeriod)
 		// The certificate rotation is handled by scrtUpdated().
 		c.scrtStore, c.scrtController =
-			cache.NewInformer(scrtLW, &v1.Secret{}, secretResyncPeriod, cache.ResourceEventHandlerFuncs{
+			cache.NewInformer(scrtLW, &v1.Secret{}, 0, cache.ResourceEventHandlerFuncs{
 				DeleteFunc: c.scrtDeleted,
 				UpdateFunc: c.scrtUpdated,
 			})

@@ -65,12 +65,12 @@ func NewServiceAccountController(core corev1.CoreV1Interface, namespaces []strin
 				return core.ServiceAccounts(namespace).Watch(options)
 			},
 		}
-	})
+	}, &v1.ServiceAccount{}, time.Minute)
 	if mrc != nil {
 		mrc.Register(LW)
 	}
 
-	_, c.controller = cache.NewInformer(LW, &v1.ServiceAccount{}, time.Minute, cache.ResourceEventHandlerFuncs{
+	_, c.controller = cache.NewInformer(LW, &v1.ServiceAccount{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.serviceAccountAdded,
 		DeleteFunc: c.serviceAccountDeleted,
 		UpdateFunc: c.serviceAccountUpdated,

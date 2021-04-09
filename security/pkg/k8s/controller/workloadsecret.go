@@ -229,14 +229,14 @@ func NewSecretController(ca certificateAuthority, enableNamespacesByDefault bool
 				return core.ServiceAccounts(namespace).Watch(options)
 			},
 		}
-	})
+	}, &v1.ServiceAccount{}, time.Minute)
 	if mrc != nil {
 		mrc.Register(saLW)
 		mrc.Register(c)
 	}
 
 	c.saStore, c.saController =
-		cache.NewInformer(saLW, &v1.ServiceAccount{}, time.Minute, cache.ResourceEventHandlerFuncs{
+		cache.NewInformer(saLW, &v1.ServiceAccount{}, 0, cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.saAdded,
 			DeleteFunc: c.saDeleted,
 		})
@@ -253,14 +253,14 @@ func NewSecretController(ca certificateAuthority, enableNamespacesByDefault bool
 				return core.Secrets(namespace).Watch(options)
 			},
 		}
-	})
+	}, &v1.Secret{}, secretResyncPeriod)
 
 	if mrc != nil {
 		mrc.Register(scrtLW)
 	}
 
 	c.scrtStore, c.scrtController =
-		cache.NewInformer(scrtLW, &v1.Secret{}, secretResyncPeriod, cache.ResourceEventHandlerFuncs{
+		cache.NewInformer(scrtLW, &v1.Secret{}, 0, cache.ResourceEventHandlerFuncs{
 			DeleteFunc: c.scrtDeleted,
 			UpdateFunc: c.scrtUpdated,
 		})
@@ -273,9 +273,9 @@ func NewSecretController(ca certificateAuthority, enableNamespacesByDefault bool
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				return core.Namespaces().Watch(options)
 			}}
-	})
+	}, &v1.Namespace{}, namespaceResyncPeriod)
 	c.namespaceStore, c.namespaceController =
-		cache.NewInformer(namespaceLW, &v1.Namespace{}, namespaceResyncPeriod, cache.ResourceEventHandlerFuncs{
+		cache.NewInformer(namespaceLW, &v1.Namespace{}, 0, cache.ResourceEventHandlerFuncs{
 			UpdateFunc: c.namespaceUpdated,
 		})
 

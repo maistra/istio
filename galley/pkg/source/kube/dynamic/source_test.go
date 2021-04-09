@@ -317,8 +317,7 @@ func TestSource_MangledNames(t *testing.T) {
 					Collection: emptyInfo.Collection,
 					FullName:   resource.FullNameFromNamespaceAndName("foo/"+obj.GetNamespace(), obj.GetName()),
 				},
-				// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
-				Version: resource.Version(listerWatcherNamespace + "=" + obj.GetResourceVersion()),
+				Version: resource.Version(obj.GetResourceVersion()),
 			},
 			Metadata: resource.Metadata{
 				Labels:      obj.GetLabels(),
@@ -396,8 +395,7 @@ func getID(obj *unstructured.Unstructured) resource.VersionedKey {
 			Collection: emptyInfo.Collection,
 			FullName:   resource.FullNameFromNamespaceAndName(obj.GetNamespace(), obj.GetName()),
 		},
-		// multi namespace lister watcher prepends the namespace used on its creation to the original resource version
-		Version: resource.Version(listerWatcherNamespace + "=" + obj.GetResourceVersion()),
+		Version: resource.Version(obj.GetResourceVersion()),
 	}
 }
 
