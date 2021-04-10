@@ -246,7 +246,7 @@ func (c *controller) newCacheHandler(
 	namespaces []string,
 	mrc meshcontroller.Controller) *cacheHandler {
 
-	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, lwf)
+	mlw := listwatch.MultiNamespaceListerWatcher(namespaces, lwf, o, resyncPeriod)
 	if mrc != nil {
 		mrc.Register(mlw, fmt.Sprintf("pilot-cache-%s", otype))
 	}
@@ -254,7 +254,7 @@ func (c *controller) newCacheHandler(
 	// TODO: finer-grained index (perf)
 	informer := cache.NewSharedIndexInformer(
 		mlw, o,
-		resyncPeriod, cache.Indexers{})
+		0, cache.Indexers{})
 
 	h := &cacheHandler{
 		c:        c,

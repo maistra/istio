@@ -301,13 +301,13 @@ func NewController(client kubernetes.Interface, metadataClient metadata.Interfac
 				return client.CoreV1().Services(namespace).Watch(context.TODO(), opts)
 			},
 		}
-	})
+	}, &v1.Service{}, options.ResyncPeriod)
 
 	if mrc != nil {
 		mrc.Register(svcMlw, "pilot-service")
 	}
 
-	c.services = cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, options.ResyncPeriod,
+	c.services = cache.NewSharedIndexInformer(svcMlw, &v1.Service{}, 0,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	c.serviceLister = listerv1.NewServiceLister(c.services.GetIndexer())
 	registerHandlers(c.services, c.queue, "Services", c.onServiceEvent)

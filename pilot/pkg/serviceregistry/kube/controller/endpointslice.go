@@ -57,13 +57,13 @@ func newEndpointSliceController(c *Controller, mrc meshcontroller.Controller, op
 				return c.client.DiscoveryV1alpha1().EndpointSlices(namespace).Watch(context.TODO(), opts)
 			},
 		}
-	})
+	}, &discoveryv1alpha1.EndpointSlice{}, options.ResyncPeriod)
 
 	if mrc != nil {
 		mrc.Register(mlw, "pilot-endpointslice")
 	}
 
-	informer := cache.NewSharedIndexInformer(mlw, &discoveryv1alpha1.EndpointSlice{}, options.ResyncPeriod,
+	informer := cache.NewSharedIndexInformer(mlw, &discoveryv1alpha1.EndpointSlice{}, 0,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 	// TODO Endpoints has a special cache, to filter out irrelevant updates to kube-system

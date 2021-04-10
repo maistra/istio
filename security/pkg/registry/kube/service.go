@@ -65,7 +65,7 @@ func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg 
 				return core.Services(namespace).Watch(context.TODO(), options)
 			},
 		}
-	})
+	}, &v1.Service{}, time.Minute)
 
 	if mrc != nil {
 		mrc.Register(LW, "security-namespaces")
@@ -76,7 +76,7 @@ func NewServiceController(core corev1.CoreV1Interface, namespaces []string, reg 
 		DeleteFunc: c.serviceDeleted,
 		UpdateFunc: c.serviceUpdated,
 	}
-	_, c.controller = cache.NewInformer(LW, &v1.Service{}, time.Minute, handler)
+	_, c.controller = cache.NewInformer(LW, &v1.Service{}, 0, handler)
 	return c
 }
 

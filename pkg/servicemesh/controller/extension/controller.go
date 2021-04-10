@@ -68,6 +68,7 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 				},
 			}
 		},
+		&v1alpha1.ServiceMeshExtension{}, resync,
 	)
 	if mrc != nil {
 		mrc.Register(mlw, "extensions-controller")
@@ -75,7 +76,7 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 	store := make(map[string]*v1alpha1.ServiceMeshExtension)
 	informer := cache.NewSharedIndexInformer(
 		mlw, &v1alpha1.ServiceMeshExtension{},
-		resync, cache.Indexers{})
+		0, cache.Indexers{})
 
 	informer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{

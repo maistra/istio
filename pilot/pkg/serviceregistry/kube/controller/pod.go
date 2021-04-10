@@ -67,13 +67,13 @@ func newPodCache(c *Controller, mrc meshcontroller.Controller, options Options, 
 				return c.client.CoreV1().Pods(namespace).Watch(context.TODO(), opts)
 			},
 		}
-	})
+	}, &v1.Pod{}, options.ResyncPeriod)
 
 	if mrc != nil {
 		mrc.Register(mlw, "pilot-pod")
 	}
 
-	informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, options.ResyncPeriod,
+	informer := cache.NewSharedIndexInformer(mlw, &v1.Pod{}, 0,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 	out := &PodCache{

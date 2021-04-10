@@ -98,9 +98,9 @@ func NewNamespaceController(data func() map[string]string, options Options, kube
 				return kubeClient.CoreV1().ConfigMaps(namespace).Watch(context.TODO(), opts)
 			},
 		}
-	})
+	}, &v1.ConfigMap{}, options.ResyncPeriod)
 
-	configmapInformer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, options.ResyncPeriod,
+	configmapInformer := cache.NewSharedIndexInformer(mlw, &v1.ConfigMap{}, 0,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 	configmapInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{

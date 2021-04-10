@@ -53,13 +53,13 @@ func newEndpointsController(c *Controller, mrc meshcontroller.Controller, option
 				return c.client.CoreV1().Endpoints(namespace).Watch(context.TODO(), opts)
 			},
 		}
-	})
+	}, &v1.Endpoints{}, options.ResyncPeriod)
 
 	if mrc != nil {
 		mrc.Register(mlw, "pilot-endpoints")
 	}
 
-	informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, options.ResyncPeriod,
+	informer := cache.NewSharedIndexInformer(mlw, &v1.Endpoints{}, 0,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 	out := &endpointsController{
