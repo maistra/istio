@@ -446,8 +446,8 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 			return fmt.Errorf("failed creating kube config: %v", err)
 		}
 		s.kubeClient, err = kubelib.CreateClientset(args.Config.KubeConfig, "", func(config *rest.Config) {
-			config.QPS = 100
-			config.Burst = 200
+			config.QPS = float32(features.PilotAPIServerQPS)
+			config.Burst = features.PilotAPIServerBurst
 		})
 		if err != nil {
 			return fmt.Errorf("failed creating kube client: %v", err)
