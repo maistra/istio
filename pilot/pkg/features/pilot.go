@@ -253,6 +253,18 @@ var (
 			"but the older, deprecated regex field. This should only be enabled to support "+
 			"legacy deployments that have not yet been migrated to the new safe regular expressions.",
 	)
+
+	PilotAPIServerQPS = env.RegisterFloatVar(
+		"PILOT_API_SERVER_QPS",
+		500,
+		"The default pilot API server QPS",
+	).Get()
+
+	PilotAPIServerBurst = env.RegisterIntVar(
+		"PILOT_API_SERVER_BURST",
+		1000,
+		"The default pilot API server Burst",
+	).Get()
 )
 
 var (

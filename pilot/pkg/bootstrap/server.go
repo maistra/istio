@@ -20,7 +20,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	tls_features "istio.io/istio/pkg/features"
 	"net"
 	"net/http"
 	"net/url"
@@ -30,6 +29,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	tls_features "istio.io/istio/pkg/features"
+	"k8s.io/client-go/rest"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gogo/protobuf/types"
@@ -567,7 +569,10 @@ func (s *Server) getKubeCfgFile(args *PilotArgs) string {
 // initKubeClient creates the k8s client if running in an k8s environment.
 func (s *Server) initKubeClient(args *PilotArgs) error {
 	if hasKubeRegistry(args) && args.Config.FileDir == "" {
-		client, kuberr := kubelib.CreateClientset(s.getKubeCfgFile(args), "")
+		client, kuberr := kubelib.CreateClientset(s.getKubeCfgFile(args), "", func(config *rest.Config) {
+			config.QPS = float32(features.PilotAPIServerQPS)
+			config.Burst = features.PilotAPIServerBurst
+		})
 		if kuberr != nil {
 			return multierror.Prefix(kuberr, "failed to connect to Kubernetes API.")
 		}
