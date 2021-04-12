@@ -119,7 +119,7 @@ func TestCreate(t *testing.T) {
 		},
 		{
 			"Invalid gateway",
-			"non-existent",
+			"istio-system",
 			[]string{"fail.com"},
 			map[string]string{"istio": "nonexistent"},
 			0,
@@ -135,8 +135,18 @@ func TestCreate(t *testing.T) {
 			"",
 			true,
 		},
+		{
+			"Non-existing namespace",
+			"non-existing",
+			[]string{"fail.com"},
+			map[string]string{"istio": "ingressgateway"},
+			0,
+			"could not handle the ADD event for non-existing",
+			false,
+		},
 	}
 
+	IORLog.SetOutputLevel(log.DebugLevel)
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
@@ -164,18 +174,24 @@ func TestCreate(t *testing.T) {
 
 				// Error is expected and matches the golden string, nothing to do
 			} else {
+				if c.expectedError != "" {
+					t.Fatalf("expected error message containing `%s', got success", c.expectedError)
+				}
 				validateRoutes(t, c.hosts, list, gatewayName, c.tls)
+
+				// Remove the gateway and expect all routes get removed
+				deleteGateway(t, store, c.ns, gatewayName)
+				_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
+				if err := getError(errorChannel); err != nil {
+					t.Fatal(err)
+				}
 			}
 
-			// Remove the gateway and expect all routes get removed
-			deleteGateway(t, store, c.ns, gatewayName)
-			_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
 		})
 	}
 }
 
 func validateRoutes(t *testing.T, hosts []string, list *routeapiv1.RouteList, gatewayName string, tls bool) {
-	t.Helper()
 	for _, host := range hosts {
 		route := findRouteByHost(list, host)
 		if route == nil {
@@ -312,7 +328,7 @@ func TestPerf(t *testing.T) {
 	createIngressGateway(t, k8sClient, "istio-system", map[string]string{"istio": "ingressgateway"})
 	qty := 100
 	qtyNamespaces := qty + 1
-	createGateways(t, store, qty)
+	createGateways(t, store, 1, qty)
 	mrc.setNamespaces(generateNamespaces(qty)...)
 
 	// It takes ~ 2s on my laptop, it's slower on prow
@@ -363,6 +379,35 @@ func TestPerf(t *testing.T) {
 	assert.Equal(t, 2, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
 }
 
+// TestConcurrency makes sure IOR can respond to events even when doing its initial sync
+func TestConcurrency(t *testing.T) {
+	IORLog.SetOutputLevel(log.DebugLevel)
+	stop := make(chan struct{})
+	defer func() { close(stop) }()
+	errorChannel := make(chan error)
+	mrc := newFakeMemberRollController()
+	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc)
+
+	// Create a bunch of namespaces and gateways
+	createIngressGateway(t, k8sClient, "istio-system", map[string]string{"istio": "ingressgateway"})
+	qty := 50
+	createGateways(t, store, 1, qty)
+	mrc.setNamespaces(generateNamespaces(qty)...)
+
+	// At the same time, while IOR is processing those initial `qty` gateways, create `qty` more
+	go func() {
+		mrc.setNamespaces(generateNamespaces(qty * 2)...)
+		createGateways(t, store, qty+1, qty*2)
+	}()
+
+	// And expect all `qty * 2` gateways to be created
+	_, _ = getRoutes(t, routerClient, "istio-system", (qty * 2), time.Minute)
+	if err := getError(errorChannel); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
 func generateNamespaces(qty int) []string {
 	var result []string
 
@@ -373,8 +418,8 @@ func generateNamespaces(qty int) []string {
 	return append(result, "istio-system")
 }
 
-func createGateways(t *testing.T, store model.ConfigStoreCache, qty int) {
-	for i := 1; i <= qty; i++ {
+func createGateways(t *testing.T, store model.ConfigStoreCache, begin, end int) {
+	for i := begin; i <= end; i++ {
 		createGateway(t,
 			store,
 			fmt.Sprintf("ns%d", i),
@@ -385,13 +430,19 @@ func createGateways(t *testing.T, store model.ConfigStoreCache, qty int) {
 	}
 }
 
+// getError tries to read an error from the error channel.
+// It tries 3 times beforing returning nil, in case of there's no error in the channel,
+// this is to give some time to async functions to run and fill the channel properly
 func getError(errorChannel chan error) error {
-	select {
-	case err := <-errorChannel:
-		return err
-	default:
-		return nil
+	for i := 1; i < 3; i++ {
+		select {
+		case err := <-errorChannel:
+			return err
+		default:
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	return nil
 }
 
 // getRoutes is a helper function that keeps trying getting a list of routes until it gets `size` items.

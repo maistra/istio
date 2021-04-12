@@ -17,6 +17,7 @@ package ior
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	v1 "github.com/openshift/api/route/v1"
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
@@ -57,6 +58,10 @@ func (c *fakeKubeClient) IsRouteSupported() bool {
 
 func (c *fakeKubeClient) GetActualClient() kubernetes.Interface {
 	return c.client
+}
+
+func (c *fakeKubeClient) GetHandleEventTimeout() time.Duration {
+	return time.Millisecond
 }
 
 // NewFakeRouterClient creates a new FakeRouterClient

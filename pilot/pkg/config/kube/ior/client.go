@@ -16,6 +16,7 @@ package ior
 
 import (
 	"strings"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 )
@@ -24,6 +25,7 @@ import (
 type KubeClient interface {
 	IsRouteSupported() bool
 	GetActualClient() kubernetes.Interface
+	GetHandleEventTimeout() time.Duration
 }
 
 type kubeClient struct {
@@ -50,4 +52,8 @@ func (c *kubeClient) IsRouteSupported() bool {
 
 func (c *kubeClient) GetActualClient() kubernetes.Interface {
 	return c.client
+}
+
+func (c *kubeClient) GetHandleEventTimeout() time.Duration {
+	return 10 * time.Second
 }
