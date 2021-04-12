@@ -356,7 +356,10 @@ func (r *route) SetNamespaces(namespaces ...string) {
 	go func() {
 		// But only after gateway store cache is synced
 		IORLog.Debug("Waiting for the Gateway store cache to sync before performing our initial sync")
-		cache.WaitForNamedCacheSync("Gateways", r.stop, r.store.HasSynced)
+		if !cache.WaitForNamedCacheSync("Gateways", r.stop, r.store.HasSynced) {
+			IORLog.Infof("Failed to sync Gateway store cache. Not performing initial sync.")
+			return
+		}
 		IORLog.Debug("Gateway store cache synced. Performing our initial sync now")
 
 		if err := r.initialSync(namespaces); err != nil {
