@@ -119,7 +119,7 @@ func TestCreate(t *testing.T) {
 		},
 		{
 			"Invalid gateway",
-			"non-existent",
+			"istio-system",
 			[]string{"fail.com"},
 			map[string]string{"istio": "nonexistent"},
 			0,
@@ -135,8 +135,18 @@ func TestCreate(t *testing.T) {
 			"",
 			true,
 		},
+		{
+			"Non-existing namespace",
+			"non-existing",
+			[]string{"fail.com"},
+			map[string]string{"istio": "ingressgateway"},
+			0,
+			"could not handle the ADD event for non-existing",
+			false,
+		},
 	}
 
+	IORLog.SetOutputLevel(log.DebugLevel)
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
@@ -164,18 +174,24 @@ func TestCreate(t *testing.T) {
 
 				// Error is expected and matches the golden string, nothing to do
 			} else {
+				if c.expectedError != "" {
+					t.Fatalf("expected error message containing `%s', got success", c.expectedError)
+				}
 				validateRoutes(t, c.hosts, list, gatewayName, c.tls)
+
+				// Remove the gateway and expect all routes get removed
+				deleteGateway(t, store, c.ns, gatewayName)
+				_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
+				if err := getError(errorChannel); err != nil {
+					t.Fatal(err)
+				}
 			}
 
-			// Remove the gateway and expect all routes get removed
-			deleteGateway(t, store, c.ns, gatewayName)
-			_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
 		})
 	}
 }
 
 func validateRoutes(t *testing.T, hosts []string, list *routeapiv1.RouteList, gatewayName string, tls bool) {
-	t.Helper()
 	for _, host := range hosts {
 		route := findRouteByHost(list, host)
 		if route == nil {
@@ -414,13 +430,19 @@ func createGateways(t *testing.T, store model.ConfigStoreCache, begin, end int) 
 	}
 }
 
+// getError tries to read an error from the error channel.
+// It tries 3 times beforing returning nil, in case of there's no error in the channel,
+// this is to give some time to async functions to run and fill the channel properly
 func getError(errorChannel chan error) error {
-	select {
-	case err := <-errorChannel:
-		return err
-	default:
-		return nil
+	for i := 1; i < 3; i++ {
+		select {
+		case err := <-errorChannel:
+			return err
+		default:
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	return nil
 }
 
 // getRoutes is a helper function that keeps trying getting a list of routes until it gets `size` items.

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	v1 "github.com/openshift/api/route/v1"
@@ -57,15 +58,16 @@ type syncRoutes struct {
 
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
-	pilotNamespace string
-	routerClient   routev1.RouteV1Interface
-	kubeClient     kubernetes.Interface
-	store          model.ConfigStoreCache
-	gatewaysMap    map[string]*syncRoutes
-	gatewaysLock   sync.Mutex
-	initialSyncRun chan struct{}
-	alive          bool
-	stop           <-chan struct{}
+	pilotNamespace     string
+	routerClient       routev1.RouteV1Interface
+	kubeClient         kubernetes.Interface
+	store              model.ConfigStoreCache
+	gatewaysMap        map[string]*syncRoutes
+	gatewaysLock       sync.Mutex
+	initialSyncRun     chan struct{}
+	alive              bool
+	stop               <-chan struct{}
+	handleEventTimeout time.Duration
 
 	// memberroll functionality
 	mrc              controller.MemberRollController
@@ -112,6 +114,7 @@ func newRoute(
 	r.namespaces = []string{pilotNamespace}
 	r.stop = stop
 	r.initialSyncRun = make(chan struct{})
+	r.handleEventTimeout = kubeClient.GetHandleEventTimeout()
 
 	if r.mrc != nil {
 		IORLog.Debugf("Registering IOR into SMMR broadcast")
@@ -229,8 +232,42 @@ func (r *route) addNewSyncRoute(cfg config.Config) *syncRoutes {
 	return syncRoute
 }
 
+// ensureNamespaceExists makes sure the gateway namespace is present in r.namespaces
+// r.namespaces is updated by the SMMR controller, in SetNamespaces()
+// This handles the case where an ADD event comes before SetNamespaces() is called and
+// the unlikely case an ADD event arrives for a gateway whose namespace does not belong to the SMMR at all
+func (r *route) ensureNamespaceExists(cfg config.Config) error {
+	timeout := time.After(r.handleEventTimeout) // default is 10s
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("could not handle the ADD event for %s/%s: SMMR does not recognize this namespace", cfg.Namespace, cfg.Name)
+		default:
+		}
+
+		r.namespaceLock.Lock()
+		namespaces := r.namespaces
+		r.namespaceLock.Unlock()
+
+		for _, ns := range namespaces {
+			if ns == cfg.Namespace {
+				IORLog.Debugf("Namespace %s found in SMMR", cfg.Namespace)
+				return nil
+			}
+		}
+
+		IORLog.Debugf("Namespace %s not found in SMMR, trying again", cfg.Namespace)
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func (r *route) handleAdd(cfg config.Config) error {
 	var result *multierror.Error
+
+	if err := r.ensureNamespaceExists(cfg); err != nil {
+		return err
+	}
 
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
