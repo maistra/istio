@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	v1 "github.com/openshift/api/route/v1"
@@ -211,8 +212,42 @@ func (r *route) addNewSyncRoute(cfg model.Config) *syncRoutes {
 	return syncRoute
 }
 
+// ensureNamespaceExists makes sure the gateway namespace is present in r.namespaces
+// r.namespaces is updated by the SMMR controller, in SetNamespaces()
+// This handles the case where an ADD event comes before SetNamespaces() is called and
+// the unlikely case an ADD event arrives for a gateway whose namespace does not belong to the SMMR at all
+func (r *route) ensureNamespaceExists(cfg model.Config) error {
+	timeout := time.After(10 * time.Second) // default is 10s
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("could not handle the ADD event for %s/%s: SMMR does not recognize this namespace", cfg.Namespace, cfg.Name)
+		default:
+		}
+
+		r.namespaceLock.Lock()
+		namespaces := r.namespaces
+		r.namespaceLock.Unlock()
+
+		for _, ns := range namespaces {
+			if ns == cfg.Namespace {
+				iorLog.Debugf("Namespace %s found in SMMR", cfg.Namespace)
+				return nil
+			}
+		}
+
+		iorLog.Debugf("Namespace %s not found in SMMR, trying again", cfg.Namespace)
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func (r *route) handleAdd(cfg model.Config) error {
 	var result *multierror.Error
+
+	if err := r.ensureNamespaceExists(cfg); err != nil {
+		return err
+	}
 
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
@@ -301,7 +336,10 @@ func (r *route) UpdateNamespaces(namespaces []string) {
 	go func() {
 		// But only after gateway store cache is synced
 		iorLog.Debug("Waiting for the Gateway store cache to sync before performing our initial sync")
-		cache.WaitForNamedCacheSync("Gateways", r.stop, r.store.HasSynced)
+		if !cache.WaitForNamedCacheSync("Gateways", r.stop, r.store.HasSynced) {
+			iorLog.Infof("Failed to sync Gateway store cache. Not performing initial sync.")
+			return
+		}
 		iorLog.Debug("Gateway store cache synced. Performing our initial sync now")
 
 		if err := r.initialSync(namespaces); err != nil {
