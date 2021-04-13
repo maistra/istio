@@ -69,14 +69,15 @@ type Worker struct {
 
 	pullStrategy model.ImagePullStrategy
 
-	client   v1alpha1client.ServicemeshV1alpha1Interface
-	stopChan <-chan struct{}
-	Queue    chan ExtensionEvent
+	client       v1alpha1client.ServicemeshV1alpha1Interface
+	errorChannel chan error
+	stopChan     <-chan struct{}
+	Queue        chan ExtensionEvent
 
 	mut sync.Mutex
 }
 
-func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseURL, serveDirectory string) (*Worker, error) {
+func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseURL, serveDirectory string, errorChannel chan error) (*Worker, error) {
 	client, err := v1alpha1client.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client from config: %v", err)
@@ -88,10 +89,11 @@ func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseUR
 		pullStrategy:   pullStrategy,
 		baseURL:        baseURL,
 		serveDirectory: serveDirectory,
+		errorChannel:   errorChannel,
 	}, nil
 }
 
-func (w *Worker) processEvent(event ExtensionEvent) {
+func (w *Worker) processEvent(event ExtensionEvent) error {
 	extension := event.Extension
 	workerlog.Debugf("Event %s arrived for %s/%s", event.Operation, extension.Namespace, extension.Name)
 	workerlog.Debugf("Extension object: %+v", extension)
@@ -102,7 +104,7 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 			filename := path.Join(w.serveDirectory, id)
 			os.Remove(filename)
 		}
-		return
+		return nil
 	}
 
 	// MAISTRA-2252
@@ -110,13 +112,12 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		extension.Status.Deployment.Ready &&
 		extension.Status.ObservedGeneration == extension.Generation {
 		workerlog.Debug("Skipping update, current extension is up to date.")
-		return
+		return nil
 	}
 
 	imageRef := model.StringToImageRef(extension.Spec.Image)
 	if imageRef == nil {
-		workerlog.Errorf("failed to parse spec.image: '%s'", extension.Spec.Image)
-		return
+		return fmt.Errorf("failed to parse spec.image: %q", extension.Spec.Image)
 	}
 	workerlog.Debugf("Image Ref: %+v", imageRef)
 
@@ -136,8 +137,7 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		workerlog.Debugf("Image %s not present. Pulling", imageRef.String())
 		img, err = w.pullStrategy.PullImage(imageRef, extension.Namespace, extension.Spec.ImagePullPolicy, extension.Spec.ImagePullSecrets)
 		if err != nil {
-			workerlog.Errorf("failed to pull image %s: %v", imageRef.String(), err)
-			return
+			return fmt.Errorf("failed to pull image %q: %v", imageRef.String(), err)
 		}
 	}
 	var id string
@@ -147,8 +147,7 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		workerlog.Debug("Image is already in the http server, retrieving its ID")
 		url, err := url.Parse(extension.Status.Deployment.URL)
 		if err != nil {
-			workerlog.Errorf("failed to parse status.deployment.url: %s", err)
-			return
+			return fmt.Errorf("failed to parse status.deployment.url: %v", err)
 		}
 		id = path.Base(url.Path)
 		workerlog.Debugf("Got ID = %s", id)
@@ -168,8 +167,7 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 
 		wasmUUID, err := uuid.NewRandom()
 		if err != nil {
-			workerlog.Errorf("failed to generate new UUID: %v", err)
-			return
+			return fmt.Errorf("failed to generate new UUID: %v", err)
 		}
 		id = wasmUUID.String()
 		workerlog.Debugf("Created a new id for this image: %s", id)
@@ -180,25 +178,23 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		workerlog.Debugf("Copying the extension to the web server location: %s", filename)
 		err = img.CopyWasmModule(filename)
 		if err != nil {
-			workerlog.Errorf("failed to extract wasm module: %v", err)
-			return
+			return fmt.Errorf("failed to extract wasm module: %v", err)
 		}
 	}
 
 	sha, err := generateSHA256(filename)
 	if err != nil {
-		workerlog.Errorf("failed to generate sha256 of wasm module: %v", err)
-		return
+		return fmt.Errorf("failed to generate sha256 of wasm module: %v", err)
 	}
 	workerlog.Debugf("WASM module SHA256 is %s", sha)
 
 	filePath, err := url.Parse(id)
 	if err != nil {
-		workerlog.Errorf("failed to parse new UUID '%s' as URL path: %s", id, err)
+		return fmt.Errorf("failed to parse new UUID %q as URL path: %v", id, err)
 	}
 	baseURL, err := url.Parse(w.baseURL)
 	if err != nil {
-		workerlog.Errorf("failed to parse baseURL: %s", err)
+		return fmt.Errorf("failed to parse baseURL: %v", err)
 	}
 
 	extension.Status.Deployment.SHA256 = sha
@@ -220,17 +216,20 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		extension.Status.Priority = *extension.Spec.Priority
 	}
 
+	// TODO(jwendell): Is this necessary?
 	if !containerImageChanged && extension.Generation > 0 && extension.Status.ObservedGeneration == extension.Generation {
 		workerlog.Debug("Skipping status update")
-		return
+		return nil
 	}
 
 	extension.Status.ObservedGeneration = extension.Generation
 	workerlog.Debugf("Updating extension status with: %v", extension.Status)
 	_, err = w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, v1.UpdateOptions{})
 	if err != nil {
-		workerlog.Errorf("failed to update status of extension: %v", err)
+		return fmt.Errorf("failed to update status of extension: %v", err)
 	}
+
+	return nil
 }
 
 func (w *Worker) Start(stopChan <-chan struct{}) {
@@ -246,7 +245,12 @@ func (w *Worker) Start(stopChan <-chan struct{}) {
 		for {
 			select {
 			case event := <-w.Queue:
-				w.processEvent(event)
+				if err := w.processEvent(event); err != nil {
+					workerlog.Error(err)
+					if w.errorChannel != nil {
+						go func() { w.errorChannel <- err }()
+					}
+				}
 			case <-w.stopChan:
 				workerlog.Info("Stopping worker")
 				return

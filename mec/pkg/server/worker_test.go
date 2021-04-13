@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -199,17 +200,14 @@ func TestWorker(t *testing.T) {
 				Extension: &tc.extension,
 				Operation: ExtensionEventOperationAdd,
 			}
-			// res := <-w.resultChan
-			// for _, msg := range res.messages {
-			// 	log.Info(msg)
-			// }
-			// for _, err := range res.errors {
-			// 	if !res.successful && !tc.expectedError {
-			// 		log.Fatalf("expected no error but got: %s", err)
-			// 	} else {
-			// 		log.Infof("%s", err)
-			// 	}
-			// }
+
+			err = getError(w.errorChannel)
+			if tc.expectedError && err == nil {
+				t.Fatalf("expected error but got success")
+			}
+			if !tc.expectedError && err != nil {
+				t.Fatalf("expected success but got error: %v", err)
+			}
 
 			for _, event := range tc.events {
 				ext := event.Extension.DeepCopy()
@@ -230,18 +228,16 @@ func TestWorker(t *testing.T) {
 					Extension: ext,
 					Operation: event.Operation,
 				}
-				// res := <-w.resultChan
-				// for _, msg := range res.messages {
-				// 	log.Info(msg)
-				// }
-				// for _, err := range res.errors {
-				// 	if !res.successful && !tc.expectedError {
-				// 		log.Fatalf("expected no error but got: %s", err)
-				// 	} else {
-				// 		log.Infof("%s", err)
-				// 	}
-				// }
+
+				err = getError(w.errorChannel)
+				if tc.expectedError && err == nil {
+					t.Fatalf("expected error but got success")
+				}
+				if !tc.expectedError && err != nil {
+					t.Fatalf("expected success but got error: %v", err)
+				}
 			}
+
 			stopChan <- struct{}{}
 			updatedExtension, err := w.client.ServiceMeshExtensions(tc.extension.Namespace).Get(context.TODO(), tc.extension.Name, metav1.GetOptions{})
 			if err != nil {
@@ -276,7 +272,21 @@ func createWorker(tmpDir string, clientset *fake.Clientset) *Worker {
 		pullStrategy:   &fakestrategy.PullStrategy{},
 		serveDirectory: tmpDir,
 		Queue:          make(chan ExtensionEvent),
-		// resultChan:     make(chan workerResult, 100),
-		// enableLogger:   false,
+		errorChannel:   make(chan error),
 	}
+}
+
+// getError tries to read an error from the error channel.
+// It tries 3 times beforing returning nil, in case of there's no error in the channel,
+// this is to give some time to async functions to run and fill the channel properly
+func getError(errorChannel chan error) error {
+	for i := 1; i < 3; i++ {
+		select {
+		case err := <-errorChannel:
+			return err
+		default:
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return nil
 }

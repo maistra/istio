@@ -54,7 +54,7 @@ var (
 
 func main() {
 	rootCmd := createCommand(os.Args[1:])
-	rootCmd.Execute()
+	_ = rootCmd.Execute()
 }
 
 func configureLogging(_ *cobra.Command, _ []string) error {
@@ -105,7 +105,7 @@ func createCommand(args []string) *cobra.Command {
 				return fmt.Errorf("failed to create OSSMPullStrategy: %v", err)
 			}
 
-			w, err := server.NewWorker(config, p, baseURL, serveDirectory)
+			w, err := server.NewWorker(config, p, baseURL, serveDirectory, nil)
 			if err != nil {
 				return fmt.Errorf("failed to create worker: %v", err)
 			}
