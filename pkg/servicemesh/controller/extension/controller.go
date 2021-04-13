@@ -32,6 +32,8 @@ import (
 	"istio.io/pkg/log"
 )
 
+var controllerlog = log.RegisterScope("controller", "Extension controller", 0)
+
 type serviceMeshExtensionController struct {
 	informer cache.SharedIndexInformer
 	store    map[string]*v1alpha1.ServiceMeshExtension
@@ -85,7 +87,7 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 				extension, ok := obj.(*v1alpha1.ServiceMeshExtension)
 				if ok && extension != nil {
 					store[extension.Namespace+"/"+extension.Name] = extension.DeepCopy()
-					log.Infof("Added extension %s/%s", extension.Namespace, extension.Name)
+					controllerlog.Infof("Added extension %s/%s", extension.Namespace, extension.Name)
 
 				}
 			},
@@ -93,7 +95,7 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 				extension, ok := cur.(*v1alpha1.ServiceMeshExtension)
 				if ok && extension != nil {
 					store[extension.Namespace+"/"+extension.Name] = extension.DeepCopy()
-					log.Infof("Updated extension %s/%s", extension.Namespace, extension.Name)
+					controllerlog.Infof("Updated extension %s/%s", extension.Namespace, extension.Name)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -101,17 +103,17 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 				if !ok {
 					tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 					if !ok {
-						log.Errorf("Couldn't get object from tombstone %#v", obj)
+						controllerlog.Errorf("Couldn't get object from tombstone %#v", obj)
 						return
 					}
 					extension, ok = tombstone.Obj.(*v1alpha1.ServiceMeshExtension)
 					if !ok {
-						log.Errorf("Tombstone contained object that is not a service mesh member roll %#v", obj)
+						controllerlog.Errorf("Tombstone contained object that is not a service mesh member roll %#v", obj)
 						return
 					}
 				}
 				delete(store, extension.Namespace+"/"+extension.Name)
-				log.Infof("Deleted extension %s/%s", extension.Namespace, extension.Name)
+				controllerlog.Infof("Deleted extension %s/%s", extension.Namespace, extension.Name)
 			},
 		})
 
