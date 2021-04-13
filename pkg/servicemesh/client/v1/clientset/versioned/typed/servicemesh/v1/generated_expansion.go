@@ -16,4 +16,6 @@
 
 package v1
 
+type ServiceMeshExtensionExpansion interface{}
+
 type ServiceMeshMemberRollExpansion interface{}
