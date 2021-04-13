@@ -40,7 +40,7 @@ import (
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/visibility"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	maistramodel "istio.io/istio/pkg/servicemesh/model"
 	"istio.io/pkg/monitoring"
 )
@@ -1909,11 +1909,11 @@ func (ps *PushContext) initExtensions(env *Environment) error {
 }
 
 // Extensions return the merged ExtensionWrappers of a proxy
-func (ps *PushContext) Extensions(proxy *Proxy) map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper {
+func (ps *PushContext) Extensions(proxy *Proxy) map[v1.FilterPhase][]*maistramodel.ExtensionWrapper {
 	if proxy == nil {
 		return nil
 	}
-	matchedExtensions := make(map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper)
+	matchedExtensions := make(map[v1.FilterPhase][]*maistramodel.ExtensionWrapper)
 	// First get all the extension configs from the config root namespace
 	// and then add the ones from proxy's own namespace
 	if ps.Mesh.RootNamespace != "" {
@@ -1949,8 +1949,8 @@ func (ps *PushContext) Extensions(proxy *Proxy) map[v1alpha1.FilterPhase][]*mais
 			// if priority is the same, in order to still have a
 			// deterministic ordering, we sort based on name + image
 			if slice[i].Priority == slice[j].Priority {
-				in := slice[i].Image + slice[i].Image
-				jn := slice[j].Image + slice[i].Image
+				in := slice[i].Name + slice[i].Image
+				jn := slice[j].Name + slice[j].Image
 				return in < jn
 			}
 			return slice[i].Priority > slice[j].Priority

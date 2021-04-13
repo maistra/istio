@@ -59,12 +59,13 @@ maistra-gen-k8s-client:
 	@$(client_gen) --clientset-name $(kube_clientset_name) --input-base "" --input  $(kube_api_packages_v1alpha1) --output-package $(kube_clientset_package_v1alpha1) -h $(kube_go_header_text) --plural-exceptions ServiceExports:ServiceExports
 	@$(lister_gen) --input-dirs $(kube_api_packages_v1alpha1) --output-package $(kube_listers_package_v1alpha1) -h $(kube_go_header_text) --plural-exceptions ServiceExports:ServiceExports
 	@$(informer_gen) --input-dirs $(kube_api_packages_v1alpha1) --versioned-clientset-package $(kube_clientset_package_v1alpha1)/$(kube_clientset_name) --listers-package $(kube_listers_package_v1alpha1) --output-package $(kube_informers_package_v1alpha1) -h $(kube_go_header_text) --plural-exceptions ServiceExports:ServiceExports
+	@$(deepcopy_gen) -i  $(kube_api_packages_v1) -O zz_generated.deepcopy -h $(kube_go_header_text)
 	@$(move_generated)
 
 # this is manual for now, but should be moved into a separate maistra/api project
-.PHONY: maistra-gen-k8s-client
+.PHONY: maistra-gen-crd-resources
 maistra-gen-crd-resources:
-	@$(controller_gen) crd paths=./pkg/servicemesh/apis/servicemesh/v1alpha1/ crd:preserveUnknownFields=false,crdVersions=v1beta1 output:dir=./manifests/charts/base/crds
+	@$(controller_gen) crd paths=./pkg/servicemesh/apis/servicemesh/v1/ paths=./pkg/servicemesh/apis/servicemesh/v1alpha1/ crd:preserveUnknownFields=false,crdVersions=v1beta1 output:dir=./manifests/charts/base/crds
 	@sed -i -e '/---/d' ./manifests/charts/base/crds/maistra.io_*.yaml
 
 .PHONY: vendor
@@ -78,4 +79,4 @@ maistra-gen: maistra-gen-k8s-client vendor
 
 .PHONY: mec
 mec: build
-BINARIES += ./mec/cmd/mec
+STANDARD_BINARIES += ./mec/cmd/mec
