@@ -55,6 +55,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		SchemeGroupVersion,
 		&ServiceMeshMemberRoll{},
 		&ServiceMeshMemberRollList{},
+		&ServiceMeshExtension{},
+		&ServiceMeshExtensionList{},
 	)
 
 	metav1.AddToGroupVersion(
@@ -70,6 +72,8 @@ func addKnownInternalTypes(scheme *runtime.Scheme) error {
 		InternalSchemeGroupVersion,
 		&ServiceMeshMemberRoll{},
 		&ServiceMeshMemberRollList{},
+		&ServiceMeshExtension{},
+		&ServiceMeshExtensionList{},
 	)
 
 	return nil

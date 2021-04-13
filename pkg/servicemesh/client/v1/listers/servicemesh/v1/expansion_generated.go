@@ -16,6 +16,14 @@
 
 package v1
 
+// ServiceMeshExtensionListerExpansion allows custom methods to be added to
+// ServiceMeshExtensionLister.
+type ServiceMeshExtensionListerExpansion interface{}
+
+// ServiceMeshExtensionNamespaceListerExpansion allows custom methods to be added to
+// ServiceMeshExtensionNamespaceLister.
+type ServiceMeshExtensionNamespaceListerExpansion interface{}
+
 // ServiceMeshMemberRollListerExpansion allows custom methods to be added to
 // ServiceMeshMemberRollLister.
 type ServiceMeshMemberRollListerExpansion interface{}

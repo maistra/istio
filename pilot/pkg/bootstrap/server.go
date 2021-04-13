@@ -70,6 +70,7 @@ import (
 	"istio.io/istio/pkg/kube/inject"
 	"istio.io/istio/pkg/kube/multicluster"
 	"istio.io/istio/pkg/security"
+	smv1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/istio/pkg/servicemesh/federation"
 	"istio.io/istio/pkg/servicemesh/federation/common"
@@ -1026,6 +1027,36 @@ func (s *Server) initRegistryEventHandlers() {
 				})
 			})
 		}
+	}
+
+	if s.environment.ExtensionStore != nil {
+		s.environment.ExtensionStore.RegisterEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				s.XDSServer.Push(&model.PushRequest{Full: true})
+			},
+			DeleteFunc: func(obj interface{}) {
+				s.XDSServer.Push(&model.PushRequest{Full: true})
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				oldExtension, ok := oldObj.(*smv1.ServiceMeshExtension)
+				if !ok {
+					log.Errorf("object could not be decoded into a ServiceMeshExtension: %+v", oldObj)
+					return
+				}
+				newExtension, ok := newObj.(*smv1.ServiceMeshExtension)
+				if !ok {
+					log.Errorf("object could not be decoded into a ServiceMeshExtension: %+v", newObj)
+					return
+				}
+
+				if oldExtension.Generation == newExtension.Generation && oldExtension.Status.ObservedGeneration == newExtension.Status.ObservedGeneration {
+					// Empty update event, nothing has changed.
+					return
+				}
+
+				s.XDSServer.Push(&model.PushRequest{Full: true})
+			},
+		})
 	}
 }
 
