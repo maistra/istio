@@ -172,12 +172,22 @@ func (i *multiNamespaceInformer) RemoveNamespace(namespace string) {
 	i.lock.Lock()
 	defer i.lock.Unlock()
 
+	informer, ok := i.informers[namespace]
+
 	// If there is no informer for this namespace, this is a no-op.
-	if _, ok := i.informers[namespace]; !ok {
+	if !ok {
 		return
 	}
 
-	close(i.stopChans[namespace])
+	close(i.stopChans[namespace]) // Stop the informer.
+
+	// Send delete events for everything in the store.
+	for _, obj := range informer.GetStore().List() {
+		for _, h := range i.eventHandlers {
+			h.handler.OnDelete(obj)
+		}
+	}
+
 	delete(i.stopChans, namespace)
 	delete(i.informers, namespace)
 

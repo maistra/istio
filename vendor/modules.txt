@@ -680,7 +680,7 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/maistra/xns-informer v0.0.0-20210129184249-388865e61925
+# github.com/maistra/xns-informer v0.0.0-20210413152253-f6302cf13b64
 ## explicit
 github.com/maistra/xns-informer/pkg/generated/istio
 github.com/maistra/xns-informer/pkg/generated/istio/internalinterfaces
