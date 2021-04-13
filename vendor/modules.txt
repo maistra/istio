@@ -131,6 +131,7 @@ github.com/cheekybits/genny/parse
 github.com/cheggaaa/pb/v3
 github.com/cheggaaa/pb/v3/termutil
 # github.com/cncf/udpa/go v0.0.0-20210930031921-04548b0d99d4
+## explicit
 github.com/cncf/udpa/go/udpa/type/v1
 # github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1
 ## explicit

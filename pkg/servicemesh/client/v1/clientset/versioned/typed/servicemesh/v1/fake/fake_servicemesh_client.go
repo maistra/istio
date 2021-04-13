@@ -26,6 +26,10 @@ type FakeMaistraV1 struct {
 	*testing.Fake
 }
 
+func (c *FakeMaistraV1) ServiceMeshExtensions(namespace string) v1.ServiceMeshExtensionInterface {
+	return &FakeServiceMeshExtensions{c, namespace}
+}
+
 func (c *FakeMaistraV1) ServiceMeshMemberRolls(namespace string) v1.ServiceMeshMemberRollInterface {
 	return &FakeServiceMeshMemberRolls{c, namespace}
 }

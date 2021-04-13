@@ -15,11 +15,10 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -28,8 +27,9 @@ import (
 
 	"istio.io/istio/mec/pkg/pullstrategy/ossm"
 	"istio.io/istio/mec/pkg/server"
+	"istio.io/istio/pkg/cmd"
 	"istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/pkg/filewatcher"
@@ -47,28 +47,39 @@ var (
 	registryURL    string
 	resyncPeriod   string
 	namespace      string
+
+	mainlog        = log.RegisterScope("main", "Main function", 0)
+	loggingOptions = log.DefaultOptions()
 )
 
 func main() {
-	cmd := createCommand(os.Args[1:])
-	if err := cmd.Execute(); err != nil {
-		log.Errora(err)
+	rootCmd := createCommand(os.Args[1:])
+	_ = rootCmd.Execute()
+}
+
+func configureLogging(_ *cobra.Command, _ []string) error {
+	if err := log.Configure(loggingOptions); err != nil {
+		return err
 	}
+	return nil
 }
 
 func createCommand(args []string) *cobra.Command {
-	cmd := &cobra.Command{
-		Use: "mec [flags]",
-		Run: func(cmd *cobra.Command, args []string) {
+	rootCmd := &cobra.Command{
+		Use:               "mec [flags]",
+		PersistentPreRunE: configureLogging,
+		RunE: func(command *cobra.Command, args []string) error {
 			resyncPeriod, err := time.ParseDuration(resyncPeriod)
 			if err != nil {
-				log.Warnf("Failed to parse --resyncPeriod parameter, using default 5m: %v", err)
+				mainlog.Warnf("Failed to parse --resyncPeriod parameter, using default 5m: %v", err)
 				resyncPeriod = defaultResyncPeriod
 			}
+
 			config, err := kube.BuildClientConfig("", "")
 			if err != nil {
-				log.Errorf("Failed to BuildClientConfig(): %v", err)
+				return fmt.Errorf("failed to BuildClientConfig(): %v", err)
 			}
+
 			mrc, err := memberroll.NewMemberRollController(
 				config,
 				namespace,
@@ -76,43 +87,45 @@ func createCommand(args []string) *cobra.Command {
 				resyncPeriod,
 			)
 			if err != nil {
-				log.Errorf("Failed to create MemberRoll Controller: %v", err)
+				return fmt.Errorf("failed to create MemberRoll Controller: %v", err)
 			}
+
 			ec, err := extension.NewControllerFromConfigFile(
 				"",
-				[]string{"test"},
+				[]string{namespace},
 				mrc,
 				resyncPeriod,
 			)
 			if err != nil {
-				log.Errorf("Failed to create Extension Controller: %v", err)
+				return fmt.Errorf("failed to create Extension Controller: %v", err)
 			}
 
-			p, err := ossm.NewOSSMPullStrategy(config, namespace)
+			p, err := ossm.NewOSSMPullStrategy(config)
 			if err != nil {
-				log.Errorf("Failed to create OSSMPullStrategy: %v", err)
+				return fmt.Errorf("failed to create OSSMPullStrategy: %v", err)
 			}
-			w, err := server.NewWorker(config, p, baseURL, serveDirectory)
+
+			w, err := server.NewWorker(config, p, baseURL, serveDirectory, nil)
 			if err != nil {
-				log.Errorf("Failed to create worker: %v", err)
-				return
+				return fmt.Errorf("failed to create worker: %v", err)
 			}
+
 			ec.RegisterEventHandler(cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
 					w.Queue <- server.ExtensionEvent{
-						Extension: obj.(*v1alpha1.ServiceMeshExtension).DeepCopy(),
+						Extension: obj.(*v1.ServiceMeshExtension).DeepCopy(),
 						Operation: server.ExtensionEventOperationAdd,
 					}
 				},
 				DeleteFunc: func(obj interface{}) {
 					w.Queue <- server.ExtensionEvent{
-						Extension: obj.(*v1alpha1.ServiceMeshExtension).DeepCopy(),
+						Extension: obj.(*v1.ServiceMeshExtension).DeepCopy(),
 						Operation: server.ExtensionEventOperationDelete,
 					}
 				},
 				UpdateFunc: func(oldObj, newObj interface{}) {
 					w.Queue <- server.ExtensionEvent{
-						Extension: newObj.(*v1alpha1.ServiceMeshExtension).DeepCopy(),
+						Extension: newObj.(*v1.ServiceMeshExtension).DeepCopy(),
 						Operation: server.ExtensionEventOperationUpdate,
 					}
 				},
@@ -121,10 +134,10 @@ func createCommand(args []string) *cobra.Command {
 			ws := server.NewHTTPServer(8080, serveDirectory)
 
 			fw := filewatcher.NewWatcher()
+			defer fw.Close()
 			err = fw.Add(tokenPath)
 			if err != nil {
-				_ = fw.Close()
-				log.Errorf("Error while creating watch on token file %s: %v", tokenPath, err)
+				return fmt.Errorf("error while creating watch on token file %s: %v", tokenPath, err)
 			}
 
 			stopChan := make(chan struct{}, 1)
@@ -135,17 +148,18 @@ func createCommand(args []string) *cobra.Command {
 					for {
 						select {
 						case <-ch:
-							log.Infof("Token file updated. Logging in to registry")
+							mainlog.Infof("Token file updated. Logging in to registry")
 							tokenBytes, err := ioutil.ReadFile(tokenPath)
 							if err != nil {
-								log.Errorf("Error reading token file %s: %v", tokenPath, err)
+								mainlog.Errorf("Error reading token file %s: %v", tokenPath, err)
+								continue
 							}
 							token := strings.TrimSpace(string(tokenBytes))
 							output, err := p.Login(registryURL, token)
 							if err != nil {
-								log.Errorf("Error logging in to registry: %v", err)
+								mainlog.Errorf("Error logging in to registry: %v", err)
 							} else {
-								log.Infof("%s", output)
+								mainlog.Infof("%s", output)
 							}
 						case <-stopChan:
 							return
@@ -160,28 +174,23 @@ func createCommand(args []string) *cobra.Command {
 			w.Start(stopChan)
 			ws.Start(stopChan)
 
-			sigc := make(chan os.Signal, 1)
-			signal.Notify(sigc,
-				syscall.SIGHUP,
-				syscall.SIGINT,
-				syscall.SIGTERM,
-				syscall.SIGQUIT)
-			<-sigc
-			fw.Close()
-			close(stopChan)
+			cmd.WaitSignal(stopChan)
+
+			return nil
 		},
 	}
 
-	cmd.SetArgs(args)
-	cmd.PersistentFlags().StringVar(&resyncPeriod, "resyncPeriod", "5m", "Resync Period for the K8s controllers")
-	cmd.PersistentFlags().StringVar(&baseURL, "baseURL", "http://mec.istio-system.svc.cluster.local", "Base URL")
-	cmd.PersistentFlags().StringVar(&tokenPath, "tokenPath", "/var/run/secrets/kubernetes.io/serviceaccount/token",
+	rootCmd.SetArgs(args)
+	rootCmd.PersistentFlags().StringVar(&resyncPeriod, "resyncPeriod", "5m", "Resync Period for the K8s controllers")
+	rootCmd.PersistentFlags().StringVar(&baseURL, "baseURL", "http://mec.istio-system.svc.cluster.local", "Base URL")
+	rootCmd.PersistentFlags().StringVar(&tokenPath, "tokenPath", "/var/run/secrets/kubernetes.io/serviceaccount/token",
 		"File containing to the ServiceAccount token to be used for communication with the K8s API server")
-	cmd.PersistentFlags().StringVar(&serveDirectory, "serveDirectory", "/srv",
+	rootCmd.PersistentFlags().StringVar(&serveDirectory, "serveDirectory", "/srv",
 		"Directory form where WASM modules are served")
-	cmd.PersistentFlags().StringVar(&registryURL, "registryURL", "image-registry.openshift-image-registry.svc:5000",
+	rootCmd.PersistentFlags().StringVar(&registryURL, "registryURL", "image-registry.openshift-image-registry.svc:5000",
 		"Registry from which to pull images by default")
-	cmd.PersistentFlags().StringVar(&namespace, "namespace", "istio-system", "The namespace that MEC is running in")
+	rootCmd.PersistentFlags().StringVar(&namespace, "namespace", "istio-system", "The namespace that MEC is running in")
 
-	return cmd
+	loggingOptions.AttachCobraFlags(rootCmd)
+	return rootCmd
 }

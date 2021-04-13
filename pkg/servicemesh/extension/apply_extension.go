@@ -17,16 +17,19 @@ package extension
 import (
 	"fmt"
 
+	udpa "github.com/cncf/udpa/go/udpa/type/v1"
 	xdslistener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	hcm_filter "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	xdsutil "github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	structpb "github.com/golang/protobuf/ptypes/struct"
+	structpb2 "google.golang.org/protobuf/types/known/structpb"
 
 	"istio.io/istio/istioctl/pkg/authz"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/networking/util"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	maistramodel "istio.io/istio/pkg/servicemesh/model"
+	"istio.io/pkg/log"
 )
 
 const (
@@ -52,15 +55,19 @@ func ApplyListenerPatches(
 		return nil
 	}
 	extensionsMap := push.Extensions(proxy)
+	if len(extensionsMap) == 0 {
+		return listener
+	}
 
-	relevantFilterChains := []string{}
+	// FIXME: https://issues.redhat.com/browse/MAISTRA-2321
+	relevantFilterChains := []string{fmt.Sprintf("0.0.0.0_%d", proxy.ServiceInstances[0].Endpoint.EndpointPort)}
 	for _, si := range proxy.ServiceInstances {
 		relevantFilterChains = append(relevantFilterChains, fmt.Sprintf("%s_%d", si.Endpoint.Address, si.Endpoint.EndpointPort))
 	}
 
 	for fcIndex, fc := range listener.FilterChains {
 		// copy extensions map
-		extensions := make(map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper)
+		extensions := make(map[v1.FilterPhase][]*maistramodel.ExtensionWrapper)
 		for k, v := range extensionsMap {
 			extensions[k] = []*maistramodel.ExtensionWrapper{}
 			extensions[k] = append(extensions[k], v...)
@@ -79,7 +86,7 @@ func ApplyListenerPatches(
 		var hcm *hcm_filter.HttpConnectionManager
 		var hcmIndex int
 		for i, f := range fc.Filters {
-			if f.Name == "envoy.http_connection_manager" {
+			if f.Name == "envoy.filters.network.http_connection_manager" {
 				if hcm = authz.GetHTTPConnectionManager(f); hcm != nil {
 					hcmIndex = i
 					break
@@ -93,33 +100,33 @@ func ApplyListenerPatches(
 		for _, httpFilter := range hcm.GetHttpFilters() {
 			switch httpFilter.Name {
 			case "envoy.filters.http.jwt_authn":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
 			case "istio_authn":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthN)
 			case "envoy.filters.http.rbac":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthZ)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthZ)
 			case "istio.stats":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthZ)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthZ)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreStats)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreStats)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostStats)
-			case "envoy.router":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthZ)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthZ)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreStats)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostStats)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostStats)
+			case "envoy.filters.http.router":
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreStats)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostStats)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
 			default:
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
@@ -148,44 +155,58 @@ func ApplyListenerListPatches(
 }
 
 func popAppend(list []*hcm_filter.HttpFilter,
-	filterMap map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper,
-	phase v1alpha1.FilterPhase) []*hcm_filter.HttpFilter {
+	filterMap map[v1.FilterPhase][]*maistramodel.ExtensionWrapper,
+	phase v1.FilterPhase) []*hcm_filter.HttpFilter {
 	for _, ext := range filterMap[phase] {
-		list = append(list, toEnvoyHTTPFilter(ext))
+		if filter := toEnvoyHTTPFilter(ext); filter != nil {
+			list = append(list, filter)
+		}
 	}
 	filterMap[phase] = []*maistramodel.ExtensionWrapper{}
 	return list
 }
 
 func toEnvoyHTTPFilter(extension *maistramodel.ExtensionWrapper) *hcm_filter.HttpFilter {
+	configuration, err := structpb2.NewStruct(extension.Config.Data)
+	if err != nil {
+		log.Errorf("invalid configuration for extension %s: %v", extension.Name, err)
+		return nil
+	}
+
 	return &hcm_filter.HttpFilter{
 		Name: "envoy.filters.http.wasm",
 		ConfigType: &hcm_filter.HttpFilter_TypedConfig{
-			TypedConfig: util.MessageToAny(&structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					"config": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-						"name":          {Kind: &structpb.Value_StringValue{StringValue: extension.Name}},
-						"rootId":        {Kind: &structpb.Value_StringValue{StringValue: extension.Name + "_root"}},
-						"configuration": {Kind: &structpb.Value_StringValue{StringValue: extension.Config}},
-						"vmConfig": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-							"code": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-								"remote": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-									"httpUri": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-										"uri":     {Kind: &structpb.Value_StringValue{StringValue: extension.FilterURL}},
-										"cluster": {Kind: &structpb.Value_StringValue{StringValue: CacheCluster}},
-										"timeout": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-											"seconds": {Kind: &structpb.Value_NumberValue{NumberValue: 30}},
+			TypedConfig: util.MessageToAny(&udpa.TypedStruct{
+				TypeUrl: "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm",
+				Value: &structpb.Struct{
+					Fields: map[string]*structpb.Value{
+						"config": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+							"name":   {Kind: &structpb.Value_StringValue{StringValue: extension.Name}},
+							"rootId": {Kind: &structpb.Value_StringValue{StringValue: extension.Name + "_root"}},
+							"configuration": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+								"@type": {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/google.protobuf.Struct"}},
+								"value": {Kind: &structpb.Value_StructValue{StructValue: configuration}},
+							}}}},
+							"vmConfig": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+								"code": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+									"remote": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+										"httpUri": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+											"uri":     {Kind: &structpb.Value_StringValue{StringValue: extension.FilterURL}},
+											"cluster": {Kind: &structpb.Value_StringValue{StringValue: CacheCluster}},
+											"timeout": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+												"seconds": {Kind: &structpb.Value_NumberValue{NumberValue: 30}},
+											}}}},
+										}}}},
+										"sha256": {Kind: &structpb.Value_StringValue{StringValue: extension.SHA256}},
+										"retryPolicy": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+											"numRetries": {Kind: &structpb.Value_NumberValue{NumberValue: 2}},
 										}}}},
 									}}}},
-									"sha256": {Kind: &structpb.Value_StringValue{StringValue: extension.SHA256}},
-									"retryPolicy": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-										"numRetries": {Kind: &structpb.Value_NumberValue{NumberValue: 2}},
-									}}}},
 								}}}},
+								"runtime": {Kind: &structpb.Value_StringValue{StringValue: Runtime}},
 							}}}},
-							"runtime": {Kind: &structpb.Value_StringValue{StringValue: Runtime}},
 						}}}},
-					}}}},
+					},
 				},
 			}),
 		},

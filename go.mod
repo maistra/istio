@@ -28,6 +28,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/cheggaaa/pb/v3 v3.0.8
+	github.com/cncf/udpa/go v0.0.0-20210930031921-04548b0d99d4
 	github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1
 	github.com/containernetworking/cni v1.0.1
 	github.com/containernetworking/plugins v1.0.1
