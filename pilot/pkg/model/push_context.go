@@ -1641,7 +1641,7 @@ func (ps *PushContext) Extensions(proxy *Proxy) map[v1alpha1.FilterPhase][]*mais
 			// deterministic ordering, we sort based on name + image
 			if slice[i].Priority == slice[j].Priority {
 				in := slice[i].Image + slice[i].Image
-				jn := slice[j].Image + slice[i].Image
+				jn := slice[j].Image + slice[j].Image
 				return in < jn
 			}
 			return slice[i].Priority > slice[j].Priority
