@@ -43,11 +43,10 @@ const (
 
 type ossmPullStrategy struct {
 	client imagev1client.ImageV1Interface
-	//namespace string
 	podman podman.Podman
 }
 
-func NewOSSMPullStrategy(config *rest.Config /*, namespace string*/) (model.ImagePullStrategy, error) {
+func NewOSSMPullStrategy(config *rest.Config) (model.ImagePullStrategy, error) {
 	cl, err := imagev1client.NewForConfig(config)
 	if err != nil {
 		return nil, err
@@ -55,12 +54,11 @@ func NewOSSMPullStrategy(config *rest.Config /*, namespace string*/) (model.Imag
 
 	return &ossmPullStrategy{
 		client: cl,
-		//namespace: namespace,
 		podman: podman.NewPodman(),
 	}, nil
 }
 
-func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, namespace string, image *model.ImageRef) (*imagev1.ImageStreamImport, error) {
+func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, namespace string, image *model.ImageRef) error {
 	isi := &imagev1.ImageStreamImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: imageStreamName,
@@ -83,11 +81,11 @@ func (p *ossmPullStrategy) createImageStreamImport(imageStreamName string, names
 
 	createdIsi, err := p.client.ImageStreamImports(namespace).Create(context.TODO(), isi, metav1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	strategylog.Infof("Created ImageStreamImport %s", createdIsi.Name)
-	return createdIsi, nil
+	return nil
 }
 
 type ossmImage struct {
@@ -133,7 +131,7 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
 	imageStreamName := getImageStreamName(image)
 
 	if (pullPolicy == corev1.PullAlways) || (pullPolicy == "" && image.Tag == "latest") {
-		_, err := p.createImageStreamImport(imageStreamName, namespace, image)
+		err := p.createImageStreamImport(imageStreamName, namespace, image)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
 		}
@@ -142,7 +140,7 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
 	for attempt := 0; attempt < 2; attempt++ {
 		imageStream, err = p.client.ImageStreams(namespace).Get(context.TODO(), imageStreamName, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
-			_, err := p.createImageStreamImport(imageStreamName, namespace, image)
+			err := p.createImageStreamImport(imageStreamName, namespace, image)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
 			}
@@ -160,7 +158,7 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
 				}
 			}
 			if !tagFound {
-				_, err := p.createImageStreamImport(imageStreamName, namespace, image)
+				err := p.createImageStreamImport(imageStreamName, namespace, image)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create ImageStreamImport: %s", err)
 				}

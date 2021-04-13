@@ -25,7 +25,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/openshift/client-go/image/clientset/versioned/fake"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -137,7 +136,6 @@ func TestGetImage(t *testing.T) {
 	clientSet := fake.NewSimpleClientset(&namespace)
 	strategy := &ossmPullStrategy{
 		client: clientSet.ImageV1(),
-		//namespace: namespace.Name,
 		podman: fakePodman,
 	}
 
@@ -315,7 +313,6 @@ func TestPullImage(t *testing.T) {
 
 			strategy := &ossmPullStrategy{
 				client: clientSet.ImageV1(),
-				//namespace: namespace.Name,
 				podman: fakePodman,
 			}
 			image, err := strategy.PullImage(tc.imageRef, "test", v1.PullAlways, nil)
