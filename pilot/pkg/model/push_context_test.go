@@ -42,7 +42,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/visibility"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	"istio.io/istio/pkg/servicemesh/model"
 	"istio.io/istio/tests/util/leak"
 )
@@ -443,24 +443,24 @@ func TestExtensions(t *testing.T) {
 	extensionsTestNamespace := []*model.ExtensionWrapper{
 		{
 			Name:             "v1",
-			Phase:            v1alpha1.FilterPhasePreAuthN,
+			Phase:            v1.FilterPhasePreAuthN,
 			WorkloadSelector: map[string]string{"app": "v1"},
 		},
 		{
 			Name:             "v2",
-			Phase:            v1alpha1.FilterPhasePostAuthN,
+			Phase:            v1.FilterPhasePostAuthN,
 			WorkloadSelector: map[string]string{"app": "v2"},
 		},
 	}
 	extensionsRootNamespace := []*model.ExtensionWrapper{
 		{
 			Name:             "globalv1",
-			Phase:            v1alpha1.FilterPhasePreAuthZ,
+			Phase:            v1.FilterPhasePreAuthZ,
 			WorkloadSelector: map[string]string{"app": "v1"},
 		},
 		{
 			Name:             "globalv3",
-			Phase:            v1alpha1.FilterPhasePostAuthZ,
+			Phase:            v1.FilterPhasePostAuthZ,
 			WorkloadSelector: map[string]string{"app": "v3"},
 		},
 	}
@@ -478,7 +478,7 @@ func TestExtensions(t *testing.T) {
 	cases := []struct {
 		name               string
 		proxy              *Proxy
-		expectedExtensions map[v1alpha1.FilterPhase][]*model.ExtensionWrapper
+		expectedExtensions map[v1.FilterPhase][]*model.ExtensionWrapper
 	}{
 		{
 			name: "proxy matches two extensions",
@@ -486,18 +486,18 @@ func TestExtensions(t *testing.T) {
 				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v1"}},
 				ConfigNamespace: "test-ns",
 			},
-			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
-				v1alpha1.FilterPhasePreAuthN: {
+			expectedExtensions: map[v1.FilterPhase][]*model.ExtensionWrapper{
+				v1.FilterPhasePreAuthN: {
 					{
 						Name:             "v1",
-						Phase:            v1alpha1.FilterPhasePreAuthN,
+						Phase:            v1.FilterPhasePreAuthN,
 						WorkloadSelector: map[string]string{"app": "v1"},
 					},
 				},
-				v1alpha1.FilterPhasePreAuthZ: {
+				v1.FilterPhasePreAuthZ: {
 					{
 						Name:             "globalv1",
-						Phase:            v1alpha1.FilterPhasePreAuthZ,
+						Phase:            v1.FilterPhasePreAuthZ,
 						WorkloadSelector: map[string]string{"app": "v1"},
 					},
 				},
@@ -509,11 +509,11 @@ func TestExtensions(t *testing.T) {
 				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v3"}},
 				ConfigNamespace: "istio-system",
 			},
-			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
-				v1alpha1.FilterPhasePostAuthZ: {
+			expectedExtensions: map[v1.FilterPhase][]*model.ExtensionWrapper{
+				v1.FilterPhasePostAuthZ: {
 					{
 						Name:             "globalv3",
-						Phase:            v1alpha1.FilterPhasePostAuthZ,
+						Phase:            v1.FilterPhasePostAuthZ,
 						WorkloadSelector: map[string]string{"app": "v3"},
 					},
 				},
@@ -526,7 +526,7 @@ func TestExtensions(t *testing.T) {
 				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v4"}},
 				ConfigNamespace: "test-ns",
 			},
-			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{},
+			expectedExtensions: map[v1.FilterPhase][]*model.ExtensionWrapper{},
 		},
 
 		{
@@ -535,11 +535,11 @@ func TestExtensions(t *testing.T) {
 				Metadata:        &NodeMetadata{IstioVersion: "1.4.0", Labels: map[string]string{"app": "v3"}},
 				ConfigNamespace: "test-n2",
 			},
-			expectedExtensions: map[v1alpha1.FilterPhase][]*model.ExtensionWrapper{
-				v1alpha1.FilterPhasePostAuthZ: {
+			expectedExtensions: map[v1.FilterPhase][]*model.ExtensionWrapper{
+				v1.FilterPhasePostAuthZ: {
 					{
 						Name:             "globalv3",
-						Phase:            v1alpha1.FilterPhasePostAuthZ,
+						Phase:            v1.FilterPhasePostAuthZ,
 						WorkloadSelector: map[string]string{"app": "v3"},
 					},
 				},
