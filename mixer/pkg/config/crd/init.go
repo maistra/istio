@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"istio.io/istio/pkg/features"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -37,6 +39,8 @@ import (
 
 // defaultDiscoveryBuilder builds the actual discovery client using the kubernetes config.
 func defaultDiscoveryBuilder(conf *rest.Config) (discovery.DiscoveryInterface, error) {
+	conf.QPS = float32(features.APIServerQPS)
+	conf.Burst = features.APIServerBurst
 	client, err := discovery.NewDiscoveryClientForConfig(conf)
 	return client, err
 }

@@ -64,7 +64,7 @@ import (
 	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/dns"
-	tls_features "istio.io/istio/pkg/features"
+	core_features "istio.io/istio/pkg/features"
 	"istio.io/istio/pkg/jwt"
 	istiokeepalive "istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
@@ -446,8 +446,8 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 			return fmt.Errorf("failed creating kube config: %v", err)
 		}
 		s.kubeClient, err = kubelib.CreateClientset(args.Config.KubeConfig, "", func(config *rest.Config) {
-			config.QPS = float32(features.PilotAPIServerQPS)
-			config.Burst = features.PilotAPIServerBurst
+			config.QPS = float32(core_features.APIServerQPS)
+			config.Burst = core_features.APIServerBurst
 		})
 		if err != nil {
 			return fmt.Errorf("failed creating kube client: %v", err)
@@ -632,10 +632,10 @@ func (s *Server) initDNSTLSListener(dns string, tlsOptions TLSOptions) error {
 		Certificates:     []tls.Certificate{certP},
 		ClientAuth:       tls.NoClientCert,
 		ClientCAs:        cp,
-		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
-		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
-		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
-		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
+		MinVersion:       core_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       core_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     core_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: core_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 	}
 
 	// create secure grpc listener
@@ -679,10 +679,10 @@ func (s *Server) initSecureGrpcServer(port string, keepalive *istiokeepalive.Opt
 		Certificates:     []tls.Certificate{certP},
 		ClientAuth:       tls.VerifyClientCertIfGiven,
 		ClientCAs:        cp,
-		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
-		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
-		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
-		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
+		MinVersion:       core_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       core_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     core_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: core_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 	}
 
 	tlsCreds := credentials.NewTLS(cfg)

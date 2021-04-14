@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"istio.io/istio/pilot/pkg/features"
+	core_features "istio.io/istio/pkg/features"
 
 	"github.com/hashicorp/go-multierror"
 
@@ -205,8 +205,8 @@ func NewClient(config string, context string, schemas collection.Schemas, domain
 		return nil, err
 	}
 
-	cfg.QPS = float32(features.PilotAPIServerQPS)
-	cfg.Burst = features.PilotAPIServerBurst
+	cfg.QPS = float32(core_features.APIServerQPS)
+	cfg.Burst = core_features.APIServerBurst
 
 	return NewForConfig(cfg, schemas, domainSuffix, configLedger, revision)
 }
