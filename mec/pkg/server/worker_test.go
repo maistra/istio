@@ -31,8 +31,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fakestrategy "istio.io/istio/mec/pkg/pullstrategy/fake"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	"istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/fake"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	"istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/fake"
 )
 
 const (
@@ -48,38 +48,38 @@ func TestWorker(t *testing.T) {
 	testCases := []struct {
 		name           string
 		events         []ExtensionEvent
-		extension      v1alpha1.ServiceMeshExtension
-		expectedStatus v1alpha1.ServiceMeshExtensionStatus
+		extension      v1.ServiceMeshExtension
+		expectedStatus v1.ServiceMeshExtensionStatus
 		expectedError  bool
 	}{
 		{
 			name: "invalid_resource",
-			extension: v1alpha1.ServiceMeshExtension{
+			extension: v1.ServiceMeshExtension{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "test",
 					Generation: 1,
 				},
 			},
-			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{},
+			expectedStatus: v1.ServiceMeshExtensionStatus{},
 			expectedError:  true,
 		},
 		{
 			name: "valid_resource",
-			extension: v1alpha1.ServiceMeshExtension{
+			extension: v1.ServiceMeshExtension{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "test",
 					Generation: 1,
 				},
-				Spec: v1alpha1.ServiceMeshExtensionSpec{
+				Spec: v1.ServiceMeshExtensionSpec{
 					Image: "docker.io/test/test:latest",
 				},
 			},
-			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{
+			expectedStatus: v1.ServiceMeshExtensionStatus{
 				Phase:    fakestrategy.FakeManifest.Phase,
 				Priority: fakestrategy.FakeManifest.Priority,
-				Deployment: v1alpha1.DeploymentStatus{
+				Deployment: v1.DeploymentStatus{
 					Ready:           true,
 					ContainerSHA256: fakestrategy.FakeContainerSHA256,
 					SHA256:          fakestrategy.FakeModuleSHA256,
@@ -89,35 +89,35 @@ func TestWorker(t *testing.T) {
 		},
 		{
 			name: "valid_resource_update_module",
-			extension: v1alpha1.ServiceMeshExtension{
+			extension: v1.ServiceMeshExtension{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "test",
 					Generation: 1,
 				},
-				Spec: v1alpha1.ServiceMeshExtensionSpec{
+				Spec: v1.ServiceMeshExtensionSpec{
 					Image: "docker.io/test/test:latest",
 				},
 			},
 			events: []ExtensionEvent{
 				{
-					Extension: &v1alpha1.ServiceMeshExtension{
+					Extension: &v1.ServiceMeshExtension{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:       "test",
 							Namespace:  "test",
 							Generation: 2,
 						},
-						Spec: v1alpha1.ServiceMeshExtensionSpec{
+						Spec: v1.ServiceMeshExtensionSpec{
 							Image: "docker.io/other/test:latest",
 						},
 					},
 					Operation: ExtensionEventOperationUpdate,
 				},
 			},
-			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{
+			expectedStatus: v1.ServiceMeshExtensionStatus{
 				Phase:    fakestrategy.FakeManifest2.Phase,
 				Priority: fakestrategy.FakeManifest2.Priority,
-				Deployment: v1alpha1.DeploymentStatus{
+				Deployment: v1.DeploymentStatus{
 					Ready:           true,
 					ContainerSHA256: fakestrategy.FakeContainer2SHA256,
 					SHA256:          fakestrategy.FakeModule2SHA256,
@@ -127,25 +127,25 @@ func TestWorker(t *testing.T) {
 		},
 		{
 			name: "valid_resource_update_priority",
-			extension: v1alpha1.ServiceMeshExtension{
+			extension: v1.ServiceMeshExtension{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "test",
 					Generation: 1,
 				},
-				Spec: v1alpha1.ServiceMeshExtensionSpec{
+				Spec: v1.ServiceMeshExtensionSpec{
 					Image: "docker.io/test/test:latest",
 				},
 			},
 			events: []ExtensionEvent{
 				{
-					Extension: &v1alpha1.ServiceMeshExtension{
+					Extension: &v1.ServiceMeshExtension{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:       "test",
 							Namespace:  "test",
 							Generation: 3,
 						},
-						Spec: v1alpha1.ServiceMeshExtensionSpec{
+						Spec: v1.ServiceMeshExtensionSpec{
 							Image:    "docker.io/test/test:latest",
 							Priority: &oneHundred,
 						},
@@ -153,13 +153,13 @@ func TestWorker(t *testing.T) {
 					Operation: ExtensionEventOperationUpdate,
 				},
 				{
-					Extension: &v1alpha1.ServiceMeshExtension{
+					Extension: &v1.ServiceMeshExtension{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:       "test",
 							Namespace:  "test",
 							Generation: 4,
 						},
-						Spec: v1alpha1.ServiceMeshExtensionSpec{
+						Spec: v1.ServiceMeshExtensionSpec{
 							Image:    "docker.io/test/test:latest",
 							Priority: &twoHundred,
 						},
@@ -167,10 +167,10 @@ func TestWorker(t *testing.T) {
 					Operation: ExtensionEventOperationUpdate,
 				},
 			},
-			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{
+			expectedStatus: v1.ServiceMeshExtensionStatus{
 				Phase:    fakestrategy.FakeManifest.Phase,
 				Priority: 200,
-				Deployment: v1alpha1.DeploymentStatus{
+				Deployment: v1.DeploymentStatus{
 					Ready:           true,
 					ContainerSHA256: fakestrategy.FakeContainerSHA256,
 					SHA256:          fakestrategy.FakeModuleSHA256,
@@ -244,10 +244,10 @@ func TestWorker(t *testing.T) {
 				t.Fatalf("failed to Get() extension: %s", err)
 			}
 			// ignore Deployment.URL because it contains a random UUID
-			if !cmp.Equal(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1alpha1.DeploymentStatus{}, "URL")) {
-				t.Fatalf("comparison failed -got +want: %s", cmp.Diff(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1alpha1.DeploymentStatus{}, "URL")))
+			if !cmp.Equal(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1.DeploymentStatus{}, "URL")) {
+				t.Fatalf("comparison failed -got +want: %s", cmp.Diff(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1.DeploymentStatus{}, "URL")))
 			}
-			if !cmp.Equal(tc.expectedStatus, v1alpha1.ServiceMeshExtensionStatus{}) {
+			if !cmp.Equal(tc.expectedStatus, v1.ServiceMeshExtensionStatus{}) {
 				// validate URL
 				url, err := url.Parse(updatedExtension.Status.Deployment.URL)
 				if err != nil {
@@ -267,7 +267,7 @@ func TestWorker(t *testing.T) {
 func createWorker(tmpDir string, clientset *fake.Clientset) *Worker {
 	return &Worker{
 		baseURL:        baseURL,
-		client:         clientset.MaistraV1alpha1(),
+		client:         clientset.MaistraV1(),
 		mut:            sync.Mutex{},
 		pullStrategy:   &fakestrategy.PullStrategy{},
 		serveDirectory: tmpDir,

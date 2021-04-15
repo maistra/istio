@@ -12,19 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1alpha1
+package v1
 
 import (
+	"encoding/json"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // ServiceMeshExtensionSpec defines the desired state of ServiceMeshExtension
 type ServiceMeshExtensionSpec struct {
-	Image            string           `json:"image,omitempty"`
-	WorkloadSelector WorkloadSelector `json:"workloadSelector,omitempty"`
-	Phase            *FilterPhase     `json:"phase"`
-	Priority         *int             `json:"priority,omitempty"`
-	Config           string           `json:"config,omitempty"`
+	Image            string                        `json:"image,omitempty"`
+	ImagePullPolicy  corev1.PullPolicy             `json:"imagePullPolicy,omitempty"`
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	WorkloadSelector WorkloadSelector              `json:"workloadSelector,omitempty"`
+	Phase            *FilterPhase                  `json:"phase"`
+	Priority         *int                          `json:"priority,omitempty"`
+
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Config ServiceMeshExtensionConfig `json:"config,omitempty"`
 }
 
 // ServiceMeshExtensionStatus defines the observed state of ServiceMeshExtension
@@ -60,7 +68,7 @@ const (
 )
 
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:statusw
+// +kubebuilder:subresource:status
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -81,4 +89,29 @@ type ServiceMeshExtensionList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ServiceMeshExtension `json:"items"`
+}
+
+type ServiceMeshExtensionConfig struct {
+	Data map[string]interface{} `json:"-"`
+}
+
+func (smec *ServiceMeshExtensionConfig) DeepCopy() *ServiceMeshExtensionConfig {
+	if smec == nil {
+		return nil
+	}
+	out := new(ServiceMeshExtensionConfig)
+	out.Data = runtime.DeepCopyJSON(smec.Data)
+	return out
+}
+
+func (smec *ServiceMeshExtensionConfig) UnmarshalJSON(in []byte) error {
+	err := json.Unmarshal(in, &smec.Data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (smec *ServiceMeshExtensionConfig) MarshalJSON() ([]byte, error) {
+	return json.Marshal(smec.Data)
 }

@@ -59,6 +59,7 @@ maistra-gen-k8s-client:
 	@$(client_gen) --clientset-name $(kube_clientset_name) --input-base "" --input  $(kube_api_packages_v1alpha1) --output-package $(kube_clientset_package_v1alpha1) -h $(kube_go_header_text)
 	@$(lister_gen) --input-dirs $(kube_api_packages_v1alpha1) --output-package $(kube_listers_package_v1alpha1) -h $(kube_go_header_text)
 	@$(informer_gen) --input-dirs $(kube_api_packages_v1alpha1) --versioned-clientset-package $(kube_clientset_package_v1alpha1)/$(kube_clientset_name) --listers-package $(kube_listers_package_v1alpha1) --output-package $(kube_informers_package_v1alpha1) -h $(kube_go_header_text)
+	@$(deepcopy_gen) -i  $(kube_api_packages_v1) -O zz_generated.deepcopy -h $(kube_go_header_text)
 	@$(move_generated)
 
 # this is manual for now, but should be moved into a separate maistra/api project

@@ -27,12 +27,12 @@ import (
 
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
 	"istio.io/istio/mec/pkg/model"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	v1alpha1client "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/typed/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	v1client "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
 	"istio.io/pkg/log"
 )
 
@@ -45,7 +45,7 @@ const (
 )
 
 type ExtensionEvent struct {
-	Extension *v1alpha1.ServiceMeshExtension
+	Extension *v1.ServiceMeshExtension
 	Operation ExtensionEventOperation
 }
 
@@ -70,7 +70,7 @@ type Worker struct {
 
 	pullStrategy model.ImagePullStrategy
 
-	client       v1alpha1client.MaistraV1alpha1Interface
+	client       v1client.MaistraV1Interface
 	errorChannel chan error
 	stopChan     <-chan struct{}
 	Queue        chan ExtensionEvent
@@ -79,7 +79,7 @@ type Worker struct {
 }
 
 func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseURL, serveDirectory string, errorChannel chan error) (*Worker, error) {
-	client, err := v1alpha1client.NewForConfig(config)
+	client, err := v1client.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client from config: %v", err)
 	}
@@ -229,7 +229,7 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 
 	extension.Status.ObservedGeneration = extension.Generation
 	workerlog.Debugf("Updating extension status with: %v", extension.Status)
-	_, err = w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, v1.UpdateOptions{})
+	_, err = w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to update status of extension: %v", err)
 	}

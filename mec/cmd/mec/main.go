@@ -29,7 +29,7 @@ import (
 	"istio.io/istio/mec/pkg/server"
 	"istio.io/istio/pkg/cmd"
 	"istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/pkg/filewatcher"
@@ -100,7 +100,7 @@ func createCommand(args []string) *cobra.Command {
 				return fmt.Errorf("failed to create Extension Controller: %v", err)
 			}
 
-			p, err := ossm.NewOSSMPullStrategy(config /*, namespace*/)
+			p, err := ossm.NewOSSMPullStrategy(config)
 			if err != nil {
 				return fmt.Errorf("failed to create OSSMPullStrategy: %v", err)
 			}
@@ -113,19 +113,19 @@ func createCommand(args []string) *cobra.Command {
 			ec.RegisterEventHandler(cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
 					w.Queue <- server.ExtensionEvent{
-						Extension: obj.(*v1alpha1.ServiceMeshExtension).DeepCopy(),
+						Extension: obj.(*v1.ServiceMeshExtension).DeepCopy(),
 						Operation: server.ExtensionEventOperationAdd,
 					}
 				},
 				DeleteFunc: func(obj interface{}) {
 					w.Queue <- server.ExtensionEvent{
-						Extension: obj.(*v1alpha1.ServiceMeshExtension).DeepCopy(),
+						Extension: obj.(*v1.ServiceMeshExtension).DeepCopy(),
 						Operation: server.ExtensionEventOperationDelete,
 					}
 				},
 				UpdateFunc: func(oldObj, newObj interface{}) {
 					w.Queue <- server.ExtensionEvent{
-						Extension: newObj.(*v1alpha1.ServiceMeshExtension).DeepCopy(),
+						Extension: newObj.(*v1.ServiceMeshExtension).DeepCopy(),
 						Operation: server.ExtensionEventOperationUpdate,
 					}
 				},

@@ -22,7 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"istio.io/istio/mec/pkg/model"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 )
 
 const (
@@ -48,14 +48,14 @@ priority: 12
 		SchemaVersion: model.ManifestSchemaVersion1,
 		Name:          "testExtension",
 		Description:   "bogus",
-		Phase:         v1alpha1.FilterPhasePostAuthN,
+		Phase:         v1.FilterPhasePostAuthN,
 		Priority:      12,
 	}
 	FakeManifest2 = model.Manifest{
 		SchemaVersion: model.ManifestSchemaVersion1,
 		Name:          "another extension",
 		Description:   "description",
-		Phase:         v1alpha1.FilterPhasePreAuthZ,
+		Phase:         v1.FilterPhasePreAuthZ,
 		Priority:      8,
 	}
 )
