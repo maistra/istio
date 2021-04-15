@@ -26,8 +26,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	versioned_v1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/typed/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	versioned_v1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/log"
 )
@@ -36,11 +36,11 @@ var controllerlog = log.RegisterScope("controller", "Extension controller", 0)
 
 type serviceMeshExtensionController struct {
 	informer cache.SharedIndexInformer
-	store    map[string]*v1alpha1.ServiceMeshExtension
+	store    map[string]*v1.ServiceMeshExtension
 }
 
 type Controller interface {
-	GetExtensions() []*v1alpha1.ServiceMeshExtension
+	GetExtensions() []*v1.ServiceMeshExtension
 	RegisterEventHandler(handler cache.ResourceEventHandler)
 	Start(<-chan struct{})
 }
@@ -51,7 +51,7 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 		fmt.Printf("Could not create k8s config: %v", err)
 		return nil, err
 	}
-	cs, err := versioned_v1alpha1.NewForConfig(config)
+	cs, err := versioned_v1.NewForConfig(config)
 	if err != nil {
 		fmt.Printf("Could not create k8s clientset: %v", err)
 		return nil, err
@@ -72,19 +72,19 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 					return cs.ServiceMeshExtensions(namespace).Watch(context.TODO(), options)
 				},
 			},
-			&v1alpha1.ServiceMeshExtension{},
+			&v1.ServiceMeshExtension{},
 			resync,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 	}
 
-	store := make(map[string]*v1alpha1.ServiceMeshExtension)
+	store := make(map[string]*v1.ServiceMeshExtension)
 	informer := xnsinformers.NewMultiNamespaceInformer(namespaceSet, resync, newInformer)
 
 	informer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
-				extension, ok := obj.(*v1alpha1.ServiceMeshExtension)
+				extension, ok := obj.(*v1.ServiceMeshExtension)
 				if ok && extension != nil {
 					store[extension.Namespace+"/"+extension.Name] = extension.DeepCopy()
 					controllerlog.Infof("Added extension %s/%s", extension.Namespace, extension.Name)
@@ -92,21 +92,21 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 				}
 			},
 			UpdateFunc: func(old, cur interface{}) {
-				extension, ok := cur.(*v1alpha1.ServiceMeshExtension)
+				extension, ok := cur.(*v1.ServiceMeshExtension)
 				if ok && extension != nil {
 					store[extension.Namespace+"/"+extension.Name] = extension.DeepCopy()
 					controllerlog.Infof("Updated extension %s/%s", extension.Namespace, extension.Name)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
-				extension, ok := obj.(*v1alpha1.ServiceMeshExtension)
+				extension, ok := obj.(*v1.ServiceMeshExtension)
 				if !ok {
 					tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 					if !ok {
 						controllerlog.Errorf("Couldn't get object from tombstone %#v", obj)
 						return
 					}
-					extension, ok = tombstone.Obj.(*v1alpha1.ServiceMeshExtension)
+					extension, ok = tombstone.Obj.(*v1.ServiceMeshExtension)
 					if !ok {
 						controllerlog.Errorf("Tombstone contained object that is not a service mesh member roll %#v", obj)
 						return
@@ -123,8 +123,8 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 	}, nil
 }
 
-func (ec *serviceMeshExtensionController) GetExtensions() []*v1alpha1.ServiceMeshExtension {
-	ret := []*v1alpha1.ServiceMeshExtension{}
+func (ec *serviceMeshExtensionController) GetExtensions() []*v1.ServiceMeshExtension {
+	ret := []*v1.ServiceMeshExtension{}
 	for _, v := range ec.store {
 		ret = append(ret, v.DeepCopy())
 	}

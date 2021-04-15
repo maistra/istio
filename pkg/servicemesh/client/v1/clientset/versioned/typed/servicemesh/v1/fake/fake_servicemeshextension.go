@@ -19,7 +19,7 @@ package fake
 import (
 	"context"
 
-	v1alpha1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	servicemeshv1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -30,29 +30,29 @@ import (
 
 // FakeServiceMeshExtensions implements ServiceMeshExtensionInterface
 type FakeServiceMeshExtensions struct {
-	Fake *FakeServicemeshV1alpha1
+	Fake *FakeMaistraV1
 	ns   string
 }
 
-var servicemeshextensionsResource = schema.GroupVersionResource{Group: "servicemesh", Version: "v1alpha1", Resource: "servicemeshextensions"}
+var servicemeshextensionsResource = schema.GroupVersionResource{Group: "maistra.io", Version: "v1", Resource: "servicemeshextensions"}
 
-var servicemeshextensionsKind = schema.GroupVersionKind{Group: "servicemesh", Version: "v1alpha1", Kind: "ServiceMeshExtension"}
+var servicemeshextensionsKind = schema.GroupVersionKind{Group: "maistra.io", Version: "v1", Kind: "ServiceMeshExtension"}
 
 // Get takes name of the serviceMeshExtension, and returns the corresponding serviceMeshExtension object, and an error if there is any.
-func (c *FakeServiceMeshExtensions) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ServiceMeshExtension, err error) {
+func (c *FakeServiceMeshExtensions) Get(ctx context.Context, name string, options v1.GetOptions) (result *servicemeshv1.ServiceMeshExtension, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(servicemeshextensionsResource, c.ns, name), &v1alpha1.ServiceMeshExtension{})
+		Invokes(testing.NewGetAction(servicemeshextensionsResource, c.ns, name), &servicemeshv1.ServiceMeshExtension{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceMeshExtension), err
+	return obj.(*servicemeshv1.ServiceMeshExtension), err
 }
 
 // List takes label and field selectors, and returns the list of ServiceMeshExtensions that match those selectors.
-func (c *FakeServiceMeshExtensions) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ServiceMeshExtensionList, err error) {
+func (c *FakeServiceMeshExtensions) List(ctx context.Context, opts v1.ListOptions) (result *servicemeshv1.ServiceMeshExtensionList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(servicemeshextensionsResource, servicemeshextensionsKind, c.ns, opts), &v1alpha1.ServiceMeshExtensionList{})
+		Invokes(testing.NewListAction(servicemeshextensionsResource, servicemeshextensionsKind, c.ns, opts), &servicemeshv1.ServiceMeshExtensionList{})
 
 	if obj == nil {
 		return nil, err
@@ -62,8 +62,8 @@ func (c *FakeServiceMeshExtensions) List(ctx context.Context, opts v1.ListOption
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &v1alpha1.ServiceMeshExtensionList{ListMeta: obj.(*v1alpha1.ServiceMeshExtensionList).ListMeta}
-	for _, item := range obj.(*v1alpha1.ServiceMeshExtensionList).Items {
+	list := &servicemeshv1.ServiceMeshExtensionList{ListMeta: obj.(*servicemeshv1.ServiceMeshExtensionList).ListMeta}
+	for _, item := range obj.(*servicemeshv1.ServiceMeshExtensionList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -79,43 +79,43 @@ func (c *FakeServiceMeshExtensions) Watch(ctx context.Context, opts v1.ListOptio
 }
 
 // Create takes the representation of a serviceMeshExtension and creates it.  Returns the server's representation of the serviceMeshExtension, and an error, if there is any.
-func (c *FakeServiceMeshExtensions) Create(ctx context.Context, serviceMeshExtension *v1alpha1.ServiceMeshExtension, opts v1.CreateOptions) (result *v1alpha1.ServiceMeshExtension, err error) {
+func (c *FakeServiceMeshExtensions) Create(ctx context.Context, serviceMeshExtension *servicemeshv1.ServiceMeshExtension, opts v1.CreateOptions) (result *servicemeshv1.ServiceMeshExtension, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(servicemeshextensionsResource, c.ns, serviceMeshExtension), &v1alpha1.ServiceMeshExtension{})
+		Invokes(testing.NewCreateAction(servicemeshextensionsResource, c.ns, serviceMeshExtension), &servicemeshv1.ServiceMeshExtension{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceMeshExtension), err
+	return obj.(*servicemeshv1.ServiceMeshExtension), err
 }
 
 // Update takes the representation of a serviceMeshExtension and updates it. Returns the server's representation of the serviceMeshExtension, and an error, if there is any.
-func (c *FakeServiceMeshExtensions) Update(ctx context.Context, serviceMeshExtension *v1alpha1.ServiceMeshExtension, opts v1.UpdateOptions) (result *v1alpha1.ServiceMeshExtension, err error) {
+func (c *FakeServiceMeshExtensions) Update(ctx context.Context, serviceMeshExtension *servicemeshv1.ServiceMeshExtension, opts v1.UpdateOptions) (result *servicemeshv1.ServiceMeshExtension, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(servicemeshextensionsResource, c.ns, serviceMeshExtension), &v1alpha1.ServiceMeshExtension{})
+		Invokes(testing.NewUpdateAction(servicemeshextensionsResource, c.ns, serviceMeshExtension), &servicemeshv1.ServiceMeshExtension{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceMeshExtension), err
+	return obj.(*servicemeshv1.ServiceMeshExtension), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeServiceMeshExtensions) UpdateStatus(ctx context.Context, serviceMeshExtension *v1alpha1.ServiceMeshExtension, opts v1.UpdateOptions) (*v1alpha1.ServiceMeshExtension, error) {
+func (c *FakeServiceMeshExtensions) UpdateStatus(ctx context.Context, serviceMeshExtension *servicemeshv1.ServiceMeshExtension, opts v1.UpdateOptions) (*servicemeshv1.ServiceMeshExtension, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(servicemeshextensionsResource, "status", c.ns, serviceMeshExtension), &v1alpha1.ServiceMeshExtension{})
+		Invokes(testing.NewUpdateSubresourceAction(servicemeshextensionsResource, "status", c.ns, serviceMeshExtension), &servicemeshv1.ServiceMeshExtension{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceMeshExtension), err
+	return obj.(*servicemeshv1.ServiceMeshExtension), err
 }
 
 // Delete takes name of the serviceMeshExtension and deletes it. Returns an error if one occurs.
 func (c *FakeServiceMeshExtensions) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(servicemeshextensionsResource, c.ns, name), &v1alpha1.ServiceMeshExtension{})
+		Invokes(testing.NewDeleteAction(servicemeshextensionsResource, c.ns, name), &servicemeshv1.ServiceMeshExtension{})
 
 	return err
 }
@@ -124,17 +124,17 @@ func (c *FakeServiceMeshExtensions) Delete(ctx context.Context, name string, opt
 func (c *FakeServiceMeshExtensions) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(servicemeshextensionsResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &v1alpha1.ServiceMeshExtensionList{})
+	_, err := c.Fake.Invokes(action, &servicemeshv1.ServiceMeshExtensionList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched serviceMeshExtension.
-func (c *FakeServiceMeshExtensions) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ServiceMeshExtension, err error) {
+func (c *FakeServiceMeshExtensions) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *servicemeshv1.ServiceMeshExtension, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(servicemeshextensionsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ServiceMeshExtension{})
+		Invokes(testing.NewPatchSubresourceAction(servicemeshextensionsResource, c.ns, name, pt, data, subresources...), &servicemeshv1.ServiceMeshExtension{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceMeshExtension), err
+	return obj.(*servicemeshv1.ServiceMeshExtension), err
 }

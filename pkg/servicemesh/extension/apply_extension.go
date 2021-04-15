@@ -25,7 +25,7 @@ import (
 	"istio.io/istio/istioctl/pkg/authz"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/networking/util"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	maistramodel "istio.io/istio/pkg/servicemesh/model"
 )
 
@@ -60,7 +60,7 @@ func ApplyListenerPatches(
 
 	for fcIndex, fc := range listener.FilterChains {
 		//copy extensions map
-		extensions := make(map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper)
+		extensions := make(map[v1.FilterPhase][]*maistramodel.ExtensionWrapper)
 		for k, v := range extensionsMap {
 			extensions[k] = []*maistramodel.ExtensionWrapper{}
 			extensions[k] = append(extensions[k], v...)
@@ -93,33 +93,33 @@ func ApplyListenerPatches(
 		for _, httpFilter := range hcm.GetHttpFilters() {
 			switch httpFilter.Name {
 			case "envoy.filters.http.jwt_authn":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
 			case "istio_authn":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthN)
 			case "envoy.filters.http.rbac":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthZ)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthZ)
 			case "istio.stats":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthZ)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthZ)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreStats)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreStats)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostStats)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostStats)
 			case "envoy.router":
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthN)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreAuthZ)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostAuthZ)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePreStats)
-				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1alpha1.FilterPhasePostStats)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthN)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostAuthZ)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePreStats)
+				newHTTPFilters = popAppend(newHTTPFilters, extensions, v1.FilterPhasePostStats)
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
 			default:
 				newHTTPFilters = append(newHTTPFilters, httpFilter)
@@ -148,8 +148,8 @@ func ApplyListenerListPatches(
 }
 
 func popAppend(list []*hcm_filter.HttpFilter,
-	filterMap map[v1alpha1.FilterPhase][]*maistramodel.ExtensionWrapper,
-	phase v1alpha1.FilterPhase) []*hcm_filter.HttpFilter {
+	filterMap map[v1.FilterPhase][]*maistramodel.ExtensionWrapper,
+	phase v1.FilterPhase) []*hcm_filter.HttpFilter {
 	for _, ext := range filterMap[phase] {
 		list = append(list, toEnvoyHTTPFilter(ext))
 	}

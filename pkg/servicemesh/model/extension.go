@@ -16,7 +16,7 @@ package model
 
 import (
 	"istio.io/istio/pkg/config/labels"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 )
 
 // ExtensionWrapper is a wrapper around extensions
@@ -27,11 +27,11 @@ type ExtensionWrapper struct {
 	Image            string
 	FilterURL        string
 	SHA256           string
-	Phase            v1alpha1.FilterPhase
+	Phase            v1.FilterPhase
 	Priority         int
 }
 
-func ToWrapper(extension *v1alpha1.ServiceMeshExtension) *ExtensionWrapper {
+func ToWrapper(extension *v1.ServiceMeshExtension) *ExtensionWrapper {
 	return &ExtensionWrapper{
 		Name:             extension.Name,
 		WorkloadSelector: extension.Spec.WorkloadSelector.Labels,

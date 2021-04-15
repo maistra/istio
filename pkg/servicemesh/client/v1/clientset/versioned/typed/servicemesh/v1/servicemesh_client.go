@@ -24,12 +24,17 @@ import (
 
 type MaistraV1Interface interface {
 	RESTClient() rest.Interface
+	ServiceMeshExtensionsGetter
 	ServiceMeshMemberRollsGetter
 }
 
 // MaistraV1Client is used to interact with features provided by the maistra.io group.
 type MaistraV1Client struct {
 	restClient rest.Interface
+}
+
+func (c *MaistraV1Client) ServiceMeshExtensions(namespace string) ServiceMeshExtensionInterface {
+	return newServiceMeshExtensions(c, namespace)
 }
 
 func (c *MaistraV1Client) ServiceMeshMemberRolls(namespace string) ServiceMeshMemberRollInterface {
