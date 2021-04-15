@@ -77,6 +77,9 @@ func (lllw *listLenListerWatcher) hasReachedListCount() bool {
 }
 
 func (lllw *listLenListerWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
+	// Reset the resource version to the return latest from the API server otherwise
+	// we could hit https://github.com/kubernetes/kubernetes/issues/91073
+	options.ResourceVersion = ""
 	lllw.resetCounts()
 	result, err := lllw.listerWatcher.List(options)
 	if err != nil {
