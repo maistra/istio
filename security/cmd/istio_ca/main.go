@@ -21,6 +21,9 @@ import (
 	"strings"
 	"time"
 
+	"istio.io/istio/pkg/features"
+	"k8s.io/client-go/rest"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -353,7 +356,10 @@ func runCA() {
 			webhookServiceNames, opts.istioCaStorageNamespace, opts.customDNSNames)
 	}
 
-	cs, err := kubelib.CreateClientset(opts.kubeConfigFile, "")
+	cs, err := kubelib.CreateClientset(opts.kubeConfigFile, "", func(config *rest.Config) {
+		config.QPS = float32(features.APIServerQPS)
+		config.Burst = features.APIServerBurst
+	})
 	if err != nil {
 		fatalf("Could not create k8s clientset: %v", err)
 	}
