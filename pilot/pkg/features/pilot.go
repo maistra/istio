@@ -351,16 +351,4 @@ var (
 	PilotEnableLoopBlockers = env.RegisterBoolVar("PILOT_ENABLE_LOOP_BLOCKER", true,
 		"If enabled, Envoy will be configured to prevent traffic directly to the inbound/outbound "+
 			"ports (15001/15006). This prevents traffic loops. This option will be removed, and considered always enabled, in 1.9.").Get()
-
-	PilotAPIServerQPS = env.RegisterFloatVar(
-		"PILOT_API_SERVER_QPS",
-		500,
-		"The default pilot API server QPS",
-	).Get()
-
-	PilotAPIServerBurst = env.RegisterIntVar(
-		"PILOT_API_SERVER_BURST",
-		1000,
-		"The default pilot API server Burst",
-	).Get()
 )
