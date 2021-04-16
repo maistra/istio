@@ -15,6 +15,7 @@
 package client
 
 import (
+	"istio.io/istio/pkg/features"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -43,6 +44,8 @@ func NewKubeFromConfigFile(kubeconfig string) (Interfaces, error) {
 	if err != nil {
 		return nil, err
 	}
+	config.QPS = float32(features.APIServerQPS)
+	config.Burst = features.APIServerBurst
 
 	return NewKube(config), nil
 }

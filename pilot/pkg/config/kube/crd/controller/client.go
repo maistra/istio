@@ -19,8 +19,9 @@ package controller
 import (
 	"context"
 	"fmt"
-	"istio.io/istio/pilot/pkg/features"
 	"time"
+
+	core_features "istio.io/istio/pkg/features"
 
 	"istio.io/pkg/ledger"
 
@@ -169,8 +170,8 @@ func NewClient(config string, context string, descriptor schema.Set, domainSuffi
 		return nil, err
 	}
 
-	cfg.QPS = float32(features.PilotAPIServerQPS)
-	cfg.Burst = features.PilotAPIServerBurst
+	cfg.QPS = float32(core_features.APIServerQPS)
+	cfg.Burst = core_features.APIServerBurst
 
 	return NewForConfig(cfg, descriptor, domainSuffix, configLedger)
 }

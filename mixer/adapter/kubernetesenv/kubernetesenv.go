@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 
+	"istio.io/istio/pkg/features"
+
 	v1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // needed for auth
@@ -367,6 +369,8 @@ func newKubernetesClient(kubeconfigPath string, env adapter.Env) (k8s.Interface,
 	if err != nil || config == nil {
 		return nil, fmt.Errorf("could not retrieve kubeconfig: %v", err)
 	}
+	config.QPS = float32(features.APIServerQPS)
+	config.Burst = features.APIServerBurst
 	return k8s.NewForConfig(config)
 }
 

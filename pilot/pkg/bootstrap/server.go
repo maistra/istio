@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	tls_features "istio.io/istio/pkg/features"
+	core_features "istio.io/istio/pkg/features"
 	"k8s.io/client-go/rest"
 
 	"github.com/davecgh/go-spew/spew"
@@ -570,8 +570,8 @@ func (s *Server) getKubeCfgFile(args *PilotArgs) string {
 func (s *Server) initKubeClient(args *PilotArgs) error {
 	if hasKubeRegistry(args) && args.Config.FileDir == "" {
 		client, kuberr := kubelib.CreateClientset(s.getKubeCfgFile(args), "", func(config *rest.Config) {
-			config.QPS = float32(features.PilotAPIServerQPS)
-			config.Burst = features.PilotAPIServerBurst
+			config.QPS = float32(core_features.APIServerQPS)
+			config.Burst = core_features.APIServerBurst
 		})
 		if kuberr != nil {
 			return multierror.Prefix(kuberr, "failed to connect to Kubernetes API.")
@@ -1307,10 +1307,10 @@ func (s *Server) initSecureGrpcServer(options *istiokeepalive.Options) error {
 			NextProtos:       []string{"h2", "http/1.1"},
 			ClientAuth:       tls.RequireAndVerifyClientCert,
 			ClientCAs:        caCertPool,
-			MinVersion:       tls_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
-			MaxVersion:       tls_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
-			CipherSuites:     tls_features.TlsCipherSuites.GetGoTlsCipherSuites(),
-			CurvePreferences: tls_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
+			MinVersion:       core_features.TlsMinProtocolVersion.GetGoTlsProtocolVersion(),
+			MaxVersion:       core_features.TlsMaxProtocolVersion.GetGoTlsProtocolVersion(),
+			CipherSuites:     core_features.TlsCipherSuites.GetGoTlsCipherSuites(),
+			CurvePreferences: core_features.TlsEcdhCurves.GetGoTlsEcdhCurves(),
 		},
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.ProtoMajor == 2 && strings.HasPrefix(
