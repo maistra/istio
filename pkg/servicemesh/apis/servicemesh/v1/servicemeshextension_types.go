@@ -15,8 +15,11 @@
 package v1
 
 import (
+	"encoding/json"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // ServiceMeshExtensionSpec defines the desired state of ServiceMeshExtension
@@ -27,7 +30,9 @@ type ServiceMeshExtensionSpec struct {
 	WorkloadSelector WorkloadSelector              `json:"workloadSelector,omitempty"`
 	Phase            *FilterPhase                  `json:"phase"`
 	Priority         *int                          `json:"priority,omitempty"`
-	Config           string                        `json:"config,omitempty"`
+
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Config ServiceMeshExtensionConfig `json:"config,omitempty"`
 }
 
 // ServiceMeshExtensionStatus defines the observed state of ServiceMeshExtension
@@ -63,7 +68,7 @@ const (
 )
 
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:statusw
+// +kubebuilder:subresource:status
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -77,10 +82,36 @@ type ServiceMeshExtension struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ServiceMeshExtensionList contains a list of ServiceMeshExtension
 type ServiceMeshExtensionList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ServiceMeshExtension `json:"items"`
+}
+
+type ServiceMeshExtensionConfig struct {
+	Data map[string]interface{} `json:"-"`
+}
+
+func (in *ServiceMeshExtensionConfig) DeepCopy() *ServiceMeshExtensionConfig {
+	if in == nil {
+		return nil
+	}
+	out := new(ServiceMeshExtensionConfig)
+	out.Data = runtime.DeepCopyJSON(in.Data)
+	return out
+}
+
+func (h *ServiceMeshExtensionConfig) UnmarshalJSON(in []byte) error {
+	err := json.Unmarshal(in, &h.Data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h *ServiceMeshExtensionConfig) MarshalJSON() ([]byte, error) {
+	return json.Marshal(h.Data)
 }

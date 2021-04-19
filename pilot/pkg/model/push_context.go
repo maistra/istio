@@ -1582,19 +1582,25 @@ func (ps *PushContext) EnvoyFilters(proxy *Proxy) *EnvoyFilterWrapper {
 
 // pre computes extensions per namespace
 func (ps *PushContext) initExtensions(env *Environment) error {
+	log.Infof("initExtensions 0")
 	if env == nil || env.ExtensionStore == nil {
 		return nil
 	}
 	ps.extensionsByNamespace = map[string][]*maistramodel.ExtensionWrapper{}
 	for _, extension := range env.ExtensionStore.GetExtensions() {
+		log.Infof("initExtensions 1. Extension = %s/%s", extension.Namespace, extension.Name)
+		log.Infof("initExtensions 1. Extension = %+v", extension)
 		if ps.extensionsByNamespace[extension.Namespace] == nil {
+			log.Infof("initExtensions 2")
 			ps.extensionsByNamespace[extension.Namespace] = []*maistramodel.ExtensionWrapper{}
 		}
 		if extension.Status.Deployment.Ready {
+			log.Infof("initExtensions 3")
 			wrapper := maistramodel.ToWrapper(extension)
 			ps.extensionsByNamespace[extension.Namespace] = append(ps.extensionsByNamespace[extension.Namespace], wrapper)
 		}
 	}
+	log.Infof("initExtensions 6 extensionsByNamespace = %+v", ps.extensionsByNamespace)
 
 	return nil
 }
@@ -1607,28 +1613,38 @@ func (ps *PushContext) Extensions(proxy *Proxy) map[v1.FilterPhase][]*maistramod
 	matchedExtensions := make(map[v1.FilterPhase][]*maistramodel.ExtensionWrapper)
 	// First get all the extension configs from the config root namespace
 	// and then add the ones from proxy's own namespace
+	log.Infof("Extensions() 0")
 	if ps.Mesh.RootNamespace != "" {
+		log.Infof("Extensions() 1 RootNamespace = %s", ps.Mesh.RootNamespace)
 		// if there is no workload selector, the config applies to all workloads
 		// if there is a workload selector, check for matching workload labels
 		for _, ext := range ps.extensionsByNamespace[ps.Mesh.RootNamespace] {
+			log.Infof("Extensions() 2 ext = %s", ext.Name)
 			var workloadLabels labels.Collection
 			if proxy.Metadata != nil && len(proxy.Metadata.Labels) > 0 {
+				log.Infof("Extensions() 3")
 				workloadLabels = labels.Collection{proxy.Metadata.Labels}
 			}
 			if ext.WorkloadSelector == nil || workloadLabels.IsSupersetOf(ext.WorkloadSelector) {
+				log.Infof("Extensions() 4")
 				matchedExtensions[ext.Phase] = append(matchedExtensions[ext.Phase], ext)
 			}
 		}
 	}
 
 	// To prevent duplicate extensions in case root namespace equals proxy's namespace
+	log.Infof("Extensions() 5 comparing %q and %q", proxy.ConfigNamespace, ps.Mesh.RootNamespace)
 	if proxy.ConfigNamespace != ps.Mesh.RootNamespace {
+		log.Infof("Extensions() 6 different")
 		for _, ext := range ps.extensionsByNamespace[proxy.ConfigNamespace] {
+			log.Infof("Extensions() 7 ext = %s", ext.Name)
 			var workloadLabels labels.Collection
 			if proxy.Metadata != nil && len(proxy.Metadata.Labels) > 0 {
+				log.Infof("Extensions() 8")
 				workloadLabels = labels.Collection{proxy.Metadata.Labels}
 			}
 			if ext.WorkloadSelector == nil || workloadLabels.IsSupersetOf(ext.WorkloadSelector) {
+				log.Infof("Extensions() 9")
 				matchedExtensions[ext.Phase] = append(matchedExtensions[ext.Phase], ext)
 			}
 		}
@@ -1640,8 +1656,8 @@ func (ps *PushContext) Extensions(proxy *Proxy) map[v1.FilterPhase][]*maistramod
 			// if priority is the same, in order to still have a
 			// deterministic ordering, we sort based on name + image
 			if slice[i].Priority == slice[j].Priority {
-				in := slice[i].Image + slice[i].Image
-				jn := slice[j].Image + slice[j].Image
+				in := slice[i].Name + slice[i].Image
+				jn := slice[j].Name + slice[j].Image
 				return in < jn
 			}
 			return slice[i].Priority > slice[j].Priority
@@ -1649,6 +1665,7 @@ func (ps *PushContext) Extensions(proxy *Proxy) map[v1.FilterPhase][]*maistramod
 		matchedExtensions[i] = slice
 	}
 
+	log.Infof("Extensions() 10 returning matchedExtensions = %+v", matchedExtensions)
 	return matchedExtensions
 }
 

@@ -23,7 +23,7 @@ import (
 type ExtensionWrapper struct {
 	Name             string
 	WorkloadSelector labels.Instance
-	Config           string
+	Config           *v1.ServiceMeshExtensionConfig
 	Image            string
 	FilterURL        string
 	SHA256           string
@@ -35,7 +35,7 @@ func ToWrapper(extension *v1.ServiceMeshExtension) *ExtensionWrapper {
 	return &ExtensionWrapper{
 		Name:             extension.Name,
 		WorkloadSelector: extension.Spec.WorkloadSelector.Labels,
-		Config:           extension.Spec.Config,
+		Config:           extension.Spec.Config.DeepCopy(),
 		Image:            extension.Spec.Image,
 		FilterURL:        extension.Status.Deployment.URL,
 		SHA256:           extension.Status.Deployment.SHA256,

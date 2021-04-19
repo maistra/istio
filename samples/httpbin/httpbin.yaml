@@ -30,8 +30,8 @@ metadata:
 spec:
   ports:
   - name: http
-    port: 8000
-    targetPort: 80
+    port: 80
+    targetPort: 8000
   selector:
     app: httpbin
 ---
@@ -58,5 +58,6 @@ spec:
       - image: docker.io/kennethreitz/httpbin
         imagePullPolicy: IfNotPresent
         name: httpbin
+        command: ["gunicorn", "-b", "0.0.0.0:8000", "httpbin:app", "-k", "gevent"]
         ports:
-        - containerPort: 80
+        - containerPort: 8000
