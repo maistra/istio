@@ -43,6 +43,9 @@ spec:
         {{- else }}
         istio: istiod
         {{- end }}
+        {{- if .Values.pilot.podLabels }}
+{{ toYaml .Values.pilot.podLabels | indent 8 }}
+        {{- end }}
       annotations:
         {{- if .Values.meshConfig.enablePrometheusMerge }}
         prometheus.io/port: "15014"
