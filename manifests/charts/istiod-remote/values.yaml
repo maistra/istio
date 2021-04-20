@@ -27,6 +27,7 @@ pilot:
   # if protocol sniffing is enabled for inbound
   enableProtocolSniffingForInbound: true
   nodeSelector: {}
+  podLabels: {}
   podAnnotations: {}
   serviceAnnotations: {}
   tolerations: []

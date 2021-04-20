@@ -34,6 +34,7 @@ pilot:
   enableProtocolSniffingForInbound: true
 
   nodeSelector: {}
+  podLabels: {}
   podAnnotations: {}
   serviceAnnotations: {}
 
