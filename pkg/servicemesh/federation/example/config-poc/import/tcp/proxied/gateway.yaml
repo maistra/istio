@@ -11,7 +11,7 @@ spec:
   servers:
   - hosts:
     # matches exported service name (fqdn)
-    - ./mongodb-aliased.mesh1-exports.svc.cluster.local
+    - ./mongodb.bookinfo.svc.mesh2.local
     #- ./mongodb.mesh1-bookinfo.svc.cluster.local
     port:
       # name = (https|tls)-<port>

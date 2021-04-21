@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package controller
+package discovery
 
 import (
 	"context"
@@ -27,9 +27,25 @@ import (
 	rawsecurity "istio.io/api/security/v1beta1"
 	rawtype "istio.io/api/type/v1beta1"
 	"istio.io/istio/pkg/config"
+	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	servicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	"istio.io/istio/pkg/servicemesh/federation"
+	"istio.io/istio/pkg/servicemesh/federation/common"
+)
+
+func init() {
+	schemasBuilder := collection.NewSchemasBuilder()
+	schemasBuilder.MustAdd(collections.IstioNetworkingV1Alpha3Destinationrules)
+	schemasBuilder.MustAdd(collections.IstioNetworkingV1Alpha3Virtualservices)
+	schemasBuilder.MustAdd(collections.IstioNetworkingV1Alpha3Gateways)
+	schemasBuilder.MustAdd(collections.IstioSecurityV1Beta1Authorizationpolicies)
+	// XXX: we should consider adding this directly to the service registry
+	schemasBuilder.MustAdd(collections.IstioNetworkingV1Alpha3Serviceentries)
+	Schemas = schemasBuilder.Build()
+}
+
+var (
+	Schemas collection.Schemas
 )
 
 // only to facilitate processing errors from the store
@@ -238,14 +254,12 @@ func discoveryIngressResourceName(instance *servicemeshv1alpha1.MeshFederation) 
 
 func federationIngressLabels(instance *servicemeshv1alpha1.MeshFederation) map[string]string {
 	return map[string]string{
-		"federation.maistra.io/proxy":     instance.Name,
 		"service.istio.io/canonical-name": instance.Spec.Gateways.Ingress.Name,
 	}
 }
 
 func federationEgressLabels(instance *servicemeshv1alpha1.MeshFederation) map[string]string {
 	return map[string]string{
-		"federation.maistra.io/proxy":     instance.Name,
 		"service.istio.io/canonical-name": instance.Spec.Gateways.Egress.Name,
 	}
 }
@@ -268,7 +282,7 @@ func (c *Controller) discoveryService(instance *servicemeshv1alpha1.MeshFederati
 	// This should turn into a service entry for the other mesh's network.
 	name := discoveryResourceName(instance)
 	discoveryHost := instance.Spec.NetworkAddress
-	discoveryPort := federation.DefaultDiscoveryPort
+	discoveryPort := common.DefaultDiscoveryPort
 	service := &config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Serviceentries.Resource().GroupVersionKind(),
@@ -308,7 +322,7 @@ func (c *Controller) discoveryService(instance *servicemeshv1alpha1.MeshFederati
 func (c *Controller) discoveryIngressGateway(instance *servicemeshv1alpha1.MeshFederation) *config.Config {
 	// Gateway definition for handling inbound discovery requests
 	name := discoveryIngressResourceName(instance)
-	discoveryPort := federation.DefaultDiscoveryPort
+	discoveryPort := common.DefaultDiscoveryPort
 	gateway := &config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
@@ -342,7 +356,7 @@ func (c *Controller) discoveryEgressGateway(instance *servicemeshv1alpha1.MeshFe
 	// Gateway definition for routing outbound discovery.  This is used to terminate source mtls for discovery.
 	name := discoveryEgressResourceName(instance)
 	egressGatewayServiceName := fmt.Sprintf("%s.%s.svc.cluster.local", instance.Spec.Gateways.Egress.Name, instance.Namespace)
-	discoveryPort := federation.DefaultDiscoveryPort
+	discoveryPort := common.DefaultDiscoveryPort
 	gateway := &config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
@@ -373,7 +387,7 @@ func (c *Controller) discoveryEgressGateway(instance *servicemeshv1alpha1.MeshFe
 func (c *Controller) discoveryAuthorizationPolicy(instance *servicemeshv1alpha1.MeshFederation) *config.Config {
 	// AuthorizationPolicy used to restrict inbound discovery requests to known clients.
 	name := discoveryResourceName(instance)
-	discoveryPort := federation.DefaultDiscoveryPort
+	discoveryPort := common.DefaultDiscoveryPort
 	ap := &config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
@@ -424,7 +438,7 @@ func (c *Controller) discoveryVirtualService(
 	egressGatewayName := fmt.Sprintf("%s/%s-egress", instance.Namespace, name)
 	discoveryService := c.discoveryHostname(name)
 	discoveryHost := instance.Spec.NetworkAddress
-	discoveryPort := federation.DefaultDiscoveryPort
+	discoveryPort := common.DefaultDiscoveryPort
 	vs := &config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
@@ -488,14 +502,15 @@ func (c *Controller) discoveryVirtualService(
 							},
 							Port: uint32(discoveryPort),
 							Uri: &rawnetworking.StringMatch{
-								MatchType: &rawnetworking.StringMatch_Prefix{
-									Prefix: "/services/",
+								MatchType: &rawnetworking.StringMatch_Exact{
+									Exact: "/services/",
 								},
 							},
 						},
 					},
 					Rewrite: &rawnetworking.HTTPRewrite{
 						Authority: istiodService,
+						Uri:       "/services/" + instance.Name,
 					},
 					Route: []*rawnetworking.HTTPRouteDestination{
 						{
@@ -518,14 +533,15 @@ func (c *Controller) discoveryVirtualService(
 							},
 							Port: uint32(discoveryPort),
 							Uri: &rawnetworking.StringMatch{
-								MatchType: &rawnetworking.StringMatch_Prefix{
-									Prefix: "/watch",
+								MatchType: &rawnetworking.StringMatch_Exact{
+									Exact: "/watch",
 								},
 							},
 						},
 					},
 					Rewrite: &rawnetworking.HTTPRewrite{
 						Authority: istiodService,
+						Uri:       "/watch/" + instance.Name,
 					},
 					Route: []*rawnetworking.HTTPRouteDestination{
 						{
@@ -548,7 +564,7 @@ func (c *Controller) discoveryDestinationRule(instance *servicemeshv1alpha1.Mesh
 	// DestinationRule to configure mTLS for outbound discovery requests
 	name := discoveryResourceName(instance)
 	discoveryHost := c.discoveryHostname(name)
-	discoveryPort := federation.DefaultDiscoveryPort
+	discoveryPort := common.DefaultDiscoveryPort
 	dr := &config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),

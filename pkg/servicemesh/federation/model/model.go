@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package federation
+package model
 
 import hashstructure "github.com/mitchellh/hashstructure/v2"
 
@@ -24,6 +24,8 @@ type ServiceListMessage struct {
 
 type ServiceMessage struct {
 	Name         string         `json:"name"`
+	Namespace    string         `json:"namespace"`
+	Hostname     string         `json:"hostname"`
 	ServicePorts []*ServicePort `json:"servicePorts"`
 }
 
@@ -51,7 +53,15 @@ var (
 )
 
 func (s *ServiceListMessage) GenerateChecksum() uint64 {
-	checksum, err := hashstructure.Hash(s, hashstructure.FormatV2, nil)
+	checksum, err := hashstructure.Hash(s, hashstructure.FormatV2, &hashstructure.HashOptions{SlicesAsSets: true})
+	if err != nil {
+		return 0
+	}
+	return checksum
+}
+
+func (s *ServiceMessage) GenerateChecksum() uint64 {
+	checksum, err := hashstructure.Hash(s, hashstructure.FormatV2, &hashstructure.HashOptions{SlicesAsSets: true})
 	if err != nil {
 		return 0
 	}

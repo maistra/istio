@@ -1,0 +1,23 @@
+apiVersion: maistra.io/v1alpha1
+kind: ServiceExports
+metadata:
+  name: mesh2
+  namespace: mesh1-system
+spec:
+  exports:
+  - type: Name
+    nameSelector:
+      name:
+        namespace: mesh1-bookinfo
+        name: ratings
+      alias:
+        namespace: bookinfo
+        name: ratings
+  - type: Name
+    nameSelector:
+      name:
+        namespace: mesh1-bookinfo
+        name: mongodb
+      alias:
+        namespace: bookinfo
+        name: mongodb

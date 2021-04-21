@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,7 +32,8 @@ import (
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/protocol"
-	"istio.io/istio/pkg/servicemesh/federation"
+	"istio.io/istio/pkg/servicemesh/federation/common"
+	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/pkg/log"
 )
 
@@ -44,7 +44,7 @@ var _ serviceregistry.Instance = &Controller{}
 var logger = log.RegisterScope("federation-registry", "federation-registry", 0)
 
 const (
-	federationPort = 15443
+	federationPort = common.FederationPort
 )
 
 // Controller aggregates data across different registries and monitors for changes
@@ -53,6 +53,7 @@ type Controller struct {
 	networkAddress string
 	discoveryURL   string
 	networkName    string
+	namespace      string
 	clusterID      string
 	resyncPeriod   time.Duration
 	backoffPolicy  *backoff.ExponentialBackOff
@@ -64,7 +65,7 @@ type Controller struct {
 	instanceStore map[host.Name][]*model.ServiceInstance
 	gatewayStore  []*model.Gateway
 
-	lastMessage *federation.ServiceListMessage
+	lastMessage *federationmodel.ServiceListMessage
 	stopped     int32
 }
 
@@ -74,6 +75,7 @@ type Options struct {
 	EgressService  string
 	NetworkName    string
 	ClusterID      string
+	Namespace      string
 	XDSUpdater     model.XDSUpdater
 	ResyncPeriod   time.Duration
 }
@@ -84,9 +86,10 @@ func NewController(opt Options) *Controller {
 	backoffPolicy.MaxElapsedTime = 0
 	return &Controller{
 		meshHolder:     opt.MeshHolder,
-		discoveryURL:   fmt.Sprintf("%s://%s:%d", federation.DiscoveryScheme, opt.EgressService, federation.DefaultDiscoveryPort),
+		discoveryURL:   fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, opt.EgressService, common.DefaultDiscoveryPort),
 		networkAddress: opt.NetworkAddress,
 		networkName:    opt.NetworkName,
+		namespace:      opt.Namespace,
 		clusterID:      opt.ClusterID,
 		xdsUpdater:     opt.XDSUpdater,
 		resyncPeriod:   opt.ResyncPeriod,
@@ -106,7 +109,7 @@ func (c *Controller) NetworkAddress() string {
 	return c.networkAddress
 }
 
-func (c *Controller) pollServices() *federation.ServiceListMessage {
+func (c *Controller) pollServices() *federationmodel.ServiceListMessage {
 	url := c.discoveryURL + "/services/"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -119,6 +122,10 @@ func (c *Controller) pollServices() *federation.ServiceListMessage {
 		logger.Errorf("Failed to GET URL: '%s': %s", url, err)
 		return nil
 	}
+	if resp.StatusCode != http.StatusOK {
+		logger.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
+		return nil
+	}
 
 	respBytes := []byte{}
 	_, err = resp.Body.Read(respBytes)
@@ -127,7 +134,7 @@ func (c *Controller) pollServices() *federation.ServiceListMessage {
 		return nil
 	}
 
-	var serviceList federation.ServiceListMessage
+	var serviceList federationmodel.ServiceListMessage
 	err = json.NewDecoder(resp.Body).Decode(&serviceList)
 	if err != nil {
 		logger.Errorf("Failed to unmarshal response bytes: %s", err)
@@ -136,28 +143,19 @@ func (c *Controller) pollServices() *federation.ServiceListMessage {
 	return &serviceList
 }
 
-func getNameAndNamespaceFromHostname(hostname string) (string, string) {
-	fragments := strings.Split(hostname, ".")
-	if len(fragments) != 5 {
-		logger.Warnf("Can't parse hostname: %s", hostname)
-		return hostname, ""
-	}
-	return fragments[0], fragments[1]
-}
-
-func (c *Controller) convertService(s *federation.ServiceMessage, networkGateways []*model.Gateway) (*model.Service, []*model.ServiceInstance) {
+func (c *Controller) convertService(s *federationmodel.ServiceMessage, networkGateways []*model.Gateway) (*model.Service, []*model.ServiceInstance) {
 	instances := []*model.ServiceInstance{}
-	name, namespace := getNameAndNamespaceFromHostname(s.Name)
+	serviceName := fmt.Sprintf("%s.%s", s.Name, s.Namespace)
 	svc := &model.Service{
 		Attributes: model.ServiceAttributes{
 			ServiceRegistry: string(serviceregistry.Federation),
-			Name:            name,
-			Namespace:       namespace,
-			UID:             fmt.Sprintf("istio://%s/services/%s", namespace, name),
+			Name:            serviceName, // simple name in the form name.namespace of the exported service
+			Namespace:       c.namespace, // the federation namespace
+			UID:             fmt.Sprintf("istio://%s/services/%s", c.namespace, serviceName),
 		},
 		Resolution:      model.ClientSideLB,
 		Address:         constants.UnspecifiedIP,
-		Hostname:        host.Name(s.Name),
+		Hostname:        host.Name(s.Hostname),
 		Ports:           model.PortList{},
 		ServiceAccounts: []string{},
 	}
@@ -175,7 +173,12 @@ func (c *Controller) convertService(s *federation.ServiceMessage, networkGateway
 				Service:     svc,
 				ServicePort: port,
 				Endpoint: &model.IstioEndpoint{
-					Address:      networkGateway.Addr,
+					// XXX: in any mode, this should be set to the exported service host
+					// this assumes that istio will route this to the ip associated with
+					// the network gateway
+					// it looks like istio will swap this address out with the address of the network gateway
+					Address: networkGateway.Addr,
+					// XXX: as above, this should be set to the actual service port
 					EndpointPort: networkGateway.Port,
 					Network:      c.networkName,
 					Locality: model.Locality{
@@ -215,7 +218,7 @@ func (c *Controller) gatewayForNetworkAddress() []*model.Gateway {
 	return gateways
 }
 
-func (c *Controller) convertServices(serviceList *federation.ServiceListMessage) {
+func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMessage) {
 	services := []*model.Service{}
 	instances := make(map[host.Name][]*model.ServiceInstance)
 	gateways := c.gatewayForNetworkAddress()
@@ -322,7 +325,7 @@ func (c *Controller) GetProxyWorkloadLabels(proxy *model.Proxy) labels.Collectio
 
 // Run starts all the controllers
 func (c *Controller) Run(stop <-chan struct{}) {
-	eventCh := make(chan *federation.WatchEvent)
+	eventCh := make(chan *federationmodel.WatchEvent)
 	refreshTicker := time.NewTicker(c.resyncPeriod)
 	defer refreshTicker.Stop()
 	c.resync()
@@ -362,7 +365,7 @@ func (c *Controller) hasStopped() bool {
 	return atomic.LoadInt32(&c.stopped) != 0
 }
 
-func (c *Controller) handleEvent(e *federation.WatchEvent) {
+func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 	if e.Service == nil {
 		checksum := c.resync()
 		if checksum != e.Checksum {
@@ -378,16 +381,16 @@ func (c *Controller) handleEvent(e *federation.WatchEvent) {
 
 	// verify we're up to date
 	lastReceivedMessage := c.lastMessage
-	if e.Action == federation.ActionAdd {
+	if e.Action == federationmodel.ActionAdd {
 		lastReceivedMessage.Services = append(c.lastMessage.Services, e.Service)
-	} else if e.Action == federation.ActionUpdate {
+	} else if e.Action == federationmodel.ActionUpdate {
 		for i, s := range lastReceivedMessage.Services {
 			if s.Name == e.Service.Name {
 				lastReceivedMessage.Services[i] = e.Service
 				break
 			}
 		}
-	} else if e.Action == federation.ActionDelete {
+	} else if e.Action == federationmodel.ActionDelete {
 		for i, s := range lastReceivedMessage.Services {
 			if s.Name == e.Service.Name {
 				lastReceivedMessage.Services[i] = c.lastMessage.Services[len(c.lastMessage.Services)-1]
@@ -409,20 +412,20 @@ func (c *Controller) handleEvent(e *federation.WatchEvent) {
 
 	endpoints := []*model.IstioEndpoint{}
 	action := model.EventAdd
-	if e.Action == federation.ActionAdd {
+	if e.Action == federationmodel.ActionAdd {
 		c.serviceStore = append(c.serviceStore, svc)
 		c.instanceStore[svc.Hostname] = instances
 		for _, instance := range instances {
 			endpoints = append(endpoints, instance.Endpoint)
 		}
-	} else if e.Action == federation.ActionUpdate {
+	} else if e.Action == federationmodel.ActionUpdate {
 		action = model.EventUpdate
 		c.serviceStore = append(c.serviceStore, svc)
 		c.instanceStore[svc.Hostname] = instances
 		for _, instance := range instances {
 			endpoints = append(endpoints, instance.Endpoint)
 		}
-	} else if e.Action == federation.ActionDelete {
+	} else if e.Action == federationmodel.ActionDelete {
 		action = model.EventDelete
 		for i, s := range c.serviceStore {
 			if s.Hostname == svc.Hostname {
@@ -440,7 +443,7 @@ func (c *Controller) handleEvent(e *federation.WatchEvent) {
 	})
 }
 
-func (c *Controller) watch(eventCh chan *federation.WatchEvent, stopCh <-chan struct{}) error {
+func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-chan struct{}) error {
 	url := c.discoveryURL + "/watch"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -466,7 +469,7 @@ func (c *Controller) watch(eventCh chan *federation.WatchEvent, stopCh <-chan st
 			return nil
 		default:
 		}
-		var e federation.WatchEvent
+		var e federationmodel.WatchEvent
 		err := dec.Decode(&e)
 		if err != nil {
 			return err

@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package controller
+package discovery
 
 import (
 	"context"
@@ -27,80 +27,77 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
-	"istio.io/istio/pilot/pkg/serviceregistry/federation"
-	"istio.io/istio/pkg/config/schema/collection"
-	"istio.io/istio/pkg/config/schema/collections"
+	federationregistry "istio.io/istio/pilot/pkg/serviceregistry/federation"
 	kubecontroller "istio.io/istio/pkg/kube/controller"
 	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 	clientsetservicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
 	informersservicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/servicemesh/v1alpha1"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
+	"istio.io/istio/pkg/servicemesh/federation/common"
+	"istio.io/istio/pkg/servicemesh/federation/server"
 	"istio.io/pkg/log"
 )
 
-func init() {
-	schemasBuilder := collection.NewSchemasBuilder()
-	schemasBuilder.MustAdd(collections.IstioNetworkingV1Alpha3Destinationrules)
-	schemasBuilder.MustAdd(collections.IstioNetworkingV1Alpha3Virtualservices)
-	schemasBuilder.MustAdd(collections.IstioNetworkingV1Alpha3Gateways)
-	schemasBuilder.MustAdd(collections.IstioSecurityV1Beta1Authorizationpolicies)
-	// XXX: we should consider adding this directly to the service registry
-	schemasBuilder.MustAdd(collections.IstioNetworkingV1Alpha3Serviceentries)
-	schemas = schemasBuilder.Build()
-}
-
 var (
-	logger  = log.RegisterScope("federation-controller", "federation-controller", 0)
-	schemas collection.Schemas
-)
-
-const (
-	defaultResyncPeriod = 60 * time.Second
+	logger = log.RegisterScope("federation-controller", "federation-controller", 0)
 )
 
 type Options struct {
-	MemberRollController memberroll.MemberRollController
-	ClientSet            clientsetservicemeshv1alpha1.Interface
-	ResyncPeriod         time.Duration
-	Namespace            string
-	ServiceController    *aggregate.Controller
-	XDSUpdater           model.XDSUpdater
-	Env                  *model.Environment
+	common.ControllerOptions
+	ServiceController *aggregate.Controller
+	XDSUpdater        model.XDSUpdater
+	Env               *model.Environment
+	ConfigStore       model.ConfigStoreCache
+	FederationManager server.FederationManager
 }
 
 type Controller struct {
 	*kubecontroller.Controller
 	model.ConfigStoreCache
-	cs           clientsetservicemeshv1alpha1.Interface
-	env          *model.Environment
-	sc           *aggregate.Controller
-	xds          model.XDSUpdater
-	mu           sync.Mutex
-	stopChannels map[string]chan struct{}
+	cs                clientsetservicemeshv1alpha1.Interface
+	env               *model.Environment
+	federationManager server.FederationManager
+	sc                *aggregate.Controller
+	xds               model.XDSUpdater
+	mu                sync.Mutex
+	stopChannels      map[string]chan struct{}
 }
 
 var _ model.ConfigStore = (*Controller)(nil)
 var _ model.ConfigStoreCache = (*Controller)(nil)
 
 // NewController creates a new Aggregate controller
-func NewController(opt Options) *Controller {
-	opt.validate()
+func NewController(opt Options) (*Controller, error) {
+	if err := opt.validate(); err != nil {
+		return nil, err
+	}
 
+	cs, err := clientsetservicemeshv1alpha1.NewForConfig(opt.KubeClient.RESTConfig())
+	if err != nil {
+		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
+	}
+
+	mrc := opt.KubeClient.GetMemberRoll()
+
+	return internalNewController(cs, mrc, opt), nil
+}
+
+// allows using a fake client set for testing purposes
+func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
 	var informer cache.SharedIndexInformer
 	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
-	if opt.MemberRollController != nil && false {
+	if mrc != nil && false {
 		newInformer := func(namespace string) cache.SharedIndexInformer {
 			return cache.NewSharedIndexInformer(
 				&cache.ListWatch{
 					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return opt.ClientSet.MaistraV1alpha1().MeshFederations(namespace).List(context.TODO(), options)
+						return cs.MaistraV1alpha1().MeshFederations(namespace).List(context.TODO(), options)
 					},
 					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						return opt.ClientSet.MaistraV1alpha1().MeshFederations(namespace).Watch(context.TODO(), options)
+						return cs.MaistraV1alpha1().MeshFederations(namespace).Watch(context.TODO(), options)
 					},
 				},
 				&v1alpha1.MeshFederation{},
@@ -111,20 +108,21 @@ func NewController(opt Options) *Controller {
 
 		namespaceSet := xnsinformers.NewNamespaceSet()
 		informer = xnsinformers.NewMultiNamespaceInformer(namespaceSet, opt.ResyncPeriod, newInformer)
-		opt.MemberRollController.Register(namespaceSet, "federation-controller")
+		mrc.Register(namespaceSet, "federation-controller")
 	} else {
 		informer = informersservicemeshv1alpha1.NewMeshFederationInformer(
-			opt.ClientSet, opt.Namespace, opt.ResyncPeriod,
+			cs, opt.Namespace, opt.ResyncPeriod,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	}
 
 	controller := &Controller{
-		ConfigStoreCache: memory.NewController(memory.Make(schemas)),
-		cs:               opt.ClientSet,
-		env:              opt.Env,
-		sc:               opt.ServiceController,
-		stopChannels:     make(map[string]chan struct{}),
-		xds:              opt.XDSUpdater,
+		ConfigStoreCache:  opt.ConfigStore,
+		cs:                cs,
+		env:               opt.Env,
+		sc:                opt.ServiceController,
+		stopChannels:      make(map[string]chan struct{}),
+		xds:               opt.XDSUpdater,
+		federationManager: opt.FederationManager,
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
 		Informer:     informer,
@@ -138,7 +136,6 @@ func NewController(opt Options) *Controller {
 }
 
 func (c *Controller) Run(stopChan <-chan struct{}) {
-	go c.ConfigStoreCache.Run(stopChan)
 	c.Controller.Start(stopChan)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -209,7 +206,7 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 		}
 		// check to see if it needs updating
 		// TODO: support updates
-		if federationRegistry, ok := registry.(*federation.Controller); ok {
+		if federationRegistry, ok := registry.(*federationregistry.Controller); ok {
 			if federationRegistry.NetworkAddress() != instance.Spec.NetworkAddress {
 				// TODO: support updates
 				logger.Warnf("updating NetworkAddress for MeshFederation (%s) is not supported", instance.Name)
@@ -219,21 +216,33 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 		}
 	} else {
 		// if there's no existing registry
+		logger.Info("Creating handler for Federation discovery server")
+		exportConfig, err := c.cs.MaistraV1alpha1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
+			logger.Errorf("error retrieving ServiceExports associated with MeshFederation %s: %s", instance.Name, err)
+			return err
+		}
+		if err := c.federationManager.AddMeshFederation(instance, exportConfig); err != nil {
+			return err
+		}
+
 		logger.Infof("Creating Istio resources for Federation discovery")
 		if err := c.createDiscoveryResources(ctx, instance, c.env.Mesh()); err != nil {
 			return err
 		}
+
 		logger.Infof("Initializing Federation service registry %q at %s", instance.Name, instance.Spec.NetworkAddress)
 		// create a registry instance
-		options := federation.Options{
+		options := federationregistry.Options{
 			NetworkAddress: instance.Spec.NetworkAddress,
 			EgressService:  egressGatewayService,
 			ClusterID:      instance.Name,
+			Namespace:      instance.Namespace,
 			XDSUpdater:     c.xds,
 			ResyncPeriod:   time.Minute * 5,
 			NetworkName:    fmt.Sprintf("network-%s", instance.Name),
 		}
-		registry = federation.NewController(options)
+		registry = federationregistry.NewController(options)
 		// register the new instance
 		c.sc.AddRegistry(registry)
 
@@ -249,6 +258,10 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 
 func (c *Controller) delete(ctx context.Context, instance *v1alpha1.MeshFederation) error {
 	var allErrors []error
+	// delete the server
+	c.federationManager.DeleteMeshFederation(instance.Name)
+
+	// delete the registry
 	registry := c.getRegistry(instance.Name)
 	if registry != nil {
 		// make sure it's one of ours
@@ -285,22 +298,26 @@ func (c *Controller) getRegistry(name string) serviceregistry.Instance {
 	return nil
 }
 
-func (opt Options) validate() {
-	// we want a hard fail.  most of these would be caused by programming errors
-	if opt.ClientSet == nil {
-		panic("Client field must not be nil")
+func (opt Options) validate() error {
+	var allErrors []error
+	if opt.KubeClient == nil {
+		allErrors = append(allErrors, fmt.Errorf("the KubeClient field must not be nil"))
 	}
 	if opt.ServiceController == nil {
-		panic("ServiceController field must not be nil")
+		allErrors = append(allErrors, fmt.Errorf("the ServiceController field must not be nil"))
 	}
 	if opt.XDSUpdater == nil {
-		panic("XDSUpdater field must not be nil")
+		allErrors = append(allErrors, fmt.Errorf("the XDSUpdater field must not be nil"))
 	}
 	if opt.Env == nil {
-		panic("Env field must not be nil")
+		allErrors = append(allErrors, fmt.Errorf("the Env field must not be nil"))
+	}
+	if opt.FederationManager == nil {
+		allErrors = append(allErrors, fmt.Errorf("the FederationManager field must not be nil"))
 	}
 	if opt.ResyncPeriod == 0 {
-		opt.ResyncPeriod = defaultResyncPeriod
+		opt.ResyncPeriod = common.DefaultResyncPeriod
 		logger.Warnf("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
 	}
+	return utilerrors.NewAggregate(allErrors)
 }

@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package controller
+package discovery
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 
 	"istio.io/api/mesh/v1alpha1"
+	configmemory "istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/networking/core/v1alpha3"
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
@@ -33,7 +34,34 @@ import (
 	"istio.io/istio/pkg/kube"
 	servicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 	"istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/fake"
+	"istio.io/istio/pkg/servicemesh/federation/common"
 )
+
+type fakeManager struct{}
+
+func (m *fakeManager) AddMeshFederation(mesh *servicemeshv1alpha1.MeshFederation, exports *servicemeshv1alpha1.ServiceExports) error {
+	return nil
+}
+func (m *fakeManager) DeleteMeshFederation(name string) {}
+func (m *fakeManager) UpdateExportsForMesh(exports *servicemeshv1alpha1.ServiceExports) error {
+	return nil
+}
+func (m *fakeManager) DeleteExportsForMesh(name string) {}
+
+func TestValidOptions(t *testing.T) {
+	opt := Options{
+		ControllerOptions: common.ControllerOptions{
+			KubeClient: kube.NewFakeClient(),
+		},
+		ServiceController: &aggregate.Controller{},
+		XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
+		Env:               &model.Environment{},
+		FederationManager: &fakeManager{},
+	}
+	if err := opt.validate(); err != nil {
+		t.Errorf("unexpected error")
+	}
+}
 
 func TestInvalidOptions(t *testing.T) {
 	testCases := []struct {
@@ -43,7 +71,9 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "client",
 			opt: Options{
-				ClientSet:         nil,
+				ControllerOptions: common.ControllerOptions{
+					KubeClient: nil,
+				},
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               &model.Environment{},
@@ -52,7 +82,9 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "service-controller",
 			opt: Options{
-				ClientSet:         fake.NewSimpleClientset(),
+				ControllerOptions: common.ControllerOptions{
+					KubeClient: kube.NewFakeClient(),
+				},
 				ServiceController: nil,
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               &model.Environment{},
@@ -61,7 +93,9 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "xds-updater",
 			opt: Options{
-				ClientSet:         fake.NewSimpleClientset(),
+				ControllerOptions: common.ControllerOptions{
+					KubeClient: kube.NewFakeClient(),
+				},
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        nil,
 				Env:               &model.Environment{},
@@ -70,7 +104,9 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "env",
 			opt: Options{
-				ClientSet:         fake.NewSimpleClientset(),
+				ControllerOptions: common.ControllerOptions{
+					KubeClient: kube.NewFakeClient(),
+				},
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               nil,
@@ -79,12 +115,9 @@ func TestInvalidOptions(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("failed to panic")
-				}
-			}()
-			NewController(tc.opt)
+			if _, err := NewController(tc.opt); err == nil {
+				t.Errorf("expected error")
+			}
 		})
 	}
 }
@@ -123,13 +156,17 @@ func newTestOptions(discoveryAddress string) options {
 func TestReconcile(t *testing.T) {
 	resyncPeriod := 30 * time.Second
 	options := newTestOptions("test.address")
-	controller := NewController(Options{
-		ClientSet:         fake.NewSimpleClientset(),
-		ResyncPeriod:      resyncPeriod,
-		Namespace:         "",
+	controller := internalNewController(fake.NewSimpleClientset(), nil, Options{
+		ControllerOptions: common.ControllerOptions{
+			KubeClient:   kube.NewFakeClient(),
+			ResyncPeriod: resyncPeriod,
+			Namespace:    "",
+		},
 		ServiceController: options.serviceController,
 		XDSUpdater:        options.xdsUpdater,
 		Env:               options.env,
+		FederationManager: &fakeManager{},
+		ConfigStore:       configmemory.NewController(configmemory.Make(Schemas)),
 	})
 
 	name := "test"
