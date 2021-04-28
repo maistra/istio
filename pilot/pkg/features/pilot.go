@@ -399,4 +399,14 @@ var (
 	EnableFederationDiscoveryServer = env.RegisterBoolVar("PILOT_ENABLE_FEDERATION_DISCOVERY_SERVER", true, "").Get()
 
 	FederationDiscoveryEndpoint = env.RegisterStringVar("PILOT_REMOTE_FEDERATION_DISCOVERY", "", "").Get()
+
+	MemberRollName = env.RegisterStringVar("MEMBER_ROLL_NAME", "", "The name of the MemberRoll resource").Get()
+
+	EnableCRDScan = env.RegisterBoolVar("ENABLE_CRD_SCAN", true, "Whether to scan CRDs at startup").Get()
+
+	DisableNodeAccess = env.RegisterBoolVar("DISABLE_NODE_ACCESS", false,
+		"Whether to prevent istiod watching Node objects").Get()
+
+	EnableIngressClassName = env.RegisterBoolVar("ENABLE_INGRESS_CLASS_NAME", true,
+		"Whether support processing Ingress resources that use the new ingressClassName field in their spec").Get()
 )

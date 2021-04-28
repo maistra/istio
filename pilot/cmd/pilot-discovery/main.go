@@ -146,14 +146,14 @@ func init() {
 	discoveryCmd.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.TrustDomain, "trust-domain", "",
 		"The domain serves to identify the system with spiffe")
 
-	discoveryCmd.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.MemberRollName, "memberRollName", "",
-		"The name of the MemberRoll resource")
-	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableCRDScan, "enableCRDScan", true,
-		"Whether to scan CRDs at startup")
-	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.DisableNodeAccess, "disableNodeAccess", false,
-		"Whether to prevent istiod watching Node objects")
+	discoveryCmd.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.MemberRollName, "memberRollName",
+		features.MemberRollName, "The name of the MemberRoll resource")
+	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableCRDScan, "enableCRDScan",
+		features.EnableCRDScan, "Whether to scan CRDs at startup")
+	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.DisableNodeAccess, "disableNodeAccess",
+		features.DisableNodeAccess, "Whether to prevent istiod watching Node objects")
 	discoveryCmd.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableIngressClassName, "enableIngressClassName",
-		true, "Whether support processing Ingress resources that use the new ingressClassName field in their spec")
+		features.EnableIngressClassName, "Whether support processing Ingress resources that use the new ingressClassName field in their spec")
 	discoveryCmd.PersistentFlags().StringVar(&extension.CacheCluster, "cacheCluster", extension.DefaultCacheCluster,
 		"Cluster pointing to Extension Cache component. This is used in proxies to retrieve WASM filters.")
 
