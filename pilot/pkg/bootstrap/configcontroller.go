@@ -51,6 +51,8 @@ import (
 	"istio.io/istio/pkg/mcp/creds"
 	"istio.io/istio/pkg/mcp/monitoring"
 	"istio.io/istio/pkg/mcp/sink"
+	clientsetservicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
+	federationcontroller "istio.io/istio/pkg/servicemesh/federation/controller"
 	"istio.io/pkg/log"
 )
 
@@ -112,6 +114,29 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 				Run(stop)
 			return nil
 		})
+	}
+
+	// XXX: should we check to see if Federation registry is enabled instead?
+	if features.EnableFederationDiscoveryServer {
+		if s.kubeClient == nil {
+			log.Errorf("Federation support disabled: no k8s client is configured for the server")
+		} else {
+			cs, err := clientsetservicemeshv1alpha1.NewForConfig(s.kubeClient.RESTConfig())
+			if err == nil {
+				fc := federationcontroller.NewController(federationcontroller.Options{
+					ClientSet:            cs,
+					MemberRollController: s.kubeClient.GetMemberRoll(),
+					ResyncPeriod:         args.RegistryOptions.KubeOptions.ResyncPeriod,
+					Namespace:            args.RegistryOptions.ClusterRegistriesNamespace,
+					ServiceController:    s.ServiceController(),
+					XDSUpdater:           s.XDSServer,
+					Env:                  s.environment,
+				})
+				s.ConfigStores = append(s.ConfigStores, fc)
+			} else {
+				log.Errorf("Federation support disabled: could not create ClientSet for MeshFederation: %#v", err)
+			}
+		}
 	}
 
 	// Wrap the config controller with a cache.
