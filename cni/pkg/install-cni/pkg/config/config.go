@@ -35,6 +35,8 @@ type Config struct {
 	K8sServicePort     string
 	K8sNodeName        string
 
+	CNIBinSourceDir   string
+	CNIBinTargetDirs  []string
 	UpdateCNIBinaries bool
 	SkipCNIBinaries   []string
 	CNIBinariesPrefix string
