@@ -63,9 +63,9 @@ maistra-gen-k8s-client:
 	@$(move_generated)
 
 # this is manual for now, but should be moved into a separate maistra/api project
-.PHONY: maistra-gen-k8s-client
+.PHONY: maistra-gen-crd-resources
 maistra-gen-crd-resources:
-	@$(controller_gen) crd paths=./pkg/servicemesh/apis/servicemesh/v1alpha1/ crd:preserveUnknownFields=false,crdVersions=v1beta1 output:dir=./manifests/charts/base/crds
+	@$(controller_gen) crd paths=./pkg/servicemesh/apis/servicemesh/v1/ paths=./pkg/servicemesh/apis/servicemesh/v1alpha1/ crd:preserveUnknownFields=false,crdVersions=v1beta1 output:dir=./manifests/charts/base/crds
 	@sed -i -e '/---/d' ./manifests/charts/base/crds/maistra.io_*.yaml
 
 .PHONY: vendor
