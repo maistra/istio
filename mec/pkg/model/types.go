@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 )
 
 type ImageRef struct {
@@ -33,7 +33,7 @@ type Manifest struct {
 	Name          string                `yaml:"name"`
 	Description   string                `yaml:"description"`
 	Version       string                `yaml:"version"`
-	Phase         v1alpha1.FilterPhase  `yaml:"phase"`
+	Phase         v1.FilterPhase        `yaml:"phase"`
 	Priority      int                   `yaml:"priority"`
 	Module        string                `yaml:"module"`
 }

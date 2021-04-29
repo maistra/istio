@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -30,9 +31,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fakestrategy "istio.io/istio/mec/pkg/pullstrategy/fake"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	"istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/fake"
-	"istio.io/pkg/log"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	"istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/fake"
 )
 
 const (
@@ -48,38 +48,38 @@ func TestWorker(t *testing.T) {
 	testCases := []struct {
 		name           string
 		events         []ExtensionEvent
-		extension      v1alpha1.ServiceMeshExtension
-		expectedStatus v1alpha1.ServiceMeshExtensionStatus
+		extension      v1.ServiceMeshExtension
+		expectedStatus v1.ServiceMeshExtensionStatus
 		expectedError  bool
 	}{
 		{
 			name: "invalid_resource",
-			extension: v1alpha1.ServiceMeshExtension{
+			extension: v1.ServiceMeshExtension{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "test",
 					Generation: 1,
 				},
 			},
-			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{},
+			expectedStatus: v1.ServiceMeshExtensionStatus{},
 			expectedError:  true,
 		},
 		{
 			name: "valid_resource",
-			extension: v1alpha1.ServiceMeshExtension{
+			extension: v1.ServiceMeshExtension{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "test",
 					Generation: 1,
 				},
-				Spec: v1alpha1.ServiceMeshExtensionSpec{
+				Spec: v1.ServiceMeshExtensionSpec{
 					Image: "docker.io/test/test:latest",
 				},
 			},
-			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{
+			expectedStatus: v1.ServiceMeshExtensionStatus{
 				Phase:    fakestrategy.FakeManifest.Phase,
 				Priority: fakestrategy.FakeManifest.Priority,
-				Deployment: v1alpha1.DeploymentStatus{
+				Deployment: v1.DeploymentStatus{
 					Ready:           true,
 					ContainerSHA256: fakestrategy.FakeContainerSHA256,
 					SHA256:          fakestrategy.FakeModuleSHA256,
@@ -89,35 +89,35 @@ func TestWorker(t *testing.T) {
 		},
 		{
 			name: "valid_resource_update_module",
-			extension: v1alpha1.ServiceMeshExtension{
+			extension: v1.ServiceMeshExtension{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "test",
 					Generation: 1,
 				},
-				Spec: v1alpha1.ServiceMeshExtensionSpec{
+				Spec: v1.ServiceMeshExtensionSpec{
 					Image: "docker.io/test/test:latest",
 				},
 			},
 			events: []ExtensionEvent{
 				{
-					Extension: &v1alpha1.ServiceMeshExtension{
+					Extension: &v1.ServiceMeshExtension{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:       "test",
 							Namespace:  "test",
 							Generation: 2,
 						},
-						Spec: v1alpha1.ServiceMeshExtensionSpec{
+						Spec: v1.ServiceMeshExtensionSpec{
 							Image: "docker.io/other/test:latest",
 						},
 					},
 					Operation: ExtensionEventOperationUpdate,
 				},
 			},
-			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{
+			expectedStatus: v1.ServiceMeshExtensionStatus{
 				Phase:    fakestrategy.FakeManifest2.Phase,
 				Priority: fakestrategy.FakeManifest2.Priority,
-				Deployment: v1alpha1.DeploymentStatus{
+				Deployment: v1.DeploymentStatus{
 					Ready:           true,
 					ContainerSHA256: fakestrategy.FakeContainer2SHA256,
 					SHA256:          fakestrategy.FakeModule2SHA256,
@@ -127,25 +127,25 @@ func TestWorker(t *testing.T) {
 		},
 		{
 			name: "valid_resource_update_priority",
-			extension: v1alpha1.ServiceMeshExtension{
+			extension: v1.ServiceMeshExtension{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "test",
 					Generation: 1,
 				},
-				Spec: v1alpha1.ServiceMeshExtensionSpec{
+				Spec: v1.ServiceMeshExtensionSpec{
 					Image: "docker.io/test/test:latest",
 				},
 			},
 			events: []ExtensionEvent{
 				{
-					Extension: &v1alpha1.ServiceMeshExtension{
+					Extension: &v1.ServiceMeshExtension{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:       "test",
 							Namespace:  "test",
 							Generation: 3,
 						},
-						Spec: v1alpha1.ServiceMeshExtensionSpec{
+						Spec: v1.ServiceMeshExtensionSpec{
 							Image:    "docker.io/test/test:latest",
 							Priority: &oneHundred,
 						},
@@ -153,13 +153,13 @@ func TestWorker(t *testing.T) {
 					Operation: ExtensionEventOperationUpdate,
 				},
 				{
-					Extension: &v1alpha1.ServiceMeshExtension{
+					Extension: &v1.ServiceMeshExtension{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:       "test",
 							Namespace:  "test",
 							Generation: 4,
 						},
-						Spec: v1alpha1.ServiceMeshExtensionSpec{
+						Spec: v1.ServiceMeshExtensionSpec{
 							Image:    "docker.io/test/test:latest",
 							Priority: &twoHundred,
 						},
@@ -167,10 +167,10 @@ func TestWorker(t *testing.T) {
 					Operation: ExtensionEventOperationUpdate,
 				},
 			},
-			expectedStatus: v1alpha1.ServiceMeshExtensionStatus{
+			expectedStatus: v1.ServiceMeshExtensionStatus{
 				Phase:    fakestrategy.FakeManifest.Phase,
 				Priority: 200,
-				Deployment: v1alpha1.DeploymentStatus{
+				Deployment: v1.DeploymentStatus{
 					Ready:           true,
 					ContainerSHA256: fakestrategy.FakeContainerSHA256,
 					SHA256:          fakestrategy.FakeModuleSHA256,
@@ -200,16 +200,13 @@ func TestWorker(t *testing.T) {
 				Extension: &tc.extension,
 				Operation: ExtensionEventOperationAdd,
 			}
-			res := <-w.resultChan
-			for _, msg := range res.messages {
-				log.Info(msg)
+
+			err = getError(w.errorChannel)
+			if tc.expectedError && err == nil {
+				t.Fatalf("expected error but got success")
 			}
-			for _, err := range res.errors {
-				if !res.successful && !tc.expectedError {
-					log.Fatalf("expected no error but got: %s", err)
-				} else {
-					log.Infof("%s", err)
-				}
+			if !tc.expectedError && err != nil {
+				t.Fatalf("expected success but got error: %v", err)
 			}
 
 			for _, event := range tc.events {
@@ -231,28 +228,26 @@ func TestWorker(t *testing.T) {
 					Extension: ext,
 					Operation: event.Operation,
 				}
-				res := <-w.resultChan
-				for _, msg := range res.messages {
-					log.Info(msg)
+
+				err = getError(w.errorChannel)
+				if tc.expectedError && err == nil {
+					t.Fatalf("expected error but got success")
 				}
-				for _, err := range res.errors {
-					if !res.successful && !tc.expectedError {
-						log.Fatalf("expected no error but got: %s", err)
-					} else {
-						log.Infof("%s", err)
-					}
+				if !tc.expectedError && err != nil {
+					t.Fatalf("expected success but got error: %v", err)
 				}
 			}
+
 			stopChan <- struct{}{}
 			updatedExtension, err := w.client.ServiceMeshExtensions(tc.extension.Namespace).Get(context.TODO(), tc.extension.Name, metav1.GetOptions{})
 			if err != nil {
 				t.Fatalf("failed to Get() extension: %s", err)
 			}
 			// ignore Deployment.URL because it contains a random UUID
-			if !cmp.Equal(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1alpha1.DeploymentStatus{}, "URL")) {
-				t.Fatalf("comparison failed -got +want: %s", cmp.Diff(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1alpha1.DeploymentStatus{}, "URL")))
+			if !cmp.Equal(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1.DeploymentStatus{}, "URL")) {
+				t.Fatalf("comparison failed -got +want: %s", cmp.Diff(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1.DeploymentStatus{}, "URL")))
 			}
-			if !cmp.Equal(tc.expectedStatus, v1alpha1.ServiceMeshExtensionStatus{}) {
+			if !cmp.Equal(tc.expectedStatus, v1.ServiceMeshExtensionStatus{}) {
 				// validate URL
 				url, err := url.Parse(updatedExtension.Status.Deployment.URL)
 				if err != nil {
@@ -272,12 +267,26 @@ func TestWorker(t *testing.T) {
 func createWorker(tmpDir string, clientset *fake.Clientset) *Worker {
 	return &Worker{
 		baseURL:        baseURL,
-		client:         clientset.MaistraV1alpha1(),
+		client:         clientset.MaistraV1(),
 		mut:            sync.Mutex{},
 		pullStrategy:   &fakestrategy.PullStrategy{},
 		serveDirectory: tmpDir,
 		Queue:          make(chan ExtensionEvent),
-		resultChan:     make(chan workerResult, 100),
-		enableLogger:   false,
+		errorChannel:   make(chan error),
 	}
+}
+
+// getError tries to read an error from the error channel.
+// It tries 3 times beforing returning nil, in case of there's no error in the channel,
+// this is to give some time to async functions to run and fill the channel properly
+func getError(errorChannel chan error) error {
+	for i := 1; i < 3; i++ {
+		select {
+		case err := <-errorChannel:
+			return err
+		default:
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return nil
 }

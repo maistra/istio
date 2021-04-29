@@ -135,9 +135,8 @@ func TestGetImage(t *testing.T) {
 	}}
 	clientSet := fake.NewSimpleClientset(&namespace)
 	strategy := &ossmPullStrategy{
-		client:    clientSet.ImageV1(),
-		namespace: namespace.Name,
-		podman:    fakePodman,
+		client: clientSet.ImageV1(),
+		podman: fakePodman,
 	}
 
 	for _, tc := range testCases {
@@ -313,11 +312,10 @@ func TestPullImage(t *testing.T) {
 			}
 
 			strategy := &ossmPullStrategy{
-				client:    clientSet.ImageV1(),
-				namespace: namespace.Name,
-				podman:    fakePodman,
+				client: clientSet.ImageV1(),
+				podman: fakePodman,
 			}
-			image, err := strategy.PullImage(tc.imageRef)
+			image, err := strategy.PullImage(tc.imageRef, "test", v1.PullAlways, nil)
 			if tc.expectedError {
 				if err == nil {
 					t.Error("Expected error but got nil")

@@ -14,9 +14,13 @@
 
 package model
 
+import (
+	corev1 "k8s.io/api/core/v1"
+)
+
 type ImagePullStrategy interface {
 	// PullImage will go and Pull and image from a remote registry
-	PullImage(image *ImageRef) (Image, error)
+	PullImage(image *ImageRef, namespace string, pullPolicy corev1.PullPolicy, pullSecrets []corev1.LocalObjectReference) (Image, error)
 	// GetImage returns an image that has been pulled previously
 	GetImage(image *ImageRef) (Image, error)
 	// Login is used to provide credentials to the ImagePullStrategy

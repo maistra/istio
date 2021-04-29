@@ -26,14 +26,17 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
 	"istio.io/istio/mec/pkg/model"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	v1alpha1client "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned/typed/servicemesh/v1alpha1"
+	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	v1client "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
 	"istio.io/pkg/log"
 )
+
+var workerlog = log.RegisterScope("worker", "Worker function", 0)
 
 const (
 	ExtensionEventOperationAdd    = 0
@@ -42,11 +45,24 @@ const (
 )
 
 type ExtensionEvent struct {
-	Extension *v1alpha1.ServiceMeshExtension
+	Extension *v1.ServiceMeshExtension
 	Operation ExtensionEventOperation
 }
 
 type ExtensionEventOperation int
+
+func (op ExtensionEventOperation) String() string {
+	switch op {
+	case ExtensionEventOperationAdd:
+		return "ADD"
+	case ExtensionEventOperationDelete:
+		return "DEL"
+	case ExtensionEventOperationUpdate:
+		return "UPD"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 type Worker struct {
 	baseURL        string
@@ -54,35 +70,16 @@ type Worker struct {
 
 	pullStrategy model.ImagePullStrategy
 
-	client       v1alpha1client.MaistraV1alpha1Interface
+	client       v1client.MaistraV1Interface
+	errorChannel chan error
 	stopChan     <-chan struct{}
-	resultChan   chan workerResult
 	Queue        chan ExtensionEvent
-	enableLogger bool
 
 	mut sync.Mutex
 }
 
-type workerResult struct {
-	successful bool
-	errors     []error
-	messages   []string
-}
-
-func (r *workerResult) Fail() {
-	r.successful = false
-}
-
-func (r *workerResult) AddMessage(msg string) {
-	r.messages = append(r.messages, msg)
-}
-
-func (r *workerResult) AddError(err error) {
-	r.errors = append(r.errors, err)
-}
-
-func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseURL, serveDirectory string) (*Worker, error) {
-	client, err := v1alpha1client.NewForConfig(config)
+func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseURL, serveDirectory string, errorChannel chan error) (*Worker, error) {
+	client, err := v1client.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client from config: %v", err)
 	}
@@ -90,21 +87,16 @@ func NewWorker(config *rest.Config, pullStrategy model.ImagePullStrategy, baseUR
 	return &Worker{
 		client:         client,
 		Queue:          make(chan ExtensionEvent, 100),
-		resultChan:     make(chan workerResult, 100),
 		pullStrategy:   pullStrategy,
 		baseURL:        baseURL,
 		serveDirectory: serveDirectory,
+		errorChannel:   errorChannel,
 	}, nil
 }
 
-func (w *Worker) processEvent(event ExtensionEvent) {
-	result := workerResult{
-		errors:     []error{},
-		messages:   []string{},
-		successful: true,
-	}
+func (w *Worker) processEvent(event ExtensionEvent) error {
 	extension := event.Extension
-	result.AddMessage("Processing " + extension.Namespace + "/" + extension.Name)
+	workerlog.Debugf("Event %s arrived for %s/%s", event.Operation, extension.Namespace, extension.Name)
 
 	if event.Operation == ExtensionEventOperationDelete {
 		if len(extension.Status.Deployment.URL) > len(w.baseURL) {
@@ -112,100 +104,102 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 			filename := path.Join(w.serveDirectory, id)
 			os.Remove(filename)
 		}
-		return
+		return nil
 	}
-	imageRef := model.StringToImageRef(extension.Spec.Image)
 
-	if imageRef == nil {
-		result.AddError(fmt.Errorf("failed to parse spec.image: '%s'", extension.Spec.Image))
-		result.Fail()
-		w.resultChan <- result
-		return
+	if event.Operation == ExtensionEventOperationUpdate &&
+		extension.Status.Deployment.Ready &&
+		extension.Status.ObservedGeneration == extension.Generation {
+		workerlog.Debug("Skipping update, current extension is up to date.")
+		return nil
 	}
+
+	imageRef := model.StringToImageRef(extension.Spec.Image)
+	if imageRef == nil {
+		return fmt.Errorf("failed to parse spec.image: %q", extension.Spec.Image)
+	}
+	workerlog.Debugf("Image Ref: %+v", imageRef)
 
 	var img model.Image
 	var err error
+	// Only happens if image is in the format: quay.io/repo/image@sha256:...
 	if imageRef.SHA256 != "" {
+		workerlog.Debug("Trying to get an already pulled image")
+		// FIXME: GetImage() is broken and always returns an error: MAISTRA-2249
 		img, err = w.pullStrategy.GetImage(imageRef)
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to check whether image is already present: %s", err))
+			workerlog.Errorf("failed to check whether image is already present: %v", err)
 		}
 	}
 	if img == nil {
-		result.AddMessage(fmt.Sprintf("Image %s not present. Pulling", imageRef.String()))
-		img, err = w.pullStrategy.PullImage(imageRef)
+		workerlog.Debugf("Image %s not present. Pulling", imageRef.String())
+
+		pullPolicy := extension.Spec.ImagePullPolicy
+		if !extension.Status.Deployment.Ready {
+			// Ready is false, force pull the image again, it might be the image stream is stuck
+			pullPolicy = corev1.PullAlways
+		}
+
+		img, err = w.pullStrategy.PullImage(imageRef, extension.Namespace, pullPolicy, extension.Spec.ImagePullSecrets)
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to pull image %s: %v", imageRef.String(), err))
-			result.Fail()
-			w.resultChan <- result
-			return
+			return fmt.Errorf("failed to pull image %q: %v", imageRef.String(), err)
 		}
 	}
 	var id string
 	containerImageChanged := false
 
 	if strings.HasPrefix(extension.Status.Deployment.URL, w.baseURL) {
+		workerlog.Debug("Image is already in the http server, retrieving its ID")
 		url, err := url.Parse(extension.Status.Deployment.URL)
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to parse status.deployment.url: %s", err))
-			result.Fail()
-			w.resultChan <- result
+			return fmt.Errorf("failed to parse status.deployment.url: %v", err)
 		}
 		id = path.Base(url.Path)
+		workerlog.Debugf("Got ID = %s", id)
 	}
 
+	workerlog.Debugf("Checking if SHA's match: %s - %s", img.SHA256(), extension.Status.Deployment.ContainerSHA256)
 	if img.SHA256() != extension.Status.Deployment.ContainerSHA256 {
+		workerlog.Debug("They differ, setting containerImageChanged = true")
 		// if container sha changed, re-generate UUID
 		containerImageChanged = true
 		if id != "" {
 			err := os.Remove(path.Join(w.serveDirectory, id))
 			if err != nil {
-				result.AddError(fmt.Errorf("failed to delete existing wasm module: %s", err))
+				workerlog.Errorf("failed to delete existing wasm module: %s", err)
 			}
 		}
 
 		wasmUUID, err := uuid.NewRandom()
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to generate new UUID: %v", err))
-			result.Fail()
-			w.resultChan <- result
-			return
+			return fmt.Errorf("failed to generate new UUID: %v", err)
 		}
 		id = wasmUUID.String()
+		workerlog.Debugf("Created a new id for this image: %s", id)
 	}
 
 	filename := path.Join(w.serveDirectory, id)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		workerlog.Debugf("Copying the extension to the web server location: %s", filename)
 		err = img.CopyWasmModule(filename)
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to extract wasm module: %v", err))
-			result.Fail()
-			w.resultChan <- result
-			return
+			return fmt.Errorf("failed to extract wasm module: %v", err)
 		}
 	}
 
 	sha, err := generateSHA256(filename)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to generate sha256 of wasm module: %v", err))
-		result.Fail()
-		w.resultChan <- result
-		return
+		return fmt.Errorf("failed to generate sha256 of wasm module: %v", err)
 	}
-	result.AddMessage(fmt.Sprintf("WASM module SHA256 is %s", sha))
+	workerlog.Debugf("WASM module SHA256 is %s", sha)
 
 	filePath, err := url.Parse(id)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to parse new UUID '%s' as URL path: %s", id, err))
-		result.Fail()
-		w.resultChan <- result
-
+		return fmt.Errorf("failed to parse new UUID %q as URL path: %v", id, err)
 	}
 	baseURL, err := url.Parse(w.baseURL)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to parse baseURL: %s", err))
-		result.Fail()
-		w.resultChan <- result
+		return fmt.Errorf("failed to parse baseURL: %v", err)
 	}
 
 	extension.Status.Deployment.SHA256 = sha
@@ -227,18 +221,20 @@ func (w *Worker) processEvent(event ExtensionEvent) {
 		extension.Status.Priority = *extension.Spec.Priority
 	}
 
+	// TODO(jwendell): Is this necessary?
 	if !containerImageChanged && extension.Generation > 0 && extension.Status.ObservedGeneration == extension.Generation {
-		result.AddMessage("Skipping status update")
-		w.resultChan <- result
-		return
+		workerlog.Debug("Skipping status update")
+		return nil
 	}
+
 	extension.Status.ObservedGeneration = extension.Generation
-	_, err = w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, v1.UpdateOptions{})
+	workerlog.Debugf("Updating extension status with: %v", extension.Status)
+	_, err = w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, metav1.UpdateOptions{})
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to update status of extension: %v", err))
-		result.Fail()
+		return fmt.Errorf("failed to update status of extension: %v", err)
 	}
-	w.resultChan <- result
+
+	return nil
 }
 
 func (w *Worker) Start(stopChan <-chan struct{}) {
@@ -249,37 +245,23 @@ func (w *Worker) Start(stopChan <-chan struct{}) {
 		return
 	}
 	w.stopChan = stopChan
-	log.Info("Starting worker")
+	workerlog.Info("Starting worker")
 	go func() {
 		for {
 			select {
 			case event := <-w.Queue:
-				w.processEvent(event)
+				if err := w.processEvent(event); err != nil {
+					workerlog.Error(err)
+					if w.errorChannel != nil {
+						go func() { w.errorChannel <- err }()
+					}
+				}
 			case <-w.stopChan:
-				log.Info("Stopping worker")
+				workerlog.Info("Stopping worker")
 				return
 			}
 		}
 	}()
-	if w.enableLogger {
-		go func() {
-			select {
-			case result := <-w.resultChan:
-				for _, msg := range result.messages {
-					log.Info(msg)
-				}
-				for _, err := range result.errors {
-					if !result.successful {
-						log.Errorf("%s", err)
-					} else {
-						log.Warnf("%s", err)
-					}
-				}
-			case <-w.stopChan:
-				return
-			}
-		}()
-	}
 }
 
 func generateSHA256(filename string) (string, error) {
