@@ -39,6 +39,7 @@ import (
 
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/kube"
+	servicemeshv1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
 )
@@ -133,6 +134,10 @@ func (c MockClient) AddMemberRoll(namespace, memberRollName string) error {
 }
 
 func (c MockClient) GetMemberRoll() memberroll.MemberRollController {
+	panic("not used in mock")
+}
+
+func (c MockClient) ServiceMeshV1() servicemeshv1.Interface {
 	panic("not used in mock")
 }
 

@@ -69,6 +69,8 @@ import (
 	"istio.io/api/label"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	servicemeshv1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned"
+	servicemeshv1fake "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/fake"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
 )
@@ -138,6 +140,9 @@ type Client interface {
 
 	// GetMemberRoll returns the member roll for the client, which may be nil.
 	GetMemberRoll() memberroll.MemberRollController
+
+	// ServiceMeshV1 returns the ServiceMesh V1 client.
+	ServiceMeshV1() servicemeshv1.Interface
 }
 
 // ExtendedClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -229,6 +234,8 @@ func NewFakeClient(objects ...runtime.Object) ExtendedClient {
 
 	c.extSet = extfake.NewSimpleClientset()
 
+	c.servicemeshV1 = servicemeshv1fake.NewSimpleClientset()
+
 	// https://github.com/kubernetes/kubernetes/issues/95372
 	// There is a race condition in the client fakes, where events that happen between the List and Watch
 	// of an informer are dropped. To avoid this, we explicitly manage the list and watch, ensuring all lists
@@ -292,6 +299,8 @@ type client struct {
 	serviceapisInformers serviceapisinformer.SharedInformerFactory
 
 	memberRoll memberroll.MemberRollController
+
+	servicemeshV1 servicemeshv1.Interface
 
 	// If enable, will wait for cache syncs with extremely short delay. This should be used only for tests
 	fastSync               bool
@@ -368,6 +377,11 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.extSet = ext
 	c.versionClient = ext
 
+	c.servicemeshV1, err = servicemeshv1.NewForConfig(c.config)
+	if err != nil {
+		return nil, err
+	}
+
 	return &c, nil
 }
 
@@ -433,6 +447,10 @@ func (c *client) IstioInformer() istioinformer.SharedInformerFactory {
 
 func (c *client) ServiceApisInformer() serviceapisinformer.SharedInformerFactory {
 	return c.serviceapisInformers
+}
+
+func (c *client) ServiceMeshV1() servicemeshv1.Interface {
+	return c.servicemeshV1
 }
 
 func (c *client) SetNamespaces(namespaces ...string) {
