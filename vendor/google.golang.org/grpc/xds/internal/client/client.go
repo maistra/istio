@@ -31,6 +31,8 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
 
+	"google.golang.org/grpc/xds/internal/client/load"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/buffer"
@@ -39,7 +41,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -68,9 +69,9 @@ func getAPIClientBuilder(version version.TransportAPI) APIClientBuilder {
 
 // BuildOptions contains options to be passed to client builders.
 type BuildOptions struct {
-	// Parent is a top-level xDS client or server which has the intelligence to
-	// take appropriate action based on xDS responses received from the
-	// management server.
+	// Parent is a top-level xDS client which has the intelligence to take
+	// appropriate action based on xDS responses received from the management
+	// server.
 	Parent UpdateHandler
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
@@ -78,9 +79,6 @@ type BuildOptions struct {
 	// Backoff returns the amount of time to backoff before retrying broken
 	// streams.
 	Backoff func(int) time.Duration
-	// LoadStore contains load reports which need to be pushed to the management
-	// server.
-	LoadStore *load.Store
 	// Logger provides enhanced logging capabilities.
 	Logger *grpclog.PrefixLogger
 }
@@ -99,6 +97,12 @@ type APIClientBuilder interface {
 
 // APIClient represents the functionality provided by transport protocol
 // version specific implementations of the xDS client.
+//
+// TODO: unexport this interface and all the methods after the PR to make
+// xdsClient sharable by clients. AddWatch and RemoveWatch are exported for
+// v2/v3 to override because they need to keep track of LDS name for RDS to use.
+// After the share xdsClient change, that's no longer necessary. After that, we
+// will still keep this interface for testing purposes.
 type APIClient interface {
 	// AddWatch adds a watch for an xDS resource given its type and name.
 	AddWatch(ResourceType, string)
@@ -107,21 +111,18 @@ type APIClient interface {
 	// given its type and name.
 	RemoveWatch(ResourceType, string)
 
-	// ReportLoad starts an LRS stream to periodically report load using the
+	// reportLoad starts an LRS stream to periodically report load using the
 	// provided ClientConn, which represent a connection to the management
 	// server.
-	ReportLoad(ctx context.Context, cc *grpc.ClientConn, opts LoadReportingOptions)
+	reportLoad(ctx context.Context, cc *grpc.ClientConn, opts loadReportingOptions)
 
 	// Close cleans up resources allocated by the API client.
 	Close()
 }
 
-// LoadReportingOptions contains configuration knobs for reporting load data.
-type LoadReportingOptions struct {
-	// ClusterName is the cluster name for which load is being reported.
-	ClusterName string
-	// TargetName is the target of the parent ClientConn.
-	TargetName string
+// loadReportingOptions contains configuration knobs for reporting load data.
+type loadReportingOptions struct {
+	loadStore *load.Store
 }
 
 // UpdateHandler receives and processes (by taking appropriate actions) xDS
@@ -144,11 +145,30 @@ type ListenerUpdate struct {
 	// RouteConfigName is the route configuration name corresponding to the
 	// target which is being watched through LDS.
 	RouteConfigName string
+	// SecurityCfg contains security configuration sent by the control plane.
+	SecurityCfg *SecurityConfig
+	// MaxStreamDuration contains the HTTP connection manager's
+	// common_http_protocol_options.max_stream_duration field, or zero if
+	// unset.
+	MaxStreamDuration time.Duration
+}
+
+func (lu *ListenerUpdate) String() string {
+	return fmt.Sprintf("{RouteConfigName: %q, SecurityConfig: %+v", lu.RouteConfigName, lu.SecurityCfg)
 }
 
 // RouteConfigUpdate contains information received in an RDS response, which is
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
+	VirtualHosts []*VirtualHost
+}
+
+// VirtualHost contains the routes for a list of Domains.
+//
+// Note that the domains in this slice can be a wildcard, not an exact string.
+// The consumer of this struct needs to find the best match for its hostname.
+type VirtualHost struct {
+	Domains []string
 	// Routes contains a list of routes, each containing matchers and
 	// corresponding action.
 	Routes []*Route
@@ -158,9 +178,20 @@ type RouteConfigUpdate struct {
 // indication of the action to take upon match.
 type Route struct {
 	Path, Prefix, Regex *string
-	Headers             []*HeaderMatcher
-	Fraction            *uint32
-	Action              map[string]uint32 // action is weighted clusters.
+	// Indicates if prefix/path matching should be case insensitive. The default
+	// is false (case sensitive).
+	CaseInsensitive bool
+	Headers         []*HeaderMatcher
+	Fraction        *uint32
+
+	// If the matchers above indicate a match, the below configuration is used.
+	Action map[string]uint32 // action is weighted clusters.
+	// If MaxStreamDuration is nil, it indicates neither of the route action's
+	// max_stream_duration fields (grpc_timeout_header_max nor
+	// max_stream_duration) were set.  In this case, the ListenerUpdate's
+	// MaxStreamDuration field should be used.  If MaxStreamDuration is set to
+	// an explicit zero duration, the application's deadline should be used.
+	MaxStreamDuration *time.Duration
 }
 
 // HeaderMatcher represents header matchers.
@@ -181,11 +212,35 @@ type Int64Range struct {
 	End   int64 `json:"end"`
 }
 
-// ServiceUpdate contains information received from LDS and RDS responses,
-// which is of interest to the registered service watcher.
-type ServiceUpdate struct {
-	// Routes contain matchers+actions to route RPCs.
-	Routes []*Route
+// SecurityConfig contains the security configuration received as part of the
+// Cluster resource on the client-side, and as part of the Listener resource on
+// the server-side.
+type SecurityConfig struct {
+	// RootInstanceName identifies the certProvider plugin to be used to fetch
+	// root certificates. This instance name will be resolved to the plugin name
+	// and its associated configuration from the certificate_providers field of
+	// the bootstrap file.
+	RootInstanceName string
+	// RootCertName is the certificate name to be passed to the plugin (looked
+	// up from the bootstrap file) while fetching root certificates.
+	RootCertName string
+	// IdentityInstanceName identifies the certProvider plugin to be used to
+	// fetch identity certificates. This instance name will be resolved to the
+	// plugin name and its associated configuration from the
+	// certificate_providers field of the bootstrap file.
+	IdentityInstanceName string
+	// IdentityCertName is the certificate name to be passed to the plugin
+	// (looked up from the bootstrap file) while fetching identity certificates.
+	IdentityCertName string
+	// AcceptedSANs is a list of Subject Alternative Names. During the TLS
+	// handshake, the SAN present in the peer certificate is compared against
+	// this list, and the handshake succeeds only if a match is found. Used only
+	// on the client-side.
+	AcceptedSANs []string
+	// RequireClientCert indicates if the server handshake process expects the
+	// client to present a certificate. Set to true when performing mTLS. Used
+	// only on the server-side.
+	RequireClientCert bool
 }
 
 // ClusterUpdate contains information from a received CDS response, which is of
@@ -196,6 +251,10 @@ type ClusterUpdate struct {
 	ServiceName string
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
+	// SecurityCfg contains security configuration sent by the control plane.
+	SecurityCfg *SecurityConfig
+	// MaxRequests for circuit breaking, if any (otherwise nil).
+	MaxRequests *uint32
 }
 
 // OverloadDropConfig contains the config to drop overloads.
@@ -244,28 +303,6 @@ type EndpointsUpdate struct {
 	Localities []Locality
 }
 
-// Options provides all parameters required for the creation of an xDS client.
-type Options struct {
-	// Config contains a fully populated bootstrap config. It is the
-	// responsibility of the caller to use some sane defaults here if the
-	// bootstrap process returned with certain fields left unspecified.
-	Config bootstrap.Config
-	// DialOpts contains dial options to be used when dialing the xDS server.
-	DialOpts []grpc.DialOption
-	// TargetName is the target of the parent ClientConn.
-	TargetName string
-	// WatchExpiryTimeout is the amount of time the client is willing to wait
-	// for the first response from the server for any resource being watched.
-	// Expiry will not cause cancellation of the watch. It will only trigger the
-	// invocation of the registered callback and it is left up to the caller to
-	// decide whether or not they want to cancel the watch.
-	//
-	// If this field is left unspecified, a default value of 15 seconds will be
-	// used. This is based on the default value of the initial_fetch_timeout
-	// field in corepb.ConfigSource proto.
-	WatchExpiryTimeout time.Duration
-}
-
 // Function to be overridden in tests.
 var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts BuildOptions) (APIClient, error) {
 	cb := getAPIClientBuilder(apiVersion)
@@ -275,24 +312,19 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 	return cb.Build(cc, opts)
 }
 
-// Client is a full fledged gRPC client which queries a set of discovery APIs
-// (collectively termed as xDS) on a remote management server, to discover
-// various dynamic resources.
-//
-// A single client object will be shared by the xds resolver and balancer
-// implementations. But the same client can only be shared by the same parent
-// ClientConn.
+// clientImpl is the real implementation of the xds client. The exported Client
+// is a wrapper of this struct with a ref count.
 //
 // Implements UpdateHandler interface.
 // TODO(easwars): Make a wrapper struct which implements this interface in the
 // style of ccBalancerWrapper so that the Client type does not implement these
 // exported methods.
-type Client struct {
-	done      *grpcsync.Event
-	opts      Options
-	cc        *grpc.ClientConn // Connection to the xDS server
-	apiClient APIClient
-	loadStore *load.Store
+type clientImpl struct {
+	done               *grpcsync.Event
+	config             *bootstrap.Config
+	cc                 *grpc.ClientConn // Connection to the management server.
+	apiClient          APIClient
+	watchExpiryTimeout time.Duration
 
 	logger *grpclog.PrefixLogger
 
@@ -306,49 +338,47 @@ type Client struct {
 	cdsCache    map[string]ClusterUpdate
 	edsWatchers map[string]map[*watchInfo]bool
 	edsCache    map[string]EndpointsUpdate
+
+	// Changes to map lrsClients and the lrsClient inside the map need to be
+	// protected by lrsMu.
+	lrsMu      sync.Mutex
+	lrsClients map[string]*lrsClient
 }
 
-// New returns a new xdsClient configured with opts.
-func New(opts Options) (*Client, error) {
+// newWithConfig returns a new xdsClient with the given config.
+func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (*clientImpl, error) {
 	switch {
-	case opts.Config.BalancerName == "":
+	case config.BalancerName == "":
 		return nil, errors.New("xds: no xds_server name provided in options")
-	case opts.Config.Creds == nil:
+	case config.Creds == nil:
 		return nil, errors.New("xds: no credentials provided in options")
-	case opts.Config.NodeProto == nil:
+	case config.NodeProto == nil:
 		return nil, errors.New("xds: no node_proto provided in options")
 	}
 
-	switch opts.Config.TransportAPI {
+	switch config.TransportAPI {
 	case version.TransportV2:
-		if _, ok := opts.Config.NodeProto.(*v2corepb.Node); !ok {
-			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", opts.Config.NodeProto, opts.Config.TransportAPI)
+		if _, ok := config.NodeProto.(*v2corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.NodeProto, config.TransportAPI)
 		}
 	case version.TransportV3:
-		if _, ok := opts.Config.NodeProto.(*v3corepb.Node); !ok {
-			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", opts.Config.NodeProto, opts.Config.TransportAPI)
+		if _, ok := config.NodeProto.(*v3corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.NodeProto, config.TransportAPI)
 		}
 	}
 
 	dopts := []grpc.DialOption{
-		opts.Config.Creds,
+		config.Creds,
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:    5 * time.Minute,
 			Timeout: 20 * time.Second,
 		}),
 	}
-	dopts = append(dopts, opts.DialOpts...)
 
-	if opts.WatchExpiryTimeout == 0 {
-		// This is based on the default value of the initial_fetch_timeout field
-		// in corepb.ConfigSource proto.
-		opts.WatchExpiryTimeout = 15 * time.Second
-	}
-
-	c := &Client{
-		done:      grpcsync.NewEvent(),
-		opts:      opts,
-		loadStore: load.NewStore(),
+	c := &clientImpl{
+		done:               grpcsync.NewEvent(),
+		config:             config,
+		watchExpiryTimeout: watchExpiryTimeout,
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
@@ -359,22 +389,22 @@ func New(opts Options) (*Client, error) {
 		cdsCache:    make(map[string]ClusterUpdate),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
 		edsCache:    make(map[string]EndpointsUpdate),
+		lrsClients:  make(map[string]*lrsClient),
 	}
 
-	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
+	cc, err := grpc.Dial(config.BalancerName, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
-		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", opts.Config.BalancerName, err)
+		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", config.BalancerName, err)
 	}
 	c.cc = cc
 	c.logger = prefixLogger((c))
-	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
+	c.logger.Infof("Created ClientConn to xDS management server: %s", config.BalancerName)
 
-	apiClient, err := newAPIClient(opts.Config.TransportAPI, cc, BuildOptions{
+	apiClient, err := newAPIClient(config.TransportAPI, cc, BuildOptions{
 		Parent:    c,
-		NodeProto: opts.Config.NodeProto,
+		NodeProto: config.NodeProto,
 		Backoff:   backoff.DefaultExponential.Backoff,
-		LoadStore: c.loadStore,
 		Logger:    c.logger,
 	})
 	if err != nil {
@@ -386,13 +416,19 @@ func New(opts Options) (*Client, error) {
 	return c, nil
 }
 
+// BootstrapConfig returns the configuration read from the bootstrap file.
+// Callers must treat the return value as read-only.
+func (c *Client) BootstrapConfig() *bootstrap.Config {
+	return c.config
+}
+
 // run is a goroutine for all the callbacks.
 //
 // Callback can be called in watch(), if an item is found in cache. Without this
 // goroutine, the callback will be called inline, which might cause a deadlock
 // in user's code. Callbacks also cannot be simple `go callback()` because the
 // order matters.
-func (c *Client) run() {
+func (c *clientImpl) run() {
 	for {
 		select {
 		case t := <-c.updateCh.Get():
@@ -407,8 +443,8 @@ func (c *Client) run() {
 	}
 }
 
-// Close closes the gRPC connection to the xDS server.
-func (c *Client) Close() {
+// Close closes the gRPC connection to the management server.
+func (c *clientImpl) Close() {
 	if c.done.HasFired() {
 		return
 	}

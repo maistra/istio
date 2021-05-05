@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _accesslog_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on AccessLog with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
 func (m *AccessLog) Validate() error {
@@ -1089,7 +1086,7 @@ func (m *ResponseFlagFilter) Validate() error {
 		if _, ok := _ResponseFlagFilter_Flags_InLookup[item]; !ok {
 			return ResponseFlagFilterValidationError{
 				field:  fmt.Sprintf("Flags[%v]", idx),
-				reason: "value must be in list [LH UH UT LR UR UF UC UO NR DI FI RL UAEX RLSE DC URX SI IH DPE UMSDR RFCF NFCF DT]",
+				reason: "value must be in list [LH UH UT LR UR UF UC UO NR DI FI RL UAEX RLSE DC URX SI IH DPE UMSDR RFCF NFCF DT UPE NC]",
 			}
 		}
 
@@ -1178,6 +1175,8 @@ var _ResponseFlagFilter_Flags_InLookup = map[string]struct{}{
 	"RFCF":  {},
 	"NFCF":  {},
 	"DT":    {},
+	"UPE":   {},
+	"NC":    {},
 }
 
 // Validate checks the field values on GrpcStatusFilter with the rules defined

@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _udp_listener_config_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on UdpListenerConfig with the rules defined
 // in the proto definition for this message. If any rules are violated, an
 // error is returned.
@@ -44,22 +41,24 @@ func (m *UdpListenerConfig) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UdpListenerName
-
-	switch m.ConfigType.(type) {
-
-	case *UdpListenerConfig_TypedConfig:
-
-		if v, ok := interface{}(m.GetTypedConfig()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return UdpListenerConfigValidationError{
-					field:  "TypedConfig",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
+	if v, ok := interface{}(m.GetDownstreamSocketConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return UdpListenerConfigValidationError{
+				field:  "DownstreamSocketConfig",
+				reason: "embedded message failed validation",
+				cause:  err,
 			}
 		}
+	}
 
+	if v, ok := interface{}(m.GetQuicOptions()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return UdpListenerConfigValidationError{
+				field:  "QuicOptions",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
 	}
 
 	return nil

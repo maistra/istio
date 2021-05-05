@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _tcp_proxy_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on TcpProxy with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
 func (m *TcpProxy) Validate() error {
@@ -363,6 +360,30 @@ func (m *TcpProxy_TunnelingConfig) Validate() error {
 			field:  "Hostname",
 			reason: "value length must be at least 1 runes",
 		}
+	}
+
+	// no validation rules for UsePost
+
+	if len(m.GetHeadersToAdd()) > 1000 {
+		return TcpProxy_TunnelingConfigValidationError{
+			field:  "HeadersToAdd",
+			reason: "value must contain no more than 1000 item(s)",
+		}
+	}
+
+	for idx, item := range m.GetHeadersToAdd() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TcpProxy_TunnelingConfigValidationError{
+					field:  fmt.Sprintf("HeadersToAdd[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
 	return nil

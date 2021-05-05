@@ -37,9 +37,6 @@ var (
 	_ = v3.TrafficDirection(0)
 )
 
-// define the regex for a UUID once up-front
-var _listener_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on ListenerCollection with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
@@ -148,6 +145,8 @@ func (m *Listener) Validate() error {
 		}
 	}
 
+	// no validation rules for StatPrefix
+
 	for idx, item := range m.GetFilterChains() {
 		_, _ = idx, item
 
@@ -161,6 +160,16 @@ func (m *Listener) Validate() error {
 			}
 		}
 
+	}
+
+	if v, ok := interface{}(m.GetUseOriginalDst()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ListenerValidationError{
+				field:  "UseOriginalDst",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
 	}
 
 	if v, ok := interface{}(m.GetDefaultFilterChain()).(interface{ Validate() error }); ok {
@@ -326,16 +335,6 @@ func (m *Listener) Validate() error {
 
 	}
 
-	if v, ok := interface{}(m.GetUdpWriterConfig()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ListenerValidationError{
-				field:  "UdpWriterConfig",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
 	if v, ok := interface{}(m.GetTcpBacklogSize()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return ListenerValidationError{
@@ -346,14 +345,30 @@ func (m *Listener) Validate() error {
 		}
 	}
 
-	if v, ok := interface{}(m.GetHiddenEnvoyDeprecatedUseOriginalDst()).(interface{ Validate() error }); ok {
+	if v, ok := interface{}(m.GetBindToPort()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return ListenerValidationError{
-				field:  "HiddenEnvoyDeprecatedUseOriginalDst",
+				field:  "BindToPort",
 				reason: "embedded message failed validation",
 				cause:  err,
 			}
 		}
+	}
+
+	switch m.ListenerSpecifier.(type) {
+
+	case *Listener_InternalListener:
+
+		if v, ok := interface{}(m.GetInternalListener()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListenerValidationError{
+					field:  "InternalListener",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
 	return nil
@@ -579,6 +594,74 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = Listener_ConnectionBalanceConfigValidationError{}
+
+// Validate checks the field values on Listener_InternalListenerConfig with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *Listener_InternalListenerConfig) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// Listener_InternalListenerConfigValidationError is the validation error
+// returned by Listener_InternalListenerConfig.Validate if the designated
+// constraints aren't met.
+type Listener_InternalListenerConfigValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Listener_InternalListenerConfigValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Listener_InternalListenerConfigValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Listener_InternalListenerConfigValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Listener_InternalListenerConfigValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Listener_InternalListenerConfigValidationError) ErrorName() string {
+	return "Listener_InternalListenerConfigValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Listener_InternalListenerConfigValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListener_InternalListenerConfig.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Listener_InternalListenerConfigValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Listener_InternalListenerConfigValidationError{}
 
 // Validate checks the field values on
 // Listener_ConnectionBalanceConfig_ExactBalance with the rules defined in the

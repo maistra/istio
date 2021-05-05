@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _common_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on TlsParameters with the rules defined in
 // the proto definition for this message. If any rules are violated, an error
 // is returned.
@@ -239,6 +236,16 @@ func (m *TlsCertificate) Validate() error {
 		if err := v.Validate(); err != nil {
 			return TlsCertificateValidationError{
 				field:  "PrivateKey",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if v, ok := interface{}(m.GetWatchedDirectory()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return TlsCertificateValidationError{
+				field:  "WatchedDirectory",
 				reason: "embedded message failed validation",
 				cause:  err,
 			}
@@ -454,6 +461,16 @@ func (m *CertificateValidationContext) Validate() error {
 		}
 	}
 
+	if v, ok := interface{}(m.GetWatchedDirectory()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return CertificateValidationContextValidationError{
+				field:  "WatchedDirectory",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	for idx, item := range m.GetVerifyCertificateSpki() {
 		_, _ = idx, item
 
@@ -533,6 +550,16 @@ func (m *CertificateValidationContext) Validate() error {
 		return CertificateValidationContextValidationError{
 			field:  "TrustChainVerification",
 			reason: "value must be one of the defined enum values",
+		}
+	}
+
+	if v, ok := interface{}(m.GetCustomValidatorConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return CertificateValidationContextValidationError{
+				field:  "CustomValidatorConfig",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
 		}
 	}
 

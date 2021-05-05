@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _lightstep_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on LightstepConfig with the rules defined
 // in the proto definition for this message. If any rules are violated, an
 // error is returned.
@@ -51,10 +48,15 @@ func (m *LightstepConfig) Validate() error {
 		}
 	}
 
-	if utf8.RuneCountInString(m.GetAccessTokenFile()) < 1 {
-		return LightstepConfigValidationError{
-			field:  "AccessTokenFile",
-			reason: "value length must be at least 1 runes",
+	// no validation rules for AccessTokenFile
+
+	if v, ok := interface{}(m.GetAccessToken()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return LightstepConfigValidationError{
+				field:  "AccessToken",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
 		}
 	}
 
