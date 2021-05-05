@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _http_connection_manager_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on HttpConnectionManager with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
@@ -134,10 +131,10 @@ func (m *HttpConnectionManager) Validate() error {
 
 	if wrapper := m.GetMaxRequestHeadersKb(); wrapper != nil {
 
-		if val := wrapper.GetValue(); val <= 0 || val > 96 {
+		if val := wrapper.GetValue(); val <= 0 || val > 8192 {
 			return HttpConnectionManagerValidationError{
 				field:  "MaxRequestHeadersKb",
-				reason: "value must be inside range (0, 96]",
+				reason: "value must be inside range (0, 8192]",
 			}
 		}
 

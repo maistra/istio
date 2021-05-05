@@ -212,12 +212,16 @@ func TestCommonHttpProtocolOptions(t *testing.T) {
 			g.Expect(len(clusters)).To(Equal(tc.clusters))
 			c := clusters[tc.clusterName]
 
+			// nolint: staticcheck
 			g.Expect(c.GetCommonHttpProtocolOptions()).To(Not(BeNil()))
+			// nolint: staticcheck
 			commonHTTPProtocolOptions := c.CommonHttpProtocolOptions
 
 			if tc.useDownStreamProtocol && tc.proxyType == model.SidecarProxy {
+				// nolint: staticcheck
 				g.Expect(c.ProtocolSelection).To(Equal(cluster.Cluster_USE_DOWNSTREAM_PROTOCOL))
 			} else {
+				// nolint: staticcheck
 				g.Expect(c.ProtocolSelection).To(Equal(cluster.Cluster_USE_CONFIGURED_PROTOCOL))
 			}
 

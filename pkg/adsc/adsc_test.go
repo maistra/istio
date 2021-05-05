@@ -179,18 +179,22 @@ func TestADSC_Save(t *testing.T) {
 			expectedJSON: map[string]string{
 				"_lds_tcp": `{
     "listener-1": {
-      "name": "bar"
+      "name": "bar",
+      "ListenerSpecifier": null
     },
     "listener-2": {
-      "name": "mar"
+      "name": "mar",
+      "ListenerSpecifier": null
     }
   }`,
 				"_lds_http": `{
     "http-list-1": {
-      "name": "bar"
+      "name": "bar",
+      "ListenerSpecifier": null
     },
     "http-list-2": {
-      "name": "mar"
+      "name": "mar",
+      "ListenerSpecifier": null
     }
   }`,
 				"_rds": `{

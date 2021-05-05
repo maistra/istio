@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _udp_proxy_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on UdpProxyConfig with the rules defined in
 // the proto definition for this message. If any rules are violated, an error
 // is returned.
@@ -83,6 +80,16 @@ func (m *UdpProxyConfig) Validate() error {
 			}
 		}
 
+	}
+
+	if v, ok := interface{}(m.GetUpstreamSocketConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return UdpProxyConfigValidationError{
+				field:  "UpstreamSocketConfig",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
 	}
 
 	switch m.RouteSpecifier.(type) {
@@ -177,6 +184,15 @@ func (m *UdpProxyConfig_HashPolicy) Validate() error {
 			return UdpProxyConfig_HashPolicyValidationError{
 				field:  "SourceIp",
 				reason: "value must equal true",
+			}
+		}
+
+	case *UdpProxyConfig_HashPolicy_Key:
+
+		if utf8.RuneCountInString(m.GetKey()) < 1 {
+			return UdpProxyConfig_HashPolicyValidationError{
+				field:  "Key",
+				reason: "value length must be at least 1 runes",
 			}
 		}
 

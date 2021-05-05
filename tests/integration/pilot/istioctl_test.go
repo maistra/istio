@@ -376,6 +376,8 @@ func jsonUnmarshallOrFail(t *testing.T, context, s string) interface{} {
 }
 
 func TestProxyStatus(t *testing.T) {
+	// TODO: Unskip once we're on 1.9
+	t.Skip("https://github.com/istio/istio/issues/1")
 	framework.NewTest(t).Features("usability.observability.proxy-status").
 		RequiresSingleCluster().
 		Run(func(ctx framework.TestContext) {

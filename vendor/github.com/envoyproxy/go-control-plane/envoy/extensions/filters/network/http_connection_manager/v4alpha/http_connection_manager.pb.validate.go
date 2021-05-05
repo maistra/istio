@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _http_connection_manager_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on HttpConnectionManager with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
@@ -123,6 +120,16 @@ func (m *HttpConnectionManager) Validate() error {
 		}
 	}
 
+	if v, ok := interface{}(m.GetHttp3ProtocolOptions()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return HttpConnectionManagerValidationError{
+				field:  "Http3ProtocolOptions",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	if !_HttpConnectionManager_ServerName_Pattern.MatchString(m.GetServerName()) {
 		return HttpConnectionManagerValidationError{
 			field:  "ServerName",
@@ -139,10 +146,10 @@ func (m *HttpConnectionManager) Validate() error {
 
 	if wrapper := m.GetMaxRequestHeadersKb(); wrapper != nil {
 
-		if val := wrapper.GetValue(); val <= 0 || val > 96 {
+		if val := wrapper.GetValue(); val <= 0 || val > 8192 {
 			return HttpConnectionManagerValidationError{
 				field:  "MaxRequestHeadersKb",
-				reason: "value must be inside range (0, 96]",
+				reason: "value must be inside range (0, 8192]",
 			}
 		}
 
@@ -166,6 +173,27 @@ func (m *HttpConnectionManager) Validate() error {
 				cause:  err,
 			}
 		}
+	}
+
+	if d := m.GetRequestHeadersTimeout(); d != nil {
+		dur, err := ptypes.Duration(d)
+		if err != nil {
+			return HttpConnectionManagerValidationError{
+				field:  "RequestHeadersTimeout",
+				reason: "value is not a valid duration",
+				cause:  err,
+			}
+		}
+
+		gte := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+		if dur < gte {
+			return HttpConnectionManagerValidationError{
+				field:  "RequestHeadersTimeout",
+				reason: "value must be greater than or equal to 0s",
+			}
+		}
+
 	}
 
 	if v, ok := interface{}(m.GetDrainTimeout()).(interface{ Validate() error }); ok {
@@ -227,7 +255,12 @@ func (m *HttpConnectionManager) Validate() error {
 
 	// no validation rules for SkipXffAppend
 
-	// no validation rules for Via
+	if !_HttpConnectionManager_Via_Pattern.MatchString(m.GetVia()) {
+		return HttpConnectionManagerValidationError{
+			field:  "Via",
+			reason: "value does not match regex pattern \"^[^\\x00\\n\\r]*$\"",
+		}
+	}
 
 	if v, ok := interface{}(m.GetGenerateRequestId()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
@@ -311,12 +344,20 @@ func (m *HttpConnectionManager) Validate() error {
 		}
 	}
 
-	// no validation rules for StripMatchingHostPort
-
 	if v, ok := interface{}(m.GetStreamErrorOnInvalidHttpMessage()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return HttpConnectionManagerValidationError{
 				field:  "StreamErrorOnInvalidHttpMessage",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if v, ok := interface{}(m.GetPathNormalizationOptions()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return HttpConnectionManagerValidationError{
+				field:  "PathNormalizationOptions",
 				reason: "embedded message failed validation",
 				cause:  err,
 			}
@@ -366,6 +407,16 @@ func (m *HttpConnectionManager) Validate() error {
 			field:  "RouteSpecifier",
 			reason: "value is required",
 		}
+
+	}
+
+	switch m.StripPortMode.(type) {
+
+	case *HttpConnectionManager_StripMatchingHostPort:
+		// no validation rules for StripMatchingHostPort
+
+	case *HttpConnectionManager_StripAnyHostPort:
+		// no validation rules for StripAnyHostPort
 
 	}
 
@@ -429,6 +480,8 @@ var _ interface {
 } = HttpConnectionManagerValidationError{}
 
 var _HttpConnectionManager_ServerName_Pattern = regexp.MustCompile("^[^\x00\n\r]*$")
+
+var _HttpConnectionManager_Via_Pattern = regexp.MustCompile("^[^\x00\n\r]*$")
 
 // Validate checks the field values on LocalReplyConfig with the rules defined
 // in the proto definition for this message. If any rules are violated, an
@@ -679,24 +732,7 @@ func (m *Rds) Validate() error {
 		}
 	}
 
-	switch m.NameSpecifier.(type) {
-
-	case *Rds_RouteConfigName:
-		// no validation rules for RouteConfigName
-
-	case *Rds_RdsResourceLocator:
-
-		if v, ok := interface{}(m.GetRdsResourceLocator()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return RdsValidationError{
-					field:  "RdsResourceLocator",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
+	// no validation rules for RouteConfigName
 
 	return nil
 }
@@ -1009,6 +1045,8 @@ func (m *ScopedRds) Validate() error {
 		}
 	}
 
+	// no validation rules for SrdsResourcesLocator
+
 	return nil
 }
 
@@ -1079,6 +1117,8 @@ func (m *HttpFilter) Validate() error {
 			reason: "value length must be at least 1 runes",
 		}
 	}
+
+	// no validation rules for IsOptional
 
 	switch m.ConfigType.(type) {
 
@@ -1635,6 +1675,98 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = HttpConnectionManager_UpgradeConfigValidationError{}
+
+// Validate checks the field values on
+// HttpConnectionManager_PathNormalizationOptions with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *HttpConnectionManager_PathNormalizationOptions) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	if v, ok := interface{}(m.GetForwardingTransformation()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return HttpConnectionManager_PathNormalizationOptionsValidationError{
+				field:  "ForwardingTransformation",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if v, ok := interface{}(m.GetHttpFilterTransformation()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return HttpConnectionManager_PathNormalizationOptionsValidationError{
+				field:  "HttpFilterTransformation",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	return nil
+}
+
+// HttpConnectionManager_PathNormalizationOptionsValidationError is the
+// validation error returned by
+// HttpConnectionManager_PathNormalizationOptions.Validate if the designated
+// constraints aren't met.
+type HttpConnectionManager_PathNormalizationOptionsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HttpConnectionManager_PathNormalizationOptionsValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HttpConnectionManager_PathNormalizationOptionsValidationError) Reason() string {
+	return e.reason
+}
+
+// Cause function returns cause value.
+func (e HttpConnectionManager_PathNormalizationOptionsValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HttpConnectionManager_PathNormalizationOptionsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HttpConnectionManager_PathNormalizationOptionsValidationError) ErrorName() string {
+	return "HttpConnectionManager_PathNormalizationOptionsValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e HttpConnectionManager_PathNormalizationOptionsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHttpConnectionManager_PathNormalizationOptions.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HttpConnectionManager_PathNormalizationOptionsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HttpConnectionManager_PathNormalizationOptionsValidationError{}
 
 // Validate checks the field values on ScopedRoutes_ScopeKeyBuilder with the
 // rules defined in the proto definition for this message. If any rules are

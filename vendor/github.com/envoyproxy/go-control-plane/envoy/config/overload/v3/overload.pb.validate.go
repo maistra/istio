@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _overload_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on ResourceMonitor with the rules defined
 // in the proto definition for this message. If any rules are violated, an
 // error is returned.
@@ -392,6 +389,96 @@ var _ interface {
 	ErrorName() string
 } = TriggerValidationError{}
 
+// Validate checks the field values on ScaleTimersOverloadActionConfig with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *ScaleTimersOverloadActionConfig) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	if len(m.GetTimerScaleFactors()) < 1 {
+		return ScaleTimersOverloadActionConfigValidationError{
+			field:  "TimerScaleFactors",
+			reason: "value must contain at least 1 item(s)",
+		}
+	}
+
+	for idx, item := range m.GetTimerScaleFactors() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ScaleTimersOverloadActionConfigValidationError{
+					field:  fmt.Sprintf("TimerScaleFactors[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	return nil
+}
+
+// ScaleTimersOverloadActionConfigValidationError is the validation error
+// returned by ScaleTimersOverloadActionConfig.Validate if the designated
+// constraints aren't met.
+type ScaleTimersOverloadActionConfigValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ScaleTimersOverloadActionConfigValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ScaleTimersOverloadActionConfigValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ScaleTimersOverloadActionConfigValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ScaleTimersOverloadActionConfigValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ScaleTimersOverloadActionConfigValidationError) ErrorName() string {
+	return "ScaleTimersOverloadActionConfigValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ScaleTimersOverloadActionConfigValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sScaleTimersOverloadActionConfig.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ScaleTimersOverloadActionConfigValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ScaleTimersOverloadActionConfigValidationError{}
+
 // Validate checks the field values on OverloadAction with the rules defined in
 // the proto definition for this message. If any rules are violated, an error
 // is returned.
@@ -427,6 +514,16 @@ func (m *OverloadAction) Validate() error {
 			}
 		}
 
+	}
+
+	if v, ok := interface{}(m.GetTypedConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return OverloadActionValidationError{
+				field:  "TypedConfig",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
 	}
 
 	return nil
@@ -597,3 +694,123 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = OverloadManagerValidationError{}
+
+// Validate checks the field values on
+// ScaleTimersOverloadActionConfig_ScaleTimer with the rules defined in the
+// proto definition for this message. If any rules are violated, an error is returned.
+func (m *ScaleTimersOverloadActionConfig_ScaleTimer) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	if _, ok := _ScaleTimersOverloadActionConfig_ScaleTimer_Timer_NotInLookup[m.GetTimer()]; ok {
+		return ScaleTimersOverloadActionConfig_ScaleTimerValidationError{
+			field:  "Timer",
+			reason: "value must not be in list [0]",
+		}
+	}
+
+	if _, ok := ScaleTimersOverloadActionConfig_TimerType_name[int32(m.GetTimer())]; !ok {
+		return ScaleTimersOverloadActionConfig_ScaleTimerValidationError{
+			field:  "Timer",
+			reason: "value must be one of the defined enum values",
+		}
+	}
+
+	switch m.OverloadAdjust.(type) {
+
+	case *ScaleTimersOverloadActionConfig_ScaleTimer_MinTimeout:
+
+		if v, ok := interface{}(m.GetMinTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ScaleTimersOverloadActionConfig_ScaleTimerValidationError{
+					field:  "MinTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *ScaleTimersOverloadActionConfig_ScaleTimer_MinScale:
+
+		if v, ok := interface{}(m.GetMinScale()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ScaleTimersOverloadActionConfig_ScaleTimerValidationError{
+					field:  "MinScale",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	default:
+		return ScaleTimersOverloadActionConfig_ScaleTimerValidationError{
+			field:  "OverloadAdjust",
+			reason: "value is required",
+		}
+
+	}
+
+	return nil
+}
+
+// ScaleTimersOverloadActionConfig_ScaleTimerValidationError is the validation
+// error returned by ScaleTimersOverloadActionConfig_ScaleTimer.Validate if
+// the designated constraints aren't met.
+type ScaleTimersOverloadActionConfig_ScaleTimerValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ScaleTimersOverloadActionConfig_ScaleTimerValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ScaleTimersOverloadActionConfig_ScaleTimerValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ScaleTimersOverloadActionConfig_ScaleTimerValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ScaleTimersOverloadActionConfig_ScaleTimerValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ScaleTimersOverloadActionConfig_ScaleTimerValidationError) ErrorName() string {
+	return "ScaleTimersOverloadActionConfig_ScaleTimerValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ScaleTimersOverloadActionConfig_ScaleTimerValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sScaleTimersOverloadActionConfig_ScaleTimer.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ScaleTimersOverloadActionConfig_ScaleTimerValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ScaleTimersOverloadActionConfig_ScaleTimerValidationError{}
+
+var _ScaleTimersOverloadActionConfig_ScaleTimer_Timer_NotInLookup = map[ScaleTimersOverloadActionConfig_TimerType]struct{}{
+	0: {},
+}

@@ -282,7 +282,13 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 
 func (c *Controller) delete(ctx context.Context, instance *v1alpha1.MeshFederation) error {
 	var allErrors []error
+
+	if instance == nil {
+		return nil
+	}
+
 	// delete the server
+	// nolint: staticcheck
 	c.federationManager.DeleteMeshFederation(instance.Name)
 
 	// delete the registry

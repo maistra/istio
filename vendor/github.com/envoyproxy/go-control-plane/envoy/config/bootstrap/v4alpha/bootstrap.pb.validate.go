@@ -33,9 +33,6 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _bootstrap_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on Bootstrap with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
 func (m *Bootstrap) Validate() error {
@@ -118,28 +115,6 @@ func (m *Bootstrap) Validate() error {
 				cause:  err,
 			}
 		}
-	}
-
-	if d := m.GetStatsFlushInterval(); d != nil {
-		dur, err := ptypes.Duration(d)
-		if err != nil {
-			return BootstrapValidationError{
-				field:  "StatsFlushInterval",
-				reason: "value is not a valid duration",
-				cause:  err,
-			}
-		}
-
-		lt := time.Duration(300*time.Second + 0*time.Nanosecond)
-		gte := time.Duration(0*time.Second + 1000000*time.Nanosecond)
-
-		if dur < gte || dur >= lt {
-			return BootstrapValidationError{
-				field:  "StatsFlushInterval",
-				reason: "value must be inside range [1ms, 5m0s)",
-			}
-		}
-
 	}
 
 	if v, ok := interface{}(m.GetHiddenEnvoyDeprecatedWatchdog()).(interface{ Validate() error }); ok {
@@ -233,6 +208,21 @@ func (m *Bootstrap) Validate() error {
 
 	}
 
+	for idx, item := range m.GetFatalActions() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return BootstrapValidationError{
+					field:  fmt.Sprintf("FatalActions[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	for idx, item := range m.GetConfigSources() {
 		_, _ = idx, item
 
@@ -272,6 +262,43 @@ func (m *Bootstrap) Validate() error {
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
+			}
+		}
+
+	}
+
+	switch m.StatsFlush.(type) {
+
+	case *Bootstrap_StatsFlushInterval:
+
+		if d := m.GetStatsFlushInterval(); d != nil {
+			dur, err := ptypes.Duration(d)
+			if err != nil {
+				return BootstrapValidationError{
+					field:  "StatsFlushInterval",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+			}
+
+			lt := time.Duration(300*time.Second + 0*time.Nanosecond)
+			gte := time.Duration(0*time.Second + 1000000*time.Nanosecond)
+
+			if dur < gte || dur >= lt {
+				return BootstrapValidationError{
+					field:  "StatsFlushInterval",
+					reason: "value must be inside range [1ms, 5m0s)",
+				}
+			}
+
+		}
+
+	case *Bootstrap_StatsFlushOnAdmin:
+
+		if m.GetStatsFlushOnAdmin() != true {
+			return BootstrapValidationError{
+				field:  "StatsFlushOnAdmin",
+				reason: "value must equal true",
 			}
 		}
 
@@ -341,7 +368,22 @@ func (m *Admin) Validate() error {
 		return nil
 	}
 
-	// no validation rules for AccessLogPath
+	for idx, item := range m.GetAccessLog() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return AdminValidationError{
+					field:  fmt.Sprintf("AccessLog[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for HiddenEnvoyDeprecatedAccessLogPath
 
 	// no validation rules for ProfilePath
 
@@ -757,6 +799,81 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = WatchdogValidationError{}
+
+// Validate checks the field values on FatalAction with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *FatalAction) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	if v, ok := interface{}(m.GetConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return FatalActionValidationError{
+				field:  "Config",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	return nil
+}
+
+// FatalActionValidationError is the validation error returned by
+// FatalAction.Validate if the designated constraints aren't met.
+type FatalActionValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e FatalActionValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e FatalActionValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e FatalActionValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e FatalActionValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e FatalActionValidationError) ErrorName() string { return "FatalActionValidationError" }
+
+// Error satisfies the builtin error interface
+func (e FatalActionValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sFatalAction.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = FatalActionValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = FatalActionValidationError{}
 
 // Validate checks the field values on Runtime with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
@@ -1178,15 +1295,7 @@ func (m *Bootstrap_DynamicResources) Validate() error {
 		}
 	}
 
-	if v, ok := interface{}(m.GetLdsResourcesLocator()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return Bootstrap_DynamicResourcesValidationError{
-				field:  "LdsResourcesLocator",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
+	// no validation rules for LdsResourcesLocator
 
 	if v, ok := interface{}(m.GetCdsConfig()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
@@ -1198,15 +1307,7 @@ func (m *Bootstrap_DynamicResources) Validate() error {
 		}
 	}
 
-	if v, ok := interface{}(m.GetCdsResourcesLocator()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return Bootstrap_DynamicResourcesValidationError{
-				field:  "CdsResourcesLocator",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
+	// no validation rules for CdsResourcesLocator
 
 	if v, ok := interface{}(m.GetAdsConfig()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
@@ -1589,6 +1690,8 @@ func (m *RuntimeLayer_RtdsLayer) Validate() error {
 		return nil
 	}
 
+	// no validation rules for Name
+
 	if v, ok := interface{}(m.GetRtdsConfig()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return RuntimeLayer_RtdsLayerValidationError{
@@ -1597,25 +1700,6 @@ func (m *RuntimeLayer_RtdsLayer) Validate() error {
 				cause:  err,
 			}
 		}
-	}
-
-	switch m.NameSpecifier.(type) {
-
-	case *RuntimeLayer_RtdsLayer_Name:
-		// no validation rules for Name
-
-	case *RuntimeLayer_RtdsLayer_RtdsResourceLocator:
-
-		if v, ok := interface{}(m.GetRtdsResourceLocator()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return RuntimeLayer_RtdsLayerValidationError{
-					field:  "RtdsResourceLocator",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
 	}
 
 	return nil

@@ -39,9 +39,6 @@ var (
 	_ = v3.RequestMethod(0)
 )
 
-// define the regex for a UUID once up-front
-var _route_components_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on VirtualHost with the rules defined in
 // the proto definition for this message. If any rules are violated, an error
 // is returned.
@@ -662,6 +659,18 @@ func (m *Route) Validate() error {
 			if err := v.Validate(); err != nil {
 				return RouteValidationError{
 					field:  "FilterAction",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *Route_NonForwardingAction:
+
+		if v, ok := interface{}(m.GetNonForwardingAction()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RouteValidationError{
+					field:  "NonForwardingAction",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -1881,6 +1890,18 @@ func (m *RedirectAction) Validate() error {
 			}
 		}
 
+	case *RedirectAction_RegexRewrite:
+
+		if v, ok := interface{}(m.GetRegexRewrite()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedirectActionValidationError{
+					field:  "RegexRewrite",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
 	return nil
@@ -2029,6 +2050,73 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = DirectResponseActionValidationError{}
+
+// Validate checks the field values on NonForwardingAction with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *NonForwardingAction) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// NonForwardingActionValidationError is the validation error returned by
+// NonForwardingAction.Validate if the designated constraints aren't met.
+type NonForwardingActionValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e NonForwardingActionValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e NonForwardingActionValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e NonForwardingActionValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e NonForwardingActionValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e NonForwardingActionValidationError) ErrorName() string {
+	return "NonForwardingActionValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e NonForwardingActionValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sNonForwardingAction.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = NonForwardingActionValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = NonForwardingActionValidationError{}
 
 // Validate checks the field values on Decorator with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
@@ -2798,6 +2886,83 @@ var _ interface {
 	ErrorName() string
 } = InternalRedirectPolicyValidationError{}
 
+// Validate checks the field values on FilterConfig with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *FilterConfig) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	if v, ok := interface{}(m.GetConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return FilterConfigValidationError{
+				field:  "Config",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for IsOptional
+
+	return nil
+}
+
+// FilterConfigValidationError is the validation error returned by
+// FilterConfig.Validate if the designated constraints aren't met.
+type FilterConfigValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e FilterConfigValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e FilterConfigValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e FilterConfigValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e FilterConfigValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e FilterConfigValidationError) ErrorName() string { return "FilterConfigValidationError" }
+
+// Error satisfies the builtin error interface
+func (e FilterConfigValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sFilterConfig.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = FilterConfigValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = FilterConfigValidationError{}
+
 // Validate checks the field values on WeightedCluster_ClusterWeight with the
 // rules defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
@@ -3466,6 +3631,13 @@ func (m *RouteAction_UpgradeConfig) Validate() error {
 		return nil
 	}
 
+	if utf8.RuneCountInString(m.GetUpgradeType()) < 1 {
+		return RouteAction_UpgradeConfigValidationError{
+			field:  "UpgradeType",
+			reason: "value length must be at least 1 runes",
+		}
+	}
+
 	if !_RouteAction_UpgradeConfig_UpgradeType_Pattern.MatchString(m.GetUpgradeType()) {
 		return RouteAction_UpgradeConfigValidationError{
 			field:  "UpgradeType",
@@ -4070,6 +4242,8 @@ func (m *RouteAction_UpgradeConfig_ConnectConfig) Validate() error {
 			}
 		}
 	}
+
+	// no validation rules for AllowPost
 
 	return nil
 }
@@ -4753,6 +4927,18 @@ func (m *RateLimit_Action) Validate() error {
 			if err := v.Validate(); err != nil {
 				return RateLimit_ActionValidationError{
 					field:  "Metadata",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *RateLimit_Action_Extension:
+
+		if v, ok := interface{}(m.GetExtension()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RateLimit_ActionValidationError{
+					field:  "Extension",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
