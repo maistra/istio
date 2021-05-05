@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	v1 "maistra.io/api/security/v1"
 
 	pb "istio.io/api/security/v1alpha1"
 	"istio.io/istio/pkg/security"
@@ -55,6 +56,8 @@ type citadelClient struct {
 	client        pb.IstioCertificateServiceClient
 	clusterID     string
 	conn          *grpc.ClientConn
+
+	trustBundleClient v1.TrustBundleServiceClient
 }
 
 // NewCitadelClient create a CA client for Citadel.
@@ -73,6 +76,7 @@ func NewCitadelClient(endpoint string, tls bool, rootCert []byte, clusterID stri
 	}
 	c.conn = conn
 	c.client = pb.NewIstioCertificateServiceClient(conn)
+	c.trustBundleClient = v1.NewTrustBundleServiceClient(conn)
 	return c, nil
 }
 
@@ -108,6 +112,21 @@ func (c *citadelClient) CSRSign(ctx context.Context, reqID string, csrPEM []byte
 	}
 
 	return resp.CertChain, nil
+}
+
+func (c *citadelClient) GetTrustBundles(ctx context.Context) (map[string]string, error) {
+	resp, err := c.trustBundleClient.GetTrustBundles(ctx, &v1.TrustBundleRequest{})
+	if err != nil {
+		citadelClientLog.Errorf("Failed to get trust bundles: %v", err)
+		return nil, err
+	}
+
+	trustBundleMap := map[string]string{}
+	for _, tb := range resp.TrustBundles {
+		trustBundleMap[tb.TrustDomain] = tb.RootCert
+	}
+	return trustBundleMap, nil
+
 }
 
 func (c *citadelClient) getTLSDialOption() (grpc.DialOption, error) {
@@ -199,5 +218,6 @@ func (c *citadelClient) reconnect() error {
 	}
 	c.conn = conn
 	c.client = pb.NewIstioCertificateServiceClient(conn)
+	c.trustBundleClient = v1.NewTrustBundleServiceClient(conn)
 	return err
 }

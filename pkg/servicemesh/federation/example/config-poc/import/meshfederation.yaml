@@ -11,4 +11,7 @@ spec:
     egress:
       name: federation-egress
   security:
-    clientID: cluster.local/ns/mesh1-system/sa/federation-egress-service-account
+    trustDomain: mesh1.local
+    clientID: mesh1.local/ns/mesh1-system/sa/federation-egress-service-account
+    certificateChain: |
+      {{MESH1_CERT}}

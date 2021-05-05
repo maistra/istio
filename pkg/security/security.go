@@ -242,6 +242,8 @@ type SecretItem struct {
 
 	RootCert []byte
 
+	TrustBundles map[string][]byte
+
 	// RootCertOwnedByCompoundSecret is true if this SecretItem was created by a
 	// K8S secret having both server cert/key and client ca and should be deleted
 	// with the secret.

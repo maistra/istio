@@ -1730,6 +1730,7 @@ maistra.io/api/client/versioned/typed/core/v2/fake
 maistra.io/api/core/v1
 maistra.io/api/core/v1alpha1
 maistra.io/api/core/v2
+maistra.io/api/security/v1
 # sigs.k8s.io/controller-runtime v0.6.3
 ## explicit
 sigs.k8s.io/controller-runtime/pkg/cache

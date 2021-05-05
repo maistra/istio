@@ -17,7 +17,9 @@ package federation
 import (
 	"fmt"
 
+	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/errors"
+	v1 "maistra.io/api/security/v1"
 
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
@@ -144,6 +146,10 @@ func (f *Federation) ControllersSynced() bool {
 
 func (f *Federation) StartServer(stopCh <-chan struct{}) {
 	f.server.Run(stopCh)
+}
+
+func (f *Federation) Register(grpc *grpc.Server) {
+	v1.RegisterTrustBundleServiceServer(grpc, f.discoveryController)
 }
 
 func (opt Options) validate() error {
