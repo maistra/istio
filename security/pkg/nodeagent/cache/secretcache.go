@@ -132,6 +132,10 @@ type secretCache struct {
 	workload       *security.SecretItem
 	root           []byte
 	rootExpiration time.Time
+
+	// Read/Write to trustBundleMap and trustBundleExpireTime should use getRootCertByTrustDomain() and setRootCertByTrustDomain().
+	trustBundleMap        map[string][]byte
+	trustBundleExpireTime time.Time
 }
 
 // GetRoot returns cached root cert and cert expiration time. This method is thread safe.
@@ -220,6 +224,33 @@ func (sc *SecretManagerClient) CallUpdateCallback(resourceName string) {
 	}
 }
 
+func (sc *SecretManagerClient) GetTrustBundles() (trustBundles map[string][]byte, earliestExpiry time.Time) {
+	sc.cache.mu.RLock()
+	trustBundles = sc.cache.trustBundleMap
+	earliestExpiry = sc.cache.trustBundleExpireTime
+	if trustBundles != nil && sc.cache.root != nil {
+		trustBundles[sc.configOptions.TrustDomain] = sc.cache.root
+		if sc.cache.rootExpiration.Before(earliestExpiry) {
+			earliestExpiry = sc.cache.rootExpiration
+		}
+	}
+	sc.cache.mu.RUnlock()
+	return trustBundles, earliestExpiry
+}
+
+func (sc *SecretManagerClient) SetTrustBundles(trustBundles map[string][]byte, earliestExpiry time.Time) {
+	sc.cache.mu.Lock()
+	trustBundlesUpdated := !compareTrustBundles(sc.cache.trustBundleMap, trustBundles)
+	if trustBundlesUpdated {
+		sc.cache.trustBundleMap = trustBundles
+		sc.cache.trustBundleExpireTime = earliestExpiry
+	}
+	sc.cache.mu.Unlock()
+	if trustBundlesUpdated {
+		sc.CallUpdateCallback(RootCertReqResourceName)
+	}
+}
+
 // GenerateSecret generates new secret and cache the secret, this function is called by SDS.StreamSecrets
 // and SDS.FetchSecret. Since credential passing from client may change, regenerate secret every time
 // instead of reading from cache.
@@ -304,12 +335,18 @@ func (sc *SecretManagerClient) GenerateSecret(resourceName string) (secret *secu
 		return nil, errors.New("failed to get root cert")
 	}
 
+	trustBundles, trustBundleExpiry := sc.GetTrustBundles()
+	if trustBundles != nil && trustBundleExpiry.Before(rootCertExpr) {
+		rootCertExpr = trustBundleExpiry
+	}
+
 	t := time.Now()
 	ns = &security.SecretItem{
 		ResourceName: resourceName,
 		RootCert:     rootCert,
 		ExpireTime:   rootCertExpr,
 		CreatedTime:  t,
+		TrustBundles: trustBundles,
 	}
 
 	return ns, nil
@@ -552,7 +589,6 @@ func (sc *SecretManagerClient) generateSecret(resourceName string) (*security.Se
 			logPrefix, certChainPEM, err)
 		return nil, fmt.Errorf("failed to extract expire time from server certificate in CSR response: %v", err)
 	}
-
 	length := len(certChainPEM)
 	rootCert, _ := sc.cache.GetRoot()
 	// Leaf cert is element '0'. Root cert is element 'n'.
@@ -671,4 +707,17 @@ func concatCerts(certsPEM []string) []byte {
 		}
 	}
 	return certChain.Bytes()
+}
+
+// returns true if trust bundles are the same
+func compareTrustBundles(a map[string][]byte, b map[string][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if string(b[k]) != string(v) {
+			return false
+		}
+	}
+	return true
 }

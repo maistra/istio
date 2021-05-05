@@ -83,3 +83,6 @@ spec:
                 cpu: 10m
                 memory: 128Mi
               limits: {}
+  security:
+    trust:
+      domain: mesh2.local

@@ -156,6 +156,10 @@ func (f *Federation) StartServer(stopCh <-chan struct{}) {
 	f.server.Run(stopCh)
 }
 
+func (f *Federation) GetTrustBundles() map[string]string {
+	return f.discoveryController.GetTrustBundles()
+}
+
 func (opt Options) validate() error {
 	var allErrors []error
 	if opt.KubeClient == nil {

@@ -30,6 +30,9 @@ const (
 
 	// TODO(bianpengyuan): uses upstream resource url one go control plane is updated.
 	ExtensionConfigurationType = "type.googleapis.com/envoy.config.core.v3.TypedExtensionConfig"
+
+	// maistra xDS
+	TrustBundleType = "type.googleapis.com/maistra.security.v1.TrustBundleResponse"
 )
 
 // GetShortType returns an abbreviated form of a type, useful for logging or human friendly messages
@@ -47,6 +50,8 @@ func GetShortType(typeURL string) string {
 		return "SDS"
 	case NameTableType:
 		return "NDS"
+	case TrustBundleType:
+		return "TBDS"
 	default:
 		return typeURL
 	}
@@ -67,6 +72,8 @@ func GetMetricType(typeURL string) string {
 		return "sds"
 	case NameTableType:
 		return "nds"
+	case TrustBundleType:
+		return "tbds"
 	default:
 		return typeURL
 	}

@@ -212,7 +212,30 @@ func toEnvoySecret(s *security.SecretItem) *tls.Secret {
 	secret := &tls.Secret{
 		Name: s.ResourceName,
 	}
-	if s.RootCert != nil {
+	if s.TrustBundles != nil {
+		spiffeValidatorConfig := &tls.SPIFFECertValidatorConfig{}
+		for trustDomain, rootCert := range s.TrustBundles {
+			spiffeValidatorConfig.TrustDomains = append(
+				spiffeValidatorConfig.TrustDomains,
+				&tls.SPIFFECertValidatorConfig_TrustDomain{
+					Name: trustDomain,
+					TrustBundle: &core.DataSource{
+						Specifier: &core.DataSource_InlineBytes{
+							InlineBytes: rootCert,
+						},
+					},
+				},
+			)
+		}
+		secret.Type = &tls.Secret_ValidationContext{
+			ValidationContext: &tls.CertificateValidationContext{
+				CustomValidatorConfig: &core.TypedExtensionConfig{
+					Name:        "envoy.tls.cert_validator.spiffe",
+					TypedConfig: util.MessageToAny(spiffeValidatorConfig),
+				},
+			},
+		}
+	} else if s.RootCert != nil {
 		secret.Type = &tls.Secret_ValidationContext{
 			ValidationContext: &tls.CertificateValidationContext{
 				TrustedCa: &core.DataSource{

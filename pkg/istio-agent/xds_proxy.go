@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	v1 "maistra.io/api/security/v1"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/cmd/pilot-agent/status/ready"
@@ -54,7 +55,9 @@ import (
 	"istio.io/istio/pkg/mcp/status"
 	"istio.io/istio/pkg/uds"
 	"istio.io/istio/pkg/wasm"
+	"istio.io/istio/security/pkg/nodeagent/cache"
 	"istio.io/istio/security/pkg/nodeagent/caclient"
+	nodeagentutil "istio.io/istio/security/pkg/nodeagent/util"
 	"istio.io/pkg/log"
 )
 
@@ -92,6 +95,7 @@ type XdsProxy struct {
 	// Wasm cache and ecds channel are used to replace wasm remote load with local file.
 	wasmCache      wasm.Cache
 	ecdsUpdateChan chan *discovery.DiscoveryResponse
+	secretCache    *cache.SecretManagerClient
 	// ecds version and nonce uses atomic only to prevent race in testing.
 	// In reality there should not be race as istiod will only have one
 	// in flight update for each type of resource.
@@ -128,6 +132,7 @@ func initXdsProxy(ia *Agent) (*XdsProxy, error) {
 		xdsHeaders:     ia.cfg.XDSHeaders,
 		xdsUdsPath:     ia.cfg.XdsUdsPath,
 		wasmCache:      wasm.NewLocalFileCache(constants.IstioDataDir, wasm.DefaultWasmModulePurgeInteval, wasm.DefaultWasmModuleExpiry),
+		secretCache:    ia.secretCache,
 		ecdsUpdateChan: make(chan *discovery.DiscoveryResponse, 10),
 	}
 
@@ -257,6 +262,11 @@ func (p *XdsProxy) StreamAggregatedResources(downstream discovery.AggregatedDisc
 				// Fire of a configured initial request, if there is one
 				if initialRequest != nil {
 					con.requestsChan <- initialRequest
+				}
+
+				// fire off an initial TBDS request
+				con.requestsChan <- &discovery.DiscoveryRequest{
+					TypeUrl: v3.TrustBundleType,
 				}
 				initialRequestsSent = true
 			}
@@ -404,6 +414,46 @@ func (p *XdsProxy) handleUpstreamResponse(con *ProxyConnection) {
 					// Otherwise, forward ECDS resource update directly to Envoy.
 					forwardToEnvoy(con, resp)
 				}
+			case v3.TrustBundleType:
+				if len(resp.Resources) == 0 {
+					log.Error("empty response")
+					continue
+				}
+				var tb v1.TrustBundleResponse
+				if err := ptypes.UnmarshalAny(resp.Resources[0], &tb); err != nil {
+					proxyLog.Errorf("failed to unmarshall trust bundles: %v", err)
+					continue
+				}
+				trustBundles := map[string][]byte{}
+				proxyLog.Debugf("received new trust bundles: %v", tb.TrustBundles)
+				expireTime := time.Date(3000, 1, 1, 1, 1, 1, 1, time.Now().Location())
+				for _, bundle := range tb.TrustBundles {
+					certBytes := []byte(bundle.RootCert)
+					certExpireTime, err := nodeagentutil.ParseCertAndGetExpiryTimestamp(certBytes)
+					if err != nil {
+						proxyLog.Errorf("failed to extract expiration time in the certificate loaded from file: %v", err)
+					} else if certExpireTime.Before(expireTime) {
+						expireTime = certExpireTime
+					}
+					trustBundles[bundle.TrustDomain] = certBytes
+				}
+
+				if p.secretCache == nil {
+					proxyLog.Error("failed to access secret cache")
+					continue
+				}
+				if len(trustBundles) == 0 {
+					trustBundles = nil
+				}
+				p.secretCache.SetTrustBundles(trustBundles, expireTime)
+
+				// Send ACK
+				con.requestsChan <- &discovery.DiscoveryRequest{
+					VersionInfo:   resp.VersionInfo,
+					TypeUrl:       v3.TrustBundleType,
+					ResponseNonce: resp.Nonce,
+				}
+
 			default:
 				forwardToEnvoy(con, resp)
 			}
