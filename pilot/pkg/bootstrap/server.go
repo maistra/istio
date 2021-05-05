@@ -783,6 +783,9 @@ func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 	s.secureGrpcServer = grpc.NewServer(opts...)
 	s.XDSServer.Register(s.secureGrpcServer)
 	reflection.Register(s.secureGrpcServer)
+	if s.federation != nil {
+		s.federation.Register(s.secureGrpcServer)
+	}
 
 	s.addStartFunc(func(stop <-chan struct{}) error {
 		go func() {

@@ -29,6 +29,7 @@ import (
 	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
 	maistraclient "maistra.io/api/client/versioned"
 	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/security/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
@@ -67,6 +68,7 @@ type Controller struct {
 	xds               model.XDSUpdater
 	mu                sync.Mutex
 	stopChannels      map[string]chan struct{}
+	trustBundles      map[string]string
 }
 
 var _ model.ConfigStore = (*Controller)(nil)
@@ -130,6 +132,7 @@ func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRoll
 		stopChannels:      make(map[string]chan struct{}),
 		xds:               opt.XDSUpdater,
 		federationManager: opt.FederationManager,
+		trustBundles:      map[string]string{},
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
 		Informer:     informer,
@@ -201,6 +204,10 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 
 	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
 		instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.GetDomainSuffix())
+
+	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.CertificateChain != "" {
+		c.updateRootCert(instance.Spec.Security.TrustDomain, instance.Spec.Security.CertificateChain)
+	}
 
 	// check for existing registry
 	if registry != nil {
@@ -291,6 +298,11 @@ func (c *Controller) delete(ctx context.Context, instance *v1alpha1.MeshFederati
 	// nolint: staticcheck
 	c.federationManager.DeleteMeshFederation(instance.Name)
 
+	// delete trust bundle
+	if instance != nil && instance.Spec.Security != nil && instance.Spec.Security.TrustDomain != "" {
+		c.updateRootCert(instance.Spec.Security.TrustDomain, "")
+	}
+
 	// delete the registry
 	registry := c.getRegistry(instance.Name)
 	if registry != nil {
@@ -350,4 +362,25 @@ func (opt Options) validate() error {
 		common.Logger.WithLabels("component", controllerName).Warnf("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
 	}
 	return utilerrors.NewAggregate(allErrors)
+}
+
+func (c *Controller) updateRootCert(trustDomain string, rootCert string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if rootCert == "" {
+		delete(c.trustBundles, trustDomain)
+	} else {
+		c.trustBundles[trustDomain] = rootCert
+	}
+}
+
+func (c *Controller) GetTrustBundles(ctx context.Context, req *v1.TrustBundleRequest) (*v1.TrustBundleResponse, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// make a copy
+	ret := &v1.TrustBundleResponse{TrustBundles: []*v1.TrustBundle{}}
+	for td, cert := range c.trustBundles {
+		ret.TrustBundles = append(ret.TrustBundles, &v1.TrustBundle{TrustDomain: td, RootCert: cert})
+	}
+	return ret, nil
 }
