@@ -23,11 +23,12 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
-	"istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned"
-	versioned_v1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
-	"istio.io/istio/pkg/servicemesh/client/v1/informers/externalversions"
 	"istio.io/pkg/log"
+
+	"maistra.io/api/client/informers/externalversions"
+	"maistra.io/api/client/versioned"
+	versioned_v1 "maistra.io/api/client/versioned/typed/core/v1"
+	v1 "maistra.io/api/core/v1"
 )
 
 var smmrLog = log.RegisterScope("smmr", "SMMR controller", 0)
@@ -69,7 +70,7 @@ func NewMemberRollController(config *rest.Config, namespace string, memberRollNa
 func newMemberRollSharedInformer(restClient rest.Interface, namespace string, resync time.Duration) cache.SharedIndexInformer {
 	client := versioned.New(restClient)
 	return externalversions.NewSharedInformerFactoryWithOptions(client, resync,
-		externalversions.WithNamespace(namespace)).Maistra().V1().ServiceMeshMemberRolls().Informer()
+		externalversions.WithNamespace(namespace)).Core().V1().ServiceMeshMemberRolls().Informer()
 }
 
 func (smmrc *serviceMeshMemberRollController) Start(stopCh <-chan struct{}) {

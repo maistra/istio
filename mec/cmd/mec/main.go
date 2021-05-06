@@ -29,11 +29,12 @@ import (
 	"istio.io/istio/mec/pkg/server"
 	"istio.io/istio/pkg/cmd"
 	"istio.io/istio/pkg/kube"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/pkg/filewatcher"
 	"istio.io/pkg/log"
+
+	v1 "maistra.io/api/core/v1"
 )
 
 const (

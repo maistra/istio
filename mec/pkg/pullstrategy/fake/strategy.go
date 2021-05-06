@@ -22,7 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"istio.io/istio/mec/pkg/model"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	v1 "maistra.io/api/core/v1"
 )
 
 const (
