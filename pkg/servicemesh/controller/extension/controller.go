@@ -26,10 +26,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pkg/kube"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
-	versioned_v1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
+
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/log"
+	versioned_v1 "maistra.io/api/client/versioned/typed/core/v1"
+	v1 "maistra.io/api/core/v1"
 )
 
 var controllerlog = log.RegisterScope("controller", "Extension controller", 0)

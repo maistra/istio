@@ -40,8 +40,8 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/visibility"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	"istio.io/istio/pkg/servicemesh/model"
+	v1 "maistra.io/api/core/v1"
 )
 
 func TestMergeUpdateRequest(t *testing.T) {

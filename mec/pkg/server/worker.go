@@ -31,9 +31,9 @@ import (
 	"k8s.io/client-go/rest"
 
 	"istio.io/istio/mec/pkg/model"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
-	v1client "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
 	"istio.io/pkg/log"
+	v1client "maistra.io/api/client/versioned/typed/core/v1"
+	v1 "maistra.io/api/core/v1"
 )
 
 var workerlog = log.RegisterScope("worker", "Worker function", 0)
@@ -70,7 +70,7 @@ type Worker struct {
 
 	pullStrategy model.ImagePullStrategy
 
-	client       v1client.MaistraV1Interface
+	client       v1client.CoreV1Interface
 	errorChannel chan error
 	stopChan     <-chan struct{}
 	Queue        chan ExtensionEvent

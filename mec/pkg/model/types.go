@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
+	v1 "maistra.io/api/core/v1"
 )
 
 type ImageRef struct {
