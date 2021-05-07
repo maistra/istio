@@ -72,6 +72,7 @@ import (
 	smv1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/istio/pkg/servicemesh/federation"
+	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/istio/security/pkg/pki/ca"
@@ -136,7 +137,7 @@ type Server struct {
 	httpsServer      *http.Server // webhooks HTTPS Server.
 	httpsReadyClient *http.Client
 
-	federationServer *federation.Server
+	federation *federation.Federation
 
 	grpcServer       *grpc.Server
 	secureGrpcServer *grpc.Server
@@ -212,14 +213,6 @@ func NewServer(args *PilotArgs) (*Server, error) {
 		readinessProbes: make(map[string]readinessProbe),
 	}
 
-	if features.EnableFederationDiscoveryServer {
-		var err error
-		s.federationServer, err = federation.NewServer(args.ServerOptions.FederationAddr, e, s.clusterID, features.NetworkName)
-		if err != nil {
-			return nil, fmt.Errorf("error initializing federation server: %v", err)
-		}
-	}
-
 	if args.ShutdownDuration == 0 {
 		s.shutdownDuration = 10 * time.Second // If not specified set to 10 seconds.
 	}
@@ -275,8 +268,39 @@ func NewServer(args *PilotArgs) (*Server, error) {
 		return nil, err
 	}
 
+	// federation support must be initialized before config and service controllers
+	if features.EnableFederation {
+		if s.kubeClient == nil {
+			log.Errorf("could not initialize federation discovery server: kubeClient is nil")
+		} else {
+			var err error
+			s.federation, err = federation.New(federation.Options{
+				ControllerOptions: common.ControllerOptions{
+					KubeClient:   s.kubeClient,
+					ResyncPeriod: args.RegistryOptions.KubeOptions.ResyncPeriod,
+					Namespace:    args.RegistryOptions.ClusterRegistriesNamespace,
+				},
+				BindAddress:       args.ServerOptions.FederationAddr,
+				Env:               s.environment,
+				Network:           features.NetworkName,
+				XDSUpdater:        s.XDSServer,
+				ServiceController: s.ServiceController(),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("error initializing federation: %v", err)
+			}
+		}
+	}
+
 	if err := s.initControllers(args); err != nil {
 		return nil, err
+	}
+
+	if s.federation != nil {
+		s.addStartFunc(func(stop <-chan struct{}) error {
+			go s.federation.StartControllers(stop)
+			return nil
+		})
 	}
 
 	s.initJwtPolicy()
@@ -452,8 +476,8 @@ func (s *Server) Start(stop <-chan struct{}) error {
 		}()
 	}
 
-	if s.federationServer != nil {
-		go s.federationServer.Run(stop)
+	if s.federation != nil {
+		go s.federation.StartServer(stop)
 	}
 
 	s.waitForShutdown(stop)
@@ -881,6 +905,9 @@ func (s *Server) cachesSynced() bool {
 	if !s.configController.HasSynced() {
 		return false
 	}
+	if s.federation != nil && !s.federation.ControllersSynced() {
+		return false
+	}
 	return true
 }
 
@@ -902,8 +929,8 @@ func (s *Server) initRegistryEventHandlers() {
 	}
 	s.ServiceController().AppendServiceHandler(serviceHandler)
 
-	if s.federationServer != nil {
-		s.ServiceController().AppendServiceHandler(s.federationServer.UpdateService)
+	if s.federation != nil {
+		s.federation.RegisterServiceHandlers(s.ServiceController())
 	}
 
 	if s.configController != nil {
