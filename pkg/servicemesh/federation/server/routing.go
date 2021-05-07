@@ -46,11 +46,11 @@ var (
 	armageddonTime = time.Unix(1<<62-1, 0)
 )
 
-func createResourceName(mesh string, source serviceKey) string {
-	return fmt.Sprintf("federation-exports-%s-%s-%s", mesh, source.name, source.namespace)
+func createResourceName(mesh string, source federationmodel.ServiceKey) string {
+	return fmt.Sprintf("federation-exports-%s-%s-%s", mesh, source.Name, source.Namespace)
 }
 
-func (s *meshServer) deleteExportResources(source serviceKey, target *federationmodel.ServiceMessage) error {
+func (s *meshServer) deleteExportResources(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) error {
 	resourceName := createResourceName(s.mesh.Name, source)
 	// Delete() is always successful
 	_ = s.configStore.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), resourceName, s.mesh.Namespace)
@@ -85,7 +85,7 @@ func (s *meshServer) removeServiceFromAuthorizationPolicy(target *federationmode
 	return nil
 }
 
-func (s *meshServer) createExportResources(source serviceKey, target *federationmodel.ServiceMessage) error {
+func (s *meshServer) createExportResources(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) error {
 	if err := s.createOrUpdateAuthorizationPolicy(target); err != nil {
 		return errors.Wrapf(err, "error updating AuthorinzationPolicy resource")
 	}
@@ -97,7 +97,7 @@ func (s *meshServer) createExportResources(source serviceKey, target *federation
 		}
 	} else {
 		// overwrite whatever's there
-		logger.Warnf("Gateway resource %s already exists for exported service (%s => %s).  It will be overwritten.", gateway.Name, source.hostname, target.Hostname)
+		logger.Warnf("Gateway resource %s already exists for exported service (%s => %s).  It will be overwritten.", gateway.Name, source.Hostname, target.Hostname)
 		if _, err := s.configStore.Update(*gateway); err != nil {
 			return errors.Wrapf(err, "error updating Gateway resource")
 		}
@@ -109,7 +109,7 @@ func (s *meshServer) createExportResources(source serviceKey, target *federation
 		}
 	} else {
 		// overwrite whatever's there
-		logger.Warnf("VirtualService resource %s already exists for exported service (%s => %s).  It will be overwritten.", vs.Name, source.hostname, target.Hostname)
+		logger.Warnf("VirtualService resource %s already exists for exported service (%s => %s).  It will be overwritten.", vs.Name, source.Hostname, target.Hostname)
 		if _, err := s.configStore.Update(*vs); err != nil {
 			return errors.Wrapf(err, "error updating VirtualService resource")
 		}
@@ -190,7 +190,7 @@ func (s *meshServer) createOrUpdateAuthorizationPolicy(target *federationmodel.S
 	return nil
 }
 
-func (s *meshServer) gatewayForExport(source serviceKey, target *federationmodel.ServiceMessage) *config.Config {
+func (s *meshServer) gatewayForExport(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) *config.Config {
 	resourceName := createResourceName(s.mesh.Name, source)
 	mode := rawnetworking.ServerTLSSettings_ISTIO_MUTUAL
 	if s.mesh.Spec.Security != nil && s.mesh.Spec.Security.AllowDirectInbound {
@@ -230,7 +230,7 @@ func (s *meshServer) gatewayForExport(source serviceKey, target *federationmodel
 	return gateway
 }
 
-func (s *meshServer) virtualServiceForExport(source serviceKey, target *federationmodel.ServiceMessage) *config.Config {
+func (s *meshServer) virtualServiceForExport(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) *config.Config {
 	// VirtualService used to route inbound requests to the service.
 	name := createResourceName(s.mesh.Name, source)
 	ingressGatewayName := fmt.Sprintf("%s/%s", s.mesh.Namespace, name)
@@ -263,7 +263,7 @@ func (s *meshServer) virtualServiceForExport(source serviceKey, target *federati
 					Route: []*rawnetworking.RouteDestination{
 						{
 							Destination: &rawnetworking.Destination{
-								Host: source.hostname,
+								Host: source.Hostname,
 							},
 						},
 					},

@@ -60,11 +60,11 @@ echo "Installing istio configuration for mesh1"
 # oc create -f export/tcp/destinationrule.yaml
 
 echo "Installing istio configuration for mesh2"
-oc create -f import/http/passthrough
-oc create -f import/http/proxied
-oc create -f import/tcp/passthrough
-oc create -f import/tcp/proxied
-oc create -f import/destinationrule-gateway.yaml
+# oc create -f import/http/passthrough
+# oc create -f import/http/proxied
+# oc create -f import/tcp/passthrough
+# oc create -f import/tcp/proxied
+# oc create -f import/destinationrule-gateway.yaml
 oc create -f import/mongodb-service.yaml
 
 echo "Please install bookinfo into mesh1-bookinfo and mesh2-bookinfo"

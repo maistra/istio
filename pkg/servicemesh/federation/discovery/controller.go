@@ -235,9 +235,12 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 		// create a registry instance
 		options := federationregistry.Options{
 			NetworkAddress: instance.Spec.NetworkAddress,
+			EgressName:     instance.Spec.Gateways.Egress.Name,
 			EgressService:  egressGatewayService,
 			ClusterID:      instance.Name,
 			Namespace:      instance.Namespace,
+			UseDirectCalls: instance.Spec.Security != nil && instance.Spec.Security.AllowDirectOutbound,
+			ConfigStore:    c.ConfigStoreCache,
 			XDSUpdater:     c.xds,
 			ResyncPeriod:   time.Minute * 5,
 			NetworkName:    fmt.Sprintf("network-%s", instance.Name),

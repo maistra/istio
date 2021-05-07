@@ -314,6 +314,9 @@ func (c *Controller) discoveryService(instance *servicemeshv1alpha1.MeshFederati
 					},
 				},
 			},
+			ExportTo: []string{
+				".",
+			},
 		},
 	}
 	return service

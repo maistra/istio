@@ -129,9 +129,11 @@ func TestServiceList(t *testing.T) {
 			expectedMessage: federationmodel.ServiceListMessage{
 				Services: []*federationmodel.ServiceMessage{
 					{
-						Name:      "service",
-						Namespace: "federation",
-						Hostname:  "service.federation.svc.test-remote.local",
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "service",
+							Namespace: "federation",
+							Hostname:  "service.federation.svc.test-remote.local",
+						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
 								Name:     "https",
@@ -238,9 +240,11 @@ func TestServiceList(t *testing.T) {
 				},
 				Services: []*federationmodel.ServiceMessage{
 					{
-						Name:      "service",
-						Namespace: "federation",
-						Hostname:  "service.federation.svc.test-remote.local",
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "service",
+							Namespace: "federation",
+							Hostname:  "service.federation.svc.test-remote.local",
+						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
 								Name:     "https",
@@ -323,9 +327,11 @@ func TestServiceList(t *testing.T) {
 				},
 				Services: []*federationmodel.ServiceMessage{
 					{
-						Name:      "productpage",
-						Namespace: "bookinfo",
-						Hostname:  "productpage.bookinfo.svc.test-remote.local",
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "productpage",
+							Namespace: "bookinfo",
+							Hostname:  "productpage.bookinfo.svc.test-remote.local",
+						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
 								Name:     "https",
@@ -335,9 +341,11 @@ func TestServiceList(t *testing.T) {
 						},
 					},
 					{
-						Name:      "ratings",
-						Namespace: "bookinfo",
-						Hostname:  "ratings.bookinfo.svc.test-remote.local",
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "ratings",
+							Namespace: "bookinfo",
+							Hostname:  "ratings.bookinfo.svc.test-remote.local",
+						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
 								Name:     "https",
@@ -497,9 +505,11 @@ func TestWatch(t *testing.T) {
 				{
 					Action: federationmodel.ActionAdd,
 					Service: &federationmodel.ServiceMessage{
-						Name:      "service",
-						Namespace: "federation",
-						Hostname:  "service.federation.svc.test-remote.local",
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "service",
+							Namespace: "federation",
+							Hostname:  "service.federation.svc.test-remote.local",
+						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
 								Name:     "https",
@@ -512,9 +522,11 @@ func TestWatch(t *testing.T) {
 				{
 					Action: federationmodel.ActionDelete,
 					Service: &federationmodel.ServiceMessage{
-						Name:      "service",
-						Namespace: "federation",
-						Hostname:  "service.federation.svc.test-remote.local",
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "service",
+							Namespace: "federation",
+							Hostname:  "service.federation.svc.test-remote.local",
+						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
 								Name:     "https",
@@ -574,9 +586,11 @@ func TestWatch(t *testing.T) {
 				{
 					Action: federationmodel.ActionDelete,
 					Service: &federationmodel.ServiceMessage{
-						Name:      "service",
-						Namespace: "federation",
-						Hostname:  "service.federation.svc.test-remote.local",
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "service",
+							Namespace: "federation",
+							Hostname:  "service.federation.svc.test-remote.local",
+						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
 								Name:     "https",
@@ -589,9 +603,11 @@ func TestWatch(t *testing.T) {
 				{
 					Action: federationmodel.ActionAdd,
 					Service: &federationmodel.ServiceMessage{
-						Name:      "service",
-						Namespace: "cluster",
-						Hostname:  "service.cluster.svc.test-remote.local",
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "service",
+							Namespace: "cluster",
+							Hostname:  "service.cluster.svc.test-remote.local",
+						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
 								Name:     "https",

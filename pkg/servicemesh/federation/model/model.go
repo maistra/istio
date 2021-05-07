@@ -16,6 +16,12 @@ package model
 
 import hashstructure "github.com/mitchellh/hashstructure/v2"
 
+type ServiceKey struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Hostname  string `json:"hostname"`
+}
+
 type ServiceListMessage struct {
 	Checksum                uint64             `json:"checksum" hash:"ignore"`
 	NetworkGatewayEndpoints []*ServiceEndpoint `json:"networkGatewayEndpoints" hash:"set"`
@@ -23,9 +29,7 @@ type ServiceListMessage struct {
 }
 
 type ServiceMessage struct {
-	Name         string         `json:"name"`
-	Namespace    string         `json:"namespace"`
-	Hostname     string         `json:"hostname"`
+	ServiceKey   `json:"inline"`
 	ServicePorts []*ServicePort `json:"servicePorts"`
 }
 

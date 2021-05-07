@@ -125,7 +125,7 @@ func (s *Server) AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alp
 		mesh:                     mesh,
 		exportConfig:             exportConfig,
 		configStore:              s.configStore,
-		currentServices:          make(map[serviceKey]*federationmodel.ServiceMessage),
+		currentServices:          make(map[federationmodel.ServiceKey]*federationmodel.ServiceMessage),
 	}
 	if _, loaded := s.meshes.LoadOrStore(mesh.Name, meshServer); !loaded {
 		meshServer.resync()
@@ -287,17 +287,11 @@ type GatewayEndpointsProvider interface {
 	GetGatewayEndpoints() []*federationmodel.ServiceEndpoint
 }
 
-type serviceKey struct {
-	name      string
-	namespace string
-	hostname  string
-}
-
-func serviceKeyForService(svc *model.Service) serviceKey {
-	return serviceKey{
-		name:      svc.Attributes.Name,
-		namespace: svc.Attributes.Namespace,
-		hostname:  string(svc.Hostname),
+func serviceKeyForService(svc *model.Service) federationmodel.ServiceKey {
+	return federationmodel.ServiceKey{
+		Name:      svc.Attributes.Name,
+		Namespace: svc.Attributes.Namespace,
+		Hostname:  string(svc.Hostname),
 	}
 }
 
@@ -312,7 +306,7 @@ type meshServer struct {
 
 	configStore model.ConfigStoreCache
 
-	currentServices map[serviceKey]*federationmodel.ServiceMessage
+	currentServices map[federationmodel.ServiceKey]*federationmodel.ServiceMessage
 
 	watchMut       sync.RWMutex
 	currentWatches []chan *federationmodel.WatchEvent
@@ -330,9 +324,11 @@ func (s *meshServer) getServiceMessage(svc *model.Service, exportedName *v1alpha
 		return nil
 	}
 	ret := &federationmodel.ServiceMessage{
-		Name:         exportedName.Name,
-		Namespace:    exportedName.Namespace,
-		Hostname:     fmt.Sprintf("%s.%s.svc.%s.local", exportedName.Name, exportedName.Namespace, s.mesh.Name),
+		ServiceKey: federationmodel.ServiceKey{
+			Name:      exportedName.Name,
+			Namespace: exportedName.Namespace,
+			Hostname:  fmt.Sprintf("%s.%s.svc.%s.local", exportedName.Name, exportedName.Namespace, s.mesh.Name),
+		},
 		ServicePorts: make([]*federationmodel.ServicePort, 0),
 	}
 	for _, port := range svc.Ports {
@@ -497,9 +493,9 @@ func (s *meshServer) serviceUpdated(svc *model.Service, event model.Event) {
 }
 
 // s has to be Lock()ed
-func (s *meshServer) addService(svc serviceKey, msg *federationmodel.ServiceMessage) {
+func (s *meshServer) addService(svc federationmodel.ServiceKey, msg *federationmodel.ServiceMessage) {
 	if err := s.createExportResources(svc, msg); err != nil {
-		logger.Errorf("error creating resources for exported service %s => %s: %s", svc.hostname, msg.Hostname, err)
+		logger.Errorf("error creating resources for exported service %s => %s: %s", svc.Hostname, msg.Hostname, err)
 		return
 	}
 	s.currentServices[svc] = msg
@@ -511,7 +507,7 @@ func (s *meshServer) addService(svc serviceKey, msg *federationmodel.ServiceMess
 }
 
 // s has to be Lock()ed
-func (s *meshServer) updateService(svc serviceKey, msg *federationmodel.ServiceMessage) {
+func (s *meshServer) updateService(svc federationmodel.ServiceKey, msg *federationmodel.ServiceMessage) {
 	// resources used to configure export are all based on names, so we don't need to update them
 	s.currentServices[svc] = msg
 	e := &federationmodel.WatchEvent{
@@ -522,9 +518,9 @@ func (s *meshServer) updateService(svc serviceKey, msg *federationmodel.ServiceM
 }
 
 // s has to be Lock()ed
-func (s *meshServer) deleteService(svc serviceKey, msg *federationmodel.ServiceMessage) {
+func (s *meshServer) deleteService(svc federationmodel.ServiceKey, msg *federationmodel.ServiceMessage) {
 	if err := s.deleteExportResources(svc, msg); err != nil {
-		logger.Errorf("couldn't remove resources associated with exported service %s => %s: %s", svc.hostname, msg.Hostname, err)
+		logger.Errorf("couldn't remove resources associated with exported service %s => %s: %s", svc.Hostname, msg.Hostname, err)
 		// let the deletion go through, so the other mesh won't try to call us
 	}
 	delete(s.currentServices, svc)
@@ -553,7 +549,7 @@ func (s *meshServer) stop() {
 	defer s.watchMut.Unlock()
 
 	// copy map as deleteService() removes entries
-	currentServices := make(map[serviceKey]*federationmodel.ServiceMessage)
+	currentServices := make(map[federationmodel.ServiceKey]*federationmodel.ServiceMessage)
 	for source, svc := range s.currentServices {
 		currentServices[source] = svc
 	}

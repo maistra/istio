@@ -4,16 +4,14 @@
 kind: VirtualService
 apiVersion: networking.istio.io/v1alpha3
 metadata:
-  name: mongodb-remote
+  name: ratings-remote
   namespace: mesh2-bookinfo
 spec:
   hosts:
-    - mongodb.mesh2-bookinfo.svc.cluster.local
-  tcp:
-    - match:
-        - port: 27017
+    - ratings.mesh2-bookinfo.svc.cluster.local
+  http:
+    - rewrite:
+        authority: ratings.bookinfo.svc.mesh1.local
       route:
         - destination:
-            host: mongodb.mesh1-bookinfo.svc.cluster.local
-            port:
-              number: 27017
+            host: ratings.bookinfo.svc.mesh1.local

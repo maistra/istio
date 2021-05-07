@@ -1,4 +1,0 @@
-This assumes that we will be terminating TLS at the ingress gateway.  For true
-passthrough, everything here will need to be configured to match the downstream
-service, e.g. if the downstream service is not using TLS, then the configuration
-for the imported service must also be plain text.
