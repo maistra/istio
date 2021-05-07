@@ -1,0 +1,38 @@
+# These work when using aliased services.  In these cases, the gateway
+# performs authentication, so principals can be checked.  Note, if using
+# passthrough on the import side, the principals should match the client
+# workloads, e.g. cluster.local/ns/mesh2-bookinfo/sa/bookinfo-ratings-v2 for
+# mongodb-aliased.
+
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: aliased-authz
+  namespace: mesh1-exports
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/mesh2-bookinfo/sa/bookinfo-ratings-v2
+      to:
+        - operation:
+            ports:
+              - "27017"
+      when:
+        - key: connection.sni
+          values:
+            - "*.mongodb.bookinfo.svc.mesh2.local"
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/mesh2-bookinfo/sa/bookinfo-reviews-v2
+      to:
+        - operation:
+            ports:
+              - "9080"
+      when:
+        - key: connection.sni
+          values:
+            - "*.ratings.bookinfo.svc.mesh2.local"

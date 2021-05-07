@@ -396,7 +396,5 @@ var (
 	EnableIOR = env.RegisterBoolVar("ENABLE_IOR", false,
 		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
 
-	EnableFederationDiscoveryServer = env.RegisterBoolVar("PILOT_ENABLE_FEDERATION_DISCOVERY_SERVER", true, "").Get()
-
-	FederationDiscoveryEndpoint = env.RegisterStringVar("PILOT_REMOTE_FEDERATION_DISCOVERY", "", "").Get()
+	EnableFederation = env.RegisterBoolVar("PILOT_ENABLE_FEDERATION", false, "").Get()
 )
