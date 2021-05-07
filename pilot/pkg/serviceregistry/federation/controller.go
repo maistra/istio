@@ -169,7 +169,9 @@ func (c *Controller) convertExportedService(s *federationmodel.ServiceMessage) (
 	return c.createService(s, serviceName, s.Hostname, c.clusterID, c.networkName, serviceVisibility, c.gatewayStore)
 }
 
-func (c *Controller) convertToLocalService(s *federationmodel.ServiceMessage, importedName federationmodel.ServiceKey) (*model.Service, []*model.ServiceInstance) {
+func (c *Controller) convertToLocalService(s *federationmodel.ServiceMessage,
+	importedName federationmodel.ServiceKey) (*model.Service, []*model.ServiceInstance) {
+
 	serviceName := fmt.Sprintf("%s.%s.local", s.Name, s.Namespace)
 	egressAddrs, err := c.getIPAddrsForHostOrIP(c.egressService)
 	gateways := make([]*model.Gateway, len(egressAddrs))
@@ -229,7 +231,6 @@ func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceNam
 					Locality: model.Locality{
 						ClusterID: clusterID,
 					},
-					Namespace:       c.namespace,
 					ServicePortName: port.Name,
 					TLSMode:         model.IstioMutualTLSModeLabel,
 				},
@@ -547,15 +548,13 @@ func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 }
 
 // store has to be Lock()ed
-func (c *Controller) updateXDS(svc *model.Service, instances []*model.ServiceInstance) {
-	c.serviceStore = append(c.serviceStore, svc)
-	c.instanceStore[svc.Hostname] = instances
+func (c *Controller) updateXDS(hostname, namespace string, instances []*model.ServiceInstance, event model.Event) {
 	endpoints := []*model.IstioEndpoint{}
 	for _, instance := range instances {
 		endpoints = append(endpoints, instance.Endpoint)
 	}
-	c.xdsUpdater.SvcUpdate(c.clusterID, string(svc.Hostname), svc.Attributes.Namespace, model.EventAdd)
-	c.xdsUpdater.EDSCacheUpdate(c.clusterID, string(svc.Hostname), svc.Attributes.Namespace, endpoints)
+	c.xdsUpdater.SvcUpdate(c.clusterID, hostname, namespace, event)
+	c.xdsUpdater.EDSCacheUpdate(c.clusterID, hostname, namespace, endpoints)
 }
 
 // store has to be Lock()ed
@@ -571,14 +570,14 @@ func (c *Controller) addService(service *federationmodel.ServiceMessage, importN
 
 	c.imports[service.ServiceKey] = &existingImport{ServiceMessage: service, localName: importName}
 
-	c.updateXDS(exportedService, exportedInstances)
+	c.addServiceToStore(exportedService, exportedInstances)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      string(exportedService.Hostname),
 		Namespace: c.namespace,
 	}] = struct{}{}
 
-	c.updateXDS(localService, localInstances)
+	c.addServiceToStore(localService, localInstances)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      string(localService.Hostname),
@@ -608,14 +607,14 @@ func (c *Controller) updateService(service *federationmodel.ServiceMessage, exis
 
 	c.imports[service.ServiceKey] = &existingImport{ServiceMessage: service, localName: importName}
 
-	c.updateXDS(exportedService, exportedInstances)
+	c.updateServiceInStore(exportedService, exportedInstances)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      string(exportedService.Hostname),
 		Namespace: c.namespace,
 	}] = struct{}{}
 
-	c.updateXDS(localService, localInstances)
+	c.updateServiceInStore(localService, localInstances)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      string(localService.Hostname),
@@ -637,7 +636,7 @@ func (c *Controller) deleteService(service *federationmodel.ServiceMessage, exis
 
 	delete(c.imports, service.ServiceKey)
 
-	c.removeServiceFromStores(service.ServiceKey)
+	c.removeServiceFromStore(service.ServiceKey)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      service.Hostname,
@@ -645,7 +644,7 @@ func (c *Controller) deleteService(service *federationmodel.ServiceMessage, exis
 	}] = struct{}{}
 
 	if existing != nil {
-		c.removeServiceFromStores(existing.localName)
+		c.removeServiceFromStore(existing.localName)
 		updatedConfigs[model.ConfigKey{
 			Kind:      gvk.ServiceEntry,
 			Name:      existing.localName.Hostname,
@@ -656,7 +655,24 @@ func (c *Controller) deleteService(service *federationmodel.ServiceMessage, exis
 	return updatedConfigs, nil
 }
 
-func (c *Controller) removeServiceFromStores(service federationmodel.ServiceKey) {
+func (c *Controller) addServiceToStore(service *model.Service, instances []*model.ServiceInstance) {
+	c.serviceStore = append(c.serviceStore, service)
+	c.instanceStore[service.Hostname] = instances
+	c.updateXDS(string(service.Hostname), service.Attributes.Namespace, instances, model.EventAdd)
+}
+
+func (c *Controller) updateServiceInStore(service *model.Service, instances []*model.ServiceInstance) {
+	for i, s := range c.serviceStore {
+		if s.Hostname == host.Name(service.Hostname) {
+			c.serviceStore[i] = service
+			break
+		}
+	}
+	c.instanceStore[service.Hostname] = instances
+	c.updateXDS(string(service.Hostname), service.Attributes.Namespace, instances, model.EventUpdate)
+}
+
+func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) {
 	for i, s := range c.serviceStore {
 		if s.Hostname == host.Name(service.Hostname) {
 			c.serviceStore[i] = c.serviceStore[len(c.serviceStore)-1]
