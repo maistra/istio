@@ -53,6 +53,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=maistra.io, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("meshfederations"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Maistra().V1alpha1().MeshFederations().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("serviceexports"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Maistra().V1alpha1().ServiceExports().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("servicemeshextensions"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Maistra().V1alpha1().ServiceMeshExtensions().Informer()}, nil
 

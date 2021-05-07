@@ -40,30 +40,16 @@ echo "Waiting for mesh1 installation to complete"
 oc wait --for condition=Ready -n mesh1-system smmr/default --timeout 180s
 
 echo "Enabling federation for mesh1"
-# oc patch -n mesh1-system smcp/fed-export --type merge -p '{"spec":{"gateways":{"additionalIngress":{"mesh1-ingress":{"enabled":true}}}}}'
 oc create -f export/meshfederation.yaml
+oc create -f export/serviceexports.yaml
 
 echo "Waiting for mesh2 installation to complete"
 oc wait --for condition=Ready -n mesh2-system smmr/default --timeout 180s
 
 echo "Enabling federation mesh2"
-# oc patch -n mesh2-system smcp/fed-import --type merge -p '{"spec":{"gateways":{"additionalEgress":{"mesh2-egress":{"enabled":true}}}}}'
 oc create -f import/meshfederation.yaml
 
-echo "Installing istio configuration for mesh1"
-oc create -f export/http/passthrough
-oc create -f export/http/aliased
-# oc create -f export/http/destinationrule.yaml
-oc create -f export/tcp/passthrough
-oc create -f export/tcp/aliased
-# oc create -f export/tcp/destinationrule.yaml
-
-echo "Installing istio configuration for mesh2"
-oc create -f import/http/passthrough
-oc create -f import/http/proxied
-oc create -f import/tcp/passthrough
-oc create -f import/tcp/proxied
-oc create -f import/destinationrule-gateway.yaml
+echo "Installing mongo for mesh2"
 oc create -f import/mongodb-service.yaml
 
 echo "Please install bookinfo into mesh1-bookinfo and mesh2-bookinfo"

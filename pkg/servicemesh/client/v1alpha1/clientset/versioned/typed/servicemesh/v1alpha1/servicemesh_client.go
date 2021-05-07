@@ -25,6 +25,7 @@ import (
 type MaistraV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	MeshFederationsGetter
+	ServiceExportsGetter
 	ServiceMeshExtensionsGetter
 }
 
@@ -35,6 +36,10 @@ type MaistraV1alpha1Client struct {
 
 func (c *MaistraV1alpha1Client) MeshFederations(namespace string) MeshFederationInterface {
 	return newMeshFederations(c, namespace)
+}
+
+func (c *MaistraV1alpha1Client) ServiceExports(namespace string) ServiceExportsInterface {
+	return newServiceExports(c, namespace)
 }
 
 func (c *MaistraV1alpha1Client) ServiceMeshExtensions(namespace string) ServiceMeshExtensionInterface {
