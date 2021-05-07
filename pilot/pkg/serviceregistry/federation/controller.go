@@ -307,14 +307,9 @@ func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMes
 			allUpdatedConfigs[key] = value
 		}
 	}
-	for key := range oldImports {
-		if existing, exists := c.imports[key]; !exists {
-			var updatedConfigs map[model.ConfigKey]struct{}
-			var err error
-			if updatedConfigs, err = c.deleteService(&federationmodel.ServiceMessage{ServiceKey: key}, existing); err != nil {
-				// XXX: just log for now, we can't really recover
-				logger.Errorf("error deleting configuration for federated service %+v from mesh %s: %s", key, c.clusterID, err)
-			}
+	for key, existing := range oldImports {
+		if _, exists := c.imports[key]; !exists {
+			updatedConfigs := c.deleteService(&federationmodel.ServiceMessage{ServiceKey: key}, existing)
 			for key, value := range updatedConfigs {
 				allUpdatedConfigs[key] = value
 			}
@@ -521,10 +516,7 @@ func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 	case federationmodel.ActionUpdate:
 		if importedName.Hostname == "" {
 			if existing != nil {
-				if updatedConfigs, err = c.deleteService(e.Service, existing); err != nil {
-					// XXX: just log for now, we can't really recover
-					logger.Errorf("error deleting configuration for federated service %+v from mesh %s: %s", e.Service.ServiceKey, c.clusterID, err)
-				}
+				updatedConfigs = c.deleteService(e.Service, existing)
 			}
 		} else {
 			if updatedConfigs, err = c.updateService(e.Service, existing, importedName); err != nil {
@@ -533,10 +525,7 @@ func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 			}
 		}
 	case federationmodel.ActionDelete:
-		if updatedConfigs, err = c.deleteService(e.Service, existing); err != nil {
-			// XXX: just log for now, we can't really recover
-			logger.Errorf("error deleting configuration for federated service %+v from mesh %s", e.Service.ServiceKey, c.clusterID)
-		}
+		updatedConfigs = c.deleteService(e.Service, existing)
 	}
 	if len(updatedConfigs) > 0 {
 		logger.Debugf("pushing XDS config for services: %+v", updatedConfigs)
@@ -625,7 +614,7 @@ func (c *Controller) updateService(service *federationmodel.ServiceMessage, exis
 }
 
 // store has to be Lock()ed
-func (c *Controller) deleteService(service *federationmodel.ServiceMessage, existing *existingImport) (map[model.ConfigKey]struct{}, error) {
+func (c *Controller) deleteService(service *federationmodel.ServiceMessage, existing *existingImport) map[model.ConfigKey]struct{} {
 	if existing != nil {
 		logger.Debugf("deleting exported service %+v, known locally as %+v", service.ServiceKey, existing.localName)
 	} else {
@@ -652,7 +641,7 @@ func (c *Controller) deleteService(service *federationmodel.ServiceMessage, exis
 		}] = struct{}{}
 	}
 
-	return updatedConfigs, nil
+	return updatedConfigs
 }
 
 func (c *Controller) addServiceToStore(service *model.Service, instances []*model.ServiceInstance) {
@@ -662,14 +651,22 @@ func (c *Controller) addServiceToStore(service *model.Service, instances []*mode
 }
 
 func (c *Controller) updateServiceInStore(service *model.Service, instances []*model.ServiceInstance) {
+	eventType := model.EventUpdate
+	found := false
 	for i, s := range c.serviceStore {
-		if s.Hostname == host.Name(service.Hostname) {
+		if s.Hostname == service.Hostname {
 			c.serviceStore[i] = service
+			found = true
 			break
 		}
 	}
+	if !found {
+		logger.Warnf("trying to update unknown service %s, adding it to the registry", service.Hostname)
+		c.serviceStore = append(c.serviceStore, service)
+		eventType = model.EventAdd
+	}
 	c.instanceStore[service.Hostname] = instances
-	c.updateXDS(string(service.Hostname), service.Attributes.Namespace, instances, model.EventUpdate)
+	c.updateXDS(string(service.Hostname), service.Attributes.Namespace, instances, eventType)
 }
 
 func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) {
