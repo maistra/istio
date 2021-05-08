@@ -1700,7 +1700,7 @@ k8s.io/utils/exec
 k8s.io/utils/integer
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20210506133418-b4cd744a2b82 => /home/jwendell/src/maistra/api
+# maistra.io/api v0.0.0-20210506133418-b4cd744a2b82 => github.com/jwendell/maistra-api v0.0.0-20210507234145-f5220536624d
 ## explicit
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core
@@ -1805,7 +1805,7 @@ sigs.k8s.io/yaml
 # github.com/Microsoft/hcsshim => github.com/Microsoft/hcsshim v0.8.8-0.20200421182805-c3e488f0d815
 # github.com/imdario/mergo => github.com/imdario/mergo v0.3.5
 # github.com/evanphx/json-patch => github.com/evanphx/json-patch v0.0.0-20190815234213-e83c0a1c26c8
-# maistra.io/api => /home/jwendell/src/maistra/api
+# maistra.io/api => github.com/jwendell/maistra-api v0.0.0-20210507234145-f5220536624d
 # k8s.io/client-go => k8s.io/client-go v0.19.3
 # k8s.io/code-generator => k8s.io/code-generator v0.19.3
 # k8s.io/api => k8s.io/api v0.19.3

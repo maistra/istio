@@ -28,8 +28,9 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	serviceregistrymemory "istio.io/istio/pilot/pkg/serviceregistry/memory"
 	"istio.io/istio/pkg/config/protocol"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
+
+	"maistra.io/api/core/v1alpha1"
 )
 
 var (

@@ -20,7 +20,8 @@ import (
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
+
+	"maistra.io/api/core/v1alpha1"
 )
 
 type ServiceExporter struct {

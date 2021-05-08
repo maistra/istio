@@ -30,10 +30,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 	"istio.io/istio/pkg/servicemesh/federation/export"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/pkg/log"
+
+	"maistra.io/api/core/v1alpha1"
 )
 
 const (

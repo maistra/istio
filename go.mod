@@ -19,8 +19,9 @@ replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.5
 // See https://github.com/kubernetes/kubernetes/issues/92867, there is a bug in the library
 replace github.com/evanphx/json-patch => github.com/evanphx/json-patch v0.0.0-20190815234213-e83c0a1c26c8
 
-//replace maistra.io/api => github.com/jwendell/maistra-api v0.0.0-20210506175258-5687a1c4fa1f
-replace maistra.io/api => /home/jwendell/src/maistra/api
+replace maistra.io/api => github.com/jwendell/maistra-api v0.0.0-20210507234145-f5220536624d
+
+//replace maistra.io/api => /home/jwendell/src/maistra/api
 
 replace k8s.io/client-go => k8s.io/client-go v0.19.3
 
