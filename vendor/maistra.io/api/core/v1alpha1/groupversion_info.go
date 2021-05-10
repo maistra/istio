@@ -40,6 +40,7 @@ func init() {
 		&ServiceMeshExtension{}, &ServiceMeshExtensionList{},
 		&MeshFederation{}, &MeshFederationList{},
 		&ServiceExports{}, &ServiceExportsList{},
+		&ServiceImports{}, &ServiceImportsList{},
 	)
 }
 

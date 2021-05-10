@@ -12,7 +12,7 @@ spec:
   http:
     - route:
         - destination:
-            host: ratings.bookinfo.svc.mesh1.local
+            host: ratings.mesh2-bookinfo.svc.mesh1-imports.local
           weight: 50
         - destination:
             host: ratings.mesh2-bookinfo.svc.cluster.local

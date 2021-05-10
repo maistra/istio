@@ -48,6 +48,7 @@ oc wait --for condition=Ready -n mesh2-system smmr/default --timeout 180s
 
 echo "Enabling federation mesh2"
 oc create -f import/meshfederation.yaml
+oc create -f import/serviceimports.yaml
 
 echo "Installing mongodb k8s Service for mesh2"
 oc create -f import/mongodb-service.yaml
