@@ -347,7 +347,7 @@ refresh-goldens:
 
 update-golden: refresh-goldens
 
-gen: mod-download-go go-gen mirror-licenses format update-crds operator-proto sync-configs-from-istiod gen-kustomize maistra-gen update-golden ## Update all generated code.
+gen: mod-download-go go-gen mirror-licenses format update-crds operator-proto sync-configs-from-istiod gen-kustomize update-golden ## Update all generated code.
 
 check-no-modify:
 	@bin/check_no_modify.sh
@@ -510,4 +510,7 @@ include tests/integration/tests.mk
 
 include common/Makefile.common.mk
 
-include pkg/servicemesh/maistra.mk
+#-----------------------------------------------------------------------------
+# Maistra
+#-----------------------------------------------------------------------------
+include maistra.mk
