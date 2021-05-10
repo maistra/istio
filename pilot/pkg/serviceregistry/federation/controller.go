@@ -73,7 +73,7 @@ type Controller struct {
 	logger *log.Scope
 
 	kubeClient  kube.Client
-	configStore model.ConfigStoreCache
+	configStore model.ConfigStoreController
 	xdsUpdater  model.XDSUpdater
 
 	localDomainSuffix   string
@@ -110,7 +110,7 @@ type Options struct {
 	Network        string
 	Namespace      string
 	KubeClient     kube.Client
-	ConfigStore    model.ConfigStoreCache
+	ConfigStore    model.ConfigStore
 	XDSUpdater     model.XDSUpdater
 	ResyncPeriod   time.Duration
 }

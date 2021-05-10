@@ -30,7 +30,6 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/hashicorp/go-multierror"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"

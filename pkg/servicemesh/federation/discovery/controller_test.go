@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"maistra.io/api/client/versioned/fake"
-	maistrav1alpha1 "maistra.io/api/core/v1alpha1"
+	servicemeshv1alpha1 "maistra.io/api/core/v1alpha1"
 
 	"istio.io/api/mesh/v1alpha1"
 	configmemory "istio.io/istio/pilot/pkg/config/memory"
@@ -35,20 +35,19 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
-	servicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 )
 
 type fakeManager struct{}
 
-func (m *fakeManager) AddMeshFederation(mesh *maistrav1alpha1.MeshFederation, exports *maistrav1alpha1.ServiceExports) error {
+func (m *fakeManager) AddMeshFederation(_ *servicemeshv1alpha1.MeshFederation, _ *servicemeshv1alpha1.ServiceExports) error {
 	return nil
 }
-func (m *fakeManager) DeleteMeshFederation(name string) {}
-func (m *fakeManager) UpdateExportsForMesh(exports *maistrav1alpha1.ServiceExports) error {
+func (m *fakeManager) DeleteMeshFederation(_ string) {}
+func (m *fakeManager) UpdateExportsForMesh(_ *servicemeshv1alpha1.ServiceExports) error {
 	return nil
 }
-func (m *fakeManager) DeleteExportsForMesh(name string) {}
+func (m *fakeManager) DeleteExportsForMesh(_ string) {}
 
 func TestValidOptions(t *testing.T) {
 	opt := Options{
@@ -173,14 +172,14 @@ func TestReconcile(t *testing.T) {
 
 	name := "test"
 	namespace := "test"
-	federation := &maistrav1alpha1.MeshFederation{
+	federation := &servicemeshv1alpha1.MeshFederation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: maistrav1alpha1.MeshFederationSpec{
+		Spec: servicemeshv1alpha1.MeshFederationSpec{
 			NetworkAddress: "test.mesh",
-			Gateways: maistrav1alpha1.MeshFederationGateways{
+			Gateways: servicemeshv1alpha1.MeshFederationGateways{
 				Ingress: corev1.LocalObjectReference{
 					Name: "test-ingress",
 				},
@@ -188,7 +187,7 @@ func TestReconcile(t *testing.T) {
 					Name: "test-egress",
 				},
 			},
-			Security: &maistrav1alpha1.MeshFederationSecurity{
+			Security: &servicemeshv1alpha1.MeshFederationSecurity{
 				ClientID:            "cluster.local/ns/test-mesh/sa/test-egress-service-account",
 				TrustDomain:         "test.local",
 				CertificateChain:    "dummy",
@@ -198,12 +197,12 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 	cs := controller.cs
-	fedwatch, err := cs.MaistraV1alpha1().MeshFederations(namespace).Watch(context.TODO(), metav1.ListOptions{})
+	fedwatch, err := cs.CoreV1alpha1().MeshFederations(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Errorf("failed to watch for MeshFederation")
 		return
 	}
-	newFederation, err := cs.MaistraV1alpha1().MeshFederations(namespace).Create(context.TODO(), federation, metav1.CreateOptions{})
+	newFederation, err := cs.CoreV1alpha1().MeshFederations(namespace).Create(context.TODO(), federation, metav1.CreateOptions{})
 	if err != nil {
 		t.Errorf("failed to create MeshFederation")
 		fedwatch.Stop()
@@ -259,12 +258,12 @@ func TestReconcile(t *testing.T) {
 	}
 
 	// now delete
-	fedwatch, err = cs.MaistraV1alpha1().MeshFederations(namespace).Watch(context.TODO(), metav1.ListOptions{})
+	fedwatch, err = cs.CoreV1alpha1().MeshFederations(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Errorf("failed to watch for MeshFederation")
 		return
 	}
-	if err = cs.MaistraV1alpha1().MeshFederations(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+	if err = cs.CoreV1alpha1().MeshFederations(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 		t.Errorf("error deleting MeshFederation")
 		fedwatch.Stop()
 		return
