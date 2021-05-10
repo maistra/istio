@@ -24,10 +24,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+	versioned_v1 "maistra.io/api/client/versioned/typed/core/v1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pkg/kube"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
-	versioned_v1 "istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/typed/servicemesh/v1"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/log"
 )

@@ -15,8 +15,9 @@
 package model
 
 import (
+	v1 "maistra.io/api/core/v1"
+
 	"istio.io/istio/pkg/config/labels"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 )
 
 // ExtensionWrapper is a wrapper around extensions
