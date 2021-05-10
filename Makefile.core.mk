@@ -527,4 +527,7 @@ include tests/integration/tests.mk
 
 include common/Makefile.common.mk
 
-include pkg/servicemesh/maistra.mk
+#-----------------------------------------------------------------------------
+# Maistra
+#-----------------------------------------------------------------------------
+include maistra.mk

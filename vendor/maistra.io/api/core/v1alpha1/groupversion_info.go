@@ -31,6 +31,8 @@ var (
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
 
+	localSchemeBuilder = &SchemeBuilder.SchemeBuilder
+
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
@@ -38,9 +40,6 @@ var (
 func init() {
 	SchemeBuilder.Register(
 		&ServiceMeshExtension{}, &ServiceMeshExtensionList{},
-		&MeshFederation{}, &MeshFederationList{},
-		&ServiceExports{}, &ServiceExportsList{},
-		&ServiceImports{}, &ServiceImportsList{},
 	)
 }
 
