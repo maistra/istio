@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"maistra.io/api/core/v1alpha1"
 
 	"istio.io/istio/pkg/cluster"
 
@@ -31,7 +32,6 @@ import (
 	serviceregistrymemory "istio.io/istio/pilot/pkg/serviceregistry/memory"
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config/protocol"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 )
 

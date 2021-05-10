@@ -23,11 +23,11 @@ import (
 	xdsutil "github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	structpb2 "google.golang.org/protobuf/types/known/structpb"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/istioctl/pkg/authz"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/networking/util"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	maistramodel "istio.io/istio/pkg/servicemesh/model"
 	"istio.io/pkg/log"
 )

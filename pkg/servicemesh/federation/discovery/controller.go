@@ -26,6 +26,9 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
+	"maistra.io/api/client/versioned"
+	"maistra.io/api/core/v1alpha1"
 
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
 	"istio.io/istio/pkg/cluster"
@@ -35,9 +38,6 @@ import (
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
 	federationregistry "istio.io/istio/pilot/pkg/serviceregistry/federation"
 	kubecontroller "istio.io/istio/pkg/kube/controller"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	clientsetservicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
-	informersservicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/servicemesh/v1alpha1"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/server"
@@ -58,7 +58,7 @@ type Options struct {
 type Controller struct {
 	*kubecontroller.Controller
 	model.ConfigStoreCache
-	cs                clientsetservicemeshv1alpha1.Interface
+	cs                versioned.Interface
 	env               *model.Environment
 	federationManager server.FederationManager
 	sc                *aggregate.Controller
@@ -78,7 +78,7 @@ func NewController(opt Options) (*Controller, error) {
 		return nil, err
 	}
 
-	cs, err := clientsetservicemeshv1alpha1.NewForConfig(opt.KubeClient.RESTConfig())
+	cs, err := versioned.NewForConfig(opt.KubeClient.RESTConfig())
 	if err != nil {
 		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
 	}
@@ -89,7 +89,7 @@ func NewController(opt Options) (*Controller, error) {
 }
 
 // allows using a fake client set for testing purposes
-func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
+func internalNewController(cs versioned.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
 	var informer cache.SharedIndexInformer
 	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
 	if mrc != nil && false {
@@ -97,10 +97,10 @@ func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc member
 			return cache.NewSharedIndexInformer(
 				&cache.ListWatch{
 					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return cs.MaistraV1alpha1().MeshFederations(namespace).List(context.TODO(), options)
+						return cs.CoreV1alpha1().MeshFederations(namespace).List(context.TODO(), options)
 					},
 					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						return cs.MaistraV1alpha1().MeshFederations(namespace).Watch(context.TODO(), options)
+						return cs.CoreV1alpha1().MeshFederations(namespace).Watch(context.TODO(), options)
 					},
 				},
 				&v1alpha1.MeshFederation{},
@@ -113,7 +113,7 @@ func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc member
 		informer = xnsinformers.NewMultiNamespaceInformer(namespaceSet, opt.ResyncPeriod, newInformer)
 		mrc.Register(namespaceSet, "federation-controller")
 	} else {
-		informer = informersservicemeshv1alpha1.NewMeshFederationInformer(
+		informer = maistrainformers.NewMeshFederationInformer(
 			cs, opt.Namespace, opt.ResyncPeriod,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	}
@@ -163,7 +163,7 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.cs.MaistraV1alpha1().MeshFederations(namespace).Get(
+	instance, err := c.cs.CoreV1alpha1().MeshFederations(namespace).Get(
 		ctx, name, metav1.GetOptions{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "MeshFederation",
@@ -220,7 +220,7 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 	} else {
 		// if there's no existing registry
 		logger.Info("Creating handler for Federation discovery server")
-		exportConfig, err := c.cs.MaistraV1alpha1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		exportConfig, err := c.cs.CoreV1alpha1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
 			logger.Errorf("error retrieving ServiceExports associated with MeshFederation %s: %s", instance.Name, err)
 			return err

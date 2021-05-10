@@ -26,11 +26,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
+	"maistra.io/api/client/versioned"
+	"maistra.io/api/core/v1alpha1"
 
 	kubecontroller "istio.io/istio/pkg/kube/controller"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
-	clientsetservicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
-	informersservicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/informers/externalversions/servicemesh/v1alpha1"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/pkg/log"
@@ -54,7 +54,7 @@ type Options struct {
 
 type Controller struct {
 	*kubecontroller.Controller
-	cs            clientsetservicemeshv1alpha1.Interface
+	cs            versioned.Interface
 	exportManager ServiceExportManager
 }
 
@@ -64,7 +64,7 @@ func NewController(opt Options) (*Controller, error) {
 		return nil, fmt.Errorf("invalid Options specified for federation export controller: %s", err)
 	}
 
-	cs, err := clientsetservicemeshv1alpha1.NewForConfig(opt.KubeClient.RESTConfig())
+	cs, err := versioned.NewForConfig(opt.KubeClient.RESTConfig())
 	if err != nil {
 		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
 	}
@@ -75,7 +75,7 @@ func NewController(opt Options) (*Controller, error) {
 }
 
 // allows using a fake client set for testing purposes
-func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
+func internalNewController(cs versioned.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
 	var informer cache.SharedIndexInformer
 	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
 	if mrc != nil && false {
@@ -83,10 +83,10 @@ func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc member
 			return cache.NewSharedIndexInformer(
 				&cache.ListWatch{
 					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return cs.MaistraV1alpha1().ServiceExports(namespace).List(context.TODO(), options)
+						return cs.CoreV1alpha1().ServiceExports(namespace).List(context.TODO(), options)
 					},
 					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						return cs.MaistraV1alpha1().ServiceExports(namespace).Watch(context.TODO(), options)
+						return cs.CoreV1alpha1().ServiceExports(namespace).Watch(context.TODO(), options)
 					},
 				},
 				&v1alpha1.MeshFederation{},
@@ -99,7 +99,7 @@ func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc member
 		informer = xnsinformers.NewMultiNamespaceInformer(namespaceSet, opt.ResyncPeriod, newInformer)
 		mrc.Register(namespaceSet, "federation-exports-controller")
 	} else {
-		informer = informersservicemeshv1alpha1.NewServiceExportsInformer(
+		informer = maistrainformers.NewServiceExportsInformer(
 			cs, opt.Namespace, opt.ResyncPeriod,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	}
@@ -135,7 +135,7 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.cs.MaistraV1alpha1().ServiceExports(namespace).Get(ctx, name, metav1.GetOptions{})
+	instance, err := c.cs.CoreV1alpha1().ServiceExports(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
 			// Request object not found, could have been deleted after reconcile request.
