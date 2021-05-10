@@ -17,10 +17,10 @@ package export
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"maistra.io/api/core/v1alpha1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
-	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 )
 
 type ServiceExporter struct {
