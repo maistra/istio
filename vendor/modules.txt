@@ -1724,6 +1724,29 @@ k8s.io/utils/exec
 k8s.io/utils/integer
 k8s.io/utils/pointer
 k8s.io/utils/trace
+# maistra.io/api v0.0.0-20210511174324-2c8a7ef09df8
+## explicit
+maistra.io/api/client/informers/externalversions
+maistra.io/api/client/informers/externalversions/core
+maistra.io/api/client/informers/externalversions/core/v1
+maistra.io/api/client/informers/externalversions/core/v1alpha1
+maistra.io/api/client/informers/externalversions/core/v2
+maistra.io/api/client/informers/externalversions/internalinterfaces
+maistra.io/api/client/listers/core/v1
+maistra.io/api/client/listers/core/v1alpha1
+maistra.io/api/client/listers/core/v2
+maistra.io/api/client/versioned
+maistra.io/api/client/versioned/fake
+maistra.io/api/client/versioned/scheme
+maistra.io/api/client/versioned/typed/core/v1
+maistra.io/api/client/versioned/typed/core/v1/fake
+maistra.io/api/client/versioned/typed/core/v1alpha1
+maistra.io/api/client/versioned/typed/core/v1alpha1/fake
+maistra.io/api/client/versioned/typed/core/v2
+maistra.io/api/client/versioned/typed/core/v2/fake
+maistra.io/api/core/v1
+maistra.io/api/core/v1alpha1
+maistra.io/api/core/v2
 # sigs.k8s.io/controller-runtime v0.7.0
 ## explicit
 sigs.k8s.io/controller-runtime/pkg/cache
@@ -1735,6 +1758,7 @@ sigs.k8s.io/controller-runtime/pkg/client/fake
 sigs.k8s.io/controller-runtime/pkg/config
 sigs.k8s.io/controller-runtime/pkg/config/v1alpha1
 sigs.k8s.io/controller-runtime/pkg/controller
+sigs.k8s.io/controller-runtime/pkg/conversion
 sigs.k8s.io/controller-runtime/pkg/envtest
 sigs.k8s.io/controller-runtime/pkg/event
 sigs.k8s.io/controller-runtime/pkg/handler
