@@ -49,21 +49,19 @@ oc wait --for condition=Ready -n mesh2-system smmr/default --timeout 180s
 echo "Enabling federation mesh2"
 oc create -f import/meshfederation.yaml
 
-echo "Installing mongo for mesh2"
+echo "Installing mongodb k8s Service for mesh2"
 oc create -f import/mongodb-service.yaml
 
+echo "Installing VirtualServices for mesh2"
+oc create -f examples/mongodb-remote-virtualservice.yaml
+oc create -f examples/ratings-split-virtualservice.yaml
+
 echo "Please install bookinfo into mesh1-bookinfo and mesh2-bookinfo"
-echo "After installing, add a maistra.io/exportAs label to the ratings service"
-echo "The following label illustrates a passthrough binding (direct access to the service from the caller)"
-echo "    oc label -n mesh1-bookinfo service/ratings --overwrite maistra.io/exportAs=ratings.mesh1-bookinfo.svc.cluster.local"
-echo "The following label illustrates an aliased binding (caller is terminated at ingress gateway)"
-echo "    oc label -n mesh1-bookinfo service/ratings --overwrite maistra.io/exportAs=ratings-aliased.mesh1-exports.svc.cluster.local"
 echo "For the tcp example, install bookinfo-db into mesh1-bookinfo and"
 echo "bookinfo-ratings-v2 into mesh2-bookinfo, for example:"
 echo "    oc create -n mesh1-bookinfo bookinfo-db.yaml"
 echo "    oc create -n mesh2-bookinfo bookinfo-ratings-v2.yaml"
-echo "After installing, add a maistra.io/exportAs label to the mongodb service"
-echo "The following label illustrates a passthrough binding (direct access to the service from the caller)"
-echo "    oc label -n mesh1-bookinfo service/mongodb --overwrite maistra.io/exportAs=mongodb.mesh1-bookinfo.svc.cluster.local"
-echo "The following label illustrates an aliased binding (caller is terminated at ingress gateway)"
-echo "    oc label -n mesh1-bookinfo service/mongodb --overwrite maistra.io/exportAs=mongodb-aliased.mesh1-exports.svc.cluster.local"
+echo ""
+echo "The meshes are configured to split ratings traffic in mesh2-bookinfo"
+echo "between mesh1 and mesh2.  The ratings-v2 service in mesh2 is configured to"
+echo "use the mongodb service in mesh1."

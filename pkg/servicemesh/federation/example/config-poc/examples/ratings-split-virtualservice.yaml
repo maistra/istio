@@ -4,14 +4,16 @@
 kind: VirtualService
 apiVersion: networking.istio.io/v1alpha3
 metadata:
-  name: ratings-remote
+  name: ratings-split
   namespace: mesh2-bookinfo
 spec:
   hosts:
     - ratings.mesh2-bookinfo.svc.cluster.local
   http:
-    - rewrite:
-        authority: ratings.bookinfo.svc.mesh1.local
-      route:
+    - route:
         - destination:
             host: ratings.bookinfo.svc.mesh1.local
+          weight: 50
+        - destination:
+            host: ratings.mesh2-bookinfo.svc.cluster.local
+          weight: 50
