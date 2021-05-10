@@ -29,10 +29,10 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"maistra.io/api/client/versioned/fake"
+	v1 "maistra.io/api/core/v1"
 
 	fakestrategy "istio.io/istio/mec/pkg/pullstrategy/fake"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
-	"istio.io/istio/pkg/servicemesh/client/v1/clientset/versioned/fake"
 )
 
 const (
@@ -267,7 +267,7 @@ func TestWorker(t *testing.T) {
 func createWorker(tmpDir string, clientset *fake.Clientset) *Worker {
 	return &Worker{
 		baseURL:        baseURL,
-		client:         clientset.MaistraV1(),
+		client:         clientset.CoreV1(),
 		mut:            sync.Mutex{},
 		pullStrategy:   &fakestrategy.PullStrategy{},
 		serveDirectory: tmpDir,
