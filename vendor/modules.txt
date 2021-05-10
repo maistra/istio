@@ -862,8 +862,7 @@ github.com/prometheus/common/expfmt
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
 github.com/prometheus/common/log
 github.com/prometheus/common/model
-# github.com/prometheus/procfs v0.2.0
-## explicit
+# github.com/prometheus/procfs v0.1.3
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
@@ -977,7 +976,7 @@ golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/knownhosts
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/net v0.0.0-20200904194848-62affa334b73
+# golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/context
@@ -1007,8 +1006,7 @@ golang.org/x/oauth2/jwt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20200826173525-f9321e4c35a6
-## explicit
+# golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
@@ -1040,8 +1038,6 @@ golang.org/x/text/width
 # golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
 ## explicit
 golang.org/x/time/rate
-# golang.org/x/tools v0.0.0-20201017001424-6003fad69a88
-## explicit
 # golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
@@ -1059,7 +1055,7 @@ google.golang.org/appengine/internal/modules
 google.golang.org/appengine/internal/remote_api
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20201019141844-1ed22bb0c154
+# google.golang.org/genproto v0.0.0-20201110150050-8816d57aaa9a
 ## explicit
 google.golang.org/genproto/googleapis/api
 google.golang.org/genproto/googleapis/api/annotations
@@ -1696,7 +1692,7 @@ k8s.io/kubectl/pkg/util/storage
 k8s.io/kubectl/pkg/util/templates
 k8s.io/kubectl/pkg/util/term
 k8s.io/kubectl/pkg/validation
-# k8s.io/utils v0.0.0-20201015054608-420da100c033
+# k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 ## explicit
 k8s.io/utils/buffer
 k8s.io/utils/clock
@@ -1704,6 +1700,29 @@ k8s.io/utils/exec
 k8s.io/utils/integer
 k8s.io/utils/pointer
 k8s.io/utils/trace
+# maistra.io/api v0.0.0-20210511174324-2c8a7ef09df8
+## explicit
+maistra.io/api/client/informers/externalversions
+maistra.io/api/client/informers/externalversions/core
+maistra.io/api/client/informers/externalversions/core/v1
+maistra.io/api/client/informers/externalversions/core/v1alpha1
+maistra.io/api/client/informers/externalversions/core/v2
+maistra.io/api/client/informers/externalversions/internalinterfaces
+maistra.io/api/client/listers/core/v1
+maistra.io/api/client/listers/core/v1alpha1
+maistra.io/api/client/listers/core/v2
+maistra.io/api/client/versioned
+maistra.io/api/client/versioned/fake
+maistra.io/api/client/versioned/scheme
+maistra.io/api/client/versioned/typed/core/v1
+maistra.io/api/client/versioned/typed/core/v1/fake
+maistra.io/api/client/versioned/typed/core/v1alpha1
+maistra.io/api/client/versioned/typed/core/v1alpha1/fake
+maistra.io/api/client/versioned/typed/core/v2
+maistra.io/api/client/versioned/typed/core/v2/fake
+maistra.io/api/core/v1
+maistra.io/api/core/v1alpha1
+maistra.io/api/core/v2
 # sigs.k8s.io/controller-runtime v0.6.3
 ## explicit
 sigs.k8s.io/controller-runtime/pkg/cache
@@ -1713,6 +1732,7 @@ sigs.k8s.io/controller-runtime/pkg/client/apiutil
 sigs.k8s.io/controller-runtime/pkg/client/config
 sigs.k8s.io/controller-runtime/pkg/client/fake
 sigs.k8s.io/controller-runtime/pkg/controller
+sigs.k8s.io/controller-runtime/pkg/conversion
 sigs.k8s.io/controller-runtime/pkg/envtest
 sigs.k8s.io/controller-runtime/pkg/event
 sigs.k8s.io/controller-runtime/pkg/handler
