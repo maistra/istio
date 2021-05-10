@@ -73,7 +73,6 @@ require (
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.14.0
-	github.com/prometheus/procfs v0.2.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/soheilhy/cmux v0.1.4
@@ -89,14 +88,12 @@ require (
 	go.uber.org/multierr v1.6.0
 	go.uber.org/zap v1.16.0 // indirect
 	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
-	golang.org/x/net v0.0.0-20200904194848-62affa334b73
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/sys v0.0.0-20200826173525-f9321e4c35a6 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
-	golang.org/x/tools v0.0.0-20201017001424-6003fad69a88 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.1.0
-	google.golang.org/genproto v0.0.0-20201019141844-1ed22bb0c154
+	google.golang.org/genproto v0.0.0-20201110150050-8816d57aaa9a
 	google.golang.org/grpc v1.33.1
 	google.golang.org/grpc/examples v0.0.0-20200825162801-44d73dff99bf // indirect
 	google.golang.org/protobuf v1.25.0
@@ -115,7 +112,8 @@ require (
 	k8s.io/cli-runtime v0.19.3
 	k8s.io/client-go v0.19.3
 	k8s.io/kubectl v0.19.3
-	k8s.io/utils v0.0.0-20201015054608-420da100c033
+	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
+	maistra.io/api v0.0.0-20210511174324-2c8a7ef09df8
 	sigs.k8s.io/controller-runtime v0.6.3
 	sigs.k8s.io/service-apis v0.1.0-rc2.0.20201112213625-c0375b7fa81f
 	sigs.k8s.io/yaml v1.2.0

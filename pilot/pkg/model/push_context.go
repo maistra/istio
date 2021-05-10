@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"go.uber.org/atomic"
+	v1 "maistra.io/api/core/v1"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	networking "istio.io/api/networking/v1alpha3"
@@ -36,7 +37,6 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/visibility"
-	v1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	maistramodel "istio.io/istio/pkg/servicemesh/model"
 	"istio.io/pkg/monitoring"
 )

@@ -41,6 +41,7 @@ import (
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	smv1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/leaderelection"
@@ -65,7 +66,6 @@ import (
 	istiokeepalive "istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/inject"
-	smv1 "istio.io/istio/pkg/servicemesh/apis/servicemesh/v1"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/istio/pkg/servicemesh/federation"
 	"istio.io/istio/pkg/servicemesh/federation/common"
