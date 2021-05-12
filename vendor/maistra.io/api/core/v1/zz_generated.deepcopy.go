@@ -318,6 +318,11 @@ func (in *ServiceMeshExtensionSpec) DeepCopyInto(out *ServiceMeshExtensionSpec) 
 		*out = new(int)
 		**out = **in
 	}
+	if in.Xuxa != nil {
+		in, out := &in.Xuxa, &out.Xuxa
+		*out = new(int)
+		**out = **in
+	}
 	in.Config.DeepCopyInto(&out.Config)
 }
 

@@ -30,6 +30,7 @@ type ServiceMeshExtensionSpec struct {
 	WorkloadSelector WorkloadSelector              `json:"workloadSelector,omitempty"`
 	Phase            *FilterPhase                  `json:"phase"`
 	Priority         *int                          `json:"priority,omitempty"`
+	Xuxa             *int                          `json:"xuxa,omitempty"`
 
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Config ServiceMeshExtensionConfig `json:"config,omitempty"`
