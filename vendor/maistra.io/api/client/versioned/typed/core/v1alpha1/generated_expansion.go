@@ -20,4 +20,6 @@ type MeshFederationExpansion interface{}
 
 type ServiceExportsExpansion interface{}
 
+type ServiceImportsExpansion interface{}
+
 type ServiceMeshExtensionExpansion interface{}
