@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"istio.io/pkg/log"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
@@ -129,10 +131,19 @@ func (li *listerInformer) stop() {
 	li.stopInformer()
 }
 
-func (li *listerInformer) newWatchEvent(eventType watch.EventType, obj interface{}) *watch.Event {
-	return &watch.Event{
-		eventType, obj.(runtime.Object),
+func (li *listerInformer) newWatchEvent(eventType watch.EventType, obj interface{}) (*watch.Event, bool) {
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if ok {
+		obj = tombstone.Obj
 	}
+	runtimeObj, ok := obj.(runtime.Object)
+	if !ok {
+		log.Warnf("Unexpected event type from cache %T, ignoring", obj)
+		return nil, false
+	}
+	return &watch.Event{
+		eventType, runtimeObj,
+	}, true
 }
 
 func (li *listerInformer) sendEvent(event *watch.Event) {
@@ -145,16 +156,23 @@ func (li *listerInformer) sendEvent(event *watch.Event) {
 
 // Adapt an OnAdd event into a watch ADDED event
 func (li *listerInformer) OnAdd(obj interface{}) {
-	li.sendEvent(li.newWatchEvent(watch.Added, obj))
-	li.lllw.incAddCount()
+	if watchEvent, ok := li.newWatchEvent(watch.Added, obj); ok {
+		li.sendEvent(watchEvent)
+		li.lllw.incAddCount()
+	}
 }
 
 // Adapt an OnUpdate event into a watch MODIFIED event
 func (li *listerInformer) OnUpdate(oldObj, newObj interface{}) {
-	li.sendEvent(li.newWatchEvent(watch.Modified, newObj))
+	if watchEvent, ok := li.newWatchEvent(watch.Modified, newObj); ok {
+		li.sendEvent(watchEvent)
+	}
 }
 
 // Adapt an OnDelete event into a watch DELETED event
 func (li *listerInformer) OnDelete(obj interface{}) {
-	li.sendEvent(li.newWatchEvent(watch.Deleted, obj))
+
+	if watchEvent, ok := li.newWatchEvent(watch.Deleted, obj); ok {
+		li.sendEvent(watchEvent)
+	}
 }
