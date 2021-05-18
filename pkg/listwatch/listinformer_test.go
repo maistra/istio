@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -184,4 +186,45 @@ func TestListInformer(t *testing.T) {
 		}
 		index++
 	}
+}
+
+func TestTombstone(t *testing.T) {
+	ch := make(chan watch.Event, watch.DefaultChanSize)
+	w := watch.NewProxyWatcher(ch)
+	prefix := "pod"
+	podListChan := make(chan *v1.PodList)
+
+	testNamespace := "test_namespace"
+	events := make(chan *watch.Event, 100)
+
+	li := newListerInformer(testNamespace, func(string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return <-podListChan, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return w, nil
+			},
+		}
+	}, &v1.Pod{}, 0, func(event *watch.Event) {
+		events <- event
+	}, func(namespace string) {
+	})
+
+	podListChan <- createPodList(testNamespace, prefix, 2)
+
+	expired := errors.NewResourceExpired("Expired test connection")
+
+	ch <- watch.Event{
+		Type:   watch.Error,
+		Object: &expired.ErrStatus,
+	}
+
+	podListChan <- createPodList(testNamespace, prefix, 1)
+
+	checkEvents(t, testNamespace, events, watch.Added, prefix, 1, 2)
+	checkEvents(t, testNamespace, events, watch.Modified, prefix, 1, 1)
+	checkEvents(t, testNamespace, events, watch.Deleted, prefix, 2, 2)
+
+	li.stop()
 }
