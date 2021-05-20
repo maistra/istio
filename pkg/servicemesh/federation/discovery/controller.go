@@ -23,6 +23,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
@@ -40,6 +41,7 @@ import (
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/server"
+	"istio.io/istio/pkg/servicemesh/federation/status"
 )
 
 const controllerName = "federation-discovery-controller"
@@ -51,6 +53,7 @@ type Options struct {
 	Env               *model.Environment
 	ConfigStore       model.ConfigStoreCache
 	FederationManager server.FederationManager
+	StatusManager     status.Manager
 	LocalNetwork      string
 	LocalClusterID    string
 }
@@ -64,6 +67,7 @@ type Controller struct {
 	cs                maistraclient.Interface
 	env               *model.Environment
 	federationManager server.FederationManager
+	statusManager     status.Manager
 	sc                *aggregate.Controller
 	xds               model.XDSUpdater
 	mu                sync.Mutex
@@ -133,6 +137,7 @@ func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRoll
 		xds:               opt.XDSUpdater,
 		federationManager: opt.FederationManager,
 		trustBundles:      map[string]string{},
+		statusManager:     opt.StatusManager,
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
 		Informer:     informer,
@@ -161,6 +166,9 @@ func (c *Controller) HasSynced() bool {
 func (c *Controller) reconcile(resourceName string) error {
 	c.Logger.Debugf("Reconciling MeshFederation %s", resourceName)
 	defer func() {
+		if err := c.statusManager.PushStatus(); err != nil {
+			c.Logger.Errorf("error pushing FederationStatus for mesh %s: %s", resourceName, err)
+		}
 		c.Logger.Debugf("Completed reconciliation of MeshFederation %s", resourceName)
 	}()
 
@@ -246,7 +254,9 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 			c.Logger.Errorf("error retrieving ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
 			return err
 		}
-		if err := c.federationManager.AddMeshFederation(instance, exportConfig); err != nil {
+
+		statusHandler := c.statusManager.FederationAdded(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
+		if err := c.federationManager.AddMeshFederation(instance, exportConfig, statusHandler); err != nil {
 			return err
 		}
 
@@ -265,6 +275,7 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 			UseDirectCalls: instance.Spec.Security != nil && instance.Spec.Security.AllowDirectOutbound,
 			KubeClient:     c.kubeClient,
 			ConfigStore:    c.ConfigStoreCache,
+			StatusHandler:  statusHandler,
 			XDSUpdater:     c.xds,
 			ResyncPeriod:   time.Minute * 5,
 			DomainSuffix:   c.env.GetDomainSuffix(),
@@ -327,6 +338,8 @@ func (c *Controller) delete(ctx context.Context, instance *v1alpha1.MeshFederati
 	if err := c.deleteDiscoveryResources(ctx, instance); err != nil {
 		allErrors = append(allErrors, err)
 	}
+
+	c.statusManager.FederationDeleted(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
 
 	return utilerrors.NewAggregate(allErrors)
 }

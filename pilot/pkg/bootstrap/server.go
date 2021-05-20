@@ -273,6 +273,8 @@ func NewServer(args *PilotArgs) (*Server, error) {
 				Env:               s.environment,
 				XDSUpdater:        s.XDSServer,
 				ServiceController: s.ServiceController(),
+				IstiodNamespace:   args.Namespace,
+				IstiodPodName:     args.PodName,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("error initializing federation: %v", err)

@@ -39,6 +39,7 @@ import (
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
+	"istio.io/istio/pkg/servicemesh/federation/status"
 	"istio.io/pkg/log"
 )
 
@@ -67,9 +68,10 @@ type Controller struct {
 
 	logger *log.Scope
 
-	kubeClient  kube.Client
-	configStore model.ConfigStoreCache
-	xdsUpdater  model.XDSUpdater
+	kubeClient    kube.Client
+	statusHandler status.Handler
+	configStore   model.ConfigStoreCache
+	xdsUpdater    model.XDSUpdater
 
 	localDomainSuffix   string
 	defaultDomainSuffix string
@@ -105,6 +107,7 @@ type Options struct {
 	Network        string
 	Namespace      string
 	KubeClient     kube.Client
+	StatusHandler  status.Handler
 	ConfigStore    model.ConfigStoreCache
 	XDSUpdater     model.XDSUpdater
 	ResyncPeriod   time.Duration
@@ -147,6 +150,7 @@ func NewController(opt Options, mesh *v1alpha1.MeshFederation, defaultImportConf
 		serviceStore:        map[host.Name]*model.Service{},
 		instanceStore:       map[host.Name][]*model.ServiceInstance{},
 		kubeClient:          opt.KubeClient,
+		statusHandler:       opt.StatusHandler,
 		configStore:         opt.ConfigStore,
 		xdsUpdater:          opt.XDSUpdater,
 		resyncPeriod:        opt.ResyncPeriod,
@@ -419,6 +423,7 @@ func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMes
 	for key, existing := range oldImports {
 		if _, exists := c.imports[key]; !exists {
 			updatedConfigs := c.deleteService(&federationmodel.ServiceMessage{ServiceKey: key}, existing)
+			c.statusHandler.ImportRemoved(key.Hostname)
 			for key, value := range updatedConfigs {
 				allUpdatedConfigs[key] = value
 			}
@@ -570,6 +575,8 @@ func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 		return
 	}
 
+	c.statusHandler.WatchEventReceived()
+
 	unlockIt := true
 	c.storeLock.Lock()
 	defer func() {
@@ -629,6 +636,7 @@ func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 		}
 	case federationmodel.ActionDelete:
 		updatedConfigs = c.deleteService(e.Service, existing)
+		c.statusHandler.ImportRemoved(e.Service.Hostname)
 	}
 	if len(updatedConfigs) > 0 {
 		c.logger.Debugf("pushing XDS config for services: %+v", updatedConfigs)
@@ -658,6 +666,7 @@ func (c *Controller) addService(service *federationmodel.ServiceMessage) (map[mo
 		Attributes: model.ServiceAttributes{Name: service.Name, Namespace: service.Namespace},
 	})
 	if importedName == nil {
+		c.statusHandler.ImportAdded(federationmodel.ServiceKey{}, service.Hostname)
 		c.logger.Debugf("skipping import of service %+v, as it does not match an import filter", service.ServiceKey)
 		return nil, nil
 	}
@@ -687,6 +696,8 @@ func (c *Controller) addService(service *federationmodel.ServiceMessage) (map[mo
 		Namespace: localService.Attributes.Namespace,
 	}] = struct{}{}
 
+	c.statusHandler.ImportAdded(*importedName, service.Hostname)
+
 	return updatedConfigs, nil
 }
 
@@ -700,6 +711,7 @@ func (c *Controller) updateService(service *federationmodel.ServiceMessage, exis
 		Attributes: model.ServiceAttributes{Name: service.Name, Namespace: service.Namespace},
 	})
 	if importedName == nil {
+		c.statusHandler.ImportUpdated(federationmodel.ServiceKey{}, service.Hostname)
 		if existing != nil {
 			c.logger.Debugf("deleting import for service %+v, as it no longer matches an import filter", service.ServiceKey)
 			return c.deleteService(service, existing), nil
@@ -752,6 +764,8 @@ func (c *Controller) updateService(service *federationmodel.ServiceMessage, exis
 		Name:      string(localService.Hostname),
 		Namespace: localService.Attributes.Namespace,
 	}] = struct{}{}
+
+	c.statusHandler.ImportUpdated(*importedName, service.Hostname)
 
 	return updatedConfigs, nil
 }
@@ -828,6 +842,7 @@ func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) 
 }
 
 func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-chan struct{}) error {
+	c.statusHandler.WatchInitiated()
 	url := c.discoveryURL + "/watch"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -836,6 +851,15 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 	}
 	req.Header.Add("discovery-address", c.networkAddress)
 	resp, err := http.DefaultClient.Do(req)
+	defer func() {
+		status := ""
+		if resp != nil {
+			status = resp.Status
+		} else if err != nil {
+			status = err.Error()
+		}
+		c.statusHandler.WatchTerminated(status)
+	}()
 	if err != nil {
 		return err
 	}
@@ -843,10 +867,13 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 		return fmt.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
 	}
 
+	c.statusHandler.Watching()
+
 	// connection was established successfully. reset backoffPolicy
 	c.backoffPolicy.Reset()
 
 	dec := json.NewDecoder(resp.Body)
+	defer resp.Body.Close()
 	for {
 		select {
 		case <-stopCh:
@@ -870,6 +897,7 @@ func (c *Controller) resync() uint64 {
 	c.updateGateways(svcList)
 	if svcList != nil {
 		c.convertServices(svcList)
+		c.statusHandler.FullSyncComplete()
 		return svcList.Checksum
 	}
 	return 0

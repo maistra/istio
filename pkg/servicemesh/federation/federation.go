@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/errors"
 	v1 "maistra.io/api/security/v1"
 
@@ -30,6 +31,7 @@ import (
 	"istio.io/istio/pkg/servicemesh/federation/exports"
 	"istio.io/istio/pkg/servicemesh/federation/imports"
 	"istio.io/istio/pkg/servicemesh/federation/server"
+	"istio.io/istio/pkg/servicemesh/federation/status"
 	"istio.io/pkg/log"
 )
 
@@ -60,6 +62,8 @@ type Options struct {
 	ServiceController *aggregate.Controller
 	LocalNetwork      string
 	LocalClusterID    string
+	IstiodNamespace   string
+	IstiodPodName     string
 }
 
 type Federation struct {
@@ -72,6 +76,11 @@ type Federation struct {
 
 func New(opt Options) (*Federation, error) {
 	if err := opt.validate(); err != nil {
+		return nil, err
+	}
+	name := types.NamespacedName{Name: opt.IstiodPodName, Namespace: opt.IstiodNamespace}
+	statusManager, err := status.NewManager(name, opt.KubeClient)
+	if err != nil {
 		return nil, err
 	}
 	configStore := newConfigStore()
@@ -107,6 +116,7 @@ func New(opt Options) (*Federation, error) {
 		Env:               opt.Env,
 		ConfigStore:       configStore,
 		FederationManager: server,
+		StatusManager:     statusManager,
 	})
 	if err != nil {
 		return nil, err
