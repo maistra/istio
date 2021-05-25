@@ -17,36 +17,37 @@ package model
 import hashstructure "github.com/mitchellh/hashstructure/v2"
 
 type ServiceKey struct {
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
-	Hostname  string `json:"hostname"`
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	Hostname  string `json:"hostname,omitempty"`
 }
 
 type ServiceListMessage struct {
 	Checksum                uint64             `json:"checksum" hash:"ignore"`
-	NetworkGatewayEndpoints []*ServiceEndpoint `json:"networkGatewayEndpoints" hash:"set"`
-	Services                []*ServiceMessage  `json:"services" hash:"set"`
+	NetworkGatewayEndpoints []*ServiceEndpoint `json:"networkGatewayEndpoints,omitempty" hash:"set"`
+	Services                []*ServiceMessage  `json:"services,omitempty" hash:"set"`
 }
 
 type ServiceMessage struct {
-	ServiceKey   `json:"inline"`
-	ServicePorts []*ServicePort `json:"servicePorts"`
+	ServiceKey      `json:",inline"`
+	ServicePorts    []*ServicePort `json:"servicePorts,omitempty"`
+	ServiceAccounts []string       `json:"serviceAccounts,omitempty"`
 }
 
 type ServicePort struct {
-	Name     string `json:"name"`
-	Port     int    `json:"port"`
-	Protocol string `json:"protocol"`
+	Name     string `json:"name,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	Protocol string `json:"protocol,omitempty"`
 }
 
 type ServiceEndpoint struct {
-	Port     int    `json:"port"`
-	Hostname string `json:"hostname"`
+	Port     int    `json:"port,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
 }
 
 type WatchEvent struct {
-	Action   string          `json:"action"`
-	Service  *ServiceMessage `json:"service"`
+	Action   string          `json:"action,omitempty"`
+	Service  *ServiceMessage `json:"service,omitempty"`
 	Checksum uint64          `json:"checksum"`
 }
 

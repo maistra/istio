@@ -31,7 +31,8 @@ import (
 	"maistra.io/api/core/v1alpha1"
 
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/servicemesh/federation/export"
+	"istio.io/istio/pkg/config/host"
+	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/pkg/log"
 )
@@ -39,8 +40,6 @@ import (
 const (
 	meshURLParameter = "mesh"
 )
-
-var logger = log.RegisterScope("federation-server", "federation-server", 0)
 
 type Options struct {
 	BindAddress string
@@ -59,13 +58,15 @@ type FederationManager interface {
 type Server struct {
 	sync.RWMutex
 
-	Env        *model.Environment
+	logger *log.Scope
+
+	env        *model.Environment
 	listener   net.Listener
 	httpServer *http.Server
 
 	configStore model.ConfigStoreCache
 
-	defaultExportConfig *export.ServiceExporter
+	defaultExportConfig *common.ServiceExporter
 	meshes              *sync.Map
 
 	// XXX: we need to decide if we really want to allow this or not.
@@ -73,7 +74,7 @@ type Server struct {
 	// resource and using other gateway addresses over discovery would force
 	// us to know what the workload identifiers were so we could manage the
 	// routing config for each mesh.  This may or may not be possible.
-	Network string
+	network string
 
 	currentGatewayEndpoints []*federationmodel.ServiceEndpoint
 }
@@ -89,14 +90,15 @@ func NewServer(opt Options) (*Server, error) {
 		return nil, err
 	}
 	fed := &Server{
-		Env: opt.Env,
+		logger: common.Logger.WithLabels("component", "federation-server"),
+		env:    opt.Env,
 		httpServer: &http.Server{
 			ReadTimeout:    10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 		},
 		configStore: opt.ConfigStore,
 		meshes:      &sync.Map{},
-		Network:     opt.Network,
+		network:     opt.Network,
 		listener:    listener,
 	}
 	mux := mux.NewRouter()
@@ -110,8 +112,16 @@ func (s *Server) Addr() string {
 	return s.listener.Addr().String()
 }
 
+func exportDomainSuffix(mesh string) string {
+	return fmt.Sprintf("svc.%s-exports.local", mesh)
+}
+
+func (s *Server) ingressServiceName(mesh *v1alpha1.MeshFederation) string {
+	return fmt.Sprintf("%s.%s.svc.%s", mesh.Spec.Gateways.Ingress.Name, mesh.Namespace, s.env.DomainSuffix)
+}
+
 func (s *Server) AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alpha1.ServiceExports) error {
-	exportConfig := export.NewServiceExporter(exports, s.defaultExportConfig)
+	exportConfig := common.NewServiceExporter(exports, s.defaultExportConfig, exportDomainSuffix(mesh.Name))
 
 	untypedMeshServer, ok := s.meshes.Load(mesh.Name)
 	if untypedMeshServer != nil && ok {
@@ -119,10 +129,12 @@ func (s *Server) AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alp
 	}
 	meshServer := &meshServer{
 		GatewayEndpointsProvider: s,
-		Env:                      s.Env,
+		logger:                   s.logger.WithLabels("mesh", mesh.Name),
+		env:                      s.env,
 		mesh:                     mesh,
 		exportConfig:             exportConfig,
 		configStore:              s.configStore,
+		ingressService:           s.ingressServiceName(mesh),
 		currentServices:          make(map[federationmodel.ServiceKey]*federationmodel.ServiceMessage),
 	}
 	if _, loaded := s.meshes.LoadOrStore(mesh.Name, meshServer); !loaded {
@@ -145,7 +157,7 @@ func (s *Server) UpdateExportsForMesh(exports *v1alpha1.ServiceExports) error {
 	if untypedMeshServer == nil || !ok {
 		return fmt.Errorf("cannot update exporter for non-existent federation: %s", exports.Name)
 	}
-	untypedMeshServer.(*meshServer).updateExportConfig(export.NewServiceExporter(exports, s.defaultExportConfig))
+	untypedMeshServer.(*meshServer).updateExportConfig(common.NewServiceExporter(exports, s.defaultExportConfig, exportDomainSuffix(exports.Name)))
 	return nil
 }
 
@@ -155,7 +167,7 @@ func (s *Server) DeleteExportsForMesh(name string) {
 		return
 	}
 	// set an empty set of export rules
-	untypedMeshServer.(*meshServer).updateExportConfig(&export.ServiceExporter{})
+	untypedMeshServer.(*meshServer).updateExportConfig(&common.ServiceExporter{})
 }
 
 func (s *Server) getMeshServerForRequest(request *http.Request) (*meshServer, error) {
@@ -175,7 +187,7 @@ func (s *Server) getMeshServerForRequest(request *http.Request) (*meshServer, er
 func (s *Server) handleServiceList(response http.ResponseWriter, request *http.Request) {
 	mesh, err := s.getMeshServerForRequest(request)
 	if err != nil {
-		logger.Errorf("error handling /services/ request: %s", err)
+		s.logger.Errorf("error handling /services/ request: %s", err)
 		response.WriteHeader(400)
 		return
 	}
@@ -183,13 +195,13 @@ func (s *Server) handleServiceList(response http.ResponseWriter, request *http.R
 
 	respBytes, err := json.Marshal(ret)
 	if err != nil {
-		logger.Errorf("failed to marshal to json: %s", err)
+		s.logger.Errorf("failed to marshal to json: %s", err)
 		response.WriteHeader(500)
 		return
 	}
 	_, err = response.Write(respBytes)
 	if err != nil {
-		logger.Errorf("failed to send response: %s", err)
+		s.logger.Errorf("failed to send response: %s", err)
 		response.WriteHeader(500)
 		return
 	}
@@ -198,7 +210,7 @@ func (s *Server) handleServiceList(response http.ResponseWriter, request *http.R
 func (s *Server) handleWatch(response http.ResponseWriter, request *http.Request) {
 	mesh, err := s.getMeshServerForRequest(request)
 	if err != nil {
-		logger.Errorf("error handling /watch request: %s", err)
+		s.logger.Errorf("error handling /watch request: %s", err)
 		response.WriteHeader(400)
 		return
 	}
@@ -206,7 +218,7 @@ func (s *Server) handleWatch(response http.ResponseWriter, request *http.Request
 }
 
 func (s *Server) Run(stopCh <-chan struct{}) {
-	logger.Infof("starting federation service discovery at %s", s.Addr())
+	s.logger.Infof("starting federation service discovery at %s", s.Addr())
 	go func() {
 		_ = s.httpServer.Serve(s.listener)
 	}()
@@ -225,7 +237,7 @@ func (s *Server) resyncNetworkGateways() (bool, error) {
 	defer s.Unlock()
 
 	gatewayEndpoints := []*federationmodel.ServiceEndpoint{}
-	for _, gateway := range s.Env.NetworkGateways() {
+	for _, gateway := range s.env.NetworkGateways() {
 		gatewayEndpoints = append(gatewayEndpoints, &federationmodel.ServiceEndpoint{
 			Port:     int(gateway.Port),
 			Hostname: gateway.Addr,
@@ -297,37 +309,47 @@ type meshServer struct {
 	GatewayEndpointsProvider
 	sync.RWMutex
 
-	Env *model.Environment
+	logger *log.Scope
+
+	env *model.Environment
 
 	mesh         *v1alpha1.MeshFederation
-	exportConfig *export.ServiceExporter
+	exportConfig *common.ServiceExporter
 
 	configStore model.ConfigStoreCache
 
+	ingressService  string
+	gatewaySAs      []string
 	currentServices map[federationmodel.ServiceKey]*federationmodel.ServiceMessage
 
 	watchMut       sync.RWMutex
 	currentWatches []chan *federationmodel.WatchEvent
 }
 
-func (s *meshServer) updateExportConfig(exportConfig *export.ServiceExporter) {
+func (s *meshServer) updateExportConfig(exportConfig *common.ServiceExporter) {
 	s.Lock()
 	s.exportConfig = exportConfig
 	s.Unlock()
 	s.resync()
 }
 
-func (s *meshServer) getServiceMessage(svc *model.Service, exportedName *v1alpha1.ServiceName) *federationmodel.ServiceMessage {
+func (s *meshServer) getServiceHostName(exportedName *v1alpha1.ServiceName) string {
+	return fmt.Sprintf("%s.%s.svc.%s-exports.local", exportedName.Name, exportedName.Namespace, s.mesh.Name)
+}
+
+func (s *meshServer) getServiceMessage(svc *model.Service, exportedName *federationmodel.ServiceKey) *federationmodel.ServiceMessage {
 	if svc == nil || exportedName == nil {
 		return nil
 	}
 	ret := &federationmodel.ServiceMessage{
-		ServiceKey: federationmodel.ServiceKey{
-			Name:      exportedName.Name,
-			Namespace: exportedName.Namespace,
-			Hostname:  fmt.Sprintf("%s.%s.svc.%s.local", exportedName.Name, exportedName.Namespace, s.mesh.Name),
-		},
+		ServiceKey:   *exportedName,
 		ServicePorts: make([]*federationmodel.ServicePort, 0),
+	}
+	addServiceSAs := s.mesh.Spec.Security != nil && s.mesh.Spec.Security.AllowDirectInbound
+	if addServiceSAs {
+		ret.ServiceAccounts = append([]string(nil), svc.ServiceAccounts...)
+	} else {
+		ret.ServiceAccounts = append([]string(nil), s.gatewaySAs...)
 	}
 	for _, port := range svc.Ports {
 		ret.ServicePorts = append(ret.ServicePorts, &federationmodel.ServicePort{
@@ -335,6 +357,11 @@ func (s *meshServer) getServiceMessage(svc *model.Service, exportedName *v1alpha
 			Port:     port.Port,
 			Protocol: string(port.Protocol),
 		})
+		if addServiceSAs {
+			for _, si := range s.env.InstancesByPort(svc, port.Port, nil) {
+				ret.ServiceAccounts = append(ret.ServiceAccounts, si.Endpoint.ServiceAccount)
+			}
+		}
 	}
 	return ret
 }
@@ -362,13 +389,13 @@ func (s *meshServer) handleServiceList(response http.ResponseWriter) {
 
 	respBytes, err := json.Marshal(ret)
 	if err != nil {
-		logger.Errorf("failed to marshal to json: %s", err)
+		s.logger.Errorf("failed to marshal to json: %s", err)
 		response.WriteHeader(500)
 		return
 	}
 	_, err = response.Write(respBytes)
 	if err != nil {
-		logger.Errorf("failed to send response: %s", err)
+		s.logger.Errorf("failed to send response: %s", err)
 		response.WriteHeader(500)
 		return
 	}
@@ -402,16 +429,17 @@ func (s *meshServer) handleWatch(response http.ResponseWriter) {
 		event := <-watch
 		respBytes, err := json.Marshal(event)
 		if err != nil {
+			s.logger.Errorf("error marshaling watch event: %s", err)
 			return
 		}
 		_, err = response.Write(respBytes)
 		if err != nil {
-			logger.Errorf("failed to write http response: %s", err)
+			s.logger.Errorf("failed to write http response: %s", err)
 			return
 		}
 		_, err = response.Write([]byte("\r\n"))
 		if err != nil {
-			logger.Errorf("failed to write http response: %s", err)
+			s.logger.Errorf("failed to write http response: %s", err)
 			return
 		}
 		flusher.Flush()
@@ -421,39 +449,87 @@ func (s *meshServer) handleWatch(response http.ResponseWriter) {
 func (s *meshServer) resync() {
 	s.Lock()
 	defer s.Unlock()
-	services, err := s.Env.Services()
+	services, err := s.env.Services()
 	if err != nil {
-		logger.Errorf("failed to call env.Services(): %s", err)
+		s.logger.Errorf("failed to call env.Services(): %s", err)
 		return
 	}
+	s.updateGatewayServiceAccounts()
 	for _, svc := range services {
 		if svc.Attributes.Name == "" || svc.Attributes.Namespace == "" {
-			logger.Debugf("skipping service with no Namespace/Name: %s", svc.Hostname)
+			s.logger.Debugf("skipping service with no Namespace/Name: %s", svc.Hostname)
 			continue
 		} else if svc.External() {
-			logger.Debugf("skipping external service: %s", svc.Hostname)
+			s.logger.Debugf("skipping external service: %s", svc.Hostname)
 			continue
 		}
-		svcMessage := s.getServiceMessage(svc, s.exportConfig.ExportedNameForService(svc))
+		svcMessage := s.getServiceMessage(svc, s.exportConfig.NameForService(svc))
+		if svcMessage == nil {
+			s.logger.Debugf("skipping export of service %+v, as it does not match any export filter", serviceKeyForService(svc))
+			continue
+		}
 		svcKey := serviceKeyForService(svc)
 		if existingSvc, found := s.currentServices[svcKey]; found {
 			if existingSvc.GenerateChecksum() == svcMessage.GenerateChecksum() {
 				continue
 			}
 			if existingSvc.Name != svcMessage.Name || existingSvc.Namespace != svcMessage.Namespace {
+				s.logger.Debugf("export for service %+v has changed from %+v to %+v", svcKey, existingSvc.ServiceKey, svcMessage.ServiceKey)
 				s.deleteService(svcKey, existingSvc)
 				s.addService(svcKey, svcMessage)
 			} else {
+				s.logger.Debugf("service %+v still exported as %+v", svcKey, svcMessage.ServiceKey)
 				s.updateService(svcKey, svcMessage)
 			}
 		} else if svcMessage != nil {
+			s.logger.Debugf("exporting service %+v as %+v", svcKey, svcMessage.ServiceKey)
 			s.addService(svcKey, svcMessage)
 		}
 	}
 }
 
+// s must be lock()ed
+func (s *meshServer) updateGatewayServiceAccounts() bool {
+	oldSAs := s.gatewaySAs
+	if s.mesh.Spec.Security != nil && s.mesh.Spec.Security.AllowDirectInbound {
+		// access is direct to the service, so we'll be using the service's SAs
+		s.gatewaySAs = nil
+		return len(oldSAs) > 0
+	}
+	gatewayService := s.env.GetService(host.Name(s.ingressService))
+	if gatewayService == nil {
+		s.logger.Errorf("unexpected error retrieving ServiceAccount details for MeshFederation %s: "+
+			"could not locate ingress gateway service %s", s.mesh.Name, s.ingressService)
+		// XXX: keep using the old SAs?
+		return false
+	}
+	s.gatewaySAs = append([]string(nil), gatewayService.ServiceAccounts...)
+	for _, si := range s.env.InstancesByPort(gatewayService, common.FederationPort, nil) {
+		s.gatewaySAs = append(s.gatewaySAs, si.Endpoint.ServiceAccount)
+	}
+	sort.Slice(s.gatewaySAs, func(i, j int) bool { return strings.Compare(s.gatewaySAs[i], s.gatewaySAs[j]) < 0 })
+	if len(oldSAs) != len(s.gatewaySAs) {
+		s.logger.Debugf("gateway ServiceAccounts configured as: %s", s.gatewaySAs)
+		return true
+	}
+	for index, sa := range oldSAs {
+		if s.gatewaySAs[index] != sa {
+			s.logger.Debugf("gateway ServiceAccounts configured as: %s", s.gatewaySAs)
+			return true
+		}
+	}
+	return false
+}
+
 func (s *meshServer) serviceUpdated(svc *model.Service, event model.Event) {
 	if svc == nil {
+		return
+	}
+	if svc.Hostname == host.Name(s.ingressService) {
+		if s.updateGatewayServiceAccounts() {
+			s.resync()
+		}
+		// we don't ever want to export our ingress service
 		return
 	}
 	s.Lock()
@@ -461,30 +537,40 @@ func (s *meshServer) serviceUpdated(svc *model.Service, event model.Event) {
 	var svcMessage *federationmodel.ServiceMessage
 	switch event {
 	case model.EventAdd:
-		svcMessage = s.getServiceMessage(svc, s.exportConfig.ExportedNameForService(svc))
+		svcMessage = s.getServiceMessage(svc, s.exportConfig.NameForService(svc))
 		if svcMessage != nil {
+			s.logger.Debugf("exporting service %+v as %+v", serviceKeyForService(svc), svcMessage.ServiceKey)
 			s.addService(serviceKeyForService(svc), svcMessage)
+		} else if s.logger.DebugEnabled() {
+			s.logger.Debugf("skipping export of service %+v, as it does not match any export filter", serviceKeyForService(svc))
 		}
 	case model.EventUpdate:
-		svcMessage = s.getServiceMessage(svc, s.exportConfig.ExportedNameForService(svc))
+		svcMessage = s.getServiceMessage(svc, s.exportConfig.NameForService(svc))
 		svcKey := serviceKeyForService(svc)
 		if svcMessage != nil {
 			if existingSvc, found := s.currentServices[svcKey]; found {
 				if existingSvc.Name != svcMessage.Name || existingSvc.Namespace != svcMessage.Namespace {
+					s.logger.Debugf("export for service %+v has changed from %+v to %+v", svcKey, existingSvc.ServiceKey, svcMessage.ServiceKey)
 					s.deleteService(svcKey, existingSvc)
 					s.addService(svcKey, svcMessage)
 				} else {
+					s.logger.Debugf("service %+v still exported as %+v", svcKey, svcMessage.ServiceKey)
 					s.updateService(svcKey, svcMessage)
 				}
 			} else {
+				s.logger.Debugf("exporting service %+v as %+v", serviceKeyForService(svc), svcMessage.ServiceKey)
 				s.addService(svcKey, svcMessage)
 			}
 		} else if existingSvc, found := s.currentServices[svcKey]; found {
+			s.logger.Debugf("unexporting service %+v (was exported as %+v)", serviceKeyForService(svc), existingSvc.ServiceKey)
 			s.deleteService(svcKey, existingSvc)
+		} else if s.logger.DebugEnabled() {
+			s.logger.Debugf("skipping export of service %+v, as it does not match any export filter", serviceKeyForService(svc), svcMessage.ServiceKey)
 		}
 	case model.EventDelete:
 		svcKey := serviceKeyForService(svc)
 		if existingSvc, found := s.currentServices[svcKey]; found {
+			s.logger.Debugf("unexporting service %+v (was exported as %+v)", serviceKeyForService(svc), existingSvc.ServiceKey)
 			s.deleteService(svcKey, existingSvc)
 		}
 	}
@@ -493,7 +579,7 @@ func (s *meshServer) serviceUpdated(svc *model.Service, event model.Event) {
 // s has to be Lock()ed
 func (s *meshServer) addService(svc federationmodel.ServiceKey, msg *federationmodel.ServiceMessage) {
 	if err := s.createExportResources(svc, msg); err != nil {
-		logger.Errorf("error creating resources for exported service %s => %s: %s", svc.Hostname, msg.Hostname, err)
+		s.logger.Errorf("error creating resources for exported service %s => %s: %s", svc.Hostname, msg.Hostname, err)
 		return
 	}
 	s.currentServices[svc] = msg
@@ -518,7 +604,7 @@ func (s *meshServer) updateService(svc federationmodel.ServiceKey, msg *federati
 // s has to be Lock()ed
 func (s *meshServer) deleteService(svc federationmodel.ServiceKey, msg *federationmodel.ServiceMessage) {
 	if err := s.deleteExportResources(svc, msg); err != nil {
-		logger.Errorf("couldn't remove resources associated with exported service %s => %s: %s", svc.Hostname, msg.Hostname, err)
+		s.logger.Errorf("couldn't remove resources associated with exported service %s => %s: %s", svc.Hostname, msg.Hostname, err)
 		// let the deletion go through, so the other mesh won't try to call us
 	}
 	delete(s.currentServices, svc)

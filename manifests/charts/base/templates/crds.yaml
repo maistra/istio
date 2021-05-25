@@ -3,5 +3,6 @@
 {{ .Files.Get "crds/crd-operator.yaml" }}
 {{ .Files.Get "crds/maistra.io_meshfederations.yaml" }}
 {{ .Files.Get "crds/maistra.io_serviceexports.yaml" }}
+{{ .Files.Get "crds/maistra.io_serviceimports.yaml" }}
 {{ .Files.Get "crds/maistra.io_servicemeshextensions.yaml" }}
 {{- end }}
