@@ -25,7 +25,8 @@ import (
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/discovery"
-	"istio.io/istio/pkg/servicemesh/federation/export"
+	"istio.io/istio/pkg/servicemesh/federation/exports"
+	"istio.io/istio/pkg/servicemesh/federation/imports"
 	"istio.io/istio/pkg/servicemesh/federation/server"
 	"istio.io/pkg/log"
 )
@@ -51,15 +52,17 @@ type Options struct {
 	common.ControllerOptions
 	BindAddress       string
 	Env               *model.Environment
-	Network           string
 	XDSUpdater        model.XDSUpdater
 	ServiceController *aggregate.Controller
+	LocalNetwork      string
+	LocalClusterID    string
 }
 
 type Federation struct {
 	configStore         model.ConfigStoreCache
 	server              *server.Server
-	exportController    *export.Controller
+	exportController    *exports.Controller
+	importController    *imports.Controller
 	discoveryController *discovery.Controller
 }
 
@@ -71,20 +74,29 @@ func New(opt Options) (*Federation, error) {
 	server, err := server.NewServer(server.Options{
 		BindAddress: opt.BindAddress,
 		Env:         opt.Env,
-		Network:     opt.Network,
+		Network:     opt.LocalNetwork,
 		ConfigStore: configStore,
 	})
 	if err != nil {
 		return nil, err
 	}
-	exportController, err := export.NewController(export.Options{
+	exportController, err := exports.NewController(exports.Options{
 		ControllerOptions:    opt.ControllerOptions,
 		ServiceExportManager: server,
 	})
 	if err != nil {
 		return nil, err
 	}
+	importController, err := imports.NewController(imports.Options{
+		ControllerOptions: opt.ControllerOptions,
+		ServiceController: opt.ServiceController,
+	})
+	if err != nil {
+		return nil, err
+	}
 	discoveryController, err := discovery.NewController(discovery.Options{
+		LocalClusterID:    opt.LocalClusterID,
+		LocalNetwork:      opt.LocalNetwork,
 		ControllerOptions: opt.ControllerOptions,
 		ServiceController: opt.ServiceController,
 		XDSUpdater:        opt.XDSUpdater,
@@ -100,6 +112,7 @@ func New(opt Options) (*Federation, error) {
 		configStore:         configStore,
 		server:              server,
 		exportController:    exportController,
+		importController:    importController,
 		discoveryController: discoveryController,
 	}
 	return federation, nil
@@ -118,12 +131,13 @@ func (f *Federation) RegisterServiceHandlers(serviceController *aggregate.Contro
 }
 
 func (f *Federation) StartControllers(stopCh <-chan struct{}) {
-	go f.discoveryController.Start(stopCh)
-	f.exportController.Start(stopCh)
+	go f.exportController.Start(stopCh)
+	go f.importController.Start(stopCh)
+	f.discoveryController.Start(stopCh)
 }
 
 func (f *Federation) ControllersSynced() bool {
-	return f.exportController.HasSynced() && f.discoveryController.HasSynced()
+	return f.importController.HasSynced() && f.exportController.HasSynced() && f.discoveryController.HasSynced()
 }
 
 func (f *Federation) StartServer(stopCh <-chan struct{}) {

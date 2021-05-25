@@ -16,6 +16,8 @@ package common
 
 import (
 	"time"
+
+	"istio.io/pkg/log"
 )
 
 const (
@@ -24,3 +26,5 @@ const (
 	DefaultResyncPeriod  = 60 * time.Second
 	FederationPort       = 15443
 )
+
+var Logger = log.RegisterScope("federation", "federation", 0)

@@ -24,9 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"maistra.io/api/client/versioned/fake"
-	servicemeshv1alpha1 "maistra.io/api/core/v1alpha1"
-
-	"istio.io/istio/pkg/cluster"
+	maistrav1alpha1 "maistra.io/api/core/v1alpha1"
 
 	"istio.io/api/mesh/v1alpha1"
 	configmemory "istio.io/istio/pilot/pkg/config/memory"
@@ -42,11 +40,11 @@ import (
 
 type fakeManager struct{}
 
-func (m *fakeManager) AddMeshFederation(mesh *servicemeshv1alpha1.MeshFederation, exports *servicemeshv1alpha1.ServiceExports) error {
+func (m *fakeManager) AddMeshFederation(mesh *maistrav1alpha1.MeshFederation, exports *maistrav1alpha1.ServiceExports) error {
 	return nil
 }
 func (m *fakeManager) DeleteMeshFederation(name string) {}
-func (m *fakeManager) UpdateExportsForMesh(exports *servicemeshv1alpha1.ServiceExports) error {
+func (m *fakeManager) UpdateExportsForMesh(exports *maistrav1alpha1.ServiceExports) error {
 	return nil
 }
 func (m *fakeManager) DeleteExportsForMesh(name string) {}
@@ -174,14 +172,14 @@ func TestReconcile(t *testing.T) {
 
 	name := "test"
 	namespace := "test"
-	federation := &servicemeshv1alpha1.MeshFederation{
+	federation := &maistrav1alpha1.MeshFederation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: servicemeshv1alpha1.MeshFederationSpec{
+		Spec: maistrav1alpha1.MeshFederationSpec{
 			NetworkAddress: "test.mesh",
-			Gateways: servicemeshv1alpha1.MeshFederationGateways{
+			Gateways: maistrav1alpha1.MeshFederationGateways{
 				Ingress: corev1.LocalObjectReference{
 					Name: "test-ingress",
 				},
@@ -189,7 +187,7 @@ func TestReconcile(t *testing.T) {
 					Name: "test-egress",
 				},
 			},
-			Security: &servicemeshv1alpha1.MeshFederationSecurity{
+			Security: &maistrav1alpha1.MeshFederationSecurity{
 				ClientID:            "cluster.local/ns/test-mesh/sa/test-egress-service-account",
 				TrustDomain:         "test.local",
 				CertificateChain:    "dummy",

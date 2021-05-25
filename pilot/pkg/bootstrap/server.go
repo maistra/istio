@@ -30,6 +30,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/hashicorp/go-multierror"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -284,9 +285,10 @@ func NewServer(args *PilotArgs, initFuncs ...func(*Server)) (*Server, error) {
 					ResyncPeriod: args.RegistryOptions.KubeOptions.ResyncPeriod,
 					Namespace:    args.RegistryOptions.ClusterRegistriesNamespace,
 				},
+				LocalClusterID:    s.clusterID.String(),
+				LocalNetwork:      features.NetworkName,
 				BindAddress:       args.ServerOptions.FederationAddr,
 				Env:               s.environment,
-				Network:           features.NetworkName,
 				XDSUpdater:        s.XDSServer,
 				ServiceController: s.ServiceController(),
 			})
