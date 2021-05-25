@@ -76,13 +76,11 @@ func TestServiceList(t *testing.T) {
 		expectedMessage federationmodel.ServiceListMessage
 	}{
 		{
-			name:           "empty serviceList",
-			remoteName:     "test-remote",
-			serviceExports: exportAllServices,
-			services:       []*model.Service{},
-			expectedMessage: federationmodel.ServiceListMessage{
-				Services: []*federationmodel.ServiceMessage{},
-			},
+			name:            "empty serviceList",
+			remoteName:      "test-remote",
+			serviceExports:  exportAllServices,
+			services:        []*model.Service{},
+			expectedMessage: federationmodel.ServiceListMessage{},
 		},
 		{
 			name:       "exported service, no gateway",
@@ -132,7 +130,7 @@ func TestServiceList(t *testing.T) {
 						ServiceKey: federationmodel.ServiceKey{
 							Name:      "service",
 							Namespace: "federation",
-							Hostname:  "service.federation.svc.test-remote.local",
+							Hostname:  "service.federation.svc.test-remote-exports.local",
 						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
@@ -165,9 +163,7 @@ func TestServiceList(t *testing.T) {
 					},
 				},
 			},
-			expectedMessage: federationmodel.ServiceListMessage{
-				Services: []*federationmodel.ServiceMessage{},
-			},
+			expectedMessage: federationmodel.ServiceListMessage{},
 		},
 		{
 			name:       "exported service + gateway",
@@ -243,7 +239,7 @@ func TestServiceList(t *testing.T) {
 						ServiceKey: federationmodel.ServiceKey{
 							Name:      "service",
 							Namespace: "federation",
-							Hostname:  "service.federation.svc.test-remote.local",
+							Hostname:  "service.federation.svc.test-remote-exports.local",
 						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
@@ -330,7 +326,7 @@ func TestServiceList(t *testing.T) {
 						ServiceKey: federationmodel.ServiceKey{
 							Name:      "productpage",
 							Namespace: "bookinfo",
-							Hostname:  "productpage.bookinfo.svc.test-remote.local",
+							Hostname:  "productpage.bookinfo.svc.test-remote-exports.local",
 						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
@@ -344,7 +340,7 @@ func TestServiceList(t *testing.T) {
 						ServiceKey: federationmodel.ServiceKey{
 							Name:      "ratings",
 							Namespace: "bookinfo",
-							Hostname:  "ratings.bookinfo.svc.test-remote.local",
+							Hostname:  "ratings.bookinfo.svc.test-remote-exports.local",
 						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
@@ -508,7 +504,7 @@ func TestWatch(t *testing.T) {
 						ServiceKey: federationmodel.ServiceKey{
 							Name:      "service",
 							Namespace: "federation",
-							Hostname:  "service.federation.svc.test-remote.local",
+							Hostname:  "service.federation.svc.test-remote-exports.local",
 						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
@@ -525,7 +521,7 @@ func TestWatch(t *testing.T) {
 						ServiceKey: federationmodel.ServiceKey{
 							Name:      "service",
 							Namespace: "federation",
-							Hostname:  "service.federation.svc.test-remote.local",
+							Hostname:  "service.federation.svc.test-remote-exports.local",
 						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
@@ -539,7 +535,7 @@ func TestWatch(t *testing.T) {
 			},
 		},
 		{
-			name:           "no gateways, service exported name changes",
+			name:           "no gateways, service exported name changes, filtered service",
 			remoteName:     "test-remote",
 			serviceExports: exportProductPage,
 			updatedExports: &v1alpha1.ServiceExports{
@@ -580,6 +576,20 @@ func TestWatch(t *testing.T) {
 						},
 					},
 				},
+				{
+					Hostname: "ratings.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "ratings",
+					},
+					Ports: model.PortList{
+						&model.Port{
+							Name:     "https",
+							Protocol: protocol.HTTPS,
+							Port:     443,
+						},
+					},
+				},
 			},
 			serviceEvents: nil,
 			expectedWatchEvents: []*federationmodel.WatchEvent{
@@ -589,7 +599,7 @@ func TestWatch(t *testing.T) {
 						ServiceKey: federationmodel.ServiceKey{
 							Name:      "service",
 							Namespace: "federation",
-							Hostname:  "service.federation.svc.test-remote.local",
+							Hostname:  "service.federation.svc.test-remote-exports.local",
 						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{
@@ -606,7 +616,7 @@ func TestWatch(t *testing.T) {
 						ServiceKey: federationmodel.ServiceKey{
 							Name:      "service",
 							Namespace: "cluster",
-							Hostname:  "service.cluster.svc.test-remote.local",
+							Hostname:  "service.cluster.svc.test-remote-exports.local",
 						},
 						ServicePorts: []*federationmodel.ServicePort{
 							{

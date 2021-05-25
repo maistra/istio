@@ -37,10 +37,10 @@ type Options struct {
 }
 
 type Controller struct {
+	Logger       *log.Scope
 	informer     cache.SharedIndexInformer
 	queue        workqueue.RateLimitingInterface
 	resyncPeriod time.Duration
-	logger       *log.Scope
 	reconcile    ReconcilerFunc
 }
 
@@ -58,7 +58,7 @@ func NewController(opt Options) *Controller {
 	controller := &Controller{
 		informer:     opt.Informer,
 		queue:        queue,
-		logger:       opt.Logger,
+		Logger:       opt.Logger,
 		resyncPeriod: opt.ResyncPeriod,
 		reconcile:    opt.Reconciler,
 	}
@@ -67,29 +67,29 @@ func NewController(opt Options) *Controller {
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				key, err := cache.MetaNamespaceKeyFunc(obj)
-				controller.logger.Debugf("Processing add: %s", key)
+				controller.Logger.Debugf("Processing add: %s", key)
 				if err == nil {
 					queue.Add(key)
 				} else {
-					controller.logger.Errorf("error retrieving key for object %T", obj)
+					controller.Logger.Errorf("error retrieving key for object %T", obj)
 				}
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				key, err := cache.MetaNamespaceKeyFunc(newObj)
-				controller.logger.Debugf("Processing update: %s", key)
+				controller.Logger.Debugf("Processing update: %s", key)
 				if err == nil {
 					queue.Add(key)
 				} else {
-					controller.logger.Errorf("error retrieving key for object %T", newObj)
+					controller.Logger.Errorf("error retrieving key for object %T", newObj)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-				controller.logger.Debugf("Processing delete: %s", key)
+				controller.Logger.Debugf("Processing delete: %s", key)
 				if err == nil {
 					queue.Add(key)
 				} else {
-					controller.logger.Errorf("error retrieving key for object %T", obj)
+					controller.Logger.Errorf("error retrieving key for object %T", obj)
 				}
 			},
 		})
@@ -102,14 +102,14 @@ func (c *Controller) Start(stopChan <-chan struct{}) {
 	defer c.queue.ShutDown()
 
 	t0 := time.Now()
-	c.logger.Info("Starting controller")
+	c.Logger.Info("Starting controller")
 
 	go c.informer.Run(stopChan)
 
 	cache.WaitForCacheSync(stopChan, c.HasSynced)
-	c.logger.Infof("Controller synced in %s", time.Since(t0))
+	c.Logger.Infof("Controller synced in %s", time.Since(t0))
 
-	c.logger.Info("Starting workers")
+	c.Logger.Info("Starting workers")
 	wait.Until(c.worker, c.resyncPeriod, stopChan)
 }
 
@@ -134,10 +134,10 @@ func (c *Controller) processNextItem() bool {
 		// No error, reset the ratelimit counters
 		c.queue.Forget(resourceName)
 	} else if c.queue.NumRequeues(resourceName) < maxRetries {
-		c.logger.Errorf("Error processing %s (will retry): %v", resourceName, err)
+		c.Logger.Errorf("Error processing %s (will retry): %v", resourceName, err)
 		c.queue.AddRateLimited(resourceName)
 	} else {
-		c.logger.Errorf("Error processing %s (giving up): %v", resourceName, err)
+		c.Logger.Errorf("Error processing %s (giving up): %v", resourceName, err)
 		c.queue.Forget(resourceName)
 		utilruntime.HandleError(err)
 	}

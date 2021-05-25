@@ -38,6 +38,7 @@ popd
 
 cp "${dir}"/manifests/maistra.io_meshfederations.yaml manifests/charts/base/crds
 cp "${dir}"/manifests/maistra.io_serviceexports.yaml manifests/charts/base/crds
+cp "${dir}"/manifests/maistra.io_serviceimports.yaml manifests/charts/base/crds
 cp "${dir}"/manifests/maistra.io_servicemeshextensions.yaml manifests/charts/base/crds
 
 rm -rf "${dir}"
