@@ -26,14 +26,17 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-
-	"istio.io/istio/pilot/pkg/serviceregistry/provider"
-	"istio.io/istio/pkg/cluster"
+	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
+	maistraclient "maistra.io/api/client/versioned"
+	"maistra.io/api/core/v1alpha1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
 	federationregistry "istio.io/istio/pilot/pkg/serviceregistry/federation"
+	"istio.io/istio/pilot/pkg/serviceregistry/provider"
+	"istio.io/istio/pkg/cluster"
+	"istio.io/istio/pkg/kube"
 	kubecontroller "istio.io/istio/pkg/kube/controller"
 	"istio.io/istio/pkg/servicemesh/apis/servicemesh/v1alpha1"
 	clientsetservicemeshv1alpha1 "istio.io/istio/pkg/servicemesh/client/v1alpha1/clientset/versioned"
@@ -41,10 +44,9 @@ import (
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/server"
-	"istio.io/pkg/log"
 )
 
-var logger = log.RegisterScope("federation-controller", "federation-controller", 0)
+const controllerName = "federation-discovery-controller"
 
 type Options struct {
 	common.ControllerOptions
@@ -53,12 +55,17 @@ type Options struct {
 	Env               *model.Environment
 	ConfigStore       model.ConfigStoreController
 	FederationManager server.FederationManager
+	LocalNetwork      string
+	LocalClusterID    string
 }
 
 type Controller struct {
 	*kubecontroller.Controller
 	model.ConfigStoreController
-	cs                clientsetservicemeshv1alpha1.Interface
+	localNetwork      string
+	localClusterID    string
+	kubeClient        kube.Client
+	cs                maistraclient.Interface
 	env               *model.Environment
 	federationManager server.FederationManager
 	sc                *aggregate.Controller
@@ -69,7 +76,7 @@ type Controller struct {
 
 var (
 	_ model.ConfigStore      = (*Controller)(nil)
-	_ model.ConfigStoreCache = (*Controller)(nil)
+	_ model.ConfigStoreController = (*Controller)(nil)
 )
 
 // NewController creates a new Aggregate controller
@@ -78,7 +85,7 @@ func NewController(opt Options) (*Controller, error) {
 		return nil, err
 	}
 
-	cs, err := clientsetservicemeshv1alpha1.NewForConfig(opt.KubeClient.RESTConfig())
+	cs, err := maistraclient.NewForConfig(opt.KubeClient.RESTConfig())
 	if err != nil {
 		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
 	}
@@ -89,7 +96,8 @@ func NewController(opt Options) (*Controller, error) {
 }
 
 // allows using a fake client set for testing purposes
-func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
+func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
+	logger := common.Logger.WithLabels("component", controllerName)
 	var informer cache.SharedIndexInformer
 	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
 	if mrc != nil && false {
@@ -111,7 +119,7 @@ func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc member
 
 		namespaceSet := xnsinformers.NewNamespaceSet()
 		informer = xnsinformers.NewMultiNamespaceInformer(namespaceSet, opt.ResyncPeriod, newInformer)
-		mrc.Register(namespaceSet, "federation-controller")
+		mrc.Register(namespaceSet, controllerName)
 	} else {
 		informer = informersservicemeshv1alpha1.NewMeshFederationInformer(
 			cs, opt.Namespace, opt.ResyncPeriod,
@@ -119,7 +127,10 @@ func internalNewController(cs clientsetservicemeshv1alpha1.Interface, mrc member
 	}
 
 	controller := &Controller{
-		ConfigStoreCache:  opt.ConfigStore,
+		ConfigStoreController:  opt.ConfigStore,
+		localClusterID:    opt.LocalClusterID,
+		localNetwork:      opt.LocalNetwork,
+		kubeClient:        opt.KubeClient,
 		cs:                cs,
 		env:               opt.Env,
 		sc:                opt.ServiceController,
@@ -152,16 +163,16 @@ func (c *Controller) HasSynced() bool {
 }
 
 func (c *Controller) reconcile(resourceName string) error {
-	logger.Debugf("Reconciling MeshFederation %s", resourceName)
+	c.Logger.Debugf("Reconciling MeshFederation %s", resourceName)
 	defer func() {
-		logger.Infof("Completed reconciliation of MeshFederation %s", resourceName)
+		c.Logger.Debugf("Completed reconciliation of MeshFederation %s", resourceName)
 	}()
 
 	ctx := context.TODO()
 
 	namespace, name, err := cache.SplitMetaNamespaceKey(resourceName)
 	if err != nil {
-		logger.Errorf("error splitting resource name: %s", resourceName)
+		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
 	instance, err := c.cs.MaistraV1alpha1().MeshFederations(namespace).Get(
 		ctx, name, metav1.GetOptions{
@@ -182,7 +193,7 @@ func (c *Controller) reconcile(resourceName string) error {
 				},
 			})
 			if err == nil {
-				logger.Info("MeshFederation deleted")
+				c.Logger.Info("MeshFederation deleted")
 			}
 		}
 		// Error reading the object
@@ -195,8 +206,8 @@ func (c *Controller) reconcile(resourceName string) error {
 func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederation) error {
 	registry := c.getRegistry(cluster.ID(instance.Name))
 
-	egressGatewayService := fmt.Sprintf("%s.%s.svc.cluster.local",
-		instance.Spec.Gateways.Egress.Name, instance.Namespace)
+	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
+		instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.DomainSuffix)
 
 	// check for existing registry
 	if registry != nil {
@@ -212,43 +223,57 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 		if federationRegistry, ok := registry.(*federationregistry.Controller); ok {
 			if federationRegistry.NetworkAddress() != instance.Spec.NetworkAddress {
 				// TODO: support updates
-				logger.Warnf("updating NetworkAddress for MeshFederation (%s) is not supported", instance.Name)
+				c.Logger.Warnf("updating NetworkAddress for MeshFederation (%s) is not supported", instance.Name)
 			}
 		} else {
 			return fmt.Errorf("registry %s is not a Federation registry (type=%T)", instance.Name, registry)
 		}
 	} else {
 		// if there's no existing registry
-		logger.Info("Creating handler for Federation discovery server")
-		exportConfig, err := c.cs.MaistraV1alpha1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		c.Logger.Infof("Creating export handler for Federation to %s", instance.Name)
+		exportConfig, err := c.cs.CoreV1alpha1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
-			logger.Errorf("error retrieving ServiceExports associated with MeshFederation %s: %s", instance.Name, err)
+			c.Logger.Errorf("error retrieving ServiceExports associated with MeshFederation %s: %s", instance.Name, err)
+			return err
+		}
+		defaultImportConfig, err := c.cs.CoreV1alpha1().ServiceImports(instance.Namespace).Get(context.TODO(), "default", metav1.GetOptions{})
+		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
+			c.Logger.Errorf("error retrieving default ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
+			return err
+		}
+		importConfig, err := c.cs.CoreV1alpha1().ServiceImports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
+			c.Logger.Errorf("error retrieving ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
 			return err
 		}
 		if err := c.federationManager.AddMeshFederation(instance, exportConfig); err != nil {
 			return err
 		}
 
-		logger.Infof("Creating Istio resources for Federation discovery")
+		c.Logger.Infof("Creating Istio resources for Federation discovery from %s", instance.Name)
 		if err := c.createDiscoveryResources(ctx, instance, c.env.Mesh()); err != nil {
 			return err
 		}
 
-		logger.Infof("Initializing Federation service registry %q at %s", instance.Name, instance.Spec.NetworkAddress)
+		c.Logger.Infof("Initializing Federation service registry for %q at %s", instance.Name, instance.Spec.NetworkAddress)
 		// create a registry instance
 		options := federationregistry.Options{
 			NetworkAddress: instance.Spec.NetworkAddress,
 			EgressName:     instance.Spec.Gateways.Egress.Name,
 			EgressService:  egressGatewayService,
-			ClusterID:      instance.Name,
 			Namespace:      instance.Namespace,
 			UseDirectCalls: instance.Spec.Security != nil && instance.Spec.Security.AllowDirectOutbound,
+			KubeClient:     c.kubeClient,
 			ConfigStore:    c.ConfigStoreCache,
 			XDSUpdater:     c.xds,
 			ResyncPeriod:   time.Minute * 5,
-			NetworkName:    fmt.Sprintf("network-%s", instance.Name),
+			DomainSuffix:   c.env.DomainSuffix,
+			LocalClusterID: c.localClusterID,
+			LocalNetwork:   c.localNetwork,
+			ClusterID:      instance.Name,
+			Network:        fmt.Sprintf("network-%s", instance.Name),
 		}
-		registry = federationregistry.NewController(options)
+		registry = federationregistry.NewController(options, instance, defaultImportConfig, importConfig)
 		// register the new instance
 		c.sc.AddRegistry(registry)
 
@@ -273,7 +298,7 @@ func (c *Controller) delete(ctx context.Context, instance *v1alpha1.MeshFederati
 		// make sure it's one of ours
 		if registry.Provider() == provider.Federation {
 			// unregister federation registry
-			logger.Infof("Removing registry for Federation cluster %s", instance.Name)
+			c.Logger.Infof("Removing registry for Federation cluster %s", instance.Name)
 			c.sc.DeleteRegistry(registry.Cluster(), provider.Federation)
 			c.mu.Lock()
 			defer c.mu.Unlock()
@@ -323,7 +348,7 @@ func (opt Options) validate() error {
 	}
 	if opt.ResyncPeriod == 0 {
 		opt.ResyncPeriod = common.DefaultResyncPeriod
-		logger.Warnf("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
+		common.Logger.WithLabels("component", controllerName).Warnf("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
 	}
 	return utilerrors.NewAggregate(allErrors)
 }

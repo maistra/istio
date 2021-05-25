@@ -26,6 +26,8 @@ type Interface interface {
 	MeshFederations() MeshFederationInformer
 	// ServiceExports returns a ServiceExportsInformer.
 	ServiceExports() ServiceExportsInformer
+	// ServiceImports returns a ServiceImportsInformer.
+	ServiceImports() ServiceImportsInformer
 	// ServiceMeshMemberRolls returns a ServiceMeshMemberRollInformer.
 	ServiceMeshMemberRolls() ServiceMeshMemberRollInformer
 }
@@ -49,6 +51,11 @@ func (v *version) MeshFederations() MeshFederationInformer {
 // ServiceExports returns a ServiceExportsInformer.
 func (v *version) ServiceExports() ServiceExportsInformer {
 	return &serviceExportsInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ServiceImports returns a ServiceImportsInformer.
+func (v *version) ServiceImports() ServiceImportsInformer {
+	return &serviceImportsInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ServiceMeshMemberRolls returns a ServiceMeshMemberRollInformer.

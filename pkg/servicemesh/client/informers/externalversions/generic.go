@@ -50,10 +50,29 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=maistra.io, Version=v1
+	// Group=core, Version=v1
+	case v1.SchemeGroupVersion.WithResource("servicemeshcontrolplanes"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceMeshControlPlanes().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("servicemeshextensions"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceMeshExtensions().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("servicemeshmembers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceMeshMembers().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("servicemeshmemberrolls"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Maistra().V1().ServiceMeshMemberRolls().Informer()}, nil
-	}
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceMeshMemberRolls().Informer()}, nil
 
-	return nil, fmt.Errorf("no informer found for %v", resource)
+		// Group=core, Version=v1alpha1
+	case v1.SchemeGroupVersion.WithResource("meshfederations"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().MeshFederations().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("serviceexports"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ServiceExports().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("serviceimports"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ServiceImports().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("servicemeshextensions"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ServiceMeshExtensions().Informer()}, nil
+
+		// Group=core, Version=v2
+	case v2.SchemeGroupVersion.WithResource("servicemeshcontrolplanes"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V2().ServiceMeshControlPlanes().Informer()}, nil
+
+		return nil, fmt.Errorf("no informer found for %v", resource)
 }
