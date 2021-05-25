@@ -19,12 +19,15 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"maistra.io/api/core/v1alpha1"
 
+	"istio.io/api/label"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
@@ -35,6 +38,7 @@ import (
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/visibility"
+	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/network"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
@@ -47,8 +51,6 @@ var (
 	_ serviceregistry.Instance = &Controller{}
 )
 
-var logger = log.RegisterScope("federation-registry", "federation-registry", 0)
-
 const (
 	federationPort = common.FederationPort
 )
@@ -60,20 +62,32 @@ type Controller struct {
 	egressName     string
 	discoveryURL   string
 	useDirectCalls bool
-	networkID      network.ID
 	namespace      string
+	localClusterID cluster.ID
+	localNetworkID network.ID
 	clusterID      cluster.ID
+	networkID      network.ID
 	resyncPeriod   time.Duration
 	backoffPolicy  *backoff.ExponentialBackOff
 
+	logger *log.Scope
+
+	kubeClient  kube.Client
 	configStore model.ConfigStoreCache
 	xdsUpdater  model.XDSUpdater
 
-	storeLock     sync.RWMutex
-	imports       map[federationmodel.ServiceKey]*existingImport
-	serviceStore  []*model.Service
-	instanceStore map[host.Name][]*model.ServiceInstance
-	gatewayStore  []model.NetworkGateway
+	localDomainSuffix   string
+	defaultDomainSuffix string
+	defaultNameMapper   common.NameMapper
+	importNameMapper    common.NameMapper
+
+	storeLock      sync.RWMutex
+	imports        map[federationmodel.ServiceKey]*existingImport
+	serviceStore   map[host.Name]*model.Service
+	instanceStore  map[host.Name][]*model.ServiceInstance
+	gatewayStore   []model.NetworkGateway
+	egressGateways []model.NetworkGateway
+	egressSAs      []string
 
 	lastMessage *federationmodel.ServiceListMessage
 	stopped     int32
@@ -89,34 +103,79 @@ type Options struct {
 	EgressService  string
 	EgressName     string
 	UseDirectCalls bool
-	NetworkName    string
+	DomainSuffix   string
+	LocalClusterID string
+	LocalNetwork   string
 	ClusterID      string
+	Network        string
 	Namespace      string
+	KubeClient     kube.Client
 	ConfigStore    model.ConfigStoreCache
 	XDSUpdater     model.XDSUpdater
 	ResyncPeriod   time.Duration
 }
 
+func defaultDomainSuffixForMesh(mesh *v1alpha1.MeshFederation) string {
+	return fmt.Sprintf("svc.%s-imports.local", mesh.Name)
+}
+
+func localDomainSuffix(domainSuffix string) string {
+	if domainSuffix == "" {
+		return "svc.cluster.local"
+	}
+	return "svc." + domainSuffix
+}
+
 // NewController creates a new Aggregate controller
-func NewController(opt Options) *Controller {
+func NewController(opt Options, mesh *v1alpha1.MeshFederation, defaultImportConfig, importConfig *v1alpha1.ServiceImports) *Controller {
 	backoffPolicy := backoff.NewExponentialBackOff()
 	backoffPolicy.MaxElapsedTime = 0
+	localDomainSuffix := localDomainSuffix(opt.DomainSuffix)
+	defaultDomainSuffix := defaultDomainSuffixForMesh(mesh)
+	defaultNameMapper := common.NewServiceImporter(defaultImportConfig, nil, defaultDomainSuffix, localDomainSuffix)
 	return &Controller{
-		discoveryURL:   fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, opt.EgressService, common.DefaultDiscoveryPort),
-		egressService:  opt.EgressService,
-		egressName:     opt.EgressName,
-		networkAddress: opt.NetworkAddress,
-		useDirectCalls: opt.UseDirectCalls,
-		networkID:      network.ID(opt.NetworkName),
-		namespace:      opt.Namespace,
-		clusterID:      cluster.ID(opt.ClusterID),
-		imports:        map[federationmodel.ServiceKey]*existingImport{},
-		instanceStore:  map[host.Name][]*model.ServiceInstance{},
-		configStore:    opt.ConfigStore,
-		xdsUpdater:     opt.XDSUpdater,
-		resyncPeriod:   opt.ResyncPeriod,
-		backoffPolicy:  backoffPolicy,
+		discoveryURL:        fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, opt.EgressService, common.DefaultDiscoveryPort),
+		egressService:       opt.EgressService,
+		egressName:          opt.EgressName,
+		networkAddress:      opt.NetworkAddress,
+		useDirectCalls:      opt.UseDirectCalls,
+		namespace:           opt.Namespace,
+		localClusterID:      cluster.ID(opt.LocalClusterID),
+		localNetworkID:      network.ID(opt.LocalNetwork),
+		clusterID:           cluster.ID(opt.ClusterID),
+		networkID:           network.ID(opt.Network),
+		localDomainSuffix:   localDomainSuffix,
+		defaultDomainSuffix: defaultDomainSuffix,
+		defaultNameMapper:   defaultNameMapper,
+		importNameMapper:    common.NewServiceImporter(importConfig, defaultNameMapper, defaultDomainSuffix, localDomainSuffix),
+		imports:             map[federationmodel.ServiceKey]*existingImport{},
+		serviceStore:        map[host.Name]*model.Service{},
+		instanceStore:       map[host.Name][]*model.ServiceInstance{},
+		kubeClient:          opt.KubeClient,
+		configStore:         opt.ConfigStore,
+		xdsUpdater:          opt.XDSUpdater,
+		resyncPeriod:        opt.ResyncPeriod,
+		backoffPolicy:       backoffPolicy,
+		logger:              common.Logger.WithLabels("component", "federation-registry"),
 	}
+}
+
+func (c *Controller) UpdateImportConfig(importConfig *v1alpha1.ServiceImports) {
+	func() {
+		c.storeLock.Lock()
+		defer c.storeLock.Unlock()
+		c.importNameMapper = common.NewServiceImporter(importConfig, c.defaultNameMapper, c.defaultDomainSuffix, c.localDomainSuffix)
+	}()
+	c.resync()
+}
+
+func (c *Controller) UpdateDefaultImportConfig(importConfig *v1alpha1.ServiceImports) {
+	func() {
+		c.storeLock.Lock()
+		defer c.storeLock.Unlock()
+		c.importNameMapper.UpdateDefaultMapper(common.NewServiceImporter(importConfig, nil, c.defaultDomainSuffix, c.localDomainSuffix))
+	}()
+	c.resync()
 }
 
 func (c *Controller) Cluster() cluster.ID {
@@ -135,31 +194,31 @@ func (c *Controller) pollServices() *federationmodel.ServiceListMessage {
 	url := c.discoveryURL + "/services/"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		logger.Errorf("Failed to create request: '%s': %s", url, err)
+		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
 		return nil
 	}
 	req.Header.Add("discovery-address", c.networkAddress)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		logger.Errorf("Failed to GET URL: '%s': %s", url, err)
+		c.logger.Errorf("Failed to GET URL: '%s': %s", url, err)
 		return nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		logger.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
+		c.logger.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
 		return nil
 	}
 
 	respBytes := []byte{}
 	_, err = resp.Body.Read(respBytes)
 	if err != nil {
-		logger.Errorf("Failed to read response body from URL '%s': %s", url, err)
+		c.logger.Errorf("Failed to read response body from URL '%s': %s", url, err)
 		return nil
 	}
 
 	var serviceList federationmodel.ServiceListMessage
 	err = json.NewDecoder(resp.Body).Decode(&serviceList)
 	if err != nil {
-		logger.Errorf("Failed to unmarshal response bytes: %s", err)
+		c.logger.Errorf("Failed to unmarshal response bytes: %s", err)
 		return nil
 	}
 	return &serviceList
@@ -170,48 +229,48 @@ func (c *Controller) convertExportedService(s *federationmodel.ServiceMessage) (
 	if c.useDirectCalls {
 		serviceVisibility = visibility.Public
 	}
-	serviceName := fmt.Sprintf("%s.%s.remote", s.Name, s.Namespace)
-	return c.createService(s, serviceName, s.Hostname, c.clusterID, c.networkID, serviceVisibility, c.gatewayStore)
+	serviceName := fmt.Sprintf("%s.%s.%s.remote", s.Name, s.Namespace, c.clusterID)
+	return c.createService(s, serviceName, c.namespace, s.Hostname, c.clusterID,
+		c.networkID, serviceVisibility, c.gatewayStore, s.ServiceAccounts)
 }
 
 func (c *Controller) convertToLocalService(s *federationmodel.ServiceMessage,
 	importedName federationmodel.ServiceKey) (*model.Service, []*model.ServiceInstance) {
-	serviceName := fmt.Sprintf("%s.%s.local", s.Name, s.Namespace)
-	egressAddrs, err := c.getIPAddrsForHostOrIP(c.egressService)
-	gateways := make([]model.NetworkGateway, len(egressAddrs))
-	if err == nil {
-		for index, addr := range egressAddrs {
-			gateways[index] = model.NetworkGateway{
-				Addr: addr,
-				Port: federationPort,
-			}
-		}
-	} else {
-		logger.Errorf("could not get address for egress gateway: %s", err)
+	serviceName := fmt.Sprintf("%s.%s.%s.local", importedName.Name, importedName.Namespace, c.clusterID)
+	serviceNamespace := importedName.Namespace
+	if !strings.HasSuffix(importedName.Hostname, c.localDomainSuffix) {
+		// not importing as a local service
+		serviceNamespace = c.namespace
 	}
-	network := network.ID("")
 	// XXX: make this configurable
 	serviceVisibility := visibility.Public
-	return c.createService(s, serviceName, importedName.Hostname, c.clusterID, network, serviceVisibility, gateways)
+	return c.createService(s, serviceName, serviceNamespace, importedName.Hostname,
+		c.clusterID, c.localNetworkID, serviceVisibility, c.egressGateways, c.egressSAs)
 }
 
-func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceName, hostname string, clusterID cluster.ID, network network.ID,
-	serviceVisibility visibility.Instance, networkGateways []model.NetworkGateway) (*model.Service, []*model.ServiceInstance) {
+func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceName, serviceNamespace, hostname string, clusterID cluster.ID, network network.ID,
+	serviceVisibility visibility.Instance, networkGateways []model.NetworkGateway, sas []string) (*model.Service, []*model.ServiceInstance) {
 	instances := []*model.ServiceInstance{}
 	svc := &model.Service{
 		Attributes: model.ServiceAttributes{
 			ServiceRegistry: provider.Federation,
-			Name:            serviceName, // simple name in the form name.namespace of the exported service
-			Namespace:       c.namespace, // the federation namespace
+			Name:            serviceName,
+			Namespace:       serviceNamespace,
 			ExportTo: map[visibility.Instance]bool{
 				serviceVisibility: true,
 			},
+			Labels: labels.Instance{
+				label.TopologyCluster.Name:           clusterID.String(),
+				label.TopologyNetwork.Name:           network.String(),
+				model.IstioCanonicalServiceLabelName: serviceName,
+			},
 		},
+		CreationTime:    time.Now(),
 		Resolution:      model.ClientSideLB,
 		DefaultAddress:  constants.UnspecifiedIP,
 		Hostname:        host.Name(hostname),
 		Ports:           model.PortList{},
-		ServiceAccounts: []string{},
+		ServiceAccounts: append([]string(nil), sas...),
 	}
 	for _, port := range s.ServicePorts {
 		svc.Ports = append(svc.Ports, &model.Port{
@@ -221,20 +280,34 @@ func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceNam
 		})
 	}
 
+	baseWorkloadName := serviceName
+	if !strings.Contains(serviceName, c.clusterID.String()) {
+		baseWorkloadName = fmt.Sprintf("%s-%s", serviceName, c.clusterID)
+	}
 	for _, port := range svc.Ports {
-		for _, networkGateway := range networkGateways {
+		for gatewayIndex, networkGateway := range networkGateways {
+			c.logger.Debugf("adding endpoint for imported service: addr=%s, port=%d, host=%s",
+				networkGateway.Addr, networkGateway.Port, svc.Hostname)
 			instances = append(instances, &model.ServiceInstance{
 				Service:     svc,
 				ServicePort: port,
 				Endpoint: &model.IstioEndpoint{
 					Address:      networkGateway.Addr,
 					EndpointPort: networkGateway.Port,
-					Network:      network,
+					Labels: labels.Instance{
+						label.TopologyCluster.Name:                   clusterID.String(),
+						label.TopologyNetwork.Name:                   network.String(),
+						model.IstioCanonicalServiceLabelName:         serviceName,
+						model.IstioCanonicalServiceRevisionLabelName: clusterID.String(),
+					},
+					Network: network,
 					Locality: model.Locality{
 						ClusterID: clusterID,
 					},
 					ServicePortName: port.Name,
 					TLSMode:         model.IstioMutualTLSModeLabel,
+					Namespace:       serviceNamespace,
+					WorkloadName:    fmt.Sprintf("%s-%d", baseWorkloadName, gatewayIndex),
 				},
 			})
 		}
@@ -246,11 +319,11 @@ func (c *Controller) gatewayForNetworkAddress() []model.NetworkGateway {
 	var gateways []model.NetworkGateway
 	addrs, err := c.getIPAddrsForHostOrIP(c.networkAddress)
 	if err != nil {
-		logger.Errorf("error resolving IP addr for federation network %s: %v", c.networkAddress, err)
+		c.logger.Errorf("error resolving IP addr for federation network %s: %v", c.networkAddress, err)
 	} else {
-		logger.Debugf("adding gateway %s endpoints for cluster %s", c.networkAddress, c.clusterID)
+		c.logger.Debugf("adding gateway %s endpoints for cluster %s", c.networkAddress, c.clusterID)
 		for _, ip := range addrs {
-			logger.Debugf("adding gateway %s endpoint %s for cluster %s", c.networkAddress, ip, c.clusterID)
+			c.logger.Debugf("adding gateway %s endpoint %s for cluster %s", c.networkAddress, ip, c.clusterID)
 			gateways = append(gateways, model.NetworkGateway{
 				Addr: ip,
 				Port: federationPort,
@@ -268,41 +341,79 @@ func (c *Controller) getIPAddrsForHostOrIP(host string) ([]string, error) {
 	return net.LookupHost(host)
 }
 
-func (c *Controller) getImportNameForService(name federationmodel.ServiceKey) federationmodel.ServiceKey {
+// store has to be Lock()ed
+func (c *Controller) getImportNameForService(exportedService *model.Service) *federationmodel.ServiceKey {
 	// XXX: integrate ServiceImports CRD functionality here
 	// for now, hardcoding values for all services
-	return federationmodel.ServiceKey{
-		Name:      fmt.Sprintf("%s.%s", name.Name, name.Namespace),
-		Namespace: c.namespace,
-		Hostname:  fmt.Sprintf("%s.%s.svc.%s.local", name.Name, name.Namespace, c.clusterID),
+	return c.importNameMapper.NameForService(exportedService)
+}
+
+func (c *Controller) updateGateways(serviceList *federationmodel.ServiceListMessage) {
+	c.gatewayStore = c.gatewayForNetworkAddress()
+	if serviceList != nil {
+		for _, gateway := range serviceList.NetworkGatewayEndpoints {
+			c.gatewayStore = append(c.gatewayStore, model.NetworkGateway{
+				Addr: gateway.Hostname,
+				Port: uint32(gateway.Port),
+			})
+		}
 	}
+	c.egressGateways, c.egressSAs = c.getEgressServiceAddrs()
+}
+
+func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) {
+	endpoints, err := common.EndpointsForService(c.kubeClient, c.egressName, c.namespace)
+	if err != nil {
+		c.logger.Errorf("unabled to retrieve endpoints for federation egress gateway %s: %s", c.egressName, err)
+		return nil, nil
+	}
+	serviceAccountByIP := map[string]string{}
+	if !c.useDirectCalls {
+		serviceAccountByIP, err = common.ServiceAccountsForService(c.kubeClient, c.egressName, c.namespace)
+		if err != nil {
+			c.logger.Warnf("unable to retrieve ServiceAccount information for imported services accessed through %s: %s",
+				c.egressName, err)
+		}
+	}
+	var addrs []model.NetworkGateway
+	var sas []string
+	for _, subset := range endpoints.Subsets {
+		for index, address := range subset.Addresses {
+			if subset.Ports[index].Port == common.FederationPort {
+				ips, err := c.getIPAddrsForHostOrIP(address.IP)
+				if err != nil {
+					c.logger.Errorf("error converting to IP address from %s: %s", address.IP, err)
+					continue
+				}
+				for _, ip := range ips {
+					addrs = append(addrs, model.NetworkGateway{
+						Addr: ip,
+						Port: federationPort,
+					})
+					sas = append(sas, serviceAccountByIP[ip])
+				}
+			}
+		}
+	}
+	return addrs, sas
 }
 
 func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMessage) {
-	c.gatewayStore = c.gatewayForNetworkAddress()
-	for _, gateway := range serviceList.NetworkGatewayEndpoints {
-		c.gatewayStore = append(c.gatewayStore, model.NetworkGateway{
-			Addr: gateway.Hostname,
-			Port: uint32(gateway.Port),
-		})
-	}
-
 	oldImports := c.imports
 	c.imports = map[federationmodel.ServiceKey]*existingImport{}
 	allUpdatedConfigs := map[model.ConfigKey]struct{}{}
 	for _, s := range serviceList.Services {
 		var updatedConfigs map[model.ConfigKey]struct{}
 		var err error
-		importName := c.getImportNameForService(s.ServiceKey)
 		if existing, update := oldImports[s.ServiceKey]; update {
-			if updatedConfigs, err = c.updateService(s, existing, importName); err != nil {
+			if updatedConfigs, err = c.updateService(s, existing); err != nil {
 				// XXX: just log for now, we can't really recover
-				logger.Errorf("error updating configuration for federated service %+v from mesh %s: %s", s.ServiceKey, c.clusterID, err)
+				c.logger.Errorf("error updating configuration for federated service %+v from mesh %s: %s", s.ServiceKey, c.clusterID, err)
 			}
-		} else if importName.Hostname != "" {
-			if updatedConfigs, err = c.addService(s, importName); err != nil {
+		} else {
+			if updatedConfigs, err = c.addService(s); err != nil {
 				// XXX: just log for now, we can't really recover
-				logger.Errorf("error adding configuration for federated service %+v from mesh %s: %s", s.ServiceKey, c.clusterID, err)
+				c.logger.Errorf("error adding configuration for federated service %+v from mesh %s: %s", s.ServiceKey, c.clusterID, err)
 			}
 		}
 		for key, value := range updatedConfigs {
@@ -318,7 +429,7 @@ func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMes
 		}
 	}
 	if len(allUpdatedConfigs) > 0 {
-		logger.Debugf("pushing XDS config for services: %+v", allUpdatedConfigs)
+		c.logger.Debugf("pushing XDS config for services: %+v", allUpdatedConfigs)
 		c.xdsUpdater.ConfigUpdate(&model.PushRequest{
 			Full:           true,
 			ConfigsUpdated: allUpdatedConfigs,
@@ -326,7 +437,8 @@ func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMes
 	}
 }
 
-func autoAllocateIPs(services []*model.Service) []*model.Service {
+func (c *Controller) autoAllocateIPs(serviceStore map[host.Name]*model.Service) []*model.Service {
+	var services []*model.Service
 	// i is everything from 240.241.0.(j) to 240.241.255.(j)
 	// j is everything from 240.241.(i).1 to 240.241.(i).254
 	// we can capture this in one integer variable.
@@ -336,7 +448,8 @@ func autoAllocateIPs(services []*model.Service) []*model.Service {
 	// So we bump X to 511, so that the resulting IP is 240.241.2.1
 	maxIPs := 255 * 255 // are we going to exceeed this limit by processing 64K services?
 	x := 0
-	for _, svc := range services {
+	for _, svc := range serviceStore {
+		services = append(services, svc)
 		// we can allocate IPs only if
 		// 1. the service has resolution set to static/dns. We cannot allocate
 		//   for NONE because we will not know the original DST IP that the application requested.
@@ -349,8 +462,8 @@ func autoAllocateIPs(services []*model.Service) []*model.Service {
 				x++
 			}
 			if x >= maxIPs {
-				logger.Errorf("out of IPs to allocate for service entries")
-				return services
+				c.logger.Errorf("could not allocate VIP for %s: out of IPs to allocate for service entries", svc.Hostname)
+				continue
 			}
 			thirdOctet := x / 255
 			fourthOctet := x % 255
@@ -364,13 +477,17 @@ func autoAllocateIPs(services []*model.Service) []*model.Service {
 func (c *Controller) Services() ([]*model.Service, error) {
 	c.storeLock.RLock()
 	defer c.storeLock.RUnlock()
-	return autoAllocateIPs(c.serviceStore), nil
+	return c.autoAllocateIPs(c.serviceStore), nil
 }
 
 // GetService retrieves a service by hostname if exists
 func (c *Controller) GetService(hostname host.Name) *model.Service {
-	var out *model.Service
-	return out
+	c.storeLock.RLock()
+	defer c.storeLock.RUnlock()
+	if svc, found := c.serviceStore[hostname]; found {
+		return svc
+	}
+	return nil
 }
 
 // NetworkGateways merges the service-based cross-network gateways from each registry.
@@ -390,11 +507,9 @@ func (c *Controller) InstancesByPort(svc *model.Service, port int, labels labels
 	instances := []*model.ServiceInstance{}
 	c.storeLock.RLock()
 	defer c.storeLock.RUnlock()
-	for _, instanceList := range c.instanceStore {
-		for _, instance := range instanceList {
-			if instance.Service == svc && instance.ServicePort.Port == port {
-				instances = append(instances, instance.DeepCopy())
-			}
+	for _, instance := range c.instanceStore[svc.Hostname] {
+		if instance.ServicePort.Port == port {
+			instances = append(instances, instance.DeepCopy())
 		}
 	}
 	return instances
@@ -417,10 +532,10 @@ func (c *Controller) Run(stop <-chan struct{}) {
 	c.resync()
 	go func() {
 		for !c.hasStopped() {
-			logger.Info("starting watch")
+			c.logger.Info("starting watch")
 			err := c.watch(eventCh, stop)
 			if err != nil {
-				logger.Errorf("watch failed: %s", err)
+				c.logger.Errorf("watch failed: %s", err)
 				time.Sleep(c.backoffPolicy.NextBackOff())
 			} else {
 				return
@@ -430,14 +545,14 @@ func (c *Controller) Run(stop <-chan struct{}) {
 	for {
 		select {
 		case <-stop:
-			logger.Info("Federation Controller terminated")
+			c.logger.Info("Federation Controller terminated")
 			c.stop()
 			return
 		case e := <-eventCh:
-			logger.Debugf("watch event received: %s service %s", e.Action, e.Service.Name)
+			c.logger.Debugf("watch event received: %s service %s", e.Action, e.Service.Name)
 			c.handleEvent(e)
 		case <-refreshTicker.C:
-			logger.Debugf("performing full resync for cluster %s", c.clusterID)
+			c.logger.Debugf("performing full resync for cluster %s", c.clusterID)
 			_ = c.resync()
 		}
 	}
@@ -456,7 +571,7 @@ func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 		checksum := c.resync()
 		if checksum != e.Checksum {
 			// this shouldn't happen
-			logger.Error("checksum mismatch after resync")
+			c.logger.Error("checksum mismatch after resync")
 		}
 		return
 	}
@@ -489,13 +604,13 @@ func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 			}
 		}
 	default:
-		logger.Errorf("unknown Action from federation watch: %s", e.Action)
+		c.logger.Errorf("unknown Action from federation watch: %s", e.Action)
 		return
 	}
 
 	lastReceivedMessage.Checksum = lastReceivedMessage.GenerateChecksum()
 	if lastReceivedMessage.Checksum != e.Checksum {
-		logger.Warnf("checksums don't match. resyncing")
+		c.logger.Warnf("checksums don't match. resyncing")
 		unlockIt = false
 		c.storeLock.Unlock()
 		c.resync()
@@ -504,34 +619,25 @@ func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
 
 	c.lastMessage = &lastReceivedMessage
 
-	importedName := c.getImportNameForService(e.Service.ServiceKey)
 	existing := c.imports[e.Service.ServiceKey]
 	var updatedConfigs map[model.ConfigKey]struct{}
 	var err error
 	switch e.Action {
 	case federationmodel.ActionAdd:
-		if importedName.Hostname != "" {
-			if updatedConfigs, err = c.addService(e.Service, importedName); err != nil {
-				// XXX: just log for now, we can't really recover
-				logger.Errorf("error adding configuration for federated service %+v from mesh %s: %s", e.Service.ServiceKey, c.clusterID, err)
-			}
+		if updatedConfigs, err = c.addService(e.Service); err != nil {
+			// XXX: just log for now, we can't really recover
+			c.logger.Errorf("error adding configuration for federated service %+v from mesh %s: %s", e.Service.ServiceKey, c.clusterID, err)
 		}
 	case federationmodel.ActionUpdate:
-		if importedName.Hostname == "" {
-			if existing != nil {
-				updatedConfigs = c.deleteService(e.Service, existing)
-			}
-		} else {
-			if updatedConfigs, err = c.updateService(e.Service, existing, importedName); err != nil {
-				// XXX: just log for now, we can't really recover
-				logger.Errorf("error updating configuration for federated service %+v from mesh %s: %s", e.Service.ServiceKey, c.clusterID, err)
-			}
+		if updatedConfigs, err = c.updateService(e.Service, existing); err != nil {
+			// XXX: just log for now, we can't really recover
+			c.logger.Errorf("error updating configuration for federated service %+v from mesh %s: %s", e.Service.ServiceKey, c.clusterID, err)
 		}
 	case federationmodel.ActionDelete:
 		updatedConfigs = c.deleteService(e.Service, existing)
 	}
 	if len(updatedConfigs) > 0 {
-		logger.Debugf("pushing XDS config for services: %+v", updatedConfigs)
+		c.logger.Debugf("pushing XDS config for services: %+v", updatedConfigs)
 		c.xdsUpdater.ConfigUpdate(&model.PushRequest{
 			Full:           true,
 			ConfigsUpdated: updatedConfigs,
@@ -550,66 +656,107 @@ func (c *Controller) updateXDS(hostname, namespace string, instances []*model.Se
 }
 
 // store has to be Lock()ed
-func (c *Controller) addService(service *federationmodel.ServiceMessage, importName federationmodel.ServiceKey) (map[model.ConfigKey]struct{}, error) {
-	logger.Debugf("adding exported service %+v, known locally as %+v", service.ServiceKey, importName)
+func (c *Controller) addService(service *federationmodel.ServiceMessage) (map[model.ConfigKey]struct{}, error) {
+	c.logger.Debugf("handling new exported service %+v", service.ServiceKey)
+
+	importedName := c.getImportNameForService(&model.Service{
+		Hostname:   host.Name(service.Hostname),
+		Attributes: model.ServiceAttributes{Name: service.Name, Namespace: service.Namespace},
+	})
+	if importedName == nil {
+		c.logger.Debugf("skipping import of service %+v, as it does not match an import filter", service.ServiceKey)
+		return nil, nil
+	}
+
+	c.logger.Debugf("adding import for service %+v as %+v", service.ServiceKey, *importedName)
 	updatedConfigs := map[model.ConfigKey]struct{}{}
 	exportedService, exportedInstances := c.convertExportedService(service)
-	localService, localInstances := c.convertToLocalService(service, importName)
+	localService, localInstances := c.convertToLocalService(service, *importedName)
 
-	if err := c.createRoutingResources(service.ServiceKey, importName); err != nil {
+	if err := c.createRoutingResources(service.ServiceKey, *importedName); err != nil {
 		return nil, err
 	}
 
-	c.imports[service.ServiceKey] = &existingImport{ServiceMessage: service, localName: importName}
+	c.imports[service.ServiceKey] = &existingImport{ServiceMessage: service, localName: *importedName}
 
 	c.addServiceToStore(exportedService, exportedInstances)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      string(exportedService.Hostname),
-		Namespace: c.namespace,
+		Namespace: exportedService.Attributes.Namespace,
 	}] = struct{}{}
 
 	c.addServiceToStore(localService, localInstances)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      string(localService.Hostname),
-		Namespace: c.namespace,
+		Namespace: localService.Attributes.Namespace,
 	}] = struct{}{}
 
 	return updatedConfigs, nil
 }
 
 // store has to be Lock()ed
-func (c *Controller) updateService(service *federationmodel.ServiceMessage, existing *existingImport,
-	importName federationmodel.ServiceKey) (map[model.ConfigKey]struct{}, error) {
-	logger.Debugf("updating exported service %+v, known locally as %+v", service.ServiceKey, importName)
+func (c *Controller) updateService(service *federationmodel.ServiceMessage, existing *existingImport) (map[model.ConfigKey]struct{}, error) {
+	c.logger.Debugf("handling update for exported service %+v", service.ServiceKey)
+
+	// XXX: exported service name is name.namespace, while it's namespace is c.namespace
+	importedName := c.getImportNameForService(&model.Service{
+		Hostname:   host.Name(service.Hostname),
+		Attributes: model.ServiceAttributes{Name: service.Name, Namespace: service.Namespace},
+	})
+	if importedName == nil {
+		if existing != nil {
+			c.logger.Debugf("deleting import for service %+v, as it no longer matches an import filter", service.ServiceKey)
+			return c.deleteService(service, existing), nil
+		}
+		c.logger.Debugf("skipping import for service %+v, as it does not match any import filter", service.ServiceKey)
+		return nil, nil
+	}
+
 	updatedConfigs := map[model.ConfigKey]struct{}{}
 	exportedService, exportedInstances := c.convertExportedService(service)
-	localService, localInstances := c.convertToLocalService(service, importName)
+	localService, localInstances := c.convertToLocalService(service, *importedName)
 
-	if existing != nil && importName.Hostname != existing.localName.Hostname {
-		if err := c.createRoutingResources(service.ServiceKey, importName); err != nil {
+	if existing == nil {
+		// this may have been previously filtered out
+		c.logger.Debugf("importing service %+v as %+v", service.ServiceKey, *importedName)
+		if err := c.createRoutingResources(service.ServiceKey, *importedName); err != nil {
 			return nil, err
 		}
 		// TODO: optimize service and instance updates
+	} else if importedName.Hostname != existing.localName.Hostname {
+		c.logger.Debugf("service %+v has been reimported as %+v (was %+v)", service.ServiceKey, *importedName, existing.localName)
+		// update the routing
+		if err := c.createRoutingResources(service.ServiceKey, *importedName); err != nil {
+			return nil, err
+		}
+
+		// delete the old imported service
+		c.removeServiceFromStore(existing.localName)
+		updatedConfigs[model.ConfigKey{
+			Kind:      gvk.ServiceEntry,
+			Name:      existing.localName.Hostname,
+			Namespace: existing.Namespace,
+		}] = struct{}{}
 	}
 
 	// TODO: be smart and see if anything changed, so we don't push unnecessarily
 
-	c.imports[service.ServiceKey] = &existingImport{ServiceMessage: service, localName: importName}
+	c.imports[service.ServiceKey] = &existingImport{ServiceMessage: service, localName: *importedName}
 
 	c.updateServiceInStore(exportedService, exportedInstances)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      string(exportedService.Hostname),
-		Namespace: c.namespace,
+		Namespace: exportedService.Attributes.Namespace,
 	}] = struct{}{}
 
 	c.updateServiceInStore(localService, localInstances)
 	updatedConfigs[model.ConfigKey{
 		Kind:      gvk.ServiceEntry,
 		Name:      string(localService.Hostname),
-		Namespace: c.namespace,
+		Namespace: localService.Attributes.Namespace,
 	}] = struct{}{}
 
 	return updatedConfigs, nil
@@ -618,36 +765,40 @@ func (c *Controller) updateService(service *federationmodel.ServiceMessage, exis
 // store has to be Lock()ed
 func (c *Controller) deleteService(service *federationmodel.ServiceMessage, existing *existingImport) map[model.ConfigKey]struct{} {
 	if existing != nil {
-		logger.Debugf("deleting exported service %+v, known locally as %+v", service.ServiceKey, existing.localName)
+		c.logger.Debugf("deleting import for service %+v, known locally as %+v", service.ServiceKey, existing.localName)
 	} else {
-		logger.Debugf("deleting exported service %+v, with unknown locally name", service.ServiceKey)
+		c.logger.Debugf("deleting import for service %+v, with unknown local name", service.ServiceKey)
 	}
 	_ = c.deleteRoutingResources(service.ServiceKey)
 	updatedConfigs := map[model.ConfigKey]struct{}{}
 
 	delete(c.imports, service.ServiceKey)
 
-	c.removeServiceFromStore(service.ServiceKey)
-	updatedConfigs[model.ConfigKey{
-		Kind:      gvk.ServiceEntry,
-		Name:      service.Hostname,
-		Namespace: c.namespace,
-	}] = struct{}{}
+	svc := c.removeServiceFromStore(service.ServiceKey)
+	if svc != nil {
+		updatedConfigs[model.ConfigKey{
+			Kind:      gvk.ServiceEntry,
+			Name:      service.Hostname,
+			Namespace: svc.Attributes.Namespace,
+		}] = struct{}{}
+	}
 
 	if existing != nil {
 		c.removeServiceFromStore(existing.localName)
-		updatedConfigs[model.ConfigKey{
-			Kind:      gvk.ServiceEntry,
-			Name:      existing.localName.Hostname,
-			Namespace: c.namespace,
-		}] = struct{}{}
+		if svc != nil {
+			updatedConfigs[model.ConfigKey{
+				Kind:      gvk.ServiceEntry,
+				Name:      existing.localName.Hostname,
+				Namespace: svc.Attributes.Namespace,
+			}] = struct{}{}
+		}
 	}
 
 	return updatedConfigs
 }
 
 func (c *Controller) addServiceToStore(service *model.Service, instances []*model.ServiceInstance) {
-	c.serviceStore = append(c.serviceStore, service)
+	c.serviceStore[service.Hostname] = service
 	c.instanceStore[service.Hostname] = instances
 	c.updateXDS(string(service.Hostname), service.Attributes.Namespace, instances, model.EventAdd)
 }
@@ -663,32 +814,30 @@ func (c *Controller) updateServiceInStore(service *model.Service, instances []*m
 		}
 	}
 	if !found {
-		logger.Warnf("trying to update unknown service %s, adding it to the registry", service.Hostname)
-		c.serviceStore = append(c.serviceStore, service)
+		c.logger.Warnf("trying to update unknown service %s, adding it to the registry", service.Hostname)
+		c.serviceStore[service.Hostname] = service
 		eventType = model.EventAdd
 	}
 	c.instanceStore[service.Hostname] = instances
 	c.updateXDS(string(service.Hostname), service.Attributes.Namespace, instances, eventType)
 }
 
-func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) {
-	for i, s := range c.serviceStore {
-		if s.Hostname == host.Name(service.Hostname) {
-			c.serviceStore[i] = c.serviceStore[len(c.serviceStore)-1]
-			c.serviceStore = c.serviceStore[:len(c.serviceStore)-1]
-			break
-		}
+func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) *model.Service {
+	svc := c.serviceStore[host.Name(service.Hostname)]
+	if svc != nil {
+		delete(c.serviceStore, host.Name(service.Hostname))
+		delete(c.instanceStore, host.Name(service.Hostname))
+		c.xdsUpdater.SvcUpdate(model.ShardKeyFromRegistry(c), service.Hostname, svc.Attributes.Namespace, model.EventDelete)
+		c.xdsUpdater.EDSCacheUpdate(model.ShardKeyFromRegistry(c), service.Hostname, svc.Attributes.Namespace, nil)
 	}
-	delete(c.instanceStore, host.Name(service.Hostname))
-	c.xdsUpdater.SvcUpdate(model.ShardKeyFromRegistry(c), service.Hostname, c.namespace, model.EventDelete)
-	c.xdsUpdater.EDSCacheUpdate(model.ShardKeyFromRegistry(c), service.Hostname, c.namespace, nil)
+	return svc
 }
 
 func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-chan struct{}) error {
 	url := c.discoveryURL + "/watch"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		logger.Errorf("Failed to create request: '%s': %s", url, err)
+		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
 		return nil
 	}
 	req.Header.Add("discovery-address", c.networkAddress)
@@ -722,8 +871,9 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 func (c *Controller) resync() uint64 {
 	c.storeLock.Lock()
 	defer c.storeLock.Unlock()
-	logger.Debugf("performing full resync")
+	c.logger.Debugf("performing full resync")
 	svcList := c.pollServices()
+	c.updateGateways(svcList)
 	if svcList != nil {
 		c.convertServices(svcList)
 		return svcList.Checksum
@@ -756,5 +906,15 @@ func (c *Controller) AppendWorkloadHandler(f func(*model.WorkloadInstance, model
 // - { "spiffe://cluster.local/ns/default/sa/foo", "spiffe://trust-domain-alias/ns/default/sa/foo" };
 //   if the trust domain alias is configured.
 func (c *Controller) GetIstioServiceAccounts(svc *model.Service, ports []int) []string {
-	return []string{}
+	if svc == nil {
+		return nil
+	}
+	c.storeLock.RLock()
+	defer c.storeLock.RUnlock()
+	// we don't have different workloads for different ports, so we just need to
+	// return the SAs associated with our service.
+	if ourSVC, ok := c.serviceStore[svc.Hostname]; ok {
+		return append([]string(nil), ourSVC.ServiceAccounts...)
+	}
+	return nil
 }

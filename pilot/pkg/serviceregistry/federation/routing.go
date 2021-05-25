@@ -59,7 +59,8 @@ func (c *Controller) createRoutingResources(remote, local federationmodel.Servic
 		existingGateway := rawGateway.Spec.(*rawnetworking.Gateway)
 		if len(existingGateway.Servers) > 0 && len(existingGateway.Servers[0].Hosts) > 0 && existingGateway.Servers[0].Hosts[0] != local.Hostname {
 			// overwrite whatever's there
-			logger.Warnf("Gateway resource %s already exists for exported service (%s => %s).  It will be overwritten.", gateway.Name, remote.Hostname, local.Hostname)
+			c.logger.Warnf("Gateway resource %s already exists for exported service (%s => %s).  It will be overwritten.",
+				gateway.Name, remote.Hostname, local.Hostname)
 			if _, err := c.configStore.Update(*gateway); err != nil {
 				return errors.Wrapf(err, "error updating Gateway resource")
 			}
@@ -75,7 +76,8 @@ func (c *Controller) createRoutingResources(remote, local federationmodel.Servic
 		if (len(existingVS.Hosts) > 0 && !strings.HasSuffix(existingVS.Hosts[0], "/"+local.Hostname)) ||
 			(len(existingVS.ExportTo) > 0 && existingVS.ExportTo[0] != vs.Spec.(*rawnetworking.VirtualService).ExportTo[0]) {
 			// overwrite whatever's there
-			logger.Warnf("VirtualService resource %s already exists for exported service (%s => %s).  It will be overwritten.", vs.Name, remote.Hostname, local.Hostname)
+			c.logger.Warnf("VirtualService resource %s already exists for exported service (%s => %s).  It will be overwritten.",
+				vs.Name, remote.Hostname, local.Hostname)
 			if _, err := c.configStore.Update(*vs); err != nil {
 				return errors.Wrapf(err, "error updating VirtualService resource")
 			}
@@ -169,27 +171,6 @@ func (c *Controller) virtualServiceForImport(remote, local federationmodel.Servi
 					},
 				},
 			},
-			// Http: []*rawnetworking.HTTPRoute{
-			// 	{
-			// 		Match: []*rawnetworking.HTTPMatchRequest{
-			// 			{
-			// 				Gateways: []string{
-			// 					egressGatewayName,
-			// 				},
-			// 			},
-			// 		},
-			// 		Rewrite: &rawnetworking.HTTPRewrite{
-			// 			Authority: remote.Hostname,
-			// 		},
-			// 		Route: []*rawnetworking.HTTPRouteDestination{
-			// 			{
-			// 				Destination: &rawnetworking.Destination{
-			// 					Host: remote.Hostname,
-			// 				},
-			// 			},
-			// 		},
-			// 	},
-			// },
 		},
 	}
 	return vs

@@ -66,7 +66,7 @@ var (
 
 func (c *Controller) deleteDiscoveryResources(
 	_ context.Context, instance *v1alpha1.MeshFederation) error {
-	logger.Infof("deleting discovery resources for Federation cluster %s", instance.Name)
+	c.Logger.Infof("deleting discovery resources for Federation cluster %s", instance.Name)
 	var allErrors []error
 	rootName := discoveryResourceName(instance)
 	egressName := discoveryEgressResourceName(instance)
@@ -75,37 +75,37 @@ func (c *Controller) deleteDiscoveryResources(
 	// type", so maybe we should just skip error checking?
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Serviceentries.Resource().GroupVersionKind(),
 		rootName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		logger.Errorf("error deleting discovery Service %s for Federation cluster %s: %v",
+		c.Logger.Errorf("error deleting discovery Service %s for Federation cluster %s: %v",
 			rootName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
 		rootName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		logger.Errorf("error deleting discovery VirtualService %s for Federation cluster %s: %v",
+		c.Logger.Errorf("error deleting discovery VirtualService %s for Federation cluster %s: %v",
 			rootName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 		ingressName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		logger.Errorf("error deleting discovery ingress Gateway %s for Federation cluster %s: %v",
+		c.Logger.Errorf("error deleting discovery ingress Gateway %s for Federation cluster %s: %v",
 			ingressName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 		egressName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		logger.Errorf("error deleting discovery egress Gateway %s for Federation cluster %s: %v",
+		c.Logger.Errorf("error deleting discovery egress Gateway %s for Federation cluster %s: %v",
 			egressName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),
 		rootName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		logger.Errorf("error deleting discovery DestinationRule %s for Federation cluster %s: %v",
+		c.Logger.Errorf("error deleting discovery DestinationRule %s for Federation cluster %s: %v",
 			rootName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
 		rootName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		logger.Errorf("error deleting discovery AuthorizationPolicy %s for Federation cluster %s: %v",
+		c.Logger.Errorf("error deleting discovery AuthorizationPolicy %s for Federation cluster %s: %v",
 			rootName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
@@ -118,47 +118,47 @@ func (c *Controller) createDiscoveryResources(
 
 	defer func() {
 		if err != nil {
-			logger.Errorf("error creating discovery configuration for Federation cluster %s: %v", instance.Name, err)
-			logger.Infof("rolling back discovery Service for %s", instance.Name)
+			c.Logger.Errorf("error creating discovery configuration for Federation cluster %s: %v", instance.Name, err)
+			c.Logger.Infof("rolling back discovery Service for %s", instance.Name)
 			if s != nil {
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Serviceentries.Resource().GroupVersionKind(),
 					s.Name, s.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					logger.Errorf("error deleting discovery Service %s: %v", s.Name, newErr)
+					c.Logger.Errorf("error deleting discovery Service %s: %v", s.Name, newErr)
 				}
 			}
-			logger.Infof("rolling back discovery AuthorizationPolicy for Federation cluster %s", instance.Name)
+			c.Logger.Infof("rolling back discovery AuthorizationPolicy for Federation cluster %s", instance.Name)
 			if ap != nil {
 				if newErr := c.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
 					ap.Name, ap.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					logger.Errorf("error deleting discovery AuthorizationPolicy %s: %v", ap.Name, newErr)
+					c.Logger.Errorf("error deleting discovery AuthorizationPolicy %s: %v", ap.Name, newErr)
 				}
 			}
 			if dr != nil {
-				logger.Infof("rolling back discovery DestinationRule for Federation cluster %s", instance.Name)
+				c.Logger.Infof("rolling back discovery DestinationRule for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),
 					dr.Name, dr.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					logger.Errorf("error deleting discovery DestinationRule %s: %v", dr.Name, newErr)
+					c.Logger.Errorf("error deleting discovery DestinationRule %s: %v", dr.Name, newErr)
 				}
 			}
 			if ig != nil {
-				logger.Infof("rolling back discovery ingress Gateway for Federation cluster %s", instance.Name)
+				c.Logger.Infof("rolling back discovery ingress Gateway for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 					ig.Name, ig.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					logger.Errorf("error deleting discovery ingress Gateway %s: %v", ig.Name, newErr)
+					c.Logger.Errorf("error deleting discovery ingress Gateway %s: %v", ig.Name, newErr)
 				}
 			}
 			if eg != nil {
-				logger.Infof("rolling back discovery egress Gateway for Federation cluster %s", instance.Name)
+				c.Logger.Infof("rolling back discovery egress Gateway for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 					eg.Name, eg.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					logger.Errorf("error deleting discovery ingress Gateway %s: %v", eg.Name, newErr)
+					c.Logger.Errorf("error deleting discovery ingress Gateway %s: %v", eg.Name, newErr)
 				}
 			}
 			if vs != nil {
-				logger.Infof("rolling back discovery VirtualService for Federation cluster %s", instance.Name)
+				c.Logger.Infof("rolling back discovery VirtualService for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
 					vs.Name, vs.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					logger.Errorf("error deleting discovery VirtualService %s: %v", vs.Name, newErr)
+					c.Logger.Errorf("error deleting discovery VirtualService %s: %v", vs.Name, newErr)
 				}
 			}
 		}
@@ -356,7 +356,8 @@ func (c *Controller) discoveryIngressGateway(instance *v1alpha1.MeshFederation) 
 func (c *Controller) discoveryEgressGateway(instance *v1alpha1.MeshFederation) *config.Config {
 	// Gateway definition for routing outbound discovery.  This is used to terminate source mtls for discovery.
 	name := discoveryEgressResourceName(instance)
-	egressGatewayServiceName := fmt.Sprintf("%s.%s.svc.cluster.local", instance.Spec.Gateways.Egress.Name, instance.Namespace)
+	egressGatewayServiceName := fmt.Sprintf("%s.%s.svc.%s",
+		instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.DomainSuffix)
 	discoveryPort := common.DefaultDiscoveryPort
 	gateway := &config.Config{
 		Meta: config.Meta{
@@ -433,7 +434,7 @@ func (c *Controller) discoveryVirtualService(
 	name := discoveryResourceName(instance)
 	istiodService, _ := serviceAddressPort(meshConfig.DefaultConfig.DiscoveryAddress)
 	if svcIndex := strings.LastIndex(istiodService, ".svc"); svcIndex >= 0 {
-		istiodService = istiodService[:svcIndex] + ".svc.cluster.local"
+		istiodService = istiodService[:svcIndex] + ".svc." + c.env.DomainSuffix
 	}
 	ingressGatewayName := fmt.Sprintf("%s/%s-ingress", instance.Namespace, name)
 	egressGatewayName := fmt.Sprintf("%s/%s-egress", instance.Namespace, name)

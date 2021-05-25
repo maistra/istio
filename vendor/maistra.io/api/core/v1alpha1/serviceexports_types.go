@@ -15,8 +15,6 @@
 package v1alpha1
 
 import (
-	"fmt"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,59 +42,7 @@ type ServiceExports struct {
 type ServiceExportsList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ServiceMeshExtension `json:"items"`
-}
-
-type ServiceExportSelectorType string
-
-const (
-	LabelSelectorType ServiceExportSelectorType = "Label"
-	NameSelectorType  ServiceExportSelectorType = "Name"
-)
-
-type ServiceName struct {
-	Namespace string `json:"namespace,omitempty"`
-	Name      string `json:"names,omitempty"`
-}
-
-func (s ServiceName) String() string {
-	return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-}
-
-// XXX: this messes up crd generation
-// func (s ServiceName) NamespacedName() types.NamespacedName {
-// 	return types.NamespacedName{Namespace: s.Namespace, Name: s.Name}
-// }
-
-const MatchAny = "*"
-
-type ServiceNameMapping struct {
-	Name  ServiceName  `json:"name,omitempty"`
-	Alias *ServiceName `json:"alias,omitempty"`
-}
-
-type ServiceExportLabelSelector struct {
-	// Namespace specifies to which namespace the selector applies.  An empty
-	// value applies to all namespaces in the mesh.
-	// +optional
-	Namespace string `json:"namespace,omitempty"`
-	// Selector used to select Service resources in the namespace/mesh.  An
-	// empty selector selects all services.
-	// +required
-	Selector metav1.LabelSelector `json:"selector,omitempty"`
-
-	// Aliases is a map of aliases to apply to exported services.  If a name is
-	// not found in the map, the original service name is exported.  A '*' will
-	// match any name. The Aliases list will be processed in order, with the
-	// first match found being applied to the exported service.
-	// Examples:
-	// */foo->*/bar will match foo service in any namesapce, exporting it as bar from its original namespace.
-	// */foo->bar/bar will match foo service in any namespace, exporting it as bar/bar.
-	// foo/*->bar/* will match any service in foo namespace, exporting it from the bar namespace with its original name
-	// */*->bar/* will match any service and export it from the bar namespace with its original name.
-	// */*->*/* is the same as not specifying anything
-	// +optional
-	Aliases []ServiceNameMapping `json:"aliases,omitempty"`
+	Items           []ServiceExports `json:"items"`
 }
 
 type ServiceExportsSpec struct {
@@ -108,12 +54,13 @@ type ServiceExportsSpec struct {
 }
 
 type ServiceExportRule struct {
+	// Type of rule.  One of Name or Label.
 	// +required
-	Type ServiceExportSelectorType `json:"type"`
+	Type ServiceImportExportSelectorType `json:"type"`
 	// LabelSelector provides a mechanism for selecting services to export by
 	// using a label selector to match Service resources for export.
 	// +optional
-	LabelSelector *ServiceExportLabelSelector `json:"labelSelector,omitempty"`
+	LabelSelector *ServiceImportExportLabelelector `json:"labelSelector,omitempty"`
 	// NameSelector provides a simple name matcher for exporting services in
 	// the mesh.
 	// +optional

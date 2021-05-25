@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package export
+package exports
 
 import (
 	"context"
 	"fmt"
-	"time"
 
 	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,20 +26,15 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
-	"maistra.io/api/client/versioned"
+	maistraclient "maistra.io/api/client/versioned"
 	"maistra.io/api/core/v1alpha1"
 
 	kubecontroller "istio.io/istio/pkg/kube/controller"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
-	"istio.io/pkg/log"
 )
 
-const (
-	defaultResyncPeriod = 60 * time.Second
-)
-
-var logger = log.RegisterScope("federation-exports-controller", "federation-exports-controller", 0)
+const controllerName = "federation-exports-controller"
 
 type ServiceExportManager interface {
 	UpdateExportsForMesh(exports *v1alpha1.ServiceExports) error
@@ -54,7 +48,7 @@ type Options struct {
 
 type Controller struct {
 	*kubecontroller.Controller
-	cs            versioned.Interface
+	cs            maistraclient.Interface
 	exportManager ServiceExportManager
 }
 
@@ -64,7 +58,7 @@ func NewController(opt Options) (*Controller, error) {
 		return nil, fmt.Errorf("invalid Options specified for federation export controller: %s", err)
 	}
 
-	cs, err := versioned.NewForConfig(opt.KubeClient.RESTConfig())
+	cs, err := maistraclient.NewForConfig(opt.KubeClient.RESTConfig())
 	if err != nil {
 		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
 	}
@@ -75,7 +69,8 @@ func NewController(opt Options) (*Controller, error) {
 }
 
 // allows using a fake client set for testing purposes
-func internalNewController(cs versioned.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
+func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
+	logger := common.Logger.WithLabels("component", controllerName)
 	var informer cache.SharedIndexInformer
 	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
 	if mrc != nil && false {
@@ -97,7 +92,7 @@ func internalNewController(cs versioned.Interface, mrc memberroll.MemberRollCont
 
 		namespaceSet := xnsinformers.NewNamespaceSet()
 		informer = xnsinformers.NewMultiNamespaceInformer(namespaceSet, opt.ResyncPeriod, newInformer)
-		mrc.Register(namespaceSet, "federation-exports-controller")
+		mrc.Register(namespaceSet, controllerName)
 	} else {
 		informer = maistrainformers.NewServiceExportsInformer(
 			cs, opt.Namespace, opt.ResyncPeriod,
@@ -124,16 +119,16 @@ func (c *Controller) HasSynced() bool {
 }
 
 func (c *Controller) reconcile(resourceName string) error {
-	logger.Debugf("Reconciling MeshFederation %s", resourceName)
+	c.Logger.Debugf("Reconciling ServiceExports %s", resourceName)
 	defer func() {
-		logger.Infof("Completed reconciliation of ServiceExports %s", resourceName)
+		c.Logger.Debugf("Completed reconciliation of ServiceExports %s", resourceName)
 	}()
 
 	ctx := context.TODO()
 
 	namespace, name, err := cache.SplitMetaNamespaceKey(resourceName)
 	if err != nil {
-		logger.Errorf("error splitting resource name: %s", resourceName)
+		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
 	instance, err := c.cs.CoreV1alpha1().ServiceExports(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -142,7 +137,7 @@ func (c *Controller) reconcile(resourceName string) error {
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
 			c.exportManager.DeleteExportsForMesh(name)
-			logger.Info("ServiceExports deleted")
+			c.Logger.Info("ServiceExports deleted")
 			err = nil
 		}
 		return err
@@ -160,8 +155,8 @@ func (opt Options) validate() error {
 		allErrors = append(allErrors, fmt.Errorf("the ServiceExportManager field must not be nil"))
 	}
 	if opt.ResyncPeriod == 0 {
-		opt.ResyncPeriod = defaultResyncPeriod
-		logger.Warnf("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
+		opt.ResyncPeriod = common.DefaultResyncPeriod
+		common.Logger.WithLabels("component", controllerName).Infof("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
 	}
 	return errors.NewAggregate(allErrors)
 }
