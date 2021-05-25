@@ -34,6 +34,10 @@ func (c *FakeCoreV1alpha1) ServiceExports(namespace string) v1alpha1.ServiceExpo
 	return &FakeServiceExports{c, namespace}
 }
 
+func (c *FakeCoreV1alpha1) ServiceImports(namespace string) v1alpha1.ServiceImportsInterface {
+	return &FakeServiceImports{c, namespace}
+}
+
 func (c *FakeCoreV1alpha1) ServiceMeshExtensions(namespace string) v1alpha1.ServiceMeshExtensionInterface {
 	return &FakeServiceMeshExtensions{c, namespace}
 }

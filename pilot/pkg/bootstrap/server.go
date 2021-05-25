@@ -267,9 +267,10 @@ func NewServer(args *PilotArgs) (*Server, error) {
 					ResyncPeriod: args.RegistryOptions.KubeOptions.ResyncPeriod,
 					Namespace:    args.RegistryOptions.ClusterRegistriesNamespace,
 				},
+				LocalClusterID:    s.clusterID,
+				LocalNetwork:      features.NetworkName,
 				BindAddress:       args.ServerOptions.FederationAddr,
 				Env:               s.environment,
-				Network:           features.NetworkName,
 				XDSUpdater:        s.XDSServer,
 				ServiceController: s.ServiceController(),
 			})

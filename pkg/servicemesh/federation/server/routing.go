@@ -65,7 +65,7 @@ func (s *meshServer) removeServiceFromAuthorizationPolicy(target *federationmode
 	rawAP := s.configStore.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), name, s.mesh.Namespace)
 	if rawAP == nil {
 		// nothing to remove
-		logger.Warnf("could not find AuthorizationPolicy %s/%s associated with federation export", s.mesh.Namespace, name)
+		s.logger.Warnf("could not find AuthorizationPolicy %s/%s associated with federation export", s.mesh.Namespace, name)
 		return nil
 	}
 	apSpec := rawAP.Spec.(*rawsecurity.AuthorizationPolicy)
@@ -74,14 +74,15 @@ func (s *meshServer) removeServiceFromAuthorizationPolicy(target *federationmode
 	}
 	for index, host := range apSpec.Rules[0].To[0].Operation.NotHosts {
 		if host == target.Hostname {
-			apSpec.Rules[0].To[0].Operation.NotHosts = append(apSpec.Rules[0].To[0].Operation.NotHosts[:index], apSpec.Rules[0].To[0].Operation.NotHosts[index+1:]...)
+			apSpec.Rules[0].To[0].Operation.NotHosts = append(apSpec.Rules[0].To[0].Operation.NotHosts[:index],
+				apSpec.Rules[0].To[0].Operation.NotHosts[index+1:]...)
 			if _, err := s.configStore.Update(*rawAP); err != nil {
 				return err
 			}
 			return nil
 		}
 	}
-	logger.Warnf("AuthorizationPolicy %s/%s did not have rule for exported service %s", s.mesh.Namespace, name, target.Hostname)
+	s.logger.Warnf("AuthorizationPolicy %s/%s did not have rule for exported service %s", s.mesh.Namespace, name, target.Hostname)
 	return nil
 }
 
@@ -97,7 +98,8 @@ func (s *meshServer) createExportResources(source federationmodel.ServiceKey, ta
 		}
 	} else {
 		// overwrite whatever's there
-		logger.Warnf("Gateway resource %s already exists for exported service (%s => %s).  It will be overwritten.", gateway.Name, source.Hostname, target.Hostname)
+		s.logger.Warnf("Gateway resource %s already exists for exported service (%s => %s).  It will be overwritten.",
+			gateway.Name, source.Hostname, target.Hostname)
 		if _, err := s.configStore.Update(*gateway); err != nil {
 			return errors.Wrapf(err, "error updating Gateway resource")
 		}
@@ -109,7 +111,8 @@ func (s *meshServer) createExportResources(source federationmodel.ServiceKey, ta
 		}
 	} else {
 		// overwrite whatever's there
-		logger.Warnf("VirtualService resource %s already exists for exported service (%s => %s).  It will be overwritten.", vs.Name, source.Hostname, target.Hostname)
+		s.logger.Warnf("VirtualService resource %s already exists for exported service (%s => %s).  It will be overwritten.",
+			vs.Name, source.Hostname, target.Hostname)
 		if _, err := s.configStore.Update(*vs); err != nil {
 			return errors.Wrapf(err, "error updating VirtualService resource")
 		}
@@ -124,7 +127,8 @@ func (s *meshServer) createOrUpdateAuthorizationPolicy(target *federationmodel.S
 	rawAP := s.configStore.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), name, s.mesh.Namespace)
 	if rawAP == nil {
 		if s.mesh.Spec.Security == nil || s.mesh.Spec.Security.ClientID == "" {
-			logger.Errorf("no ClientID specified for MeshFederation %s/%s: AuthorizationPolicy for exported services will not be created", s.mesh.Namespace, s.mesh.Name)
+			s.logger.Errorf("no ClientID specified for MeshFederation %s/%s: AuthorizationPolicy for exported services will not be created",
+				s.mesh.Namespace, s.mesh.Name)
 			return nil
 		}
 		ap := &config.Config{
