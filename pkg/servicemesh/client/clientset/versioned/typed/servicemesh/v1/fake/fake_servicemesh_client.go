@@ -34,6 +34,10 @@ func (c *FakeMaistraV1alpha1) ServiceExports(namespace string) v1alpha1.ServiceE
 	return &FakeServiceExports{c, namespace}
 }
 
+func (c *FakeMaistraV1alpha1) ServiceImports(namespace string) v1alpha1.ServiceImportsInterface {
+	return &FakeServiceImports{c, namespace}
+}
+
 func (c *FakeMaistraV1alpha1) ServiceMeshMemberRolls(namespace string) v1.ServiceMeshMemberRollInterface {
 	return &FakeServiceMeshMemberRolls{c, namespace}
 }

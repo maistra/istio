@@ -26,6 +26,7 @@ type MaistraV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	MeshFederationsGetter
 	ServiceExportsGetter
+	ServiceImportsGetter
 	ServiceMeshExtensionsGetter
 }
 
@@ -42,8 +43,8 @@ func (c *MaistraV1alpha1Client) ServiceExports(namespace string) ServiceExportsI
 	return newServiceExports(c, namespace)
 }
 
-func (c *MaistraV1alpha1Client) ServiceMeshExtensions(namespace string) ServiceMeshExtensionInterface {
-	return newServiceMeshExtensions(c, namespace)
+func (c *MaistraV1alpha1Client) ServiceImports(namespace string) ServiceImportsInterface {
+	return newServiceImports(c, namespace)
 }
 
 // NewForConfig creates a new MaistraV1alpha1Client for the given config.
