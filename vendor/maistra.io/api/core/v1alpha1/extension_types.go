@@ -15,16 +15,19 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ServiceMeshExtensionSpec defines the desired state of ServiceMeshExtension
 type ServiceMeshExtensionSpec struct {
-	Image            string           `json:"image,omitempty"`
-	WorkloadSelector WorkloadSelector `json:"workloadSelector,omitempty"`
-	Phase            *FilterPhase     `json:"phase"`
-	Priority         *int             `json:"priority,omitempty"`
-	Config           string           `json:"config,omitempty"`
+	Image            string                        `json:"image,omitempty"`
+	ImagePullPolicy  corev1.PullPolicy             `json:"imagePullPolicy,omitempty"`
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	WorkloadSelector WorkloadSelector              `json:"workloadSelector,omitempty"`
+	Phase            *FilterPhase                  `json:"phase"`
+	Priority         *int                          `json:"priority,omitempty"`
+	Config           string                        `json:"config,omitempty"`
 }
 
 // ServiceMeshExtensionStatus defines the observed state of ServiceMeshExtension
