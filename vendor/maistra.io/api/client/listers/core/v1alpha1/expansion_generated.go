@@ -16,6 +16,14 @@
 
 package v1alpha1
 
+// FederationStatusListerExpansion allows custom methods to be added to
+// FederationStatusLister.
+type FederationStatusListerExpansion interface{}
+
+// FederationStatusNamespaceListerExpansion allows custom methods to be added to
+// FederationStatusNamespaceLister.
+type FederationStatusNamespaceListerExpansion interface{}
+
 // MeshFederationListerExpansion allows custom methods to be added to
 // MeshFederationLister.
 type MeshFederationListerExpansion interface{}

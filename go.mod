@@ -113,7 +113,7 @@ require (
 	k8s.io/client-go v0.19.3
 	k8s.io/kubectl v0.19.3
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
-	maistra.io/api v0.0.0-20210519155434-9f28759d3cb8
+	maistra.io/api v0.0.0-20210526132145-a4a3b28946c1
 	sigs.k8s.io/controller-runtime v0.6.3
 	sigs.k8s.io/service-apis v0.1.0-rc2.0.20201112213625-c0375b7fa81f
 	sigs.k8s.io/yaml v1.2.0
