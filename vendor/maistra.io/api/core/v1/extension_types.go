@@ -107,6 +107,10 @@ func (smec *ServiceMeshExtensionConfig) DeepCopy() *ServiceMeshExtensionConfig {
 }
 
 func (smec *ServiceMeshExtensionConfig) UnmarshalJSON(in []byte) error {
+	if len(in) == 0 {
+		return nil
+	}
+
 	err := json.Unmarshal(in, &smec.Data)
 	if err != nil {
 		return err
@@ -115,5 +119,9 @@ func (smec *ServiceMeshExtensionConfig) UnmarshalJSON(in []byte) error {
 }
 
 func (smec *ServiceMeshExtensionConfig) MarshalJSON() ([]byte, error) {
+	if smec.Data == nil {
+		return nil, nil
+	}
+
 	return json.Marshal(smec.Data)
 }
