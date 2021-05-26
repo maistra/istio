@@ -16,6 +16,8 @@
 
 package v1alpha1
 
+type FederationStatusExpansion interface{}
+
 type MeshFederationExpansion interface{}
 
 type ServiceExportsExpansion interface{}
