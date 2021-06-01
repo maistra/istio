@@ -19,6 +19,8 @@ replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.5
 // See https://github.com/kubernetes/kubernetes/issues/92867, there is a bug in the library
 replace github.com/evanphx/json-patch => github.com/evanphx/json-patch v0.0.0-20190815234213-e83c0a1c26c8
 
+replace github.com/envoyproxy/go-control-plane => github.com/istio/go-control-plane v0.9.9-0.20210420150223-d760b7f6014b
+
 require (
 	cloud.google.com/go v0.73.0
 	contrib.go.opencensus.io/exporter/prometheus v0.2.0
@@ -108,13 +110,10 @@ require (
 	k8s.io/apimachinery v0.20.1
 	k8s.io/cli-runtime v0.20.1
 	k8s.io/client-go v0.20.1
-	k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd
+	k8s.io/kube-openapi v0.0.0-20210312000640-9f480bcdc475
 	k8s.io/kubectl v0.20.1
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/controller-runtime v0.7.0
 	sigs.k8s.io/service-apis v0.1.0
 	sigs.k8s.io/yaml v1.2.0
 )
-
-// Pending https://github.com/kubernetes/kube-openapi/pull/220
-replace k8s.io/kube-openapi => github.com/howardjohn/kube-openapi v0.0.0-20210104181841-c0b40d2cb1c8
