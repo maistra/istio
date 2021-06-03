@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	v1 "maistra.io/api/security/v1"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/pkg/dns"
@@ -51,6 +52,8 @@ import (
 	"istio.io/istio/pkg/istio-agent/metrics"
 	"istio.io/istio/pkg/mcp/status"
 	"istio.io/istio/pkg/uds"
+	"istio.io/istio/security/pkg/nodeagent/cache"
+	nodeagentutil "istio.io/istio/security/pkg/nodeagent/util"
 	"istio.io/pkg/filewatcher"
 	"istio.io/pkg/log"
 )
@@ -196,7 +199,7 @@ func (p *XdsProxy) StreamAggregatedResources(downstream discovery.AggregatedDisc
 	p.RegisterStream(con)
 
 	// Handle downstream xds
-	firstNDSSent := false
+	initialRequestsSent := false
 	go func() {
 		for {
 			// From Envoy
@@ -207,12 +210,20 @@ func (p *XdsProxy) StreamAggregatedResources(downstream discovery.AggregatedDisc
 			}
 			// forward to istiod
 			con.requestsChan <- req
-			if p.localDNSServer != nil && !firstNDSSent && req.TypeUrl == v3.ListenerType {
-				// fire off an initial NDS request
-				con.requestsChan <- &discovery.DiscoveryRequest{
-					TypeUrl: v3.NameTableType,
+			if !initialRequestsSent && req.TypeUrl == v3.ListenerType {
+				if p.localDNSServer != nil {
+					// fire off an initial NDS request
+					con.requestsChan <- &discovery.DiscoveryRequest{
+						TypeUrl: v3.NameTableType,
+					}
 				}
-				firstNDSSent = true
+
+				// fire off an initial TBDS request
+				con.requestsChan <- &discovery.DiscoveryRequest{
+					TypeUrl: v3.TrustBundleType,
+				}
+				initialRequestsSent = true
+
 			}
 		}
 	}()
@@ -319,6 +330,46 @@ func (p *XdsProxy) HandleUpstream(ctx context.Context, con *ProxyConnection, xds
 					TypeUrl:       v3.NameTableType,
 					ResponseNonce: resp.Nonce,
 				}
+			case v3.TrustBundleType:
+				if len(resp.Resources) == 0 {
+					return fmt.Errorf("empty response")
+				}
+				var tb v1.TrustBundleResponse
+				if err = ptypes.UnmarshalAny(resp.Resources[0], &tb); err != nil {
+					proxyLog.Errorf("failed to unmarshall trust bundles: %v", err)
+					return err
+				}
+				trustBundles := map[string][]byte{}
+				proxyLog.Debugf("received new trust bundles: %v", tb.TrustBundles)
+				expireTime := time.Date(3000, 1, 1, 1, 1, 1, 1, time.Now().Location())
+				for _, bundle := range tb.TrustBundles {
+					certBytes := []byte(bundle.RootCert)
+					certExpireTime, err := nodeagentutil.ParseCertAndGetExpiryTimestamp(certBytes)
+					if err != nil {
+						proxyLog.Errorf("failed to extract expiration time in the certificate loaded from file: %v", err)
+					} else if certExpireTime.Before(expireTime) {
+						expireTime = certExpireTime
+					}
+					trustBundles[bundle.TrustDomain] = certBytes
+				}
+
+				sc, ok := p.agent.WorkloadSecrets.(*cache.SecretCache)
+				if !ok || sc == nil {
+					proxyLog.Errorf("failed to access secret cache", err)
+					return err
+				}
+				if len(trustBundles) == 0 {
+					trustBundles = nil
+				}
+				sc.SetTrustBundles(trustBundles, expireTime)
+
+				// Send ACK
+				con.requestsChan <- &discovery.DiscoveryRequest{
+					VersionInfo:   resp.VersionInfo,
+					TypeUrl:       v3.TrustBundleType,
+					ResponseNonce: resp.Nonce,
+				}
+
 			default:
 				// TODO: Validate the known type urls before forwarding them to Envoy.
 				if err := con.downstream.Send(resp); err != nil {

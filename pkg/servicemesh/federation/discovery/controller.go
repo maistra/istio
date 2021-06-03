@@ -30,7 +30,6 @@ import (
 	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
 	maistraclient "maistra.io/api/client/versioned"
 	"maistra.io/api/core/v1alpha1"
-	v1 "maistra.io/api/security/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
@@ -382,18 +381,25 @@ func (c *Controller) updateRootCert(trustDomain string, rootCert string) {
 	defer c.mu.Unlock()
 	if rootCert == "" {
 		delete(c.trustBundles, trustDomain)
-	} else {
+	} else if existingCert, ok := c.trustBundles[trustDomain]; !ok || existingCert != rootCert {
 		c.trustBundles[trustDomain] = rootCert
+	} else {
+		// we didn't update the trust bundles, so we return early without pushing
+		return
 	}
+	c.xds.ConfigUpdate(&model.PushRequest{
+		Full:   true,
+		Reason: []model.TriggerReason{model.GlobalUpdate},
+	})
 }
 
-func (c *Controller) GetTrustBundles(ctx context.Context, req *v1.TrustBundleRequest) (*v1.TrustBundleResponse, error) {
+func (c *Controller) GetTrustBundles() map[string]string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	// make a copy
-	ret := &v1.TrustBundleResponse{TrustBundles: []*v1.TrustBundle{}}
+	ret := map[string]string{}
 	for td, cert := range c.trustBundles {
-		ret.TrustBundles = append(ret.TrustBundles, &v1.TrustBundle{TrustDomain: td, RootCert: cert})
+		ret[td] = cert
 	}
-	return ret, nil
+	return ret
 }
