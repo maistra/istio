@@ -347,7 +347,6 @@ gen: \
 	copy-templates \
 	gen-kustomize \
 	gen-addons \
-	maistra-gen \
 	update-golden ## Update all generated code.
 
 gen-check: gen check-clean-repo

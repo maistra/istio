@@ -65,7 +65,8 @@ var (
 )
 
 func (c *Controller) deleteDiscoveryResources(
-	_ context.Context, instance *v1alpha1.MeshFederation) error {
+	_ context.Context, instance *v1alpha1.MeshFederation,
+) error {
 	c.Logger.Infof("deleting discovery resources for Federation cluster %s", instance.Name)
 	var allErrors []error
 	rootName := discoveryResourceName(instance)
@@ -113,7 +114,8 @@ func (c *Controller) deleteDiscoveryResources(
 }
 
 func (c *Controller) createDiscoveryResources(
-	_ context.Context, instance *v1alpha1.MeshFederation, meshConfig *meshv1alpha1.MeshConfig) (err error) {
+	_ context.Context, instance *v1alpha1.MeshFederation, meshConfig *meshv1alpha1.MeshConfig,
+) (err error) {
 	var s, ap, dr, ig, eg, vs *config.Config
 
 	defer func() {
@@ -270,8 +272,8 @@ func serviceAddressPort(addr string) (string, string) {
 	return addr, "80"
 }
 
-func (c *Controller) discoveryHostname(base string) string {
-	return base + ".federation.dummy.domain"
+func (c *Controller) discoveryHostname(instance *v1alpha1.MeshFederation) string {
+	return fmt.Sprintf("discovery.%s.svc.%s.local", instance.Namespace, instance.Name)
 }
 
 func (c *Controller) discoveryService(instance *v1alpha1.MeshFederation) *config.Config {
@@ -292,7 +294,7 @@ func (c *Controller) discoveryService(instance *v1alpha1.MeshFederation) *config
 		},
 		Spec: &rawnetworking.ServiceEntry{
 			Hosts: []string{
-				c.discoveryHostname(name),
+				c.discoveryHostname(instance),
 			},
 			Location: rawnetworking.ServiceEntry_MESH_EXTERNAL,
 			Ports: []*rawnetworking.Port{
@@ -429,7 +431,8 @@ func (c *Controller) discoveryAuthorizationPolicy(instance *v1alpha1.MeshFederat
 }
 
 func (c *Controller) discoveryVirtualService(
-	instance *v1alpha1.MeshFederation, meshConfig *meshv1alpha1.MeshConfig) *config.Config {
+	instance *v1alpha1.MeshFederation, meshConfig *meshv1alpha1.MeshConfig,
+) *config.Config {
 	// VirtualService used to route inbound and outbound discovery requests.
 	name := discoveryResourceName(instance)
 	istiodService, _ := serviceAddressPort(meshConfig.DefaultConfig.DiscoveryAddress)
@@ -438,7 +441,7 @@ func (c *Controller) discoveryVirtualService(
 	}
 	ingressGatewayName := fmt.Sprintf("%s/%s-ingress", instance.Namespace, name)
 	egressGatewayName := fmt.Sprintf("%s/%s-egress", instance.Namespace, name)
-	discoveryService := c.discoveryHostname(name)
+	discoveryService := c.discoveryHostname(instance)
 	discoveryHost := instance.Spec.NetworkAddress
 	discoveryPort := common.DefaultDiscoveryPort
 	vs := &config.Config{
@@ -565,7 +568,7 @@ func (c *Controller) discoveryVirtualService(
 func (c *Controller) discoveryDestinationRule(instance *v1alpha1.MeshFederation) *config.Config {
 	// DestinationRule to configure mTLS for outbound discovery requests
 	name := discoveryResourceName(instance)
-	discoveryHost := c.discoveryHostname(name)
+	discoveryHost := c.discoveryHostname(instance)
 	discoveryPort := common.DefaultDiscoveryPort
 	dr := &config.Config{
 		Meta: config.Meta{
