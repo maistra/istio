@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"maistra.io/api/client/versioned/fake"
 	maistrav1alpha1 "maistra.io/api/core/v1alpha1"
@@ -36,18 +37,36 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/federation/common"
+	"istio.io/istio/pkg/servicemesh/federation/status"
 )
 
 type fakeManager struct{}
 
-func (m *fakeManager) AddMeshFederation(mesh *maistrav1alpha1.MeshFederation, exports *maistrav1alpha1.ServiceExports) error {
+func (m *fakeManager) AddMeshFederation(_ *maistrav1alpha1.MeshFederation, _ *maistrav1alpha1.ServiceExports, _ status.Handler) error {
 	return nil
 }
-func (m *fakeManager) DeleteMeshFederation(name string) {}
-func (m *fakeManager) UpdateExportsForMesh(exports *maistrav1alpha1.ServiceExports) error {
+func (m *fakeManager) DeleteMeshFederation(_ string) {}
+func (m *fakeManager) UpdateExportsForMesh(_ *maistrav1alpha1.ServiceExports) error {
 	return nil
 }
-func (m *fakeManager) DeleteExportsForMesh(name string) {}
+func (m *fakeManager) DeleteExportsForMesh(_ string) {}
+
+type fakeStatusManager struct{}
+
+func (m *fakeStatusManager) FederationAdded(mesh types.NamespacedName) status.Handler {
+	return nil
+}
+
+func (m *fakeStatusManager) FederationDeleted(mesh types.NamespacedName) {
+}
+
+func (m *fakeStatusManager) HandlerFor(mesh types.NamespacedName) status.Handler {
+	return nil
+}
+
+func (m *fakeStatusManager) PushStatus() error {
+	return nil
+}
 
 func TestValidOptions(t *testing.T) {
 	opt := Options{
@@ -167,6 +186,7 @@ func TestReconcile(t *testing.T) {
 		XDSUpdater:        options.xdsUpdater,
 		Env:               options.env,
 		FederationManager: &fakeManager{},
+		StatusManager:     &fakeStatusManager{},
 		ConfigStore:       configmemory.NewController(configmemory.Make(Schemas)),
 	})
 

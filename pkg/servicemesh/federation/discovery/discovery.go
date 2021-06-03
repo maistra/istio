@@ -270,8 +270,8 @@ func serviceAddressPort(addr string) (string, string) {
 	return addr, "80"
 }
 
-func (c *Controller) discoveryHostname(base string) string {
-	return base + ".federation.dummy.domain"
+func (c *Controller) discoveryHostname(instance *v1alpha1.MeshFederation) string {
+	return fmt.Sprintf("discovery.%s.svc.%s.local", instance.Namespace, instance.Name)
 }
 
 func (c *Controller) discoveryService(instance *v1alpha1.MeshFederation) *config.Config {
@@ -292,7 +292,7 @@ func (c *Controller) discoveryService(instance *v1alpha1.MeshFederation) *config
 		},
 		Spec: &rawnetworking.ServiceEntry{
 			Hosts: []string{
-				c.discoveryHostname(name),
+				c.discoveryHostname(instance),
 			},
 			Location: rawnetworking.ServiceEntry_MESH_EXTERNAL,
 			Ports: []*rawnetworking.Port{
@@ -438,7 +438,7 @@ func (c *Controller) discoveryVirtualService(
 	}
 	ingressGatewayName := fmt.Sprintf("%s/%s-ingress", instance.Namespace, name)
 	egressGatewayName := fmt.Sprintf("%s/%s-egress", instance.Namespace, name)
-	discoveryService := c.discoveryHostname(name)
+	discoveryService := c.discoveryHostname(instance)
 	discoveryHost := instance.Spec.NetworkAddress
 	discoveryPort := common.DefaultDiscoveryPort
 	vs := &config.Config{
@@ -565,7 +565,7 @@ func (c *Controller) discoveryVirtualService(
 func (c *Controller) discoveryDestinationRule(instance *v1alpha1.MeshFederation) *config.Config {
 	// DestinationRule to configure mTLS for outbound discovery requests
 	name := discoveryResourceName(instance)
-	discoveryHost := c.discoveryHostname(name)
+	discoveryHost := c.discoveryHostname(instance)
 	discoveryPort := common.DefaultDiscoveryPort
 	dr := &config.Config{
 		Meta: config.Meta{
