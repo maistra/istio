@@ -34,6 +34,7 @@ import (
 	"istio.io/istio/pkg/config/host"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
+	"istio.io/istio/pkg/servicemesh/federation/status"
 	"istio.io/pkg/log"
 )
 
@@ -49,7 +50,7 @@ type Options struct {
 }
 
 type FederationManager interface {
-	AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alpha1.ServiceExports) error
+	AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alpha1.ServiceExports, statusHandler status.Handler) error
 	DeleteMeshFederation(name string)
 	UpdateExportsForMesh(exports *v1alpha1.ServiceExports) error
 	DeleteExportsForMesh(name string)
@@ -120,7 +121,7 @@ func (s *Server) ingressServiceName(mesh *v1alpha1.MeshFederation) string {
 	return fmt.Sprintf("%s.%s.svc.%s", mesh.Spec.Gateways.Ingress.Name, mesh.Namespace, s.env.DomainSuffix)
 }
 
-func (s *Server) AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alpha1.ServiceExports) error {
+func (s *Server) AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alpha1.ServiceExports, statusHandler status.Handler) error {
 	exportConfig := common.NewServiceExporter(exports, s.defaultExportConfig, exportDomainSuffix(mesh.Name))
 
 	untypedMeshServer, ok := s.meshes.Load(mesh.Name)
@@ -133,6 +134,7 @@ func (s *Server) AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alp
 		env:                      s.env,
 		mesh:                     mesh,
 		exportConfig:             exportConfig,
+		statusHandler:            statusHandler,
 		configStore:              s.configStore,
 		ingressService:           s.ingressServiceName(mesh),
 		currentServices:          make(map[federationmodel.ServiceKey]*federationmodel.ServiceMessage),
@@ -205,6 +207,8 @@ func (s *Server) handleServiceList(response http.ResponseWriter, request *http.R
 		response.WriteHeader(500)
 		return
 	}
+	connection := getClientConnectionKey(request)
+	mesh.statusHandler.FullSyncSent(connection)
 }
 
 func (s *Server) handleWatch(response http.ResponseWriter, request *http.Request) {
@@ -214,7 +218,7 @@ func (s *Server) handleWatch(response http.ResponseWriter, request *http.Request
 		response.WriteHeader(400)
 		return
 	}
-	mesh.handleWatch(response)
+	mesh.handleWatch(response, request)
 }
 
 func (s *Server) Run(stopCh <-chan struct{}) {
@@ -316,7 +320,8 @@ type meshServer struct {
 	mesh         *v1alpha1.MeshFederation
 	exportConfig *common.ServiceExporter
 
-	configStore model.ConfigStoreCache
+	statusHandler status.Handler
+	configStore   model.ConfigStoreCache
 
 	ingressService  string
 	gatewaySAs      []string
@@ -401,12 +406,23 @@ func (s *meshServer) handleServiceList(response http.ResponseWriter) {
 	}
 }
 
-func (s *meshServer) handleWatch(response http.ResponseWriter) {
+func getClientConnectionKey(request *http.Request) string {
+	forwardedIPs := strings.Split(request.Header.Get("X-Forwarded-For"), ",")
+	if len(forwardedIPs) > 0 {
+		return strings.TrimSpace(forwardedIPs[0])
+	}
+	return request.RemoteAddr
+}
+
+func (s *meshServer) handleWatch(response http.ResponseWriter, request *http.Request) {
 	watch := make(chan *federationmodel.WatchEvent)
 	s.watchMut.Lock()
 	s.currentWatches = append(s.currentWatches, watch)
 	s.watchMut.Unlock()
+	connection := getClientConnectionKey(request)
+	s.statusHandler.RemoteWatchAccepted(connection)
 	defer func() {
+		s.statusHandler.RemoteWatchTerminated(connection)
 		s.watchMut.Lock()
 		for i, w := range s.currentWatches {
 			if w == watch {
@@ -426,7 +442,12 @@ func (s *meshServer) handleWatch(response http.ResponseWriter) {
 	}
 	flusher.Flush()
 	for {
-		event := <-watch
+		var event *federationmodel.WatchEvent
+		select {
+		case event = <-watch:
+		case <-request.Context().Done():
+			return
+		}
 		respBytes, err := json.Marshal(event)
 		if err != nil {
 			s.logger.Errorf("error marshaling watch event: %s", err)
@@ -443,6 +464,7 @@ func (s *meshServer) handleWatch(response http.ResponseWriter) {
 			return
 		}
 		flusher.Flush()
+		s.statusHandler.WatchEventSent(connection)
 	}
 }
 
@@ -485,6 +507,9 @@ func (s *meshServer) resync() {
 			s.logger.Debugf("exporting service %+v as %+v", svcKey, svcMessage.ServiceKey)
 			s.addService(svcKey, svcMessage)
 		}
+	}
+	if err := s.statusHandler.Flush(); err != nil {
+		s.logger.Errorf("error updating federation export status for mesh %s: %s", s.mesh.Name, err)
 	}
 }
 
@@ -587,6 +612,7 @@ func (s *meshServer) addService(svc federationmodel.ServiceKey, msg *federationm
 		Action:  federationmodel.ActionAdd,
 		Service: msg,
 	}
+	s.statusHandler.ExportAdded(svc, msg.Hostname)
 	s.pushWatchEvent(e)
 }
 
@@ -598,6 +624,7 @@ func (s *meshServer) updateService(svc federationmodel.ServiceKey, msg *federati
 		Action:  federationmodel.ActionUpdate,
 		Service: msg,
 	}
+	s.statusHandler.ExportUpdated(svc, msg.Hostname)
 	s.pushWatchEvent(e)
 }
 
@@ -612,6 +639,7 @@ func (s *meshServer) deleteService(svc federationmodel.ServiceKey, msg *federati
 		Action:  federationmodel.ActionDelete,
 		Service: msg,
 	}
+	s.statusHandler.ExportRemoved(svc)
 	s.pushWatchEvent(e)
 }
 
