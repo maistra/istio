@@ -35,6 +35,62 @@ import (
 
 var ignoreChecksum = cmp.FilterPath(func(p cmp.Path) bool { return p.String() == "Checksum" }, cmp.Ignore())
 
+type fakeStatusHandler struct{}
+
+// Outbound connections
+func (m *fakeStatusHandler) WatchInitiated() {
+}
+
+func (m *fakeStatusHandler) Watching() {
+}
+
+func (m *fakeStatusHandler) WatchEventReceived() {
+}
+
+func (m *fakeStatusHandler) FullSyncComplete() {
+}
+
+func (m *fakeStatusHandler) WatchTerminated(status string) {
+}
+
+// Inbound connections
+func (m *fakeStatusHandler) RemoteWatchAccepted(source string) {
+}
+
+func (m *fakeStatusHandler) WatchEventSent(source string) {
+}
+
+func (m *fakeStatusHandler) FullSyncSent(source string) {
+}
+
+func (m *fakeStatusHandler) RemoteWatchTerminated(source string) {
+}
+
+// Exports
+func (m *fakeStatusHandler) ExportAdded(service federationmodel.ServiceKey, exportedName string) {
+}
+
+func (m *fakeStatusHandler) ExportUpdated(service federationmodel.ServiceKey, exportedName string) {
+}
+
+func (m *fakeStatusHandler) ExportRemoved(service federationmodel.ServiceKey) {
+}
+
+// Imports
+func (m *fakeStatusHandler) ImportAdded(service federationmodel.ServiceKey, exportedName string) {
+}
+
+func (m *fakeStatusHandler) ImportUpdated(service federationmodel.ServiceKey, exportedName string) {
+}
+
+func (m *fakeStatusHandler) ImportRemoved(exportedName string) {
+}
+
+// Write status
+func (m *fakeStatusHandler) Flush() error {
+	return nil
+}
+
 func TestServiceList(t *testing.T) {
 	federation := &v1alpha1.MeshFederation{
 		ObjectMeta: v1.ObjectMeta{
@@ -371,7 +427,7 @@ func TestServiceList(t *testing.T) {
 			go s.Run(stopCh)
 			defer close(stopCh)
 			s.resyncNetworkGateways()
-			s.AddMeshFederation(federation, tc.serviceExports)
+			s.AddMeshFederation(federation, tc.serviceExports, &fakeStatusHandler{})
 			for _, e := range tc.serviceEvents {
 				s.UpdateService(e.svc, e.event)
 			}
@@ -690,7 +746,7 @@ func TestWatch(t *testing.T) {
 			go s.Run(stopCh)
 			defer close(stopCh)
 			s.resyncNetworkGateways()
-			s.AddMeshFederation(federation, tc.serviceExports)
+			s.AddMeshFederation(federation, tc.serviceExports, &fakeStatusHandler{})
 			req, err := http.NewRequest("GET", "http://"+s.Addr()+"/watch/"+tc.remoteName, nil)
 			if err != nil {
 				t.Fatal(err)
