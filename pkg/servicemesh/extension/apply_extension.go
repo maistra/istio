@@ -156,7 +156,8 @@ func ApplyListenerListPatches(
 
 func popAppend(list []*hcm_filter.HttpFilter,
 	filterMap map[v1.FilterPhase][]*maistramodel.ExtensionWrapper,
-	phase v1.FilterPhase) []*hcm_filter.HttpFilter {
+	phase v1.FilterPhase,
+) []*hcm_filter.HttpFilter {
 	for _, ext := range filterMap[phase] {
 		if filter := toEnvoyHTTPFilter(ext); filter != nil {
 			list = append(list, filter)

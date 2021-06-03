@@ -22,9 +22,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"maistra.io/api/client/versioned/fake"
-	servicemeshv1alpha1 "maistra.io/api/core/v1alpha1"
+	maistrav1alpha1 "maistra.io/api/core/v1alpha1"
 
 	"istio.io/api/mesh/v1alpha1"
 	configmemory "istio.io/istio/pilot/pkg/config/memory"
@@ -36,18 +37,36 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/federation/common"
+	"istio.io/istio/pkg/servicemesh/federation/status"
 )
 
 type fakeManager struct{}
 
-func (m *fakeManager) AddMeshFederation(_ *servicemeshv1alpha1.MeshFederation, _ *servicemeshv1alpha1.ServiceExports) error {
+func (m *fakeManager) AddMeshFederation(_ *maistrav1alpha1.MeshFederation, _ *maistrav1alpha1.ServiceExports, _ status.Handler) error {
 	return nil
 }
 func (m *fakeManager) DeleteMeshFederation(_ string) {}
-func (m *fakeManager) UpdateExportsForMesh(_ *servicemeshv1alpha1.ServiceExports) error {
+func (m *fakeManager) UpdateExportsForMesh(_ *maistrav1alpha1.ServiceExports) error {
 	return nil
 }
 func (m *fakeManager) DeleteExportsForMesh(_ string) {}
+
+type fakeStatusManager struct{}
+
+func (m *fakeStatusManager) FederationAdded(mesh types.NamespacedName) status.Handler {
+	return nil
+}
+
+func (m *fakeStatusManager) FederationDeleted(mesh types.NamespacedName) {
+}
+
+func (m *fakeStatusManager) HandlerFor(mesh types.NamespacedName) status.Handler {
+	return nil
+}
+
+func (m *fakeStatusManager) PushStatus() error {
+	return nil
+}
 
 func TestValidOptions(t *testing.T) {
 	opt := Options{
@@ -167,19 +186,20 @@ func TestReconcile(t *testing.T) {
 		XDSUpdater:        options.xdsUpdater,
 		Env:               options.env,
 		FederationManager: &fakeManager{},
+		StatusManager:     &fakeStatusManager{},
 		ConfigStore:       configmemory.NewController(configmemory.Make(Schemas)),
 	})
 
 	name := "test"
 	namespace := "test"
-	federation := &servicemeshv1alpha1.MeshFederation{
+	federation := &maistrav1alpha1.MeshFederation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: servicemeshv1alpha1.MeshFederationSpec{
+		Spec: maistrav1alpha1.MeshFederationSpec{
 			NetworkAddress: "test.mesh",
-			Gateways: servicemeshv1alpha1.MeshFederationGateways{
+			Gateways: maistrav1alpha1.MeshFederationGateways{
 				Ingress: corev1.LocalObjectReference{
 					Name: "test-ingress",
 				},
@@ -187,7 +207,7 @@ func TestReconcile(t *testing.T) {
 					Name: "test-egress",
 				},
 			},
-			Security: &servicemeshv1alpha1.MeshFederationSecurity{
+			Security: &maistrav1alpha1.MeshFederationSecurity{
 				ClientID:            "cluster.local/ns/test-mesh/sa/test-egress-service-account",
 				TrustDomain:         "test.local",
 				CertificateChain:    "dummy",
