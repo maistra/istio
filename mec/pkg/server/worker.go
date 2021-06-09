@@ -116,7 +116,11 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 
 	imageRef := model.StringToImageRef(extension.Spec.Image)
 	if imageRef == nil {
-		return fmt.Errorf("failed to parse spec.image: %q", extension.Spec.Image)
+		message := fmt.Sprintf("failed to parse spec.image: %q", extension.Spec.Image)
+		if err := w.updateStatusNotReady(extension, message); err != nil {
+			workerlog.Error(err)
+		}
+		return fmt.Errorf(message)
 	}
 	workerlog.Debugf("Image Ref: %+v", imageRef)
 
@@ -142,7 +146,11 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 
 		img, err = w.pullStrategy.PullImage(imageRef, extension.Namespace, pullPolicy, extension.Spec.ImagePullSecrets)
 		if err != nil {
-			return fmt.Errorf("failed to pull image %q: %v", imageRef.String(), err)
+			message := fmt.Sprintf("failed to pull image %q: %v", imageRef.String(), err)
+			if err := w.updateStatusNotReady(extension, message); err != nil {
+				workerlog.Error(err)
+			}
+			return fmt.Errorf(message)
 		}
 	}
 	var id string
@@ -152,7 +160,11 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 		workerlog.Debug("Image is already in the http server, retrieving its ID")
 		url, err := url.Parse(extension.Status.Deployment.URL)
 		if err != nil {
-			return fmt.Errorf("failed to parse status.deployment.url: %v", err)
+			message := fmt.Sprintf("failed to parse status.deployment.url: %v", err)
+			if err := w.updateStatusNotReady(extension, message); err != nil {
+				workerlog.Error(err)
+			}
+			return fmt.Errorf(message)
 		}
 		id = path.Base(url.Path)
 		workerlog.Debugf("Got ID = %s", id)
@@ -172,7 +184,11 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 
 		wasmUUID, err := uuid.NewRandom()
 		if err != nil {
-			return fmt.Errorf("failed to generate new UUID: %v", err)
+			message := fmt.Sprintf("failed to generate new UUID: %v", err)
+			if err := w.updateStatusNotReady(extension, message); err != nil {
+				workerlog.Error(err)
+			}
+			return fmt.Errorf(message)
 		}
 		id = wasmUUID.String()
 		workerlog.Debugf("Created a new id for this image: %s", id)
@@ -183,29 +199,46 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 		workerlog.Debugf("Copying the extension to the web server location: %s", filename)
 		err = img.CopyWasmModule(filename)
 		if err != nil {
-			return fmt.Errorf("failed to extract wasm module: %v", err)
+			message := fmt.Sprintf("failed to extract wasm module: %v", err)
+			if err := w.updateStatusNotReady(extension, message); err != nil {
+				workerlog.Error(err)
+			}
+			return fmt.Errorf(message)
 		}
 	}
 
 	sha, err := generateSHA256(filename)
 	if err != nil {
-		return fmt.Errorf("failed to generate sha256 of wasm module: %v", err)
+		message := fmt.Sprintf("failed to generate sha256 of wasm module: %v", err)
+		if err := w.updateStatusNotReady(extension, message); err != nil {
+			workerlog.Error(err)
+		}
+		return fmt.Errorf(message)
 	}
 	workerlog.Debugf("WASM module SHA256 is %s", sha)
 
 	filePath, err := url.Parse(id)
 	if err != nil {
-		return fmt.Errorf("failed to parse new UUID %q as URL path: %v", id, err)
+		message := fmt.Sprintf("failed to parse new UUID %q as URL path: %v", id, err)
+		if err := w.updateStatusNotReady(extension, message); err != nil {
+			workerlog.Error(err)
+		}
+		return fmt.Errorf(message)
 	}
 	baseURL, err := url.Parse(w.baseURL)
 	if err != nil {
-		return fmt.Errorf("failed to parse baseURL: %v", err)
+		message := fmt.Sprintf("failed to parse baseURL: %v", err)
+		if err := w.updateStatusNotReady(extension, message); err != nil {
+			workerlog.Error(err)
+		}
+		return fmt.Errorf(message)
 	}
 
 	extension.Status.Deployment.SHA256 = sha
 	extension.Status.Deployment.ContainerSHA256 = img.SHA256()
 	extension.Status.Deployment.URL = baseURL.ResolveReference(filePath).String()
 	extension.Status.Deployment.Ready = true
+	extension.Status.Deployment.Message = ""
 
 	manifest := img.GetManifest()
 
@@ -228,13 +261,24 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 	}
 
 	extension.Status.ObservedGeneration = extension.Generation
-	workerlog.Debugf("Updating extension status with: %v", extension.Status)
-	_, err = w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, metav1.UpdateOptions{})
-	if err != nil {
+	return w.updateStatus(extension)
+}
+
+func (w *Worker) updateStatus(extension *v1.ServiceMeshExtension) error {
+	workerlog.Debugf("Updating extension status with: %+v", extension.Status)
+	if _, err := w.client.ServiceMeshExtensions(extension.Namespace).UpdateStatus(context.TODO(), extension, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update status of extension: %v", err)
 	}
 
 	return nil
+}
+
+func (w *Worker) updateStatusNotReady(extension *v1.ServiceMeshExtension, message string) error {
+	// Reset all fields, including ready=false
+	extension.Status.Deployment = v1.DeploymentStatus{}
+	extension.Status.Deployment.Message = message
+
+	return w.updateStatus(extension)
 }
 
 func (w *Worker) Start(stopChan <-chan struct{}) {
