@@ -2006,7 +2006,7 @@ k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20210601141927-1cbee4cb8ce8
+# maistra.io/api v0.0.0-20210609174032-f933bad53927
 ## explicit
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core
