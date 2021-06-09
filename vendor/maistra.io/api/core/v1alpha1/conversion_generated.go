@@ -140,6 +140,7 @@ func autoConvert_v1_DeploymentStatus_To_v1alpha1_DeploymentStatus(in *v1.Deploym
 	out.ContainerSHA256 = in.ContainerSHA256
 	out.SHA256 = in.SHA256
 	out.URL = in.URL
+	out.Message = in.Message
 	return nil
 }
 
@@ -153,6 +154,7 @@ func autoConvert_v1alpha1_DeploymentStatus_To_v1_DeploymentStatus(in *Deployment
 	out.ContainerSHA256 = in.ContainerSHA256
 	out.SHA256 = in.SHA256
 	out.URL = in.URL
+	out.Message = in.Message
 	return nil
 }
 
