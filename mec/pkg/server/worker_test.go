@@ -61,8 +61,12 @@ func TestWorker(t *testing.T) {
 					Generation: 1,
 				},
 			},
-			expectedStatus: v1.ServiceMeshExtensionStatus{},
-			expectedError:  true,
+			expectedStatus: v1.ServiceMeshExtensionStatus{
+				Deployment: v1.DeploymentStatus{
+					Message: `failed to parse spec.image: ""`,
+				},
+			},
+			expectedError: true,
 		},
 		{
 			name: "valid_resource",
@@ -247,7 +251,7 @@ func TestWorker(t *testing.T) {
 			if !cmp.Equal(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1.DeploymentStatus{}, "URL")) {
 				t.Fatalf("comparison failed -got +want: %s", cmp.Diff(tc.expectedStatus, updatedExtension.Status, cmpopts.IgnoreFields(v1.DeploymentStatus{}, "URL")))
 			}
-			if !cmp.Equal(tc.expectedStatus, v1.ServiceMeshExtensionStatus{}) {
+			if !cmp.Equal(tc.expectedStatus, v1.ServiceMeshExtensionStatus{}, cmpopts.IgnoreFields(v1.DeploymentStatus{}, "Message")) {
 				// validate URL
 				url, err := url.Parse(updatedExtension.Status.Deployment.URL)
 				if err != nil {
