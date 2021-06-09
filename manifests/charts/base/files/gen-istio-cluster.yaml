@@ -4064,7 +4064,12 @@ spec:
     status: {}
   version: v1
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - JSONPath: .status.deployment.ready
+      description: Whether this extension is ready to be consumed
+      name: Ready
+      type: boolean
+    name: v1
     schema:
       openAPIV3Schema:
         description: ServiceMeshExtension is the Schema for the servicemeshextensions API
@@ -4121,6 +4126,8 @@ spec:
               deployment:
                 properties:
                   containerSha256:
+                    type: string
+                  message:
                     type: string
                   ready:
                     type: boolean
@@ -4197,6 +4204,8 @@ spec:
               deployment:
                 properties:
                   containerSha256:
+                    type: string
+                  message:
                     type: string
                   ready:
                     type: boolean
