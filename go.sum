@@ -2058,6 +2058,8 @@ k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b h1:wxEMGetGMur3J1xuGLQY7GEQYg9bZ
 k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 maistra.io/api v0.0.0-20210601141927-1cbee4cb8ce8 h1:hBSNtXLQFFH27vJQvblel28HFClrJxVHlVKK9g69auE=
 maistra.io/api v0.0.0-20210601141927-1cbee4cb8ce8/go.mod h1:Os/zrIv6nsjgC43UAo17FFv+fvYlzANUWIpNNZEZ/KE=
+maistra.io/api v0.0.0-20210609174032-f933bad53927 h1:6HvkPG7FLx1mFsUVn2MgJQ/QGcSvXhUwzFKilOACf8k=
+maistra.io/api v0.0.0-20210609174032-f933bad53927/go.mod h1:Os/zrIv6nsjgC43UAo17FFv+fvYlzANUWIpNNZEZ/KE=
 oras.land/oras-go v0.4.0/go.mod h1:VJcU+VE4rkclUbum5C0O7deEZbBYnsnpbGSACwTjOcg=
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/letsencrypt v0.0.3/go.mod h1:buyQKZ6IXrRnB7TdkHP0RyEybLx18HHyOSoTyoOLqNY=
