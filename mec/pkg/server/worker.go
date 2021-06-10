@@ -129,7 +129,6 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 	// Only happens if image is in the format: quay.io/repo/image@sha256:...
 	if imageRef.SHA256 != "" {
 		workerlog.Debug("Trying to get an already pulled image")
-		// FIXME: GetImage() is broken and always returns an error: MAISTRA-2249
 		img, err = w.pullStrategy.GetImage(imageRef)
 		if err != nil {
 			workerlog.Errorf("failed to check whether image is already present: %v", err)
