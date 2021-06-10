@@ -237,15 +237,9 @@ func (r *route) addNewSyncRoute(cfg config.Config) *syncRoutes {
 // This handles the case where an ADD event comes before SetNamespaces() is called and
 // the unlikely case an ADD event arrives for a gateway whose namespace does not belong to the SMMR at all
 func (r *route) ensureNamespaceExists(cfg config.Config) error {
-	timeout := time.After(r.handleEventTimeout) // default is 10s
+	timeout := time.After(r.handleEventTimeout) // production default is 10s, but test default is only 1ms
 
 	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("could not handle the ADD event for %s/%s: SMMR does not recognize this namespace", cfg.Namespace, cfg.Name)
-		default:
-		}
-
 		r.namespaceLock.Lock()
 		namespaces := r.namespaces
 		r.namespaceLock.Unlock()
@@ -257,7 +251,13 @@ func (r *route) ensureNamespaceExists(cfg config.Config) error {
 			}
 		}
 
-		IORLog.Debugf("Namespace %s not found in SMMR, trying again", cfg.Namespace)
+		select {
+		case <-timeout:
+			IORLog.Debugf("Namespace %s not found in SMMR. Aborting.", cfg.Namespace)
+			return fmt.Errorf("could not handle the ADD event for %s/%s: SMMR does not recognize this namespace", cfg.Namespace, cfg.Name)
+		default:
+			IORLog.Debugf("Namespace %s not found in SMMR, trying again", cfg.Namespace)
+		}
 		time.Sleep(100 * time.Millisecond)
 	}
 }
