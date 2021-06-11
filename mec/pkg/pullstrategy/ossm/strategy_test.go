@@ -315,7 +315,7 @@ func TestPullImage(t *testing.T) {
 				client: clientSet.ImageV1(),
 				podman: fakePodman,
 			}
-			image, err := strategy.PullImage(tc.imageRef, "test", v1.PullAlways, nil)
+			image, err := strategy.PullImage(tc.imageRef, "test", v1.PullAlways, nil, "", "")
 			if tc.expectedError {
 				if err == nil {
 					t.Error("Expected error but got nil")

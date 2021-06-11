@@ -17,6 +17,7 @@ package ossm
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -28,7 +29,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	maistrav1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/mec/pkg/model"
 	"istio.io/istio/mec/pkg/podman"
@@ -124,7 +127,9 @@ func (p *ossmPullStrategy) GetImage(image *model.ImageRef) (model.Image, error) 
 func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
 	namespace string,
 	pullPolicy corev1.PullPolicy,
-	pullSecrets []corev1.LocalObjectReference) (model.Image, error) {
+	pullSecrets []corev1.LocalObjectReference,
+	smeName string,
+	smeUID types.UID) (model.Image, error) {
 
 	var imageStream *imagev1.ImageStream
 	var err error
@@ -168,6 +173,32 @@ func (p *ossmPullStrategy) PullImage(image *model.ImageRef,
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Set the ownerReferences of the ImageStream to be the Extension so that it gets garbage collected
+	// This cannot be done at ImageStreamImport creation above because it doesn't get copied into the ImageStream it creates
+	patchBytes, err := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"ownerReferences": []map[string]interface{}{
+				{
+					"apiVersion":         maistrav1.SchemeGroupVersion.String(),
+					"kind":               "ServiceMeshExtension",
+					"name":               smeName,
+					"uid":                smeUID,
+					"blockOwnerDeletion": true,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Using StrategicMergePatchType because having more than one ownerReference is ok, since more than one SME can refer to the same docker image,
+	// thus we want to append an item to the ownerReferences array, not replace it
+	_, err = p.client.ImageStreams(namespace).Patch(context.TODO(), imageStreamName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to set OwnerReferences to ImageStream %s: %v", imageStreamName, err)
 	}
 
 	if len(imageStream.Status.Tags) == 0 || len(imageStream.Status.Tags[0].Items) == 0 || imageStream.Status.DockerImageRepository == "" {
