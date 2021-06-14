@@ -174,8 +174,8 @@ func (c *DistributionController) writeStatus(ctx context.Context, config Resourc
 	// should this be moved to some sort of InformerCache for speed?
 	current, err := resourceInterface.Get(ctx, config.Name, metav1.GetOptions{ResourceVersion: config.ResourceVersion})
 	if err != nil {
-		if errors.IsGone(err) || errors.IsNotFound(err) {
-			// this resource has been deleted.  prune its state and move on.
+		if errors.IsGone(err) || errors.IsNotFound(err) || errors.IsForbidden(err) {
+			// this resource has been deleted or the namespace is no longer accessible.  prune its state and move on.
 			c.pruneOldVersion(config)
 			return
 		}
