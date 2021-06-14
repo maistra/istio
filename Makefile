@@ -69,3 +69,5 @@ export GOBIN ?= $(GOPATH)/bin
 include Makefile.core.mk
 
 endif
+
+# test
