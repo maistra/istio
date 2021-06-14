@@ -276,6 +276,8 @@ func NewServer(args *PilotArgs) (*Server, error) {
 				IstiodNamespace:   args.Namespace,
 				IstiodPodName:     args.PodName,
 			})
+			s.XDSServer.Generators[v3.TrustBundleType] = &xds.TbdsGenerator{TrustBundleProvider: s.federation}
+
 			if err != nil {
 				return nil, fmt.Errorf("error initializing federation: %v", err)
 			}
@@ -785,9 +787,6 @@ func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 	s.secureGrpcServer = grpc.NewServer(opts...)
 	s.XDSServer.Register(s.secureGrpcServer)
 	reflection.Register(s.secureGrpcServer)
-	if s.federation != nil {
-		s.federation.Register(s.secureGrpcServer)
-	}
 
 	s.addStartFunc(func(stop <-chan struct{}) error {
 		go func() {

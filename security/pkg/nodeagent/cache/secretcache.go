@@ -34,7 +34,6 @@ import (
 	pilotmodel "istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/mcp/status"
 	"istio.io/istio/pkg/security"
-	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/nodeagent/secretfetcher"
 	nodeagentutil "istio.io/istio/security/pkg/nodeagent/util"
@@ -201,21 +200,33 @@ func (sc *SecretCache) setRootCert(rootCert []byte, rootCertExpr time.Time) {
 	sc.rootCertMutex.Unlock()
 }
 
-// getRootCertInfo returns cached root cert and cert expiration time. This method is thread safe.
+// getRootCertInfo returns cached trust bundles and earliest cert expiration time. This method is thread safe.
 func (sc *SecretCache) getTrustBundles() (trustBundles map[string][]byte, earliestExpiry time.Time) {
 	sc.rootCertMutex.RLock()
 	trustBundles = sc.trustBundleMap
 	earliestExpiry = sc.trustBundleExpireTime
+	if trustBundles != nil && sc.rootCert != nil {
+		trustBundles[sc.configOptions.TrustDomain] = sc.rootCert
+		if sc.rootCertExpireTime.Before(earliestExpiry) {
+			earliestExpiry = sc.rootCertExpireTime
+		}
+	}
 	sc.rootCertMutex.RUnlock()
 	return trustBundles, earliestExpiry
 }
 
-// setRootCert sets root cert into cache. This method is thread safe.
-func (sc *SecretCache) setTrustBundles(trustBundles map[string][]byte, earliestExpiry time.Time) {
+// SetTrustBundles stores trust bundles into the cache. This method is thread safe.
+func (sc *SecretCache) SetTrustBundles(trustBundles map[string][]byte, earliestExpiry time.Time) {
 	sc.rootCertMutex.Lock()
-	sc.trustBundleMap = trustBundles
-	sc.trustBundleExpireTime = earliestExpiry
+	trustBundlesUpdated := !compareTrustBundles(sc.trustBundleMap, trustBundles)
+	if trustBundlesUpdated {
+		sc.trustBundleMap = trustBundles
+		sc.trustBundleExpireTime = earliestExpiry
+	}
 	sc.rootCertMutex.Unlock()
+	if trustBundlesUpdated {
+		sc.rotate(true)
+	}
 }
 
 // GenerateSecret generates new secret and cache the secret, this function is called by SDS.StreamSecrets
@@ -457,25 +468,13 @@ func (sc *SecretCache) Close() {
 func (sc *SecretCache) keyCertRotationJob() {
 	// Wake up once in a while and rotate keys and certificates if in grace period.
 	sc.rotationTicker = time.NewTicker(sc.configOptions.RotationInterval)
-	// Randomly choose time between 30-60 seconds to poll trust bundle endpoint
-	// to avoid thundering herd when deploying lots of proxies at the same time
-	rand.Seed(time.Now().UnixNano())
-	trustBundlePollTicker := time.NewTicker(time.Minute + time.Second*time.Duration(rand.Intn(30)))
 	for {
 		select {
 		case <-sc.rotationTicker.C:
 			sc.rotate(false /*updateRootFlag*/)
-		case <-trustBundlePollTicker.C:
-			// if trust bundles changed, rotate the root
-			if sc.retrieveTrustBundles(context.Background()) {
-				sc.rotate(true)
-			}
 		case <-sc.closing:
 			if sc.rotationTicker != nil {
 				sc.rotationTicker.Stop()
-			}
-			if trustBundlePollTicker != nil {
-				trustBundlePollTicker.Stop()
 			}
 		}
 	}
@@ -952,8 +951,6 @@ func (sc *SecretCache) generateSecret(ctx context.Context, token string, connKey
 		}
 	}
 
-	sc.retrieveTrustBundles(ctx)
-
 	if rootCertChanged {
 		cacheLog.Info("Root cert has changed, start rotating root cert for SDS clients")
 		sc.rotate(true /*updateRootFlag*/)
@@ -1055,45 +1052,6 @@ func (sc *SecretCache) sendRetriableRequest(ctx context.Context, csrPEM []byte,
 		return certChainPEM, nil
 	}
 	return []string{exchangedToken}, nil
-}
-
-func (sc *SecretCache) retrieveTrustBundles(ctx context.Context) bool {
-	if tbProvider, ok := sc.fetcher.CaClient.(federationmodel.TrustBundleProvider); ok {
-		cacheLog.Debug("Retrieving trust bundles")
-		trustBundleMap, err := tbProvider.GetTrustBundles(ctx)
-		trustBundles := map[string][]byte{}
-		if err != nil {
-			cacheLog.Warnf("fetching trust bundles failed: %s", err)
-		} else if trustBundleMap != nil {
-			rootCert, rootCertExpireTime := sc.getRootCert()
-			if rootCert == nil {
-				cacheLog.Info("skipping fetching trust bundles, root cert not present yet")
-				return false
-			}
-			trustBundles[sc.configOptions.TrustDomain] = rootCert
-			earliestExpiryTime := rootCertExpireTime
-			for td, certPEM := range trustBundleMap {
-				certBytes := []byte(certPEM)
-				if certExpiryTime, err := nodeagentutil.ParseCertAndGetExpiryTimestamp(certBytes); err != nil {
-					cacheLog.Errorf("failed to extract expire time from server certificate for trust domain '%s' in CSR response %+v: %v",
-						td, rootCert, err)
-					continue
-				} else if certExpiryTime.Before(earliestExpiryTime) {
-					earliestExpiryTime = certExpiryTime
-				}
-				trustBundles[td] = certBytes
-			}
-			if len(trustBundles) > 1 {
-				oldBundles, _ := sc.getTrustBundles()
-				if !compareTrustBundles(oldBundles, trustBundles) {
-					sc.setTrustBundles(trustBundles, earliestExpiryTime)
-					cacheLog.Infof("Updated %d trust bundles", len(trustBundles))
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
 
 // getExchangedToken gets the exchanged token for the CSR. The token is either the k8s jwt token of the

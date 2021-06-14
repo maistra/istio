@@ -15,8 +15,6 @@
 package model
 
 import (
-	"context"
-
 	hashstructure "github.com/mitchellh/hashstructure/v2"
 )
 
@@ -78,5 +76,5 @@ func (s *ServiceMessage) GenerateChecksum() uint64 {
 }
 
 type TrustBundleProvider interface {
-	GetTrustBundles(ctx context.Context) (map[string]string, error)
+	GetTrustBundles() map[string]string
 }
