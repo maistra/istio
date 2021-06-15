@@ -206,7 +206,7 @@ func TestReconcile(t *testing.T) {
 					Name: "test-egress",
 				},
 			},
-			Security: &maistrav1.MeshFederationSecurity{
+			Security: maistrav1.MeshFederationSecurity{
 				ClientID:            "cluster.local/ns/test-mesh/sa/test-egress-service-account",
 				TrustDomain:         "test.local",
 				CertificateChain:    "dummy",
