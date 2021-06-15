@@ -19,7 +19,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"maistra.io/api/federation/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
@@ -34,7 +34,6 @@ func setHostname(name *federationmodel.ServiceKey, domainSuffix string) {
 
 type NameMapper interface {
 	NameForService(svc *model.Service) *federationmodel.ServiceKey
-	UpdateDefaultMapper(defaults NameMapper)
 }
 
 type nameMatcher struct {
@@ -87,8 +86,6 @@ func (m *nameMatcher) NameForService(svc *model.Service) *federationmodel.Servic
 	return nil
 }
 
-func (m *nameMatcher) UpdateDefaultMapper(_ NameMapper) {}
-
 type labelMatcher struct {
 	domainSuffix string
 	namespace    string
@@ -98,7 +95,7 @@ type labelMatcher struct {
 
 var _ NameMapper = (*labelMatcher)(nil)
 
-func newLabelMatcher(labelSelector *v1.ServiceImportExportLabelelector, domainSuffix string) (NameMapper, error) {
+func newLabelMatcher(labelSelector *v1.ServiceImportExportLabelSelector, domainSuffix string) (NameMapper, error) {
 	selector, err := metav1.LabelSelectorAsSelector(&labelSelector.Selector)
 	if err != nil {
 		return nil, err
@@ -134,5 +131,3 @@ func (m *labelMatcher) NameForService(svc *model.Service) *federationmodel.Servi
 	}
 	return nil
 }
-
-func (m *labelMatcher) UpdateDefaultMapper(_ NameMapper) {}

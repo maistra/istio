@@ -24,6 +24,7 @@ import (
 	rawnetworking "istio.io/api/networking/v1alpha3"
 	rawsecurity "istio.io/api/security/v1beta1"
 	rawtype "istio.io/api/type/v1beta1"
+	"istio.io/istio/pilot/pkg/config/kube/ior"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
@@ -126,7 +127,7 @@ func (s *meshServer) createOrUpdateAuthorizationPolicy(target *federationmodel.S
 	name := fmt.Sprintf("federation-exports-%s", s.mesh.Name)
 	rawAP := s.configStore.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), name, s.mesh.Namespace)
 	if rawAP == nil {
-		if s.mesh.Spec.Security == nil || s.mesh.Spec.Security.ClientID == "" {
+		if s.mesh.Spec.Security.ClientID == "" {
 			s.logger.Errorf("no ClientID specified for MeshFederation %s/%s: AuthorizationPolicy for exported services will not be created",
 				s.mesh.Namespace, s.mesh.Name)
 			return nil
@@ -162,7 +163,7 @@ func (s *meshServer) createOrUpdateAuthorizationPolicy(target *federationmodel.S
 										target.Hostname,
 									},
 									Ports: []string{
-										strconv.FormatInt(common.FederationPort, 10),
+										strconv.FormatInt(common.DefaultFederationPort, 10),
 									},
 								},
 							},
@@ -197,7 +198,7 @@ func (s *meshServer) createOrUpdateAuthorizationPolicy(target *federationmodel.S
 func (s *meshServer) gatewayForExport(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) *config.Config {
 	resourceName := createResourceName(s.mesh.Name, source)
 	mode := rawnetworking.ServerTLSSettings_ISTIO_MUTUAL
-	if s.mesh.Spec.Security != nil && s.mesh.Spec.Security.AllowDirectInbound {
+	if s.mesh.Spec.Security.AllowDirectInbound {
 		// XXX: this will not work, as the exported services will have a different domain suffix
 		// for example, svc.mesh2.local as opposed to svc.cluster.local
 		mode = rawnetworking.ServerTLSSettings_AUTO_PASSTHROUGH
@@ -207,6 +208,7 @@ func (s *meshServer) gatewayForExport(source federationmodel.ServiceKey, target 
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 			Name:             resourceName,
 			Namespace:        s.mesh.Namespace,
+			Annotations:      map[string]string{ior.ShouldManageRouteAnnotation: "false"},
 		},
 		Spec: &rawnetworking.Gateway{
 			Selector: map[string]string{
@@ -221,7 +223,7 @@ func (s *meshServer) gatewayForExport(source federationmodel.ServiceKey, target 
 					},
 					Port: &rawnetworking.Port{
 						Name:     "tls-federation",
-						Number:   uint32(common.FederationPort),
+						Number:   uint32(common.DefaultFederationPort),
 						Protocol: "TLS",
 					},
 					Tls: &rawnetworking.ServerTLSSettings{
