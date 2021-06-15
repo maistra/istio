@@ -28,7 +28,7 @@ import (
 	"github.com/gorilla/mux"
 	hashstructure "github.com/mitchellh/hashstructure/v2"
 	"k8s.io/apimachinery/pkg/util/errors"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/host"
@@ -50,9 +50,9 @@ type Options struct {
 }
 
 type FederationManager interface {
-	AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alpha1.ServiceExports, statusHandler status.Handler) error
+	AddMeshFederation(mesh *v1.MeshFederation, exports *v1.ServiceExports, statusHandler status.Handler) error
 	DeleteMeshFederation(name string)
-	UpdateExportsForMesh(exports *v1alpha1.ServiceExports) error
+	UpdateExportsForMesh(exports *v1.ServiceExports) error
 	DeleteExportsForMesh(name string)
 }
 
@@ -117,11 +117,11 @@ func exportDomainSuffix(mesh string) string {
 	return fmt.Sprintf("svc.%s-exports.local", mesh)
 }
 
-func (s *Server) ingressServiceName(mesh *v1alpha1.MeshFederation) string {
+func (s *Server) ingressServiceName(mesh *v1.MeshFederation) string {
 	return fmt.Sprintf("%s.%s.svc.%s", mesh.Spec.Gateways.Ingress.Name, mesh.Namespace, s.env.GetDomainSuffix())
 }
 
-func (s *Server) AddMeshFederation(mesh *v1alpha1.MeshFederation, exports *v1alpha1.ServiceExports, statusHandler status.Handler) error {
+func (s *Server) AddMeshFederation(mesh *v1.MeshFederation, exports *v1.ServiceExports, statusHandler status.Handler) error {
 	exportConfig := common.NewServiceExporter(exports, s.defaultExportConfig, exportDomainSuffix(mesh.Name))
 
 	untypedMeshServer, ok := s.meshes.Load(mesh.Name)
@@ -154,7 +154,7 @@ func (s *Server) DeleteMeshFederation(name string) {
 	ms.(*meshServer).stop()
 }
 
-func (s *Server) UpdateExportsForMesh(exports *v1alpha1.ServiceExports) error {
+func (s *Server) UpdateExportsForMesh(exports *v1.ServiceExports) error {
 	untypedMeshServer, ok := s.meshes.Load(exports.Name)
 	if untypedMeshServer == nil || !ok {
 		return fmt.Errorf("cannot update exporter for non-existent federation: %s", exports.Name)
@@ -317,7 +317,7 @@ type meshServer struct {
 
 	env *model.Environment
 
-	mesh         *v1alpha1.MeshFederation
+	mesh         *v1.MeshFederation
 	exportConfig *common.ServiceExporter
 
 	statusHandler status.Handler
@@ -338,7 +338,7 @@ func (s *meshServer) updateExportConfig(exportConfig *common.ServiceExporter) {
 	s.resync()
 }
 
-func (s *meshServer) getServiceHostName(exportedName *v1alpha1.ServiceName) string {
+func (s *meshServer) getServiceHostName(exportedName *v1.ServiceName) string {
 	return fmt.Sprintf("%s.%s.svc.%s-exports.local", exportedName.Name, exportedName.Namespace, s.mesh.Name)
 }
 

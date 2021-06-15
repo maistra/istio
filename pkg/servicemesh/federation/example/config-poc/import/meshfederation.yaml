@@ -1,4 +1,4 @@
-apiVersion: maistra.io/v1alpha1
+apiVersion: maistra.io/v1
 kind: MeshFederation
 metadata:
   name: mesh1

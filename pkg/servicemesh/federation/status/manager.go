@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	maistraclient "maistra.io/api/client/versioned"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/federation/common"
@@ -40,7 +40,7 @@ var federationStatusPatchMetadata strategicpatch.LookupPatchMeta
 
 func init() {
 	var err error
-	federationStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1alpha1.FederationStatus{})
+	federationStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1.FederationStatus{})
 	if err != nil {
 		panic("error creating strategicpatch.LookupPatchMeta for use with FederationStatus resources")
 	}
@@ -97,7 +97,7 @@ func newManager(name types.NamespacedName, kubeClient kube.Client, cs maistracli
 		logger:   common.Logger.WithLabels("component", "federation-status"),
 		name:     name,
 		handlers: map[types.NamespacedName]*handler{},
-		status:   v1alpha1.FederationStatusStatus{Meshes: []v1alpha1.FederationStatusDetails{}},
+		status:   v1.FederationStatusStatus{Meshes: []v1.FederationStatusDetails{}},
 	}
 }
 
@@ -111,7 +111,7 @@ type manager struct {
 
 	handlers map[types.NamespacedName]*handler
 
-	status                v1alpha1.FederationStatusStatus
+	status                v1.FederationStatusStatus
 	missingCRDErrorLogged bool
 }
 
@@ -159,8 +159,8 @@ func (m *manager) PushStatus() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	newStatus := &v1alpha1.FederationStatus{
-		Status: v1alpha1.FederationStatusStatus{Meshes: []v1alpha1.FederationStatusDetails{}},
+	newStatus := &v1.FederationStatus{
+		Status: v1.FederationStatusStatus{Meshes: []v1.FederationStatusDetails{}},
 	}
 	for _, handler := range m.handlers {
 		newStatus.Status.Meshes = append(newStatus.Status.Meshes, *handler.currentStatus())
@@ -174,7 +174,7 @@ func (m *manager) PushStatus() error {
 	if err != nil {
 		return err
 	}
-	oldBytes, err := json.Marshal(&v1alpha1.FederationStatus{
+	oldBytes, err := json.Marshal(&v1.FederationStatus{
 		Status: m.status,
 	})
 	if err != nil {
@@ -196,7 +196,7 @@ func (m *manager) PushStatus() error {
 		return nil
 	}
 
-	fedStatus, err := m.cs.CoreV1alpha1().FederationStatuses(m.name.Namespace).
+	fedStatus, err := m.cs.CoreV1().FederationStatuses(m.name.Namespace).
 		Patch(context.TODO(), m.name.Name, types.MergePatchType, patch, metav1.PatchOptions{}, "status")
 	if err == nil {
 		m.missingCRDErrorLogged = false
@@ -221,7 +221,7 @@ func (m *manager) PushStatus() error {
 		return err
 	}
 	controller := true
-	newFedStatus := &v1alpha1.FederationStatus{
+	newFedStatus := &v1.FederationStatus{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.name.Name,
 			Namespace: m.name.Namespace,
@@ -237,11 +237,11 @@ func (m *manager) PushStatus() error {
 		},
 		Status: *m.status.DeepCopy(),
 	}
-	_, err = m.cs.CoreV1alpha1().FederationStatuses(m.name.Namespace).
+	_, err = m.cs.CoreV1().FederationStatuses(m.name.Namespace).
 		Create(context.TODO(), newFedStatus, metav1.CreateOptions{})
 	if err == nil {
 		// we can't create status, so we need to apply it separately
-		fedStatus, err = m.cs.CoreV1alpha1().FederationStatuses(m.name.Namespace).
+		fedStatus, err = m.cs.CoreV1().FederationStatuses(m.name.Namespace).
 			Patch(context.TODO(), m.name.Name, types.MergePatchType, patch, metav1.PatchOptions{}, "status")
 		if err == nil {
 			m.status = *fedStatus.Status.DeepCopy()

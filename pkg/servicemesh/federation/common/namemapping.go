@@ -19,7 +19,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
@@ -39,18 +39,18 @@ type NameMapper interface {
 
 type nameMatcher struct {
 	domainSuffix string
-	match        v1alpha1.ServiceName
-	alias        *v1alpha1.ServiceName
+	match        v1.ServiceName
+	alias        *v1.ServiceName
 }
 
 var _ NameMapper = (*nameMatcher)(nil)
 
-func newNameMatcher(mapping *v1alpha1.ServiceNameMapping, domainSuffix string) NameMapper {
-	var alias *v1alpha1.ServiceName
+func newNameMatcher(mapping *v1.ServiceNameMapping, domainSuffix string) NameMapper {
+	var alias *v1.ServiceName
 	// if it's nil or matches anything, it may as well be nil
 	if mapping.Alias == nil ||
-		((mapping.Alias.Namespace == v1alpha1.MatchAny || mapping.Alias.Namespace == "") &&
-			(mapping.Alias.Name == v1alpha1.MatchAny || mapping.Alias.Name == "")) {
+		((mapping.Alias.Namespace == v1.MatchAny || mapping.Alias.Namespace == "") &&
+			(mapping.Alias.Name == v1.MatchAny || mapping.Alias.Name == "")) {
 		alias = nil
 	} else {
 		alias = mapping.Alias.DeepCopy()
@@ -63,19 +63,19 @@ func newNameMatcher(mapping *v1alpha1.ServiceNameMapping, domainSuffix string) N
 }
 
 func (m *nameMatcher) NameForService(svc *model.Service) *federationmodel.ServiceKey {
-	if (m.match.Namespace == "" || m.match.Namespace == v1alpha1.MatchAny || m.match.Namespace == svc.Attributes.Namespace) &&
-		(m.match.Name == "" || m.match.Name == v1alpha1.MatchAny || m.match.Name == svc.Attributes.Name) {
+	if (m.match.Namespace == "" || m.match.Namespace == v1.MatchAny || m.match.Namespace == svc.Attributes.Namespace) &&
+		(m.match.Name == "" || m.match.Name == v1.MatchAny || m.match.Name == svc.Attributes.Name) {
 		name := &federationmodel.ServiceKey{}
 		if m.alias == nil {
 			name.Namespace = svc.Attributes.Namespace
 			name.Name = svc.Attributes.Name
 		} else {
-			if m.alias.Namespace == v1alpha1.MatchAny || m.alias.Namespace == "" {
+			if m.alias.Namespace == v1.MatchAny || m.alias.Namespace == "" {
 				name.Namespace = svc.Attributes.Namespace
 			} else {
 				name.Namespace = m.alias.Namespace
 			}
-			if m.alias.Name == v1alpha1.MatchAny || m.alias.Name == "" {
+			if m.alias.Name == v1.MatchAny || m.alias.Name == "" {
 				name.Name = svc.Attributes.Name
 			} else {
 				name.Name = m.alias.Name
@@ -98,7 +98,7 @@ type labelMatcher struct {
 
 var _ NameMapper = (*labelMatcher)(nil)
 
-func newLabelMatcher(labelSelector *v1alpha1.ServiceImportExportLabelelector, domainSuffix string) (NameMapper, error) {
+func newLabelMatcher(labelSelector *v1.ServiceImportExportLabelelector, domainSuffix string) (NameMapper, error) {
 	selector, err := metav1.LabelSelectorAsSelector(&labelSelector.Selector)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func newLabelMatcher(labelSelector *v1alpha1.ServiceImportExportLabelelector, do
 }
 
 func (m *labelMatcher) NameForService(svc *model.Service) *federationmodel.ServiceKey {
-	if (m.namespace == "" || m.namespace == v1alpha1.MatchAny || m.namespace == svc.Attributes.Namespace) &&
+	if (m.namespace == "" || m.namespace == v1.MatchAny || m.namespace == svc.Attributes.Namespace) &&
 		m.selector.Matches(labels.Set(svc.Attributes.Labels)) {
 		for _, alias := range m.aliases {
 			if name := alias.NameForService(svc); name != nil {

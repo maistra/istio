@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/api/label"
 	"istio.io/istio/pilot/pkg/model"
@@ -113,7 +113,7 @@ type Options struct {
 	ResyncPeriod   time.Duration
 }
 
-func defaultDomainSuffixForMesh(mesh *v1alpha1.MeshFederation) string {
+func defaultDomainSuffixForMesh(mesh *v1.MeshFederation) string {
 	return fmt.Sprintf("svc.%s-imports.local", mesh.Name)
 }
 
@@ -125,7 +125,7 @@ func localDomainSuffix(domainSuffix string) string {
 }
 
 // NewController creates a new Aggregate controller
-func NewController(opt Options, mesh *v1alpha1.MeshFederation, defaultImportConfig, importConfig *v1alpha1.ServiceImports) *Controller {
+func NewController(opt Options, mesh *v1.MeshFederation, defaultImportConfig, importConfig *v1.ServiceImports) *Controller {
 	backoffPolicy := backoff.NewExponentialBackOff()
 	backoffPolicy.MaxElapsedTime = 0
 	localDomainSuffix := localDomainSuffix(opt.DomainSuffix)
@@ -159,7 +159,7 @@ func NewController(opt Options, mesh *v1alpha1.MeshFederation, defaultImportConf
 	}
 }
 
-func (c *Controller) UpdateImportConfig(importConfig *v1alpha1.ServiceImports) {
+func (c *Controller) UpdateImportConfig(importConfig *v1.ServiceImports) {
 	func() {
 		c.storeLock.Lock()
 		defer c.storeLock.Unlock()
@@ -168,7 +168,7 @@ func (c *Controller) UpdateImportConfig(importConfig *v1alpha1.ServiceImports) {
 	c.resync()
 }
 
-func (c *Controller) UpdateDefaultImportConfig(importConfig *v1alpha1.ServiceImports) {
+func (c *Controller) UpdateDefaultImportConfig(importConfig *v1.ServiceImports) {
 	func() {
 		c.storeLock.Lock()
 		defer c.storeLock.Unlock()

@@ -27,9 +27,9 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
+	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1"
 	maistraclient "maistra.io/api/client/versioned"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
@@ -102,13 +102,13 @@ func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRoll
 			return cache.NewSharedIndexInformer(
 				&cache.ListWatch{
 					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return cs.CoreV1alpha1().MeshFederations(namespace).List(context.TODO(), options)
+						return cs.CoreV1().MeshFederations(namespace).List(context.TODO(), options)
 					},
 					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						return cs.CoreV1alpha1().MeshFederations(namespace).Watch(context.TODO(), options)
+						return cs.CoreV1().MeshFederations(namespace).Watch(context.TODO(), options)
 					},
 				},
-				&v1alpha1.MeshFederation{},
+				&v1.MeshFederation{},
 				opt.ResyncPeriod,
 				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 			)
@@ -175,11 +175,11 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.cs.CoreV1alpha1().MeshFederations(namespace).Get(
+	instance, err := c.cs.CoreV1().MeshFederations(namespace).Get(
 		ctx, name, metav1.GetOptions{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "MeshFederation",
-				APIVersion: v1alpha1.SchemeGroupVersion.String(),
+				APIVersion: v1.SchemeGroupVersion.String(),
 			},
 		})
 	if err != nil {
@@ -187,7 +187,7 @@ func (c *Controller) reconcile(resourceName string) error {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			err = c.delete(ctx, &v1alpha1.MeshFederation{
+			err = c.delete(ctx, &v1.MeshFederation{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: namespace,
@@ -204,7 +204,7 @@ func (c *Controller) reconcile(resourceName string) error {
 	return c.update(ctx, instance)
 }
 
-func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederation) error {
+func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) error {
 	registry := c.getRegistry(instance.Name)
 
 	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
@@ -232,17 +232,17 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 	} else {
 		// if there's no existing registry
 		c.Logger.Infof("Creating export handler for Federation to %s", instance.Name)
-		exportConfig, err := c.cs.CoreV1alpha1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		exportConfig, err := c.cs.CoreV1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
 			c.Logger.Errorf("error retrieving ServiceExports associated with MeshFederation %s: %s", instance.Name, err)
 			return err
 		}
-		defaultImportConfig, err := c.cs.CoreV1alpha1().ServiceImports(instance.Namespace).Get(context.TODO(), "default", metav1.GetOptions{})
+		defaultImportConfig, err := c.cs.CoreV1().ServiceImports(instance.Namespace).Get(context.TODO(), "default", metav1.GetOptions{})
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
 			c.Logger.Errorf("error retrieving default ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
 			return err
 		}
-		importConfig, err := c.cs.CoreV1alpha1().ServiceImports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		importConfig, err := c.cs.CoreV1().ServiceImports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
 			c.Logger.Errorf("error retrieving ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
 			return err
@@ -291,7 +291,7 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 	return nil
 }
 
-func (c *Controller) delete(ctx context.Context, instance *v1alpha1.MeshFederation) error {
+func (c *Controller) delete(ctx context.Context, instance *v1.MeshFederation) error {
 	var allErrors []error
 	// delete the server
 	c.federationManager.DeleteMeshFederation(instance.Name)

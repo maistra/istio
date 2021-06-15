@@ -17,7 +17,7 @@ package common
 import (
 	"sync"
 
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
@@ -32,7 +32,7 @@ type ServiceImporter struct {
 
 var _ NameMapper = (*ServiceImporter)(nil)
 
-func NewServiceImporter(importConfig *v1alpha1.ServiceImports, defaultMapper NameMapper, defaultDomainSuffix, localDomainSuffix string) *ServiceImporter {
+func NewServiceImporter(importConfig *v1.ServiceImports, defaultMapper NameMapper, defaultDomainSuffix, localDomainSuffix string) *ServiceImporter {
 	return &ServiceImporter{
 		domainSuffix:  defaultDomainSuffix,
 		importConfig:  convertServiceImportsToNameMapper(importConfig, defaultDomainSuffix, localDomainSuffix),
@@ -40,7 +40,7 @@ func NewServiceImporter(importConfig *v1alpha1.ServiceImports, defaultMapper Nam
 	}
 }
 
-func convertServiceImportsToNameMapper(serviceImports *v1alpha1.ServiceImports, defaultDomainSuffix, localDomainSuffix string) []NameMapper {
+func convertServiceImportsToNameMapper(serviceImports *v1.ServiceImports, defaultDomainSuffix, localDomainSuffix string) []NameMapper {
 	if serviceImports == nil {
 		return nil
 	}
@@ -49,7 +49,7 @@ func convertServiceImportsToNameMapper(serviceImports *v1alpha1.ServiceImports, 
 	}
 	var importConfig []NameMapper
 	for index, rule := range serviceImports.Spec.Imports {
-		if rule.Type != v1alpha1.NameSelectorType {
+		if rule.Type != v1.NameSelectorType {
 			Logger.Errorf("skipping rule %d in ServiceImports %s/%s: unknown selector type %s",
 				rule.Type, index, serviceImports.Namespace, serviceImports.Name)
 			continue
@@ -60,7 +60,7 @@ func convertServiceImportsToNameMapper(serviceImports *v1alpha1.ServiceImports, 
 		}
 		ruleDomainSuffix := rule.DomainSuffix
 		if rule.ImportAsLocal {
-			if rule.NameSelector.Alias == nil || rule.NameSelector.Alias.Namespace == "" || rule.NameSelector.Alias.Namespace == v1alpha1.MatchAny {
+			if rule.NameSelector.Alias == nil || rule.NameSelector.Alias.Namespace == "" || rule.NameSelector.Alias.Namespace == v1.MatchAny {
 				Logger.Errorf("skipping rule %d in ServiceImports %s/%s: cannot use importAsLocal without setting a fixed namespace alias",
 					index, serviceImports.Namespace, serviceImports.Name)
 				continue
