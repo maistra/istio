@@ -126,7 +126,7 @@ func (s *meshServer) createOrUpdateAuthorizationPolicy(target *federationmodel.S
 	name := fmt.Sprintf("federation-exports-%s", s.mesh.Name)
 	rawAP := s.configStore.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), name, s.mesh.Namespace)
 	if rawAP == nil {
-		if s.mesh.Spec.Security == nil || s.mesh.Spec.Security.ClientID == "" {
+		if s.mesh.Spec.Security.ClientID == "" {
 			s.logger.Errorf("no ClientID specified for MeshFederation %s/%s: AuthorizationPolicy for exported services will not be created",
 				s.mesh.Namespace, s.mesh.Name)
 			return nil
@@ -197,7 +197,7 @@ func (s *meshServer) createOrUpdateAuthorizationPolicy(target *federationmodel.S
 func (s *meshServer) gatewayForExport(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) *config.Config {
 	resourceName := createResourceName(s.mesh.Name, source)
 	mode := rawnetworking.ServerTLSSettings_ISTIO_MUTUAL
-	if s.mesh.Spec.Security != nil && s.mesh.Spec.Security.AllowDirectInbound {
+	if s.mesh.Spec.Security.AllowDirectInbound {
 		// XXX: this will not work, as the exported services will have a different domain suffix
 		// for example, svc.mesh2.local as opposed to svc.cluster.local
 		mode = rawnetworking.ServerTLSSettings_AUTO_PASSTHROUGH

@@ -265,7 +265,7 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 			EgressName:     instance.Spec.Gateways.Egress.Name,
 			EgressService:  egressGatewayService,
 			Namespace:      instance.Namespace,
-			UseDirectCalls: instance.Spec.Security != nil && instance.Spec.Security.AllowDirectOutbound,
+			UseDirectCalls: instance.Spec.Security.AllowDirectOutbound,
 			KubeClient:     c.kubeClient,
 			ConfigStore:    c.ConfigStoreCache,
 			StatusHandler:  statusHandler,
