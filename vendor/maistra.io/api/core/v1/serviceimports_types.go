@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1alpha1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,6 +55,8 @@ type ServiceImportsSpec struct {
 	//    <imported-name>.<imported-namespace>.<domain-suffix>
 	// +optional
 	DomainSuffix string `json:"domainSuffix,omitempty"`
+	// Locality within which imported services should be associated.
+	Locality *ServiceImportLocality `json:"locality,omitempty"`
 	// Imports are the rules that determine which services are imported to the
 	// mesh.  The list is processed in order and the first spec in the list that
 	// applies to a service is the one that will be applied.  This allows more
@@ -82,6 +84,17 @@ type ServiceImportRule struct {
 	// the mesh.
 	// +optional
 	NameSelector *ServiceNameMapping `json:"nameSelector,omitempty"`
+}
+
+type ServiceImportLocality struct {
+	// Region within which imported services are located.
+	Region string `json:"region,omitempty"`
+	// Zone within which imported services are located.  If Zone is specified,
+	// Region must also be specified.
+	Zone string `json:"zone,omitempty"`
+	// Subzone within which imported services are located.  If Subzone is
+	// specified, Zone must also be specified.
+	Subzone string `json:"subzone,omitempty"`
 }
 
 type ServiceImportsStatus struct {
