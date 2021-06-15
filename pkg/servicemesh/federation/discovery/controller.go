@@ -19,17 +19,12 @@ import (
 	"sync"
 	"time"
 
-	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
-	maistraclient "maistra.io/api/client/versioned"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
@@ -37,9 +32,7 @@ import (
 	federationregistry "istio.io/istio/pilot/pkg/serviceregistry/federation"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
 	"istio.io/istio/pkg/cluster"
-	"istio.io/istio/pkg/kube"
 	kubecontroller "istio.io/istio/pkg/kube/controller"
-	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/server"
 	"istio.io/istio/pkg/servicemesh/federation/status"
@@ -48,7 +41,8 @@ import (
 const controllerName = "federation-discovery-controller"
 
 type Options struct {
-	common.ControllerOptions
+	ResourceManager   common.ResourceManager
+	ResyncPeriod      time.Duration
 	ServiceController *aggregate.Controller
 	XDSUpdater        model.XDSUpdater
 	Env               *model.Environment
@@ -64,8 +58,7 @@ type Controller struct {
 	model.ConfigStoreCache
 	localNetwork      string
 	localClusterID    string
-	kubeClient        kube.Client
-	cs                maistraclient.Interface
+	rm                common.ResourceManager
 	env               *model.Environment
 	federationManager server.FederationManager
 	statusManager     status.Manager
@@ -73,6 +66,7 @@ type Controller struct {
 	xds               model.XDSUpdater
 	mu                sync.Mutex
 	stopChannels      map[cluster.ID]chan struct{}
+	trustBundles      map[string]string
 }
 
 var (
@@ -86,69 +80,30 @@ func NewController(opt Options) (*Controller, error) {
 		return nil, err
 	}
 
-	cs, err := maistraclient.NewForConfig(opt.KubeClient.RESTConfig())
-	if err != nil {
-		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
-	}
-
-	mrc := opt.KubeClient.GetMemberRoll()
-
-	return internalNewController(cs, mrc, opt), nil
-}
-
-// allows using a fake client set for testing purposes
-func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
 	logger := common.Logger.WithLabels("component", controllerName)
-	var informer cache.SharedIndexInformer
-	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
-	if mrc != nil && false {
-		newInformer := func(namespace string) cache.SharedIndexInformer {
-			return cache.NewSharedIndexInformer(
-				&cache.ListWatch{
-					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return cs.CoreV1alpha1().MeshFederations(namespace).List(context.TODO(), options)
-					},
-					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						return cs.CoreV1alpha1().MeshFederations(namespace).Watch(context.TODO(), options)
-					},
-				},
-				&v1alpha1.MeshFederation{},
-				opt.ResyncPeriod,
-				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-			)
-		}
-
-		namespaceSet := xnsinformers.NewNamespaceSet()
-		informer = xnsinformers.NewMultiNamespaceInformer(namespaceSet, opt.ResyncPeriod, newInformer)
-		mrc.Register(namespaceSet, controllerName)
-	} else {
-		informer = maistrainformers.NewMeshFederationInformer(
-			cs, opt.Namespace, opt.ResyncPeriod,
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
-	}
 
 	controller := &Controller{
 		ConfigStoreCache:  opt.ConfigStore,
 		localClusterID:    opt.LocalClusterID,
 		localNetwork:      opt.LocalNetwork,
-		kubeClient:        opt.KubeClient,
-		cs:                cs,
+		rm:                opt.ResourceManager,
 		env:               opt.Env,
 		sc:                opt.ServiceController,
 		stopChannels:      make(map[cluster.ID]chan struct{}),
 		xds:               opt.XDSUpdater,
 		federationManager: opt.FederationManager,
 		statusManager:     opt.StatusManager,
+		trustBundles:      map[string]string{},
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
-		Informer:     informer,
+		Informer:     opt.ResourceManager.PeerInformer().Informer(),
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
 	})
 	controller.Controller = internalController
 
-	return controller
+	return controller, nil
 }
 
 func (c *Controller) Run(stopChan <-chan struct{}) {
@@ -164,13 +119,17 @@ func (c *Controller) HasSynced() bool {
 	return c.Controller.HasSynced()
 }
 
+func (c *Controller) RunInformer(stopChan <-chan struct{}) {
+	// no-op, informer is started by the shared factory in Federation.Start()
+}
+
 func (c *Controller) reconcile(resourceName string) error {
-	c.Logger.Debugf("Reconciling MeshFederation %s", resourceName)
+	c.Logger.Debugf("Reconciling ServiceMeshPeer %s", resourceName)
 	defer func() {
 		if err := c.statusManager.PushStatus(); err != nil {
 			c.Logger.Errorf("error pushing FederationStatus for mesh %s: %s", resourceName, err)
 		}
-		c.Logger.Debugf("Completed reconciliation of MeshFederation %s", resourceName)
+		c.Logger.Debugf("Completed reconciliation of ServiceMeshPeer %s", resourceName)
 	}()
 
 	ctx := context.TODO()
@@ -179,26 +138,20 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.cs.CoreV1alpha1().MeshFederations(namespace).Get(
-		ctx, name, metav1.GetOptions{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "MeshFederation",
-				APIVersion: v1alpha1.SchemeGroupVersion.String(),
-			},
-		})
+	instance, err := c.rm.PeerInformer().Lister().ServiceMeshPeers(namespace).Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			err = c.delete(ctx, &v1alpha1.MeshFederation{
+			err = c.delete(ctx, &v1.ServiceMeshPeer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: namespace,
 				},
 			})
 			if err == nil {
-				c.Logger.Info("MeshFederation deleted")
+				c.Logger.Info("ServiceMeshPeer deleted")
 			}
 		}
 		// Error reading the object
@@ -208,69 +161,56 @@ func (c *Controller) reconcile(resourceName string) error {
 	return c.update(ctx, instance)
 }
 
-func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederation) error {
+func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) error {
 	registry := c.getRegistry(cluster.ID(instance.Name))
+	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.TrustDomain != c.env.Mesh().GetTrustDomain() {
+		rootCert, err := c.getRootCertForMesh(instance)
+		if err != nil {
+			return err
+		}
+		c.updateRootCert(instance.Spec.Security.TrustDomain, rootCert)
+	}
 
-	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
-		instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.DomainSuffix)
+	if err := c.createDiscoveryResources(ctx, instance, c.env.Mesh()); err != nil {
+		return err
+	}
+
+	importConfig, err := c.rm.ImportsInformer().Lister().ImportedServiceSets(instance.Namespace).Get(instance.Name)
+	if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
+		c.Logger.Errorf("error retrieving ServiceImports associated with ServiceMeshPeer %s: %s", instance.Name, err)
+		return err
+	}
 
 	// check for existing registry
 	if registry != nil {
-		// if there's an existing registry
-		// make sure it's one of ours
+		// if there's an existing registry, make sure it's one of ours
 		if registry.Provider() != provider.Federation {
 			return fmt.Errorf(
 				"cannot create Federation registry for %s, registry exists and belongs to another provider (%s)",
 				instance.Name, registry.Provider())
 		}
-		// check to see if it needs updating
-		// TODO: support updates
 		if federationRegistry, ok := registry.(*federationregistry.Controller); ok {
-			if federationRegistry.NetworkAddress() != instance.Spec.NetworkAddress {
-				// TODO: support updates
-				c.Logger.Warnf("updating NetworkAddress for MeshFederation (%s) is not supported", instance.Name)
-			}
+			c.Logger.Debugf("updating settings for ServiceMeshPeer %s", instance.Name)
+			federationRegistry.UpdatePeerConfig(instance)
+			federationRegistry.UpdateImportConfig(importConfig)
 		} else {
 			return fmt.Errorf("registry %s is not a Federation registry (type=%T)", instance.Name, registry)
 		}
 	} else {
 		// if there's no existing registry
-		c.Logger.Infof("Creating export handler for Federation to %s", instance.Name)
-		exportConfig, err := c.cs.CoreV1alpha1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		exportConfig, err := c.rm.ExportsInformer().Lister().ExportedServiceSets(instance.Namespace).Get(instance.Name)
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
-			c.Logger.Errorf("error retrieving ServiceExports associated with MeshFederation %s: %s", instance.Name, err)
+			c.Logger.Errorf("error retrieving ServiceExports associated with ServiceMeshPeer %s: %s", instance.Name, err)
 			return err
 		}
-		defaultImportConfig, err := c.cs.CoreV1alpha1().ServiceImports(instance.Namespace).Get(context.TODO(), "default", metav1.GetOptions{})
-		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
-			c.Logger.Errorf("error retrieving default ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
+		statusHandler := c.statusManager.PeerAdded(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
+		if err := c.federationManager.AddPeer(instance, exportConfig, statusHandler); err != nil {
 			return err
 		}
-		importConfig, err := c.cs.CoreV1alpha1().ServiceImports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
-		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
-			c.Logger.Errorf("error retrieving ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
-			return err
-		}
-
-		statusHandler := c.statusManager.FederationAdded(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
-		if err := c.federationManager.AddMeshFederation(instance, exportConfig, statusHandler); err != nil {
-			return err
-		}
-
-		c.Logger.Infof("Creating Istio resources for Federation discovery from %s", instance.Name)
-		if err := c.createDiscoveryResources(ctx, instance, c.env.Mesh()); err != nil {
-			return err
-		}
-
-		c.Logger.Infof("Initializing Federation service registry for %q at %s", instance.Name, instance.Spec.NetworkAddress)
+		c.Logger.Infof("initializing Federation service registry for %q at %s", instance.Name, instance.Spec.Remote.Addresses)
 		// create a registry instance
 		options := federationregistry.Options{
-			NetworkAddress: instance.Spec.NetworkAddress,
-			EgressName:     instance.Spec.Gateways.Egress.Name,
-			EgressService:  egressGatewayService,
-			Namespace:      instance.Namespace,
-			UseDirectCalls: instance.Spec.Security != nil && instance.Spec.Security.AllowDirectOutbound,
-			KubeClient:     c.kubeClient,
+			KubeClient:     c.rm.KubeClient(),
 			ConfigStore:    c.ConfigStoreCache,
 			StatusHandler:  statusHandler,
 			XDSUpdater:     c.xds,
@@ -281,7 +221,7 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 			ClusterID:      instance.Name,
 			Network:        fmt.Sprintf("network-%s", instance.Name),
 		}
-		registry = federationregistry.NewController(options, instance, defaultImportConfig, importConfig)
+		registry = federationregistry.NewController(options, instance, importConfig)
 		// register the new instance
 		c.sc.AddRegistry(registry)
 
@@ -295,10 +235,15 @@ func (c *Controller) update(ctx context.Context, instance *v1alpha1.MeshFederati
 	return nil
 }
 
-func (c *Controller) delete(ctx context.Context, instance *v1alpha1.MeshFederation) error {
+func (c *Controller) delete(ctx context.Context, instance *v1.ServiceMeshPeer) error {
 	var allErrors []error
 	// delete the server
-	c.federationManager.DeleteMeshFederation(instance.Name)
+	c.federationManager.DeletePeer(instance.Name)
+
+	// delete trust bundle
+	if instance.Spec.Security.TrustDomain != "" {
+		c.updateRootCert(instance.Spec.Security.TrustDomain, "")
+	}
 
 	// delete the registry
 	registry := c.getRegistry(cluster.ID(instance.Name))
@@ -325,7 +270,7 @@ func (c *Controller) delete(ctx context.Context, instance *v1alpha1.MeshFederati
 		allErrors = append(allErrors, err)
 	}
 
-	c.statusManager.FederationDeleted(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
+	c.statusManager.PeerDeleted(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
 
 	return utilerrors.NewAggregate(allErrors)
 }
@@ -341,8 +286,8 @@ func (c *Controller) getRegistry(clusterID cluster.ID) serviceregistry.Instance 
 
 func (opt Options) validate() error {
 	var allErrors []error
-	if opt.KubeClient == nil {
-		allErrors = append(allErrors, fmt.Errorf("the KubeClient field must not be nil"))
+	if opt.ResourceManager == nil {
+		allErrors = append(allErrors, fmt.Errorf("the ResourceManager field must not be nil"))
 	}
 	if opt.ServiceController == nil {
 		allErrors = append(allErrors, fmt.Errorf("the ServiceController field must not be nil"))
@@ -361,4 +306,56 @@ func (opt Options) validate() error {
 		common.Logger.WithLabels("component", controllerName).Warnf("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
 	}
 	return utilerrors.NewAggregate(allErrors)
+}
+
+func (c *Controller) getRootCertForMesh(instance *v1.ServiceMeshPeer) (string, error) {
+	if instance == nil {
+		return "", nil
+	}
+	name := instance.Spec.Security.CertificateChain.Name
+	if name == "" {
+		name = common.DefaultFederationCARootResourceName(instance)
+	}
+	entryKey := common.DefaultFederationRootCertName
+	switch instance.Spec.Security.CertificateChain.Kind {
+	case "", "ConfigMap":
+		cm, err := c.rm.KubeClient().KubeInformer().Core().V1().ConfigMaps().Lister().ConfigMaps(instance.Namespace).Get(name)
+		if err != nil {
+			return "", err
+		}
+		if cert, exists := cm.Data[entryKey]; exists {
+			return cert, nil
+		}
+		return "", fmt.Errorf("missing entry %s in ConfigMap %s/%s", entryKey, instance.Namespace, name)
+	default:
+		return "", fmt.Errorf("unknown Kind for CertificateChain object reference: %s", instance.Spec.Security.CertificateChain.Kind)
+	}
+}
+
+func (c *Controller) updateRootCert(trustDomain string, rootCert string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if rootCert == "" {
+		delete(c.trustBundles, trustDomain)
+	} else if existingCert, ok := c.trustBundles[trustDomain]; !ok || existingCert != rootCert {
+		c.trustBundles[trustDomain] = rootCert
+	} else {
+		// we didn't update the trust bundles, so we return early without pushing
+		return
+	}
+	c.xds.ConfigUpdate(&model.PushRequest{
+		Full:   true,
+		Reason: []model.TriggerReason{model.GlobalUpdate},
+	})
+}
+
+func (c *Controller) GetTrustBundles() map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// make a copy
+	ret := map[string]string{}
+	for td, cert := range c.trustBundles {
+		ret[td] = cert
+	}
+	return ret
 }

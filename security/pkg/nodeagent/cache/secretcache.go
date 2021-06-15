@@ -124,6 +124,10 @@ type secretCache struct {
 	mu       sync.RWMutex
 	workload *security.SecretItem
 	certRoot []byte
+
+	// Read/Write to trustBundleMap and trustBundleExpireTime should use getRootCertByTrustDomain() and setRootCertByTrustDomain().
+	trustBundleMap        map[string][]byte
+	trustBundleExpireTime time.Time
 }
 
 // GetRoot returns cached root cert and cert expiration time. This method is thread safe.
@@ -241,6 +245,30 @@ func (sc *SecretManagerClient) getCachedSecret(resourceName string) (secret *sec
 		return ns
 	}
 	return nil
+}
+
+func (sc *SecretManagerClient) GetTrustBundles() (trustBundles map[string][]byte, earliestExpiry time.Time) {
+	sc.cache.mu.RLock()
+	trustBundles = sc.cache.trustBundleMap
+	earliestExpiry = sc.cache.trustBundleExpireTime
+	if trustBundles != nil && sc.cache.certRoot != nil {
+		trustBundles[sc.configOptions.TrustDomain] = sc.cache.certRoot
+	}
+	sc.cache.mu.RUnlock()
+	return trustBundles, earliestExpiry
+}
+
+func (sc *SecretManagerClient) SetTrustBundles(trustBundles map[string][]byte, earliestExpiry time.Time) {
+	sc.cache.mu.Lock()
+	trustBundlesUpdated := !compareTrustBundles(sc.cache.trustBundleMap, trustBundles)
+	if trustBundlesUpdated {
+		sc.cache.trustBundleMap = trustBundles
+		sc.cache.trustBundleExpireTime = earliestExpiry
+	}
+	sc.cache.mu.Unlock()
+	if trustBundlesUpdated {
+		sc.CallUpdateCallback(security.RootCertReqResourceName)
+	}
 }
 
 // GenerateSecret passes the cached secret to SDS.StreamSecrets and SDS.FetchSecret.
@@ -606,6 +634,11 @@ func (sc *SecretManagerClient) generateNewSecret(resourceName string) (*security
 		rootCertPEM = []byte(certChainPEM[len(certChainPEM)-1])
 	}
 
+	trustBundles, trustBundleExpiry := sc.GetTrustBundles()
+	if trustBundles != nil && trustBundleExpiry.Before(expireTime) {
+		expireTime = trustBundleExpiry
+	}
+
 	return &security.SecretItem{
 		CertificateChain: certChain,
 		PrivateKey:       keyPEM,
@@ -613,6 +646,7 @@ func (sc *SecretManagerClient) generateNewSecret(resourceName string) (*security
 		CreatedTime:      time.Now(),
 		ExpireTime:       expireTime,
 		RootCert:         rootCertPEM,
+		TrustBundles:     trustBundles,
 	}, nil
 }
 
@@ -759,4 +793,17 @@ func (sc *SecretManagerClient) mergeConfigTrustBundle(rootCerts []string) []byte
 		anchorBytes = pkiutil.AppendCertByte(anchorBytes, []byte(cert))
 	}
 	return anchorBytes
+}
+
+// returns true if trust bundles are the same
+func compareTrustBundles(a map[string][]byte, b map[string][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if string(b[k]) != string(v) {
+			return false
+		}
+	}
+	return true
 }

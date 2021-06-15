@@ -73,7 +73,6 @@ import (
 	"istio.io/istio/pkg/security"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/istio/pkg/servicemesh/federation"
-	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/istio/security/pkg/pki/ca"
@@ -273,27 +272,62 @@ func NewServer(args *PilotArgs, initFuncs ...func(*Server)) (*Server, error) {
 		return nil, err
 	}
 
+	// Parse and validate Istiod Address.
+	istiodHost, _, err := e.GetDiscoveryAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create Istiod certs and setup watches.
+	if err := s.initIstiodCerts(args, string(istiodHost)); err != nil {
+		return nil, err
+	}
+
 	// federation support must be initialized before config and service controllers
 	if features.EnableFederation {
 		if s.kubeClient == nil {
 			log.Errorf("could not initialize federation discovery server: kubeClient is nil")
 		} else {
-			var err error
-			s.federation, err = federation.New(federation.Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient:   s.kubeClient,
-					ResyncPeriod: args.RegistryOptions.KubeOptions.ResyncPeriod,
-					Namespace:    args.RegistryOptions.ClusterRegistriesNamespace,
+			peerCertVerifier, err := s.createPeerCertVerifier(args.ServerOptions.TLSOptions)
+			if err != nil {
+				return nil, err
+			}
+			if peerCertVerifier == nil {
+				panic("No peerCertVerifier")
+			}
+			tlsCfg := &tls.Config{
+				GetCertificate: s.getIstiodCertificate,
+				ClientAuth:     tls.VerifyClientCertIfGiven,
+				ClientCAs:      peerCertVerifier.GetGeneralCertPool(),
+				VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+					err := peerCertVerifier.VerifyPeerCert(rawCerts, verifiedChains)
+					if err != nil {
+						log.Infof("Could not verify certificate: %v", err)
+					}
+					return err
 				},
-				LocalClusterID:    s.clusterID.String(),
-				LocalNetwork:      features.NetworkName,
-				BindAddress:       args.ServerOptions.FederationAddr,
-				Env:               s.environment,
-				XDSUpdater:        s.XDSServer,
-				ServiceController: s.ServiceController(),
-				IstiodNamespace:   args.Namespace,
-				IstiodPodName:     args.PodName,
+				MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+				MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+				CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+				CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
+			}
+
+			s.federation, err = federation.New(federation.Options{
+				KubeClient:          s.kubeClient,
+				ResyncPeriod:        args.RegistryOptions.KubeOptions.ResyncPeriod,
+				FederationNamespace: args.RegistryOptions.ClusterRegistriesNamespace,
+				LocalClusterID:      s.clusterID.String(),
+				LocalNetwork:        features.NetworkName,
+				BindAddress:         args.ServerOptions.FederationAddr,
+				Env:                 s.environment,
+				XDSUpdater:          s.XDSServer,
+				ServiceController:   s.ServiceController(),
+				IstiodNamespace:     args.Namespace,
+				IstiodPodName:       args.PodName,
+				TLSConfig:           tlsCfg,
 			})
+			s.XDSServer.Generators[v3.TrustBundleType] = &xds.TbdsGenerator{TrustBundleProvider: s.federation}
+
 			if err != nil {
 				return nil, fmt.Errorf("error initializing federation: %v", err)
 			}
@@ -315,17 +349,6 @@ func NewServer(args *PilotArgs, initFuncs ...func(*Server)) (*Server, error) {
 
 	// Initialize workloadTrustBundle after CA has been initialized
 	if err := s.initWorkloadTrustBundle(args); err != nil {
-		return nil, err
-	}
-
-	// Parse and validate Istiod Address.
-	istiodHost, _, err := e.GetDiscoveryAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	// Create Istiod certs and setup watches.
-	if err := s.initIstiodCerts(args, string(istiodHost)); err != nil {
 		return nil, err
 	}
 

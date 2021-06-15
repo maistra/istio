@@ -15,17 +15,21 @@
 package federation
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"maistra.io/api/core/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/api/label"
 	"istio.io/istio/pilot/pkg/model"
@@ -43,6 +47,7 @@ import (
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/istio/pkg/servicemesh/federation/status"
+	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/pkg/log"
 )
 
@@ -52,24 +57,21 @@ var (
 	_ serviceregistry.Instance = &Controller{}
 )
 
-const (
-	federationPort = common.FederationPort
-)
-
 // Controller aggregates data across different registries and monitors for changes
 type Controller struct {
-	networkAddress string
-	egressService  string
-	egressName     string
-	discoveryURL   string
-	useDirectCalls bool
-	namespace      string
-	localClusterID cluster.ID
-	localNetworkID network.ID
-	clusterID      cluster.ID
-	networkID      network.ID
-	resyncPeriod   time.Duration
-	backoffPolicy  *backoff.ExponentialBackOff
+	remote               v1.ServiceMeshPeerRemote
+	egressService        string
+	egressName           string
+	discoveryURL         string
+	discoveryServiceName string
+	useDirectCalls       bool
+	namespace            string
+	localClusterID       cluster.ID
+	localNetworkID       network.ID
+	clusterID            cluster.ID
+	networkID            network.ID
+	resyncPeriod         time.Duration
+	backoffPolicy        *backoff.ExponentialBackOff
 
 	logger *log.Scope
 
@@ -80,8 +82,10 @@ type Controller struct {
 
 	localDomainSuffix   string
 	defaultDomainSuffix string
-	defaultNameMapper   common.NameMapper
 	importNameMapper    common.NameMapper
+	defaultLocality     *v1.ImportedServiceLocality
+	importLocality      *v1.ImportedServiceLocality
+	locality            *v1.ImportedServiceLocality
 
 	storeLock      sync.RWMutex
 	imports        map[federationmodel.ServiceKey]*existingImport
@@ -92,7 +96,13 @@ type Controller struct {
 	egressSAs      []string
 
 	lastMessage *federationmodel.ServiceListMessage
-	stopped     int32
+	started     int32
+
+	cancelWatch context.CancelFunc
+	watchEvents chan *federationmodel.WatchEvent
+
+	peerConfigGeneration   int64
+	importConfigGeneration int64
 }
 
 type existingImport struct {
@@ -101,16 +111,11 @@ type existingImport struct {
 }
 
 type Options struct {
-	NetworkAddress string
-	EgressService  string
-	EgressName     string
-	UseDirectCalls bool
 	DomainSuffix   string
 	LocalClusterID string
 	LocalNetwork   string
 	ClusterID      string
 	Network        string
-	Namespace      string
 	KubeClient     kube.Client
 	StatusHandler  status.Handler
 	ConfigStore    model.ConfigStoreCache
@@ -118,7 +123,7 @@ type Options struct {
 	ResyncPeriod   time.Duration
 }
 
-func defaultDomainSuffixForMesh(mesh *v1alpha1.MeshFederation) string {
+func defaultDomainSuffixForMesh(mesh *v1.ServiceMeshPeer) string {
 	return fmt.Sprintf("svc.%s-imports.local", mesh.Name)
 }
 
@@ -129,57 +134,131 @@ func localDomainSuffix(domainSuffix string) string {
 	return "svc." + domainSuffix
 }
 
+func mergeLocality(locality *v1.ImportedServiceLocality, defaults *v1.ImportedServiceLocality) *v1.ImportedServiceLocality {
+	merged := v1.ImportedServiceLocality{}
+	if defaults == nil {
+		defaults = &v1.ImportedServiceLocality{}
+		if locality == nil {
+			return nil
+		}
+	} else if locality != nil {
+		merged = *locality
+	}
+	if merged.Subzone == "" && defaults.Subzone != "" {
+		merged.Subzone = defaults.Subzone
+	}
+	if merged.Zone == "" && defaults.Zone != "" {
+		merged.Zone = defaults.Zone
+	}
+	if merged.Region == "" && defaults.Region != "" {
+		merged.Region = defaults.Region
+	}
+	if merged.Subzone != "" && (merged.Zone == "" || merged.Region == "") {
+		// cannot have subzone specified without region and zone
+		return nil
+	} else if merged.Zone != "" && merged.Region == "" {
+		// cannot have zone specified without region
+		return nil
+	}
+	return &merged
+}
+
 // NewController creates a new Aggregate controller
-func NewController(opt Options, mesh *v1alpha1.MeshFederation, defaultImportConfig, importConfig *v1alpha1.ServiceImports) *Controller {
+func NewController(opt Options, mesh *v1.ServiceMeshPeer, importConfig *v1.ImportedServiceSet) *Controller {
 	backoffPolicy := backoff.NewExponentialBackOff()
 	backoffPolicy.MaxElapsedTime = 0
 	localDomainSuffix := localDomainSuffix(opt.DomainSuffix)
-	defaultDomainSuffix := defaultDomainSuffixForMesh(mesh)
-	defaultNameMapper := common.NewServiceImporter(defaultImportConfig, nil, defaultDomainSuffix, localDomainSuffix)
-	return &Controller{
-		discoveryURL:        fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, opt.EgressService, common.DefaultDiscoveryPort),
-		egressService:       opt.EgressService,
-		egressName:          opt.EgressName,
-		networkAddress:      opt.NetworkAddress,
-		useDirectCalls:      opt.UseDirectCalls,
-		namespace:           opt.Namespace,
-		localClusterID:      cluster.ID(opt.LocalClusterID),
-		localNetworkID:      network.ID(opt.LocalNetwork),
-		clusterID:           cluster.ID(opt.ClusterID),
-		networkID:           network.ID(opt.Network),
-		localDomainSuffix:   localDomainSuffix,
-		defaultDomainSuffix: defaultDomainSuffix,
-		defaultNameMapper:   defaultNameMapper,
-		importNameMapper:    common.NewServiceImporter(importConfig, defaultNameMapper, defaultDomainSuffix, localDomainSuffix),
-		imports:             map[federationmodel.ServiceKey]*existingImport{},
-		serviceStore:        map[host.Name]*model.Service{},
-		instanceStore:       map[host.Name][]*model.ServiceInstance{},
-		kubeClient:          opt.KubeClient,
-		statusHandler:       opt.StatusHandler,
-		configStore:         opt.ConfigStore,
-		xdsUpdater:          opt.XDSUpdater,
-		resyncPeriod:        opt.ResyncPeriod,
-		backoffPolicy:       backoffPolicy,
-		logger:              common.Logger.WithLabels("component", "federation-registry"),
+	c := &Controller{
+		localClusterID:    cluster.ID(opt.LocalClusterID),
+		localNetworkID:    network.ID(opt.LocalNetwork),
+		clusterID:         cluster.ID(opt.ClusterID),
+		networkID:         network.ID(opt.Network),
+		localDomainSuffix: localDomainSuffix,
+		imports:           map[federationmodel.ServiceKey]*existingImport{},
+		serviceStore:      map[host.Name]*model.Service{},
+		instanceStore:     map[host.Name][]*model.ServiceInstance{},
+		kubeClient:        opt.KubeClient,
+		statusHandler:     opt.StatusHandler,
+		configStore:       opt.ConfigStore,
+		xdsUpdater:        opt.XDSUpdater,
+		resyncPeriod:      opt.ResyncPeriod,
+		backoffPolicy:     backoffPolicy,
+		logger:            common.Logger.WithLabels("component", "federation-registry"),
+		watchEvents:       make(chan *federationmodel.WatchEvent),
+	}
+	c.UpdatePeerConfig(mesh)
+	c.UpdateImportConfig(importConfig)
+	return c
+}
+
+// UpdatePeerConfig updates all settings derived from the ServiceMeshPeer resource.
+// It will also restart the watch if the controller is already running.
+func (c *Controller) UpdatePeerConfig(peerConfig *v1.ServiceMeshPeer) {
+	if func() bool {
+		c.storeLock.RLock()
+		defer c.storeLock.RUnlock()
+		return c.peerConfigGeneration == peerConfig.Generation
+	}() {
+		return
+	}
+
+	restartWatch := func() bool {
+		c.storeLock.Lock()
+		defer c.storeLock.Unlock()
+
+		restartWatch := false
+
+		c.discoveryServiceName = common.DiscoveryServiceHostname(peerConfig)
+		c.defaultDomainSuffix = defaultDomainSuffixForMesh(peerConfig)
+		c.namespace = peerConfig.Namespace
+		c.useDirectCalls = peerConfig.Spec.Security.AllowDirectOutbound
+		if c.egressName != peerConfig.Spec.Gateways.Egress.Name {
+			c.egressName = peerConfig.Spec.Gateways.Egress.Name
+			c.egressService = fmt.Sprintf("%s.%s.%s",
+				peerConfig.Spec.Gateways.Egress.Name, c.namespace, c.localDomainSuffix)
+			c.discoveryURL = fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, c.egressService, common.DefaultDiscoveryPort)
+			restartWatch = true
+		}
+
+		if !reflect.DeepEqual(c.remote, peerConfig.Spec.Remote) {
+			c.remote = peerConfig.Spec.Remote
+			restartWatch = true
+		}
+
+		c.peerConfigGeneration = peerConfig.Generation
+
+		return restartWatch
+	}()
+	if c.hasStarted() && restartWatch {
+		c.RestartWatch()
 	}
 }
 
-func (c *Controller) UpdateImportConfig(importConfig *v1alpha1.ServiceImports) {
+// UpdateImportConfig updates the import rules that are used to select services for
+// import into the mesh and rewrite their names.
+func (c *Controller) UpdateImportConfig(importConfig *v1.ImportedServiceSet) {
+	if func() bool {
+		if importConfig == nil {
+			return false
+		}
+		c.storeLock.RLock()
+		defer c.storeLock.RUnlock()
+		return c.importConfigGeneration == importConfig.Generation
+	}() {
+		return
+	}
 	func() {
 		c.storeLock.Lock()
 		defer c.storeLock.Unlock()
-		c.importNameMapper = common.NewServiceImporter(importConfig, c.defaultNameMapper, c.defaultDomainSuffix, c.localDomainSuffix)
+		c.importNameMapper = common.NewServiceImporter(importConfig, nil, c.defaultDomainSuffix, c.localDomainSuffix)
+		if importConfig == nil {
+			c.importLocality = nil
+		} else {
+			c.importLocality = importConfig.Spec.Locality
+			c.importConfigGeneration = importConfig.Generation
+		}
+		c.locality = mergeLocality(c.importLocality, c.defaultLocality)
 	}()
-	c.resync()
-}
-
-func (c *Controller) UpdateDefaultImportConfig(importConfig *v1alpha1.ServiceImports) {
-	func() {
-		c.storeLock.Lock()
-		defer c.storeLock.Unlock()
-		c.importNameMapper.UpdateDefaultMapper(common.NewServiceImporter(importConfig, nil, c.defaultDomainSuffix, c.localDomainSuffix))
-	}()
-	c.resync()
 }
 
 func (c *Controller) Cluster() cluster.ID {
@@ -190,42 +269,34 @@ func (c *Controller) Provider() provider.ID {
 	return provider.Federation
 }
 
-func (c *Controller) NetworkAddress() string {
-	return c.networkAddress
-}
-
-func (c *Controller) pollServices() *federationmodel.ServiceListMessage {
-	url := c.discoveryURL + "/services/"
+func (c *Controller) pollServices() (*federationmodel.ServiceListMessage, error) {
+	url := c.discoveryURL + "/v1/services/"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
-		return nil
+		return nil, fmt.Errorf("failed to create request: '%s': %s", url, err)
 	}
-	req.Header.Add("discovery-address", c.networkAddress)
+	req.Header.Add("discovery-service", c.discoveryServiceName)
+	req.Header.Add("remote", fmt.Sprint(common.RemoteChecksum(c.remote)))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		c.logger.Errorf("Failed to GET URL: '%s': %s", url, err)
-		return nil
+		return nil, fmt.Errorf("failed to GET URL: '%s': %s", url, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		c.logger.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
-		return nil
+		return nil, fmt.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
 	}
 
 	respBytes := []byte{}
 	_, err = resp.Body.Read(respBytes)
 	if err != nil {
-		c.logger.Errorf("Failed to read response body from URL '%s': %s", url, err)
-		return nil
+		return nil, fmt.Errorf("failed to read response body from URL '%s': %s", url, err)
 	}
 
 	var serviceList federationmodel.ServiceListMessage
 	err = json.NewDecoder(resp.Body).Decode(&serviceList)
 	if err != nil {
-		c.logger.Errorf("Failed to unmarshal response bytes: %s", err)
-		return nil
+		return nil, fmt.Errorf("failed to unmarshal response bytes: %s", err)
 	}
-	return &serviceList
+	return &serviceList, nil
 }
 
 func (c *Controller) convertExportedService(s *federationmodel.ServiceMessage) (*model.Service, []*model.ServiceInstance) {
@@ -234,8 +305,17 @@ func (c *Controller) convertExportedService(s *federationmodel.ServiceMessage) (
 		serviceVisibility = visibility.Public
 	}
 	serviceName := fmt.Sprintf("%s.%s.%s.remote", s.Name, s.Namespace, c.clusterID)
-	return c.createService(s, serviceName, c.namespace, s.Hostname, c.clusterID,
-		c.networkID, serviceVisibility, c.gatewayStore, s.ServiceAccounts)
+	return c.createService(createServiceOptions{
+		service:           s,
+		serviceName:       serviceName,
+		serviceNamespace:  c.namespace,
+		hostname:          s.Hostname,
+		clusterID:         c.clusterID,
+		networkID:         c.networkID,
+		serviceVisibility: serviceVisibility,
+		networkGateways:   c.gatewayStore,
+		sas:               s.ServiceAccounts,
+	})
 }
 
 func (c *Controller) convertToLocalService(s *federationmodel.ServiceMessage,
@@ -248,35 +328,57 @@ func (c *Controller) convertToLocalService(s *federationmodel.ServiceMessage,
 	}
 	// XXX: make this configurable
 	serviceVisibility := visibility.Public
-	return c.createService(s, serviceName, serviceNamespace, importedName.Hostname,
-		c.clusterID, c.localNetworkID, serviceVisibility, c.egressGateways, c.egressSAs)
+	return c.createService(createServiceOptions{
+		service:           s,
+		serviceName:       serviceName,
+		serviceNamespace:  serviceNamespace,
+		hostname:          importedName.Hostname,
+		clusterID:         c.clusterID,
+		networkID:         c.localNetworkID,
+		serviceVisibility: serviceVisibility,
+		networkGateways:   c.egressGateways,
+		sas:               c.egressSAs,
+		locality:          c.locality,
+	})
 }
 
-func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceName, serviceNamespace, hostname string, clusterID cluster.ID, network network.ID,
-	serviceVisibility visibility.Instance, networkGateways []model.NetworkGateway, sas []string) (*model.Service, []*model.ServiceInstance) {
+type createServiceOptions struct {
+	service           *federationmodel.ServiceMessage
+	serviceName       string
+	serviceNamespace  string
+	hostname          string
+	clusterID         cluster.ID
+	networkID         network.ID
+	serviceVisibility visibility.Instance
+	networkGateways   []model.NetworkGateway
+	sas               []string
+	locality          *v1.ImportedServiceLocality
+}
+
+func (c *Controller) createService(opts createServiceOptions) (*model.Service, []*model.ServiceInstance) {
 	instances := []*model.ServiceInstance{}
 	svc := &model.Service{
 		Attributes: model.ServiceAttributes{
 			ServiceRegistry: provider.Federation,
-			Name:            serviceName,
-			Namespace:       serviceNamespace,
+			Name:            opts.serviceName,
+			Namespace:       opts.serviceNamespace,
 			ExportTo: map[visibility.Instance]bool{
-				serviceVisibility: true,
+				opts.serviceVisibility: true,
 			},
 			Labels: labels.Instance{
-				label.TopologyCluster.Name:           clusterID.String(),
-				label.TopologyNetwork.Name:           network.String(),
-				model.IstioCanonicalServiceLabelName: serviceName,
+				label.TopologyCluster.Name:           opts.clusterID.String(),
+				label.TopologyNetwork.Name:           opts.networkID.String(),
+				model.IstioCanonicalServiceLabelName: opts.serviceName,
 			},
 		},
 		CreationTime:    time.Now(),
 		Resolution:      model.ClientSideLB,
 		DefaultAddress:  constants.UnspecifiedIP,
-		Hostname:        host.Name(hostname),
+		Hostname:        host.Name(opts.hostname),
 		Ports:           model.PortList{},
-		ServiceAccounts: append([]string(nil), sas...),
+		ServiceAccounts: append([]string(nil), opts.sas...),
 	}
-	for _, port := range s.ServicePorts {
+	for _, port := range opts.service.ServicePorts {
 		svc.Ports = append(svc.Ports, &model.Port{
 			Name:     port.Name,
 			Port:     port.Port,
@@ -284,36 +386,47 @@ func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceNam
 		})
 	}
 
-	baseWorkloadName := serviceName
-	if !strings.Contains(serviceName, c.clusterID.String()) {
-		baseWorkloadName = fmt.Sprintf("%s-%s", serviceName, c.clusterID)
+	baseWorkloadName := opts.serviceName
+	if !strings.Contains(opts.serviceName, c.clusterID.String()) {
+		baseWorkloadName = fmt.Sprintf("%s-%s", opts.serviceName, c.clusterID)
+	}
+	localityLabel := ""
+	if opts.locality != nil && opts.locality.Region != "" {
+		localityLabel = fmt.Sprintf("%s/%s/%s", opts.locality.Region, opts.locality.Zone, opts.locality.Subzone)
 	}
 	for _, port := range svc.Ports {
-		for gatewayIndex, networkGateway := range networkGateways {
+		for gatewayIndex, networkGateway := range opts.networkGateways {
 			c.logger.Debugf("adding endpoint for imported service: addr=%s, port=%d, host=%s",
 				networkGateway.Addr, networkGateway.Port, svc.Hostname)
-			instances = append(instances, &model.ServiceInstance{
+			instance := &model.ServiceInstance{
 				Service:     svc,
 				ServicePort: port,
 				Endpoint: &model.IstioEndpoint{
 					Address:      networkGateway.Addr,
 					EndpointPort: networkGateway.Port,
 					Labels: labels.Instance{
-						label.TopologyCluster.Name:                   clusterID.String(),
-						label.TopologyNetwork.Name:                   network.String(),
-						model.IstioCanonicalServiceLabelName:         serviceName,
-						model.IstioCanonicalServiceRevisionLabelName: clusterID.String(),
+						label.TopologyCluster.Name:                   opts.clusterID.String(),
+						label.TopologyNetwork.Name:                   opts.networkID.String(),
+						model.IstioCanonicalServiceLabelName:         opts.serviceName,
+						model.IstioCanonicalServiceRevisionLabelName: opts.clusterID.String(),
 					},
-					Network: network,
+					Network: opts.networkID,
 					Locality: model.Locality{
-						ClusterID: clusterID,
+						ClusterID: opts.clusterID,
 					},
 					ServicePortName: port.Name,
 					TLSMode:         model.IstioMutualTLSModeLabel,
-					Namespace:       serviceNamespace,
+					Namespace:       opts.serviceNamespace,
 					WorkloadName:    fmt.Sprintf("%s-%d", baseWorkloadName, gatewayIndex),
 				},
-			})
+			}
+			if opts.locality != nil {
+				instance.Endpoint.Labels[label.TopologySubzone.Name] = opts.locality.Subzone
+				instance.Endpoint.Labels[corev1.LabelZoneFailureDomainStable] = opts.locality.Zone
+				instance.Endpoint.Labels[corev1.LabelZoneRegionStable] = opts.locality.Region
+				instance.Endpoint.Locality.Label = localityLabel
+			}
+			instances = append(instances, instance)
 		}
 	}
 	return svc, instances
@@ -321,17 +434,23 @@ func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceNam
 
 func (c *Controller) gatewayForNetworkAddress() []model.NetworkGateway {
 	var gateways []model.NetworkGateway
-	addrs, err := c.getIPAddrsForHostOrIP(c.networkAddress)
-	if err != nil {
-		c.logger.Errorf("error resolving IP addr for federation network %s: %v", c.networkAddress, err)
-	} else {
-		c.logger.Debugf("adding gateway %s endpoints for cluster %s", c.networkAddress, c.clusterID)
-		for _, ip := range addrs {
-			c.logger.Debugf("adding gateway %s endpoint %s for cluster %s", c.networkAddress, ip, c.clusterID)
-			gateways = append(gateways, model.NetworkGateway{
-				Addr: ip,
-				Port: federationPort,
-			})
+	remotePort := c.remote.ServicePort
+	if remotePort == 0 {
+		remotePort = common.DefaultFederationPort
+	}
+	for _, address := range c.remote.Addresses {
+		addrs, err := c.getIPAddrsForHostOrIP(address)
+		if err != nil {
+			c.logger.Errorf("error resolving IP addr for federation network %s: %v", address, err)
+		} else {
+			c.logger.Debugf("adding gateway %s endpoints for cluster %s", address, c.clusterID)
+			for _, ip := range addrs {
+				c.logger.Debugf("adding gateway %s endpoint %s for cluster %s", address, ip, c.clusterID)
+				gateways = append(gateways, model.NetworkGateway{
+					Addr: ip,
+					Port: uint32(remotePort),
+				})
+			}
 		}
 	}
 	return gateways
@@ -383,7 +502,7 @@ func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) 
 	var sas []string
 	for _, subset := range endpoints.Subsets {
 		for index, address := range subset.Addresses {
-			if subset.Ports[index].Port == common.FederationPort {
+			if subset.Ports[index].Port == common.DefaultFederationPort {
 				ips, err := c.getIPAddrsForHostOrIP(address.IP)
 				if err != nil {
 					c.logger.Errorf("error converting to IP address from %s: %s", address.IP, err)
@@ -392,7 +511,7 @@ func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) 
 				for _, ip := range ips {
 					addrs = append(addrs, model.NetworkGateway{
 						Addr: ip,
-						Port: federationPort,
+						Port: uint32(common.DefaultFederationPort),
 					})
 					sas = append(sas, serviceAccountByIP[ip])
 				}
@@ -531,30 +650,19 @@ func (c *Controller) GetProxyWorkloadLabels(proxy *model.Proxy) labels.Collectio
 
 // Run starts all the controllers
 func (c *Controller) Run(stop <-chan struct{}) {
-	eventCh := make(chan *federationmodel.WatchEvent)
 	refreshTicker := time.NewTicker(c.resyncPeriod)
 	defer refreshTicker.Stop()
-	c.resync()
-	go func() {
-		for !c.hasStopped() {
-			c.logger.Info("starting watch")
-			err := c.watch(eventCh, stop)
-			if err != nil {
-				c.logger.Errorf("watch failed: %s", err)
-				time.Sleep(c.backoffPolicy.NextBackOff())
-			} else {
-				return
-			}
-		}
-	}()
+	c.startWatch()
+	atomic.StoreInt32(&c.started, 1)
 	for {
 		select {
 		case <-stop:
 			c.logger.Info("Federation Controller terminated")
+			c.stopWatch()
 			c.stop()
 			return
-		case e := <-eventCh:
-			c.logger.Debugf("watch event received: %s service %s", e.Action, e.Service.Name)
+		case e := <-c.watchEvents:
+			c.logger.Debugf("watch event received: %v", e)
 			c.handleEvent(e)
 		case <-refreshTicker.C:
 			c.logger.Debugf("performing full resync for cluster %s", c.clusterID)
@@ -563,12 +671,18 @@ func (c *Controller) Run(stop <-chan struct{}) {
 	}
 }
 
-func (c *Controller) stop() {
-	atomic.StoreInt32(&c.stopped, 1)
+func (c *Controller) RestartWatch() {
+	c.logger.Infof("restarting watch for cluster %s", c.clusterID)
+	c.stopWatch()
+	c.startWatch()
 }
 
-func (c *Controller) hasStopped() bool {
-	return atomic.LoadInt32(&c.stopped) != 0
+func (c *Controller) stop() {
+	atomic.StoreInt32(&c.started, 0)
+}
+
+func (c *Controller) hasStarted() bool {
+	return atomic.LoadInt32(&c.started) == 1
 }
 
 func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
@@ -847,16 +961,59 @@ func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) 
 	return svc
 }
 
-func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-chan struct{}) error {
+func (c *Controller) startWatch() {
+	var ctx context.Context
+	var cancelCtx context.CancelFunc
+	ctx, cancelCtx = context.WithCancel(context.Background())
+	c.cancelWatch = cancelCtx
+	go func() {
+		defer func() {
+			cancelCtx() // cleans up resources when watch is closed gracefully
+			c.logger.Info("watch stopped")
+		}()
+		for ctx.Err() != context.Canceled {
+			c.logger.Info("starting watch")
+			err := c.watch(ctx, c.watchEvents)
+			if err != nil {
+				if err == context.Canceled {
+					c.logger.Info("watch cancelled")
+					return
+				}
+				c.logger.Errorf("watch failed: %s", err)
+
+				// sleep, but still honor context cancellation
+				select {
+				case <-ctx.Done():
+					c.logger.Info("watch cancelled")
+					return
+				case <-time.After(c.backoffPolicy.NextBackOff()):
+					// start watch again after backoff
+				}
+			} else {
+				c.backoffPolicy.Reset()
+				c.logger.Info("watch closed")
+			}
+		}
+	}()
+}
+
+func (c *Controller) stopWatch() {
+	if c.cancelWatch != nil {
+		c.cancelWatch()
+	}
+}
+
+func (c *Controller) watch(ctx context.Context, eventCh chan *federationmodel.WatchEvent) error {
 	c.statusHandler.WatchInitiated()
-	url := c.discoveryURL + "/watch"
+	url := c.discoveryURL + "/v1/watch"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
 		return nil
 	}
-	req.Header.Add("discovery-address", c.networkAddress)
-	resp, err := http.DefaultClient.Do(req)
+	req.Header.Add("discovery-service", c.discoveryServiceName)
+	req.Header.Add("remote", fmt.Sprint(common.RemoteChecksum(c.remote)))
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	defer func() {
 		status := ""
 		if resp != nil {
@@ -875,20 +1032,19 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 
 	c.statusHandler.Watching()
 
-	// connection was established successfully. reset backoffPolicy
+	// connection was established successfully. reset backoffPolicy and resync
 	c.backoffPolicy.Reset()
+	c.resync()
 
 	dec := json.NewDecoder(resp.Body)
 	defer resp.Body.Close()
 	for {
-		select {
-		case <-stopCh:
-			return nil
-		default:
-		}
 		var e federationmodel.WatchEvent
 		err := dec.Decode(&e)
 		if err != nil {
+			if err == io.EOF {
+				return nil // server closed the connection gracefully
+			}
 			return err
 		}
 		eventCh <- &e
@@ -899,7 +1055,16 @@ func (c *Controller) resync() uint64 {
 	c.storeLock.Lock()
 	defer c.storeLock.Unlock()
 	c.logger.Debugf("performing full resync")
-	svcList := c.pollServices()
+	var err error
+	var svcList *federationmodel.ServiceListMessage
+	err = retry.UntilSuccess(func() error {
+		svcList, err = c.pollServices()
+		return err
+	}, retry.Delay(time.Second), retry.Timeout(2*time.Minute))
+	if err != nil {
+		c.logger.Warnf("resync failed: %s", err)
+		return 0
+	}
 	c.updateGateways(svcList)
 	if svcList != nil {
 		c.convertServices(svcList)

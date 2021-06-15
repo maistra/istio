@@ -1745,6 +1745,28 @@ spec:
 # Removed paths for legacy and default selectors since a revision tag
 # is inherently created from a specific revision
 ---
+# Source: istiod/templates/federation.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: istiod
+  namespace: istio-system
+  labels:
+    istio.io/rev: default
+    install.operator.istio.io/owning-resource: unknown
+    operator.istio.io/component: "Pilot"
+    app: istiod
+    istio: pilot
+    release: istio
+spec:
+  host: istiod.istio-system.svc.cluster.local
+  trafficPolicy:
+    portLevelSettings:
+    - port:
+        number: 8188
+      tls:
+        mode: SIMPLE
+---
 # Source: istiod/templates/telemetryv2_1.10.yaml
 # Note: http stats filter is wasm enabled only in sidecars.
 apiVersion: networking.istio.io/v1alpha3
