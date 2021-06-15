@@ -25,34 +25,34 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
-	v1alpha1 "maistra.io/api/core/v1alpha1"
+	corev1 "maistra.io/api/core/v1"
 )
 
 // FakeMeshFederations implements MeshFederationInterface
 type FakeMeshFederations struct {
-	Fake *FakeCoreV1alpha1
+	Fake *FakeCoreV1
 	ns   string
 }
 
-var meshfederationsResource = schema.GroupVersionResource{Group: "", Version: "v1alpha1", Resource: "meshfederations"}
+var meshfederationsResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "meshfederations"}
 
-var meshfederationsKind = schema.GroupVersionKind{Group: "", Version: "v1alpha1", Kind: "MeshFederation"}
+var meshfederationsKind = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "MeshFederation"}
 
 // Get takes name of the meshFederation, and returns the corresponding meshFederation object, and an error if there is any.
-func (c *FakeMeshFederations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.MeshFederation, err error) {
+func (c *FakeMeshFederations) Get(ctx context.Context, name string, options v1.GetOptions) (result *corev1.MeshFederation, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(meshfederationsResource, c.ns, name), &v1alpha1.MeshFederation{})
+		Invokes(testing.NewGetAction(meshfederationsResource, c.ns, name), &corev1.MeshFederation{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.MeshFederation), err
+	return obj.(*corev1.MeshFederation), err
 }
 
 // List takes label and field selectors, and returns the list of MeshFederations that match those selectors.
-func (c *FakeMeshFederations) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.MeshFederationList, err error) {
+func (c *FakeMeshFederations) List(ctx context.Context, opts v1.ListOptions) (result *corev1.MeshFederationList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(meshfederationsResource, meshfederationsKind, c.ns, opts), &v1alpha1.MeshFederationList{})
+		Invokes(testing.NewListAction(meshfederationsResource, meshfederationsKind, c.ns, opts), &corev1.MeshFederationList{})
 
 	if obj == nil {
 		return nil, err
@@ -62,8 +62,8 @@ func (c *FakeMeshFederations) List(ctx context.Context, opts v1.ListOptions) (re
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &v1alpha1.MeshFederationList{ListMeta: obj.(*v1alpha1.MeshFederationList).ListMeta}
-	for _, item := range obj.(*v1alpha1.MeshFederationList).Items {
+	list := &corev1.MeshFederationList{ListMeta: obj.(*corev1.MeshFederationList).ListMeta}
+	for _, item := range obj.(*corev1.MeshFederationList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -79,43 +79,43 @@ func (c *FakeMeshFederations) Watch(ctx context.Context, opts v1.ListOptions) (w
 }
 
 // Create takes the representation of a meshFederation and creates it.  Returns the server's representation of the meshFederation, and an error, if there is any.
-func (c *FakeMeshFederations) Create(ctx context.Context, meshFederation *v1alpha1.MeshFederation, opts v1.CreateOptions) (result *v1alpha1.MeshFederation, err error) {
+func (c *FakeMeshFederations) Create(ctx context.Context, meshFederation *corev1.MeshFederation, opts v1.CreateOptions) (result *corev1.MeshFederation, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(meshfederationsResource, c.ns, meshFederation), &v1alpha1.MeshFederation{})
+		Invokes(testing.NewCreateAction(meshfederationsResource, c.ns, meshFederation), &corev1.MeshFederation{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.MeshFederation), err
+	return obj.(*corev1.MeshFederation), err
 }
 
 // Update takes the representation of a meshFederation and updates it. Returns the server's representation of the meshFederation, and an error, if there is any.
-func (c *FakeMeshFederations) Update(ctx context.Context, meshFederation *v1alpha1.MeshFederation, opts v1.UpdateOptions) (result *v1alpha1.MeshFederation, err error) {
+func (c *FakeMeshFederations) Update(ctx context.Context, meshFederation *corev1.MeshFederation, opts v1.UpdateOptions) (result *corev1.MeshFederation, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(meshfederationsResource, c.ns, meshFederation), &v1alpha1.MeshFederation{})
+		Invokes(testing.NewUpdateAction(meshfederationsResource, c.ns, meshFederation), &corev1.MeshFederation{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.MeshFederation), err
+	return obj.(*corev1.MeshFederation), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeMeshFederations) UpdateStatus(ctx context.Context, meshFederation *v1alpha1.MeshFederation, opts v1.UpdateOptions) (*v1alpha1.MeshFederation, error) {
+func (c *FakeMeshFederations) UpdateStatus(ctx context.Context, meshFederation *corev1.MeshFederation, opts v1.UpdateOptions) (*corev1.MeshFederation, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(meshfederationsResource, "status", c.ns, meshFederation), &v1alpha1.MeshFederation{})
+		Invokes(testing.NewUpdateSubresourceAction(meshfederationsResource, "status", c.ns, meshFederation), &corev1.MeshFederation{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.MeshFederation), err
+	return obj.(*corev1.MeshFederation), err
 }
 
 // Delete takes name of the meshFederation and deletes it. Returns an error if one occurs.
 func (c *FakeMeshFederations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(meshfederationsResource, c.ns, name), &v1alpha1.MeshFederation{})
+		Invokes(testing.NewDeleteAction(meshfederationsResource, c.ns, name), &corev1.MeshFederation{})
 
 	return err
 }
@@ -124,17 +124,17 @@ func (c *FakeMeshFederations) Delete(ctx context.Context, name string, opts v1.D
 func (c *FakeMeshFederations) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(meshfederationsResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &v1alpha1.MeshFederationList{})
+	_, err := c.Fake.Invokes(action, &corev1.MeshFederationList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched meshFederation.
-func (c *FakeMeshFederations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.MeshFederation, err error) {
+func (c *FakeMeshFederations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *corev1.MeshFederation, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(meshfederationsResource, c.ns, name, pt, data, subresources...), &v1alpha1.MeshFederation{})
+		Invokes(testing.NewPatchSubresourceAction(meshfederationsResource, c.ns, name, pt, data, subresources...), &corev1.MeshFederation{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.MeshFederation), err
+	return obj.(*corev1.MeshFederation), err
 }

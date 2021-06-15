@@ -53,6 +53,14 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=core, Version=v1
+	case v1.SchemeGroupVersion.WithResource("federationstatuses"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().FederationStatuses().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("meshfederations"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().MeshFederations().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("serviceexports"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceExports().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("serviceimports"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceImports().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("servicemeshcontrolplanes"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceMeshControlPlanes().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("servicemeshextensions"):
@@ -63,14 +71,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceMeshMemberRolls().Informer()}, nil
 
 		// Group=core, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("federationstatuses"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().FederationStatuses().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("meshfederations"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().MeshFederations().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("serviceexports"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ServiceExports().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("serviceimports"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ServiceImports().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("servicemeshextensions"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ServiceMeshExtensions().Informer()}, nil
 

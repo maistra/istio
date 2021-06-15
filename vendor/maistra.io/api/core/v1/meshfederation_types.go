@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package v1alpha1
+package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
@@ -93,13 +93,13 @@ type MeshFederationSecurity struct {
 	// invocations will be terminated at the ingress gateway.
 	// XXX: should this also be configurable per exported service?
 	// +optional
-	AllowDirectInbound bool `json:"allowDirectInbound,omitempty"`
+	AllowDirectInbound bool `json:"-"`
 
 	// AllowDirectOutbound determines whether or not external service
 	// invocations will be proxied through and terminated at the egress gateway
 	// XXX: should this also be configurable per imported service?
 	// +optional
-	AllowDirectOutbound bool `json:"allowDirectOutbound,omitempty"`
+	AllowDirectOutbound bool `json:"-"`
 }
 
 type MeshFederationGateways struct {
@@ -123,43 +123,9 @@ type MeshFederationSpec struct {
 
 	Gateways MeshFederationGateways `json:"gateways,omitempty"`
 
-	Security *MeshFederationSecurity `json:"security,omitempty"`
-}
-
-type FederationConditionType string
-
-const (
-	FederationReady            FederationConditionType = "Ready"
-	FederationDiscoverable     FederationConditionType = "Discoverable"
-	FederationConnected        FederationConditionType = "Connected"
-	FederationIngressAvailable FederationConditionType = "IngressAvailable"
-	FederationEgressAvailable  FederationConditionType = "EgressAvailable"
-)
-
-type FederationConditionReason string
-
-const (
-// TODO FederationConditionReason constants
-)
-
-type Condition struct {
-	// The type of this condition.
-	Type FederationConditionType `json:"type,omitempty"`
-
-	// The status of this condition. Can be True, False or Unknown.
-	Status corev1.ConditionStatus `json:"status,omitempty"`
-
-	// Unique, single-word, CamelCase reason for the condition's last transition.
-	Reason FederationConditionReason `json:"reason,omitempty"`
-
-	// Human-readable message indicating details about the last transition.
-	Message string `json:"message,omitempty"`
-
-	// Last time the condition transitioned from one status to another.
-	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	Security MeshFederationSecurity `json:"security,omitempty"`
 }
 
 // TODO
 type MeshFederationStatus struct {
-	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }

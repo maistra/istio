@@ -25,34 +25,34 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
-	v1alpha1 "maistra.io/api/core/v1alpha1"
+	corev1 "maistra.io/api/core/v1"
 )
 
 // FakeFederationStatuses implements FederationStatusInterface
 type FakeFederationStatuses struct {
-	Fake *FakeCoreV1alpha1
+	Fake *FakeCoreV1
 	ns   string
 }
 
-var federationstatusesResource = schema.GroupVersionResource{Group: "", Version: "v1alpha1", Resource: "federationstatuses"}
+var federationstatusesResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "federationstatuses"}
 
-var federationstatusesKind = schema.GroupVersionKind{Group: "", Version: "v1alpha1", Kind: "FederationStatus"}
+var federationstatusesKind = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "FederationStatus"}
 
 // Get takes name of the federationStatus, and returns the corresponding federationStatus object, and an error if there is any.
-func (c *FakeFederationStatuses) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.FederationStatus, err error) {
+func (c *FakeFederationStatuses) Get(ctx context.Context, name string, options v1.GetOptions) (result *corev1.FederationStatus, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(federationstatusesResource, c.ns, name), &v1alpha1.FederationStatus{})
+		Invokes(testing.NewGetAction(federationstatusesResource, c.ns, name), &corev1.FederationStatus{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.FederationStatus), err
+	return obj.(*corev1.FederationStatus), err
 }
 
 // List takes label and field selectors, and returns the list of FederationStatuses that match those selectors.
-func (c *FakeFederationStatuses) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.FederationStatusList, err error) {
+func (c *FakeFederationStatuses) List(ctx context.Context, opts v1.ListOptions) (result *corev1.FederationStatusList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(federationstatusesResource, federationstatusesKind, c.ns, opts), &v1alpha1.FederationStatusList{})
+		Invokes(testing.NewListAction(federationstatusesResource, federationstatusesKind, c.ns, opts), &corev1.FederationStatusList{})
 
 	if obj == nil {
 		return nil, err
@@ -62,8 +62,8 @@ func (c *FakeFederationStatuses) List(ctx context.Context, opts v1.ListOptions) 
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &v1alpha1.FederationStatusList{ListMeta: obj.(*v1alpha1.FederationStatusList).ListMeta}
-	for _, item := range obj.(*v1alpha1.FederationStatusList).Items {
+	list := &corev1.FederationStatusList{ListMeta: obj.(*corev1.FederationStatusList).ListMeta}
+	for _, item := range obj.(*corev1.FederationStatusList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -79,43 +79,43 @@ func (c *FakeFederationStatuses) Watch(ctx context.Context, opts v1.ListOptions)
 }
 
 // Create takes the representation of a federationStatus and creates it.  Returns the server's representation of the federationStatus, and an error, if there is any.
-func (c *FakeFederationStatuses) Create(ctx context.Context, federationStatus *v1alpha1.FederationStatus, opts v1.CreateOptions) (result *v1alpha1.FederationStatus, err error) {
+func (c *FakeFederationStatuses) Create(ctx context.Context, federationStatus *corev1.FederationStatus, opts v1.CreateOptions) (result *corev1.FederationStatus, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(federationstatusesResource, c.ns, federationStatus), &v1alpha1.FederationStatus{})
+		Invokes(testing.NewCreateAction(federationstatusesResource, c.ns, federationStatus), &corev1.FederationStatus{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.FederationStatus), err
+	return obj.(*corev1.FederationStatus), err
 }
 
 // Update takes the representation of a federationStatus and updates it. Returns the server's representation of the federationStatus, and an error, if there is any.
-func (c *FakeFederationStatuses) Update(ctx context.Context, federationStatus *v1alpha1.FederationStatus, opts v1.UpdateOptions) (result *v1alpha1.FederationStatus, err error) {
+func (c *FakeFederationStatuses) Update(ctx context.Context, federationStatus *corev1.FederationStatus, opts v1.UpdateOptions) (result *corev1.FederationStatus, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(federationstatusesResource, c.ns, federationStatus), &v1alpha1.FederationStatus{})
+		Invokes(testing.NewUpdateAction(federationstatusesResource, c.ns, federationStatus), &corev1.FederationStatus{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.FederationStatus), err
+	return obj.(*corev1.FederationStatus), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeFederationStatuses) UpdateStatus(ctx context.Context, federationStatus *v1alpha1.FederationStatus, opts v1.UpdateOptions) (*v1alpha1.FederationStatus, error) {
+func (c *FakeFederationStatuses) UpdateStatus(ctx context.Context, federationStatus *corev1.FederationStatus, opts v1.UpdateOptions) (*corev1.FederationStatus, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(federationstatusesResource, "status", c.ns, federationStatus), &v1alpha1.FederationStatus{})
+		Invokes(testing.NewUpdateSubresourceAction(federationstatusesResource, "status", c.ns, federationStatus), &corev1.FederationStatus{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.FederationStatus), err
+	return obj.(*corev1.FederationStatus), err
 }
 
 // Delete takes name of the federationStatus and deletes it. Returns an error if one occurs.
 func (c *FakeFederationStatuses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(federationstatusesResource, c.ns, name), &v1alpha1.FederationStatus{})
+		Invokes(testing.NewDeleteAction(federationstatusesResource, c.ns, name), &corev1.FederationStatus{})
 
 	return err
 }
@@ -124,17 +124,17 @@ func (c *FakeFederationStatuses) Delete(ctx context.Context, name string, opts v
 func (c *FakeFederationStatuses) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(federationstatusesResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &v1alpha1.FederationStatusList{})
+	_, err := c.Fake.Invokes(action, &corev1.FederationStatusList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched federationStatus.
-func (c *FakeFederationStatuses) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.FederationStatus, err error) {
+func (c *FakeFederationStatuses) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *corev1.FederationStatus, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(federationstatusesResource, c.ns, name, pt, data, subresources...), &v1alpha1.FederationStatus{})
+		Invokes(testing.NewPatchSubresourceAction(federationstatusesResource, c.ns, name, pt, data, subresources...), &corev1.FederationStatus{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.FederationStatus), err
+	return obj.(*corev1.FederationStatus), err
 }
