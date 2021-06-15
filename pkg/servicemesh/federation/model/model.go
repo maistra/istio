@@ -72,3 +72,7 @@ func (s *ServiceMessage) GenerateChecksum() uint64 {
 	}
 	return checksum
 }
+
+type TrustBundleProvider interface {
+	GetTrustBundles() map[string]string
+}

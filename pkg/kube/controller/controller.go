@@ -105,13 +105,17 @@ func (c *Controller) Start(stopChan <-chan struct{}) {
 	t0 := time.Now()
 	c.Logger.Info("Starting controller")
 
-	go c.informer.Run(stopChan)
+	c.RunInformer(stopChan)
 
 	cache.WaitForCacheSync(stopChan, c.HasSynced)
 	c.Logger.Infof("Controller synced in %s", time.Since(t0))
 
 	c.Logger.Info("Starting workers")
 	wait.Until(c.worker, c.resyncPeriod, stopChan)
+}
+
+func (c *Controller) RunInformer(stopChan <-chan struct{}) {
+	go c.informer.Run(stopChan)
 }
 
 func (c *Controller) HasSynced() bool {

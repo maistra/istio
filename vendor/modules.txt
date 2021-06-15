@@ -2242,11 +2242,20 @@ maistra.io/api/client/versioned/typed/core/v2
 maistra.io/api/client/versioned/typed/core/v2/fake
 maistra.io/api/client/versioned/typed/federation/v1
 maistra.io/api/client/versioned/typed/federation/v1/fake
+maistra.io/api/client/xnsinformer
+maistra.io/api/client/xnsinformer/core
+maistra.io/api/client/xnsinformer/core/v1
+maistra.io/api/client/xnsinformer/core/v1alpha1
+maistra.io/api/client/xnsinformer/core/v2
+maistra.io/api/client/xnsinformer/federation
+maistra.io/api/client/xnsinformer/federation/v1
+maistra.io/api/client/xnsinformer/internalinterfaces
 maistra.io/api/core/v1
 maistra.io/api/core/v1alpha1
 maistra.io/api/core/v2
 maistra.io/api/federation/v1
 maistra.io/api/manifests
+maistra.io/api/security/v1
 # sigs.k8s.io/controller-runtime v0.12.1
 ## explicit; go 1.17
 sigs.k8s.io/controller-runtime

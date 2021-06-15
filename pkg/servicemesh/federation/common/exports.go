@@ -17,7 +17,7 @@ package common
 import (
 	"sync"
 
-	"maistra.io/api/federation/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
@@ -33,7 +33,7 @@ type ServiceExporter struct {
 
 var _ NameMapper = (*ServiceExporter)(nil)
 
-func NewServiceExporter(exportConfig *v1.ServiceExports, defaultMapper *ServiceExporter, domainSuffix string) *ServiceExporter {
+func NewServiceExporter(exportConfig *v1.ExportedServiceSet, defaultMapper *ServiceExporter, domainSuffix string) *ServiceExporter {
 	return &ServiceExporter{
 		domainSuffix:  domainSuffix,
 		exportConfig:  convertServiceExportsToNameMapper(exportConfig, domainSuffix),
@@ -41,12 +41,12 @@ func NewServiceExporter(exportConfig *v1.ServiceExports, defaultMapper *ServiceE
 	}
 }
 
-func convertServiceExportsToNameMapper(serviceExports *v1.ServiceExports, domainSuffix string) []NameMapper {
+func convertServiceExportsToNameMapper(serviceExports *v1.ExportedServiceSet, domainSuffix string) []NameMapper {
 	if serviceExports == nil {
 		return nil
 	}
 	var exportConfig []NameMapper
-	for index, rule := range serviceExports.Spec.Exports {
+	for index, rule := range serviceExports.Spec.ExportRules {
 		switch rule.Type {
 		case v1.LabelSelectorType:
 			if rule.LabelSelector == nil {
@@ -87,13 +87,13 @@ func (se *ServiceExporter) NameForService(svc *model.Service) *federationmodel.S
 	defer se.mu.RUnlock()
 	for _, matcher := range se.exportConfig {
 		if name := matcher.NameForService(svc); name != nil {
-			setHostname(name, se.domainSuffix)
 			return name
 		}
 	}
-	if name := se.defaultMapper.NameForService(svc); name != nil {
-		setHostname(name, se.domainSuffix)
-		return name
+	if se.defaultMapper != nil {
+		if name := se.defaultMapper.NameForService(svc); name != nil {
+			return name
+		}
 	}
 	return nil
 }
