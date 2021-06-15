@@ -15,104 +15,64 @@
 package server
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"maistra.io/api/core/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	configmemory "istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
 	serviceregistrymemory "istio.io/istio/pilot/pkg/serviceregistry/memory"
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config/protocol"
+	"istio.io/istio/pkg/config/visibility"
+	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
+	istioenv "istio.io/istio/pkg/test/env"
 )
 
-var ignoreChecksum = cmp.FilterPath(func(p cmp.Path) bool { return p.String() == "Checksum" }, cmp.Ignore())
-
-type fakeStatusHandler struct{}
-
-// Outbound connections
-func (m *fakeStatusHandler) WatchInitiated() {
-}
-
-func (m *fakeStatusHandler) Watching() {
-}
-
-func (m *fakeStatusHandler) WatchEventReceived() {
-}
-
-func (m *fakeStatusHandler) FullSyncComplete() {
-}
-
-func (m *fakeStatusHandler) WatchTerminated(status string) {
-}
-
-// Inbound connections
-func (m *fakeStatusHandler) RemoteWatchAccepted(source string) {
-}
-
-func (m *fakeStatusHandler) WatchEventSent(source string) {
-}
-
-func (m *fakeStatusHandler) FullSyncSent(source string) {
-}
-
-func (m *fakeStatusHandler) RemoteWatchTerminated(source string) {
-}
-
-// Exports
-func (m *fakeStatusHandler) ExportAdded(service federationmodel.ServiceKey, exportedName string) {
-}
-
-func (m *fakeStatusHandler) ExportUpdated(service federationmodel.ServiceKey, exportedName string) {
-}
-
-func (m *fakeStatusHandler) ExportRemoved(service federationmodel.ServiceKey) {
-}
-
-// Imports
-func (m *fakeStatusHandler) ImportAdded(service federationmodel.ServiceKey, exportedName string) {
-}
-
-func (m *fakeStatusHandler) ImportUpdated(service federationmodel.ServiceKey, exportedName string) {
-}
-
-func (m *fakeStatusHandler) ImportRemoved(exportedName string) {
-}
-
-// Write status
-func (m *fakeStatusHandler) Flush() error {
-	return nil
-}
+var (
+	ignoreChecksum = cmp.FilterPath(func(p cmp.Path) bool { return p.String() == "Checksum" }, cmp.Ignore())
+	httpsClient    = http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+		Timeout: time.Second,
+	}
+)
 
 func TestServiceList(t *testing.T) {
-	federation := &v1alpha1.MeshFederation{
-		ObjectMeta: v1.ObjectMeta{
+	federation := &v1.ServiceMeshPeer{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1alpha1.MeshFederationSpec{
-			Security: &v1alpha1.MeshFederationSecurity{
+		Spec: v1.ServiceMeshPeerSpec{
+			Security: v1.ServiceMeshPeerSecurity{
 				ClientID: "federation-egress.other-mesh.svc.cluster.local",
 			},
 		},
 	}
-	exportAllServices := &v1alpha1.ServiceExports{
-		ObjectMeta: v1.ObjectMeta{
+	exportAllServices := &v1.ExportedServiceSet{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1alpha1.ServiceExportsSpec{
-			Exports: []v1alpha1.ServiceExportRule{
+		Spec: v1.ExportedServiceSetSpec{
+			ExportRules: []v1.ExportedServiceRule{
 				{
-					Type:         v1alpha1.NameSelectorType,
-					NameSelector: &v1alpha1.ServiceNameMapping{},
+					Type:         v1.NameSelectorType,
+					NameSelector: &v1.ServiceNameMapping{},
 				},
 			},
 		},
@@ -120,8 +80,8 @@ func TestServiceList(t *testing.T) {
 	testCases := []struct {
 		name           string
 		remoteName     string
-		defaultExports *v1alpha1.ServiceExports
-		serviceExports *v1alpha1.ServiceExports
+		defaultExports *v1.ExportedServiceSet
+		serviceExports *v1.ExportedServiceSet
 		services       []*model.Service
 		serviceEvents  []struct {
 			event model.Event
@@ -140,21 +100,21 @@ func TestServiceList(t *testing.T) {
 		{
 			name:       "exported service, no gateway",
 			remoteName: "test-remote",
-			serviceExports: &v1alpha1.ServiceExports{
-				ObjectMeta: v1.ObjectMeta{
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1alpha1.ServiceExportsSpec{
-					Exports: []v1alpha1.ServiceExportRule{
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
 						{
-							Type: v1alpha1.NameSelectorType,
-							NameSelector: &v1alpha1.ServiceNameMapping{
-								Name: v1alpha1.ServiceName{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
-								Alias: &v1alpha1.ServiceName{
+								Alias: &v1.ServiceName{
 									Namespace: "federation",
 									Name:      "service",
 								},
@@ -223,21 +183,21 @@ func TestServiceList(t *testing.T) {
 		{
 			name:       "exported service + gateway",
 			remoteName: "test-remote",
-			serviceExports: &v1alpha1.ServiceExports{
-				ObjectMeta: v1.ObjectMeta{
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1alpha1.ServiceExportsSpec{
-					Exports: []v1alpha1.ServiceExportRule{
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
 						{
-							Type: v1alpha1.NameSelectorType,
-							NameSelector: &v1alpha1.ServiceNameMapping{
-								Name: v1alpha1.ServiceName{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
-								Alias: &v1alpha1.ServiceName{
+								Alias: &v1.ServiceName{
 									Namespace: "federation",
 									Name:      "service",
 								},
@@ -408,6 +368,206 @@ func TestServiceList(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:       "exportTo - service invisible",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "bookinfo",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.None: true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{},
+		},
+		{
+			name:       "exportTo - service private",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "bookinfo",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.Private: true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{},
+		},
+		{
+			name:       "exportTo - service private to the same namespace",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "istio-system-test",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "istio-system-test",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.Private: true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{
+				Services: []*federationmodel.ServiceMessage{
+					{
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "productpage",
+							Namespace: "istio-system-test",
+							Hostname:  "productpage.istio-system-test.svc.test-remote-exports.local",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "exportTo - foreign namespace",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "bookinfo",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.Instance("foreign-namespace"): true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{},
+		},
+		{
+			name:       "exportTo - same namespace as control plane",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "bookinfo",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.Instance("istio-system-test"): true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{
+				Services: []*federationmodel.ServiceMessage{
+					{
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "productpage",
+							Namespace: "bookinfo",
+							Hostname:  "productpage.bookinfo.svc.test-remote-exports.local",
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -416,18 +576,12 @@ func TestServiceList(t *testing.T) {
 			env := &model.Environment{
 				ServiceDiscovery: serviceDiscovery,
 			}
-
-			s, _ := NewServer(Options{
-				BindAddress: "127.0.0.1:0",
-				Env:         env,
-				Network:     "network1",
-				ConfigStore: configmemory.NewController(configmemory.Make(Schemas)),
-			})
+			s := createServer(env)
 			stopCh := make(chan struct{})
 			go s.Run(stopCh)
 			defer close(stopCh)
 			s.resyncNetworkGateways()
-			s.AddMeshFederation(federation, tc.serviceExports, &fakeStatusHandler{})
+			s.AddPeer(federation, tc.serviceExports, &common.FakeStatusHandler{})
 			for _, e := range tc.serviceEvents {
 				s.UpdateService(e.svc, e.event)
 			}
@@ -443,8 +597,27 @@ func TestServiceList(t *testing.T) {
 	}
 }
 
+func createServer(env *model.Environment) *Server {
+	cert, _ := tls.LoadX509KeyPair(
+		filepath.Join(istioenv.IstioSrc, "./tests/testdata/certs/pilot/cert-chain.pem"),
+		filepath.Join(istioenv.IstioSrc, "./tests/testdata/certs/pilot/key.pem"))
+
+	s, _ := NewServer(Options{
+		BindAddress: "127.0.0.1:0",
+		Env:         env,
+		Network:     "network1",
+		ConfigStore: configmemory.NewController(configmemory.Make(Schemas)),
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{
+				cert,
+			},
+		},
+	})
+	return s
+}
+
 func getServiceList(t *testing.T, addr, remoteName string) federationmodel.ServiceListMessage {
-	resp, err := http.Get("http://" + addr + "/services/" + remoteName)
+	resp, err := httpsClient.Get("https://" + addr + "/v1/services/" + remoteName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,32 +637,32 @@ func getServiceList(t *testing.T, addr, remoteName string) federationmodel.Servi
 }
 
 func TestWatch(t *testing.T) {
-	federation := &v1alpha1.MeshFederation{
-		ObjectMeta: v1.ObjectMeta{
+	federation := &v1.ServiceMeshPeer{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1alpha1.MeshFederationSpec{
-			Security: &v1alpha1.MeshFederationSecurity{
+		Spec: v1.ServiceMeshPeerSpec{
+			Security: v1.ServiceMeshPeerSecurity{
 				ClientID: "federation-egress.other-mesh.svc.cluster.local",
 			},
 		},
 	}
-	exportProductPage := &v1alpha1.ServiceExports{
-		ObjectMeta: v1.ObjectMeta{
+	exportProductPage := &v1.ExportedServiceSet{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1alpha1.ServiceExportsSpec{
-			Exports: []v1alpha1.ServiceExportRule{
+		Spec: v1.ExportedServiceSetSpec{
+			ExportRules: []v1.ExportedServiceRule{
 				{
-					Type: v1alpha1.NameSelectorType,
-					NameSelector: &v1alpha1.ServiceNameMapping{
-						Name: v1alpha1.ServiceName{
+					Type: v1.NameSelectorType,
+					NameSelector: &v1.ServiceNameMapping{
+						ServiceName: v1.ServiceName{
 							Namespace: "bookinfo",
 							Name:      "productpage",
 						},
-						Alias: &v1alpha1.ServiceName{
+						Alias: &v1.ServiceName{
 							Namespace: "federation",
 							Name:      "service",
 						},
@@ -501,9 +674,9 @@ func TestWatch(t *testing.T) {
 	testCases := []struct {
 		name           string
 		remoteName     string
-		defaultExports *v1alpha1.ServiceExports
-		serviceExports *v1alpha1.ServiceExports
-		updatedExports *v1alpha1.ServiceExports
+		defaultExports *v1.ExportedServiceSet
+		serviceExports *v1.ExportedServiceSet
+		updatedExports *v1.ExportedServiceSet
 		services       []*model.Service
 		serviceEvents  []struct {
 			event model.Event
@@ -593,21 +766,21 @@ func TestWatch(t *testing.T) {
 			name:           "no gateways, service exported name changes, filtered service",
 			remoteName:     "test-remote",
 			serviceExports: exportProductPage,
-			updatedExports: &v1alpha1.ServiceExports{
-				ObjectMeta: v1.ObjectMeta{
+			updatedExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1alpha1.ServiceExportsSpec{
-					Exports: []v1alpha1.ServiceExportRule{
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
 						{
-							Type: v1alpha1.NameSelectorType,
-							NameSelector: &v1alpha1.ServiceNameMapping{
-								Name: v1alpha1.ServiceName{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
-								Alias: &v1alpha1.ServiceName{
+								Alias: &v1.ServiceName{
 									Namespace: "cluster",
 									Name:      "service",
 								},
@@ -727,6 +900,52 @@ func TestWatch(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "service export removed",
+			remoteName:     "test-remote",
+			serviceExports: exportProductPage,
+			updatedExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-remote",
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+					},
+					Ports: model.PortList{
+						&model.Port{
+							Name:     "https",
+							Protocol: protocol.HTTPS,
+							Port:     443,
+						},
+					},
+				},
+			},
+			serviceEvents: nil,
+			expectedWatchEvents: []*federationmodel.WatchEvent{
+				{
+					Action: federationmodel.ActionDelete,
+					Service: &federationmodel.ServiceMessage{
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "service",
+							Namespace: "federation",
+							Hostname:  "service.federation.svc.test-remote-exports.local",
+						},
+						ServicePorts: []*federationmodel.ServicePort{
+							{
+								Name:     "https",
+								Port:     443,
+								Protocol: "HTTPS",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -735,23 +954,17 @@ func TestWatch(t *testing.T) {
 			env := &model.Environment{
 				ServiceDiscovery: serviceDiscovery,
 			}
-
-			s, _ := NewServer(Options{
-				BindAddress: "127.0.0.1:0",
-				Env:         env,
-				Network:     "network1",
-				ConfigStore: configmemory.NewController(configmemory.Make(Schemas)),
-			})
+			s := createServer(env)
 			stopCh := make(chan struct{})
 			go s.Run(stopCh)
 			defer close(stopCh)
 			s.resyncNetworkGateways()
-			s.AddMeshFederation(federation, tc.serviceExports, &fakeStatusHandler{})
-			req, err := http.NewRequest("GET", "http://"+s.Addr()+"/watch/"+tc.remoteName, nil)
+			s.AddPeer(federation, tc.serviceExports, &common.FakeStatusHandler{})
+			req, err := http.NewRequest("GET", "https://"+s.Addr()+"/v1/watch/"+tc.remoteName, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := httpsClient.Do(req)
 			if err != nil {
 				t.Fatal(err)
 			}

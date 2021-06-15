@@ -31,6 +31,9 @@ const (
 	SecretType                 = resource.SecretType
 	ExtensionConfigurationType = resource.ExtensionConfigType
 
+	// maistra xDS
+	TrustBundleType = "type.googleapis.com/maistra.security.v1.TrustBundleResponse"
+
 	NameTableType   = apiTypePrefix + "istio.networking.nds.v1.NameTable"
 	HealthInfoType  = apiTypePrefix + "istio.v1.HealthInformation"
 	ProxyConfigType = apiTypePrefix + "istio.mesh.v1alpha1.ProxyConfig"
@@ -61,6 +64,8 @@ func GetShortType(typeURL string) string {
 		return "PCDS"
 	case ExtensionConfigurationType:
 		return "ECDS"
+	case TrustBundleType:
+		return "TBDS"
 	default:
 		return typeURL
 	}
@@ -87,6 +92,8 @@ func GetMetricType(typeURL string) string {
 		return "ecds"
 	case BootstrapType:
 		return "bds"
+	case TrustBundleType:
+		return "tbds"
 	default:
 		return typeURL
 	}

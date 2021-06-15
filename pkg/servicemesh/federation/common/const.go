@@ -21,10 +21,11 @@ import (
 )
 
 const (
-	DiscoveryScheme      = "http"
-	DefaultDiscoveryPort = 8188
-	DefaultResyncPeriod  = 60 * time.Second
-	FederationPort       = 15443
+	DiscoveryScheme               = "http"
+	DefaultDiscoveryPort          = 8188
+	DefaultResyncPeriod           = 60 * time.Second
+	DefaultFederationPort         = 15443
+	DefaultFederationRootCertName = "root-cert.pem"
 )
 
 var Logger = log.RegisterScope("federation", "federation", 0)

@@ -207,37 +207,63 @@ func toEnvoySecret(s *security.SecretItem, caRootPath string) *tls.Secret {
 	secret := &tls.Secret{
 		Name: s.ResourceName,
 	}
-	cfg := security.SdsCertificateConfig{}
-	ok := false
-	if s.ResourceName == security.FileRootSystemCACert {
-		cfg, ok = security.SdsCertificateConfigFromResourceNameForOSCACert(caRootPath)
-	} else {
-		cfg, ok = security.SdsCertificateConfigFromResourceName(s.ResourceName)
-	}
-	if s.ResourceName == security.RootCertReqResourceName || (ok && cfg.IsRootCertificate()) {
+
+	if s.TrustBundles != nil {
+		spiffeValidatorConfig := &tls.SPIFFECertValidatorConfig{}
+		for trustDomain, rootCert := range s.TrustBundles {
+			spiffeValidatorConfig.TrustDomains = append(
+				spiffeValidatorConfig.TrustDomains,
+				&tls.SPIFFECertValidatorConfig_TrustDomain{
+					Name: trustDomain,
+					TrustBundle: &core.DataSource{
+						Specifier: &core.DataSource_InlineBytes{
+							InlineBytes: rootCert,
+						},
+					},
+				},
+			)
+		}
 		secret.Type = &tls.Secret_ValidationContext{
 			ValidationContext: &tls.CertificateValidationContext{
-				TrustedCa: &core.DataSource{
-					Specifier: &core.DataSource_InlineBytes{
-						InlineBytes: s.RootCert,
-					},
+				CustomValidatorConfig: &core.TypedExtensionConfig{
+					Name:        "envoy.tls.cert_validator.spiffe",
+					TypedConfig: util.MessageToAny(spiffeValidatorConfig),
 				},
 			},
 		}
 	} else {
-		secret.Type = &tls.Secret_TlsCertificate{
-			TlsCertificate: &tls.TlsCertificate{
-				CertificateChain: &core.DataSource{
-					Specifier: &core.DataSource_InlineBytes{
-						InlineBytes: s.CertificateChain,
+		cfg := security.SdsCertificateConfig{}
+		ok := false
+		if s.ResourceName == security.FileRootSystemCACert {
+			cfg, ok = security.SdsCertificateConfigFromResourceNameForOSCACert(caRootPath)
+		} else {
+			cfg, ok = security.SdsCertificateConfigFromResourceName(s.ResourceName)
+		}
+		if s.ResourceName == security.RootCertReqResourceName || (ok && cfg.IsRootCertificate()) {
+			secret.Type = &tls.Secret_ValidationContext{
+				ValidationContext: &tls.CertificateValidationContext{
+					TrustedCa: &core.DataSource{
+						Specifier: &core.DataSource_InlineBytes{
+							InlineBytes: s.RootCert,
+						},
 					},
 				},
-				PrivateKey: &core.DataSource{
-					Specifier: &core.DataSource_InlineBytes{
-						InlineBytes: s.PrivateKey,
+			}
+		} else {
+			secret.Type = &tls.Secret_TlsCertificate{
+				TlsCertificate: &tls.TlsCertificate{
+					CertificateChain: &core.DataSource{
+						Specifier: &core.DataSource_InlineBytes{
+							InlineBytes: s.CertificateChain,
+						},
+					},
+					PrivateKey: &core.DataSource{
+						Specifier: &core.DataSource_InlineBytes{
+							InlineBytes: s.PrivateKey,
+						},
 					},
 				},
-			},
+			}
 		}
 	}
 

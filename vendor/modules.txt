@@ -131,7 +131,6 @@ github.com/cheekybits/genny/parse
 github.com/cheggaaa/pb/v3
 github.com/cheggaaa/pb/v3/termutil
 # github.com/cncf/udpa/go v0.0.0-20210930031921-04548b0d99d4
-## explicit
 github.com/cncf/udpa/go/udpa/type/v1
 # github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1
 ## explicit
@@ -2007,17 +2006,20 @@ k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20210609174032-f933bad53927
+# maistra.io/api v0.0.0-20220301154558-8f6a12a9464b
 ## explicit
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core
 maistra.io/api/client/informers/externalversions/core/v1
 maistra.io/api/client/informers/externalversions/core/v1alpha1
 maistra.io/api/client/informers/externalversions/core/v2
+maistra.io/api/client/informers/externalversions/federation
+maistra.io/api/client/informers/externalversions/federation/v1
 maistra.io/api/client/informers/externalversions/internalinterfaces
 maistra.io/api/client/listers/core/v1
 maistra.io/api/client/listers/core/v1alpha1
 maistra.io/api/client/listers/core/v2
+maistra.io/api/client/listers/federation/v1
 maistra.io/api/client/versioned
 maistra.io/api/client/versioned/fake
 maistra.io/api/client/versioned/scheme
@@ -2027,9 +2029,21 @@ maistra.io/api/client/versioned/typed/core/v1alpha1
 maistra.io/api/client/versioned/typed/core/v1alpha1/fake
 maistra.io/api/client/versioned/typed/core/v2
 maistra.io/api/client/versioned/typed/core/v2/fake
+maistra.io/api/client/versioned/typed/federation/v1
+maistra.io/api/client/versioned/typed/federation/v1/fake
+maistra.io/api/client/xnsinformer
+maistra.io/api/client/xnsinformer/core
+maistra.io/api/client/xnsinformer/core/v1
+maistra.io/api/client/xnsinformer/core/v1alpha1
+maistra.io/api/client/xnsinformer/core/v2
+maistra.io/api/client/xnsinformer/federation
+maistra.io/api/client/xnsinformer/federation/v1
+maistra.io/api/client/xnsinformer/internalinterfaces
 maistra.io/api/core/v1
 maistra.io/api/core/v1alpha1
 maistra.io/api/core/v2
+maistra.io/api/federation/v1
+maistra.io/api/security/v1
 # sigs.k8s.io/controller-runtime v0.10.2
 ## explicit
 sigs.k8s.io/controller-runtime

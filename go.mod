@@ -26,7 +26,6 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/cheggaaa/pb/v3 v3.0.8
-	github.com/cncf/udpa/go v0.0.0-20210930031921-04548b0d99d4
 	github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1
 	github.com/containernetworking/cni v1.0.1
 	github.com/containernetworking/plugins v1.0.1
@@ -109,7 +108,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20211020163157-7327e2aaee2b
 	k8s.io/kubectl v0.22.2
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b
-	maistra.io/api v0.0.0-20210609174032-f933bad53927
+	maistra.io/api v0.0.0-20220301154558-8f6a12a9464b
 	sigs.k8s.io/controller-runtime v0.10.2
 	sigs.k8s.io/gateway-api v0.4.0
 	sigs.k8s.io/mcs-api v0.1.0

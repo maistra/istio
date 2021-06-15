@@ -112,7 +112,7 @@ func (c *Controller) gatewayForImport(remote, local federationmodel.ServiceKey) 
 					},
 					Port: &rawnetworking.Port{
 						Name:     "tls-federation",
-						Number:   uint32(common.FederationPort),
+						Number:   uint32(common.DefaultFederationPort),
 						Protocol: "TLS",
 					},
 					Tls: &rawnetworking.ServerTLSSettings{
