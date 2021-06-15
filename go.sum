@@ -1436,8 +1436,8 @@ k8s.io/utils v0.0.0-20200821003339-5e75c0163111/go.mod h1:jPW/WVKK9YHAvNhRxK0md/
 k8s.io/utils v0.0.0-20200912215256-4140de9c8800/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20201110183641-67b214c5f920 h1:CbnUZsM497iRC5QMVkHwyl8s2tB3g7yaSHkYPkpgelw=
 k8s.io/utils v0.0.0-20201110183641-67b214c5f920/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
-maistra.io/api v0.0.0-20210609174032-f933bad53927 h1:6HvkPG7FLx1mFsUVn2MgJQ/QGcSvXhUwzFKilOACf8k=
-maistra.io/api v0.0.0-20210609174032-f933bad53927/go.mod h1:Os/zrIv6nsjgC43UAo17FFv+fvYlzANUWIpNNZEZ/KE=
+maistra.io/api v0.0.0-20210615164742-3bcdf945c8f3 h1:bKP0tAJhewTBJIiciHZ9/FNH3F72TzZroNAeDvVPvWs=
+maistra.io/api v0.0.0-20210615164742-3bcdf945c8f3/go.mod h1:Os/zrIv6nsjgC43UAo17FFv+fvYlzANUWIpNNZEZ/KE=
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
 rsc.io/sampler v1.3.0/go.mod h1:T1hPZKmBbMNahiBKFy5HrXp6adAjACjK9JXDnKaTXpA=

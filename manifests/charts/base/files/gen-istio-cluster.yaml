@@ -3705,9 +3705,9 @@ spec:
               type: array
           type: object
       type: object
-  version: v1alpha1
+  version: v1
   versions:
-  - name: v1alpha1
+  - name: v1
     served: true
     storage: true
 status:
@@ -3777,12 +3777,6 @@ spec:
               type: string
             security:
               properties:
-                allowDirectInbound:
-                  description: 'AllowDirectInbound determines whether or not external service invocations will be terminated at the ingress gateway. XXX: should this also be configurable per exported service?'
-                  type: boolean
-                allowDirectOutbound:
-                  description: 'AllowDirectOutbound determines whether or not external service invocations will be proxied through and terminated at the egress gateway XXX: should this also be configurable per imported service?'
-                  type: boolean
                 certificateChain:
                   description: 'Name of secret containing certificate chain to be used to validate the remote.  This is also used to validate certificates used by the remote services (both client and server certificates). XXX: maybe this is only used to initiate a connection, with the actual certs stored in the status field, as retrieved from the remote mesh, or maybe this identifies an endpoint used to retrieve a cert chain, a la jwks'
                   type: string
@@ -3796,33 +3790,11 @@ spec:
           type: object
         status:
           description: TODO
-          properties:
-            conditions:
-              items:
-                properties:
-                  lastTransitionTime:
-                    description: Last time the condition transitioned from one status to another.
-                    format: date-time
-                    type: string
-                  message:
-                    description: Human-readable message indicating details about the last transition.
-                    type: string
-                  reason:
-                    description: Unique, single-word, CamelCase reason for the condition's last transition.
-                    type: string
-                  status:
-                    description: The status of this condition. Can be True, False or Unknown.
-                    type: string
-                  type:
-                    description: The type of this condition.
-                    type: string
-                type: object
-              type: array
           type: object
       type: object
-  version: v1alpha1
+  version: v1
   versions:
-  - name: v1alpha1
+  - name: v1
     served: true
     storage: true
 status:
@@ -3958,9 +3930,9 @@ spec:
         status:
           type: object
       type: object
-  version: v1alpha1
+  version: v1
   versions:
-  - name: v1alpha1
+  - name: v1
     served: true
     storage: true
 status:
@@ -4044,13 +4016,26 @@ spec:
                 - type
                 type: object
               type: array
+            locality:
+              description: Locality within which imported services should be associated.
+              properties:
+                region:
+                  description: Region within which imported services are located.
+                  type: string
+                subzone:
+                  description: Subzone within which imported services are located.  If Subzone is specified, Zone must also be specified.
+                  type: string
+                zone:
+                  description: Zone within which imported services are located.  If Zone is specified, Region must also be specified.
+                  type: string
+              type: object
           type: object
         status:
           type: object
       type: object
-  version: v1alpha1
+  version: v1
   versions:
-  - name: v1alpha1
+  - name: v1
     served: true
     storage: true
 status:
