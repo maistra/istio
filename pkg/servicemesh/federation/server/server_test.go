@@ -99,7 +99,7 @@ func TestServiceList(t *testing.T) {
 			Namespace: "istio-system-test",
 		},
 		Spec: v1.MeshFederationSpec{
-			Security: &v1.MeshFederationSecurity{
+			Security: v1.MeshFederationSecurity{
 				ClientID: "federation-egress.other-mesh.svc.cluster.local",
 			},
 		},
@@ -471,7 +471,7 @@ func TestWatch(t *testing.T) {
 			Namespace: "istio-system-test",
 		},
 		Spec: v1.MeshFederationSpec{
-			Security: &v1.MeshFederationSecurity{
+			Security: v1.MeshFederationSecurity{
 				ClientID: "federation-egress.other-mesh.svc.cluster.local",
 			},
 		},

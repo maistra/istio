@@ -350,7 +350,7 @@ func (s *meshServer) getServiceMessage(svc *model.Service, exportedName *federat
 		ServiceKey:   *exportedName,
 		ServicePorts: make([]*federationmodel.ServicePort, 0),
 	}
-	addServiceSAs := s.mesh.Spec.Security != nil && s.mesh.Spec.Security.AllowDirectInbound
+	addServiceSAs := s.mesh.Spec.Security.AllowDirectInbound
 	if addServiceSAs {
 		ret.ServiceAccounts = append([]string(nil), svc.ServiceAccounts...)
 	} else {
@@ -516,7 +516,7 @@ func (s *meshServer) resync() {
 // s must be lock()ed
 func (s *meshServer) updateGatewayServiceAccounts() bool {
 	oldSAs := s.gatewaySAs
-	if s.mesh.Spec.Security != nil && s.mesh.Spec.Security.AllowDirectInbound {
+	if s.mesh.Spec.Security.AllowDirectInbound {
 		// access is direct to the service, so we'll be using the service's SAs
 		s.gatewaySAs = nil
 		return len(oldSAs) > 0
