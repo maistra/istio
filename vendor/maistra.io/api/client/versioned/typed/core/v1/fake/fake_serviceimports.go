@@ -25,34 +25,34 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
-	v1alpha1 "maistra.io/api/core/v1alpha1"
+	corev1 "maistra.io/api/core/v1"
 )
 
 // FakeServiceImports implements ServiceImportsInterface
 type FakeServiceImports struct {
-	Fake *FakeCoreV1alpha1
+	Fake *FakeCoreV1
 	ns   string
 }
 
-var serviceimportsResource = schema.GroupVersionResource{Group: "", Version: "v1alpha1", Resource: "serviceimports"}
+var serviceimportsResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "serviceimports"}
 
-var serviceimportsKind = schema.GroupVersionKind{Group: "", Version: "v1alpha1", Kind: "ServiceImports"}
+var serviceimportsKind = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceImports"}
 
 // Get takes name of the serviceImports, and returns the corresponding serviceImports object, and an error if there is any.
-func (c *FakeServiceImports) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ServiceImports, err error) {
+func (c *FakeServiceImports) Get(ctx context.Context, name string, options v1.GetOptions) (result *corev1.ServiceImports, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(serviceimportsResource, c.ns, name), &v1alpha1.ServiceImports{})
+		Invokes(testing.NewGetAction(serviceimportsResource, c.ns, name), &corev1.ServiceImports{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceImports), err
+	return obj.(*corev1.ServiceImports), err
 }
 
 // List takes label and field selectors, and returns the list of ServiceImports that match those selectors.
-func (c *FakeServiceImports) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ServiceImportsList, err error) {
+func (c *FakeServiceImports) List(ctx context.Context, opts v1.ListOptions) (result *corev1.ServiceImportsList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(serviceimportsResource, serviceimportsKind, c.ns, opts), &v1alpha1.ServiceImportsList{})
+		Invokes(testing.NewListAction(serviceimportsResource, serviceimportsKind, c.ns, opts), &corev1.ServiceImportsList{})
 
 	if obj == nil {
 		return nil, err
@@ -62,8 +62,8 @@ func (c *FakeServiceImports) List(ctx context.Context, opts v1.ListOptions) (res
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &v1alpha1.ServiceImportsList{ListMeta: obj.(*v1alpha1.ServiceImportsList).ListMeta}
-	for _, item := range obj.(*v1alpha1.ServiceImportsList).Items {
+	list := &corev1.ServiceImportsList{ListMeta: obj.(*corev1.ServiceImportsList).ListMeta}
+	for _, item := range obj.(*corev1.ServiceImportsList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -79,43 +79,43 @@ func (c *FakeServiceImports) Watch(ctx context.Context, opts v1.ListOptions) (wa
 }
 
 // Create takes the representation of a serviceImports and creates it.  Returns the server's representation of the serviceImports, and an error, if there is any.
-func (c *FakeServiceImports) Create(ctx context.Context, serviceImports *v1alpha1.ServiceImports, opts v1.CreateOptions) (result *v1alpha1.ServiceImports, err error) {
+func (c *FakeServiceImports) Create(ctx context.Context, serviceImports *corev1.ServiceImports, opts v1.CreateOptions) (result *corev1.ServiceImports, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(serviceimportsResource, c.ns, serviceImports), &v1alpha1.ServiceImports{})
+		Invokes(testing.NewCreateAction(serviceimportsResource, c.ns, serviceImports), &corev1.ServiceImports{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceImports), err
+	return obj.(*corev1.ServiceImports), err
 }
 
 // Update takes the representation of a serviceImports and updates it. Returns the server's representation of the serviceImports, and an error, if there is any.
-func (c *FakeServiceImports) Update(ctx context.Context, serviceImports *v1alpha1.ServiceImports, opts v1.UpdateOptions) (result *v1alpha1.ServiceImports, err error) {
+func (c *FakeServiceImports) Update(ctx context.Context, serviceImports *corev1.ServiceImports, opts v1.UpdateOptions) (result *corev1.ServiceImports, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(serviceimportsResource, c.ns, serviceImports), &v1alpha1.ServiceImports{})
+		Invokes(testing.NewUpdateAction(serviceimportsResource, c.ns, serviceImports), &corev1.ServiceImports{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceImports), err
+	return obj.(*corev1.ServiceImports), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeServiceImports) UpdateStatus(ctx context.Context, serviceImports *v1alpha1.ServiceImports, opts v1.UpdateOptions) (*v1alpha1.ServiceImports, error) {
+func (c *FakeServiceImports) UpdateStatus(ctx context.Context, serviceImports *corev1.ServiceImports, opts v1.UpdateOptions) (*corev1.ServiceImports, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(serviceimportsResource, "status", c.ns, serviceImports), &v1alpha1.ServiceImports{})
+		Invokes(testing.NewUpdateSubresourceAction(serviceimportsResource, "status", c.ns, serviceImports), &corev1.ServiceImports{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceImports), err
+	return obj.(*corev1.ServiceImports), err
 }
 
 // Delete takes name of the serviceImports and deletes it. Returns an error if one occurs.
 func (c *FakeServiceImports) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(serviceimportsResource, c.ns, name), &v1alpha1.ServiceImports{})
+		Invokes(testing.NewDeleteAction(serviceimportsResource, c.ns, name), &corev1.ServiceImports{})
 
 	return err
 }
@@ -124,17 +124,17 @@ func (c *FakeServiceImports) Delete(ctx context.Context, name string, opts v1.De
 func (c *FakeServiceImports) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(serviceimportsResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &v1alpha1.ServiceImportsList{})
+	_, err := c.Fake.Invokes(action, &corev1.ServiceImportsList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched serviceImports.
-func (c *FakeServiceImports) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ServiceImports, err error) {
+func (c *FakeServiceImports) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *corev1.ServiceImports, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(serviceimportsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ServiceImports{})
+		Invokes(testing.NewPatchSubresourceAction(serviceimportsResource, c.ns, name, pt, data, subresources...), &corev1.ServiceImports{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.ServiceImports), err
+	return obj.(*corev1.ServiceImports), err
 }
