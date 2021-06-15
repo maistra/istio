@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	corev1 "k8s.io/api/core/v1"
 	v1 "maistra.io/api/core/v1"
 
 	"istio.io/api/label"
@@ -77,6 +78,9 @@ type Controller struct {
 	defaultDomainSuffix string
 	defaultNameMapper   common.NameMapper
 	importNameMapper    common.NameMapper
+	defaultLocality     *v1.ServiceImportLocality
+	importLocality      *v1.ServiceImportLocality
+	locality            *v1.ServiceImportLocality
 
 	storeLock      sync.RWMutex
 	imports        map[federationmodel.ServiceKey]*existingImport
@@ -124,6 +128,35 @@ func localDomainSuffix(domainSuffix string) string {
 	return "svc." + domainSuffix
 }
 
+func mergeLocality(locality *v1.ServiceImportLocality, defaults *v1.ServiceImportLocality) *v1.ServiceImportLocality {
+	merged := v1.ServiceImportLocality{}
+	if defaults == nil {
+		defaults = &v1.ServiceImportLocality{}
+		if locality == nil {
+			return nil
+		}
+	} else if locality != nil {
+		merged = *locality
+	}
+	if merged.Subzone == "" && defaults.Subzone != "" {
+		merged.Subzone = defaults.Subzone
+	}
+	if merged.Zone == "" && defaults.Zone != "" {
+		merged.Zone = defaults.Zone
+	}
+	if merged.Region == "" && defaults.Region != "" {
+		merged.Region = defaults.Region
+	}
+	if merged.Subzone != "" && (merged.Zone == "" || merged.Region == "") {
+		// cannot have subzone specified without region and zone
+		return nil
+	} else if merged.Zone != "" && merged.Region == "" {
+		// cannot have zone specified without region
+		return nil
+	}
+	return &merged
+}
+
 // NewController creates a new Aggregate controller
 func NewController(opt Options, mesh *v1.MeshFederation, defaultImportConfig, importConfig *v1.ServiceImports) *Controller {
 	backoffPolicy := backoff.NewExponentialBackOff()
@@ -131,6 +164,14 @@ func NewController(opt Options, mesh *v1.MeshFederation, defaultImportConfig, im
 	localDomainSuffix := localDomainSuffix(opt.DomainSuffix)
 	defaultDomainSuffix := defaultDomainSuffixForMesh(mesh)
 	defaultNameMapper := common.NewServiceImporter(defaultImportConfig, nil, defaultDomainSuffix, localDomainSuffix)
+	var importLocality, defaultLocality *v1.ServiceImportLocality
+	if importConfig != nil {
+		importLocality = importConfig.Spec.Locality
+	}
+	if defaultImportConfig != nil {
+		defaultLocality = defaultImportConfig.Spec.Locality
+	}
+	locality := mergeLocality(importLocality, defaultLocality)
 	return &Controller{
 		discoveryURL:        fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, opt.EgressService, common.DefaultDiscoveryPort),
 		egressService:       opt.EgressService,
@@ -145,6 +186,9 @@ func NewController(opt Options, mesh *v1.MeshFederation, defaultImportConfig, im
 		localDomainSuffix:   localDomainSuffix,
 		defaultDomainSuffix: defaultDomainSuffix,
 		defaultNameMapper:   defaultNameMapper,
+		defaultLocality:     defaultLocality,
+		importLocality:      importLocality,
+		locality:            locality,
 		importNameMapper:    common.NewServiceImporter(importConfig, defaultNameMapper, defaultDomainSuffix, localDomainSuffix),
 		imports:             map[federationmodel.ServiceKey]*existingImport{},
 		serviceStore:        map[host.Name]*model.Service{},
@@ -164,6 +208,12 @@ func (c *Controller) UpdateImportConfig(importConfig *v1.ServiceImports) {
 		c.storeLock.Lock()
 		defer c.storeLock.Unlock()
 		c.importNameMapper = common.NewServiceImporter(importConfig, c.defaultNameMapper, c.defaultDomainSuffix, c.localDomainSuffix)
+		if importConfig == nil {
+			c.importLocality = nil
+		} else {
+			c.importLocality = importConfig.Spec.Locality
+		}
+		c.locality = mergeLocality(c.importLocality, c.defaultLocality)
 	}()
 	c.resync()
 }
@@ -173,6 +223,12 @@ func (c *Controller) UpdateDefaultImportConfig(importConfig *v1.ServiceImports) 
 		c.storeLock.Lock()
 		defer c.storeLock.Unlock()
 		c.importNameMapper.UpdateDefaultMapper(common.NewServiceImporter(importConfig, nil, c.defaultDomainSuffix, c.localDomainSuffix))
+		if importConfig == nil {
+			c.defaultLocality = nil
+		} else {
+			c.defaultLocality = importConfig.Spec.Locality
+		}
+		c.locality = mergeLocality(c.importLocality, c.defaultLocality)
 	}()
 	c.resync()
 }
@@ -229,8 +285,17 @@ func (c *Controller) convertExportedService(s *federationmodel.ServiceMessage) (
 		serviceVisibility = visibility.Public
 	}
 	serviceName := fmt.Sprintf("%s.%s.%s.remote", s.Name, s.Namespace, c.clusterID)
-	return c.createService(s, serviceName, c.namespace, s.Hostname, c.clusterID,
-		c.network, serviceVisibility, c.gatewayStore, s.ServiceAccounts)
+	return c.createService(createServiceOptions{
+		service:           s,
+		serviceName:       serviceName,
+		serviceNamespace:  c.namespace,
+		hostname:          s.Hostname,
+		clusterID:         c.clusterID,
+		network:           c.network,
+		serviceVisibility: serviceVisibility,
+		networkGateways:   c.gatewayStore,
+		sas:               s.ServiceAccounts,
+	})
 }
 
 func (c *Controller) convertToLocalService(s *federationmodel.ServiceMessage,
@@ -244,36 +309,58 @@ func (c *Controller) convertToLocalService(s *federationmodel.ServiceMessage,
 	}
 	// XXX: make this configurable
 	serviceVisibility := visibility.Public
-	return c.createService(s, serviceName, serviceNamespace, importedName.Hostname,
-		c.clusterID, c.localNetwork, serviceVisibility, c.egressGateways, c.egressSAs)
+	return c.createService(createServiceOptions{
+		service:           s,
+		serviceName:       serviceName,
+		serviceNamespace:  serviceNamespace,
+		hostname:          importedName.Hostname,
+		clusterID:         c.clusterID,
+		network:           c.localNetwork,
+		serviceVisibility: serviceVisibility,
+		networkGateways:   c.egressGateways,
+		sas:               c.egressSAs,
+		locality:          c.locality,
+	})
 }
 
-func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceName, serviceNamespace, hostname, clusterID, network string,
-	serviceVisibility visibility.Instance, networkGateways []*model.Gateway, sas []string) (*model.Service, []*model.ServiceInstance) {
+type createServiceOptions struct {
+	service           *federationmodel.ServiceMessage
+	serviceName       string
+	serviceNamespace  string
+	hostname          string
+	clusterID         string
+	network           string
+	serviceVisibility visibility.Instance
+	networkGateways   []*model.Gateway
+	sas               []string
+	locality          *v1.ServiceImportLocality
+}
+
+func (c *Controller) createService(opts createServiceOptions) (*model.Service, []*model.ServiceInstance) {
 
 	instances := []*model.ServiceInstance{}
 	svc := &model.Service{
 		Attributes: model.ServiceAttributes{
 			ServiceRegistry: string(serviceregistry.Federation),
-			Name:            serviceName,
-			Namespace:       serviceNamespace,
-			UID:             fmt.Sprintf("istio://%s/services/%s", serviceNamespace, serviceName),
+			Name:            opts.serviceName,
+			Namespace:       opts.serviceNamespace,
+			UID:             fmt.Sprintf("istio://%s/services/%s", opts.serviceNamespace, opts.serviceName),
 			ExportTo: map[visibility.Instance]bool{
-				serviceVisibility: true,
+				opts.serviceVisibility: true,
 			},
 			Labels: labels.Instance{
-				label.IstioCluster:                   clusterID,
-				model.IstioCanonicalServiceLabelName: serviceName,
+				label.IstioCluster:                   opts.clusterID,
+				model.IstioCanonicalServiceLabelName: opts.serviceName,
 			},
 		},
 		CreationTime:    time.Now(),
 		Resolution:      model.ClientSideLB,
 		Address:         constants.UnspecifiedIP,
-		Hostname:        host.Name(hostname),
+		Hostname:        host.Name(opts.hostname),
 		Ports:           model.PortList{},
-		ServiceAccounts: append([]string(nil), sas...),
+		ServiceAccounts: append([]string(nil), opts.sas...),
 	}
-	for _, port := range s.ServicePorts {
+	for _, port := range opts.service.ServicePorts {
 		svc.Ports = append(svc.Ports, &model.Port{
 			Name:     port.Name,
 			Port:     port.Port,
@@ -281,35 +368,46 @@ func (c *Controller) createService(s *federationmodel.ServiceMessage, serviceNam
 		})
 	}
 
-	baseWorkloadName := serviceName
-	if !strings.Contains(serviceName, c.clusterID) {
-		baseWorkloadName = fmt.Sprintf("%s-%s", serviceName, c.clusterID)
+	baseWorkloadName := opts.serviceName
+	if !strings.Contains(opts.serviceName, c.clusterID) {
+		baseWorkloadName = fmt.Sprintf("%s-%s", opts.serviceName, c.clusterID)
+	}
+	localityLabel := ""
+	if opts.locality != nil && opts.locality.Region != "" {
+		localityLabel = fmt.Sprintf("%s/%s/%s", opts.locality.Region, opts.locality.Zone, opts.locality.Subzone)
 	}
 	for _, port := range svc.Ports {
-		for gatewayIndex, networkGateway := range networkGateways {
+		for gatewayIndex, networkGateway := range opts.networkGateways {
 			c.logger.Debugf("adding endpoint for imported service: addr=%s, port=%d, host=%s",
 				networkGateway.Addr, networkGateway.Port, svc.Hostname)
-			instances = append(instances, &model.ServiceInstance{
+			instance := &model.ServiceInstance{
 				Service:     svc,
 				ServicePort: port,
 				Endpoint: &model.IstioEndpoint{
 					Address:      networkGateway.Addr,
 					EndpointPort: networkGateway.Port,
 					Labels: labels.Instance{
-						label.IstioCluster:                           clusterID,
-						model.IstioCanonicalServiceLabelName:         serviceName,
-						model.IstioCanonicalServiceRevisionLabelName: clusterID,
+						label.IstioCluster:                           opts.clusterID,
+						model.IstioCanonicalServiceLabelName:         opts.serviceName,
+						model.IstioCanonicalServiceRevisionLabelName: opts.clusterID,
 					},
-					Network: network,
+					Network: opts.network,
 					Locality: model.Locality{
-						ClusterID: clusterID,
+						ClusterID: opts.clusterID,
 					},
 					ServicePortName: port.Name,
 					TLSMode:         model.IstioMutualTLSModeLabel,
-					Namespace:       serviceNamespace,
+					Namespace:       opts.serviceNamespace,
 					WorkloadName:    fmt.Sprintf("%s-%d", baseWorkloadName, gatewayIndex),
 				},
-			})
+			}
+			if opts.locality != nil {
+				instance.Endpoint.Labels[label.IstioSubZone] = opts.locality.Subzone
+				instance.Endpoint.Labels[corev1.LabelZoneFailureDomainStable] = opts.locality.Zone
+				instance.Endpoint.Labels[corev1.LabelZoneRegionStable] = opts.locality.Region
+				instance.Endpoint.Locality.Label = localityLabel
+			}
+			instances = append(instances, instance)
 		}
 	}
 	return svc, instances
