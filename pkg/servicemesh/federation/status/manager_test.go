@@ -20,11 +20,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	maistraclient "maistra.io/api/client/versioned"
 	"maistra.io/api/client/versioned/fake"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/federation/model"
@@ -49,8 +49,8 @@ func TestStatusManager(t *testing.T) {
 		name       string
 		mesh       types.NamespacedName
 		events     []func(h Handler)
-		status     []v1alpha1.FederationStatusStatus
-		assertions []func(t *testing.T, status *v1alpha1.FederationStatusStatus)
+		status     []v1.FederationStatusStatus
+		assertions []func(t *testing.T, status *v1.FederationStatusStatus)
 	}{
 		{
 			name: "initial-status",
@@ -68,24 +68,24 @@ func TestStatusManager(t *testing.T) {
 					h.WatchTerminated("503")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1alpha1.FederationStatusStatus){
+			assertions: []func(t *testing.T, status *v1.FederationStatusStatus){
 				nil,
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					if status.Meshes[0].Discovery.Watch.LastConnected.IsZero() {
 						t.Errorf("expected LastConnected to be updated")
 					}
 				},
 			},
-			status: []v1alpha1.FederationStatusStatus{
+			status: []v1.FederationStatusStatus{
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Watch: v1alpha1.DiscoveryWatchStatus{
-									DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Watch: v1.DiscoveryWatchStatus{
+									DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 										Connected: false,
 									},
 								},
@@ -94,14 +94,14 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Watch: v1alpha1.DiscoveryWatchStatus{
-									DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Watch: v1.DiscoveryWatchStatus{
+									DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 										Connected:            false,
 										LastDisconnectStatus: "503",
 									},
@@ -127,29 +127,29 @@ func TestStatusManager(t *testing.T) {
 					h.WatchTerminated("200")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1alpha1.FederationStatusStatus){
+			assertions: []func(t *testing.T, status *v1.FederationStatusStatus){
 				nil,
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					if status.Meshes[0].Discovery.Watch.LastConnected.IsZero() {
 						t.Errorf("expected LastConnected to be updated")
 					}
 				},
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					if status.Meshes[0].Discovery.Watch.LastDisconnect.IsZero() {
 						t.Errorf("expected LastDisconnect to be updated")
 					}
 				},
 			},
-			status: []v1alpha1.FederationStatusStatus{
+			status: []v1.FederationStatusStatus{
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Watch: v1alpha1.DiscoveryWatchStatus{
-									DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Watch: v1.DiscoveryWatchStatus{
+									DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 										Connected: false,
 									},
 								},
@@ -158,14 +158,14 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Watch: v1alpha1.DiscoveryWatchStatus{
-									DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Watch: v1.DiscoveryWatchStatus{
+									DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 										Connected: true,
 									},
 								},
@@ -174,14 +174,14 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Watch: v1alpha1.DiscoveryWatchStatus{
-									DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Watch: v1.DiscoveryWatchStatus{
+									DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 										Connected:            false,
 										LastDisconnectStatus: "200",
 									},
@@ -209,14 +209,14 @@ func TestStatusManager(t *testing.T) {
 					h.RemoteWatchTerminated("10.10.10.10")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1alpha1.FederationStatusStatus){
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+			assertions: []func(t *testing.T, status *v1.FederationStatusStatus){
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					if status.Meshes[0].Discovery.Remotes[0].LastConnected.IsZero() {
 						t.Errorf("expected LastConnected to be updated")
 					}
 				},
 				nil,
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					// full sync causes a push, so we can also verify that an event was seen
 					if status.Meshes[0].Discovery.Remotes[0].LastEvent.IsZero() {
 						t.Errorf("expected LastEvent to be updated")
@@ -225,24 +225,24 @@ func TestStatusManager(t *testing.T) {
 						t.Errorf("expected LastFullSync to be updated")
 					}
 				},
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					if status.Meshes[0].Discovery.Remotes[0].LastDisconnect.IsZero() {
 						t.Errorf("expected LastDisconnect to be updated")
 					}
 				},
 			},
-			status: []v1alpha1.FederationStatusStatus{
+			status: []v1.FederationStatusStatus{
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Remotes: []v1alpha1.DiscoveryRemoteStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Remotes: []v1.DiscoveryRemoteStatus{
 									{
 										Source: "10.10.10.10",
-										DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 											Connected: true,
 										},
 									},
@@ -252,16 +252,16 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Remotes: []v1alpha1.DiscoveryRemoteStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Remotes: []v1.DiscoveryRemoteStatus{
 									{
 										Source: "10.10.10.10",
-										DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 											Connected: true,
 										},
 									},
@@ -271,16 +271,16 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Remotes: []v1alpha1.DiscoveryRemoteStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Remotes: []v1.DiscoveryRemoteStatus{
 									{
 										Source: "10.10.10.10",
-										DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 											Connected: true,
 										},
 									},
@@ -290,16 +290,16 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Discovery: v1alpha1.MeshDiscoveryStatus{
-								Remotes: []v1alpha1.DiscoveryRemoteStatus{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Discovery: v1.MeshDiscoveryStatus{
+								Remotes: []v1.DiscoveryRemoteStatus{
 									{
 										Source: "10.10.10.10",
-										DiscoveryConnectionStatus: v1alpha1.DiscoveryConnectionStatus{
+										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
 											Connected: false,
 										},
 									},
@@ -344,18 +344,18 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1alpha1.FederationStatusStatus){
+			assertions: []func(t *testing.T, status *v1.FederationStatusStatus){
 				nil, nil, nil,
 			},
-			status: []v1alpha1.FederationStatusStatus{
+			status: []v1.FederationStatusStatus{
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{
 								{
-									LocalService: v1alpha1.ServiceKey{
+									LocalService: v1.ServiceKey{
 										Name:      "real-service",
 										Namespace: "real-namespace",
 										Hostname:  "real-service.real-namespace.svc.cluster.local",
@@ -367,13 +367,13 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{
 								{
-									LocalService: v1alpha1.ServiceKey{
+									LocalService: v1.ServiceKey{
 										Name:      "real-service",
 										Namespace: "real-namespace",
 										Hostname:  "real-service.real-namespace.svc.cluster.local",
@@ -385,11 +385,11 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
@@ -429,43 +429,43 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1alpha1.FederationStatusStatus){
+			assertions: []func(t *testing.T, status *v1.FederationStatusStatus){
 				nil, nil, nil, nil,
 			},
-			status: []v1alpha1.FederationStatusStatus{
+			status: []v1.FederationStatusStatus{
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
@@ -499,23 +499,23 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1alpha1.FederationStatusStatus){
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+			assertions: []func(t *testing.T, status *v1.FederationStatusStatus){
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					if status.Meshes[0].Discovery.Watch.LastEvent.IsZero() {
 						t.Errorf("expected LastEvent to be updated")
 					}
 				},
 				nil, nil,
 			},
-			status: []v1alpha1.FederationStatusStatus{
+			status: []v1.FederationStatusStatus{
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{
 								{
-									LocalService: v1alpha1.ServiceKey{
+									LocalService: v1.ServiceKey{
 										Name:      "local-service",
 										Namespace: "local-namespace",
 										Hostname:  "local-service.local-namespace.svc.test-mesh.local",
@@ -527,13 +527,13 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Exports: []v1alpha1.MeshServiceMapping{},
-							Imports: []v1alpha1.MeshServiceMapping{
+							Exports: []v1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{
 								{
-									LocalService: v1alpha1.ServiceKey{},
+									LocalService: v1.ServiceKey{},
 									ExportedName: "exported-service.exported-namespace.svc.mesh.local",
 								},
 							},
@@ -541,11 +541,11 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
@@ -579,8 +579,8 @@ func TestStatusManager(t *testing.T) {
 					h.FullSyncComplete()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1alpha1.FederationStatusStatus){
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+			assertions: []func(t *testing.T, status *v1.FederationStatusStatus){
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					if !status.Meshes[0].Discovery.Watch.LastEvent.IsZero() {
 						t.Errorf("did not expect LastEvent to be updated")
 					}
@@ -589,7 +589,7 @@ func TestStatusManager(t *testing.T) {
 					}
 				},
 				nil, nil,
-				func(t *testing.T, status *v1alpha1.FederationStatusStatus) {
+				func(t *testing.T, status *v1.FederationStatusStatus) {
 					// this should have been updated in one of the previous events
 					if status.Meshes[0].Discovery.Watch.LastEvent.IsZero() {
 						t.Errorf("expected LastEvent to be updated")
@@ -599,40 +599,40 @@ func TestStatusManager(t *testing.T) {
 					}
 				},
 			},
-			status: []v1alpha1.FederationStatusStatus{
+			status: []v1.FederationStatusStatus{
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
 				{
-					Meshes: []v1alpha1.FederationStatusDetails{
+					Meshes: []v1.FederationStatusDetails{
 						{
 							Mesh:    namespace + "/" + name,
-							Imports: []v1alpha1.MeshServiceMapping{},
-							Exports: []v1alpha1.MeshServiceMapping{},
+							Imports: []v1.MeshServiceMapping{},
+							Exports: []v1.MeshServiceMapping{},
 						},
 					},
 				},
@@ -645,7 +645,7 @@ func TestStatusManager(t *testing.T) {
 			if len(tc.status) != len(tc.events) || len(tc.assertions) != len(tc.events) {
 				t.Fatalf("number of status elements and asserts must equal the number of events")
 			}
-			name := v1.ObjectMeta{Name: "istiod-test", Namespace: namespace, UID: "12345"}
+			name := metav1.ObjectMeta{Name: "istiod-test", Namespace: namespace, UID: "12345"}
 			kubeClient := kube.NewFakeClient(&corev1.Pod{
 				ObjectMeta: name,
 			})
@@ -658,12 +658,12 @@ func TestStatusManager(t *testing.T) {
 			manager := newManager(types.NamespacedName{Name: name.Name, Namespace: name.Namespace}, kubeClient, cs)
 			manager.FederationAdded(tc.mesh)
 			manager.PushStatus()
-			verifyStatus(t, cs, name, &v1alpha1.FederationStatusStatus{
-				Meshes: []v1alpha1.FederationStatusDetails{
+			verifyStatus(t, cs, name, &v1.FederationStatusStatus{
+				Meshes: []v1.FederationStatusDetails{
 					{
 						Mesh:    tc.mesh.Namespace + "/" + tc.mesh.Name,
-						Exports: []v1alpha1.MeshServiceMapping{},
-						Imports: []v1alpha1.MeshServiceMapping{},
+						Exports: []v1.MeshServiceMapping{},
+						Imports: []v1.MeshServiceMapping{},
 					},
 				},
 			}, nil)
@@ -678,16 +678,16 @@ func TestStatusManager(t *testing.T) {
 			}
 
 			manager.FederationDeleted(tc.mesh)
-			verifyStatus(t, cs, name, &v1alpha1.FederationStatusStatus{}, nil)
+			verifyStatus(t, cs, name, &v1.FederationStatusStatus{}, nil)
 		})
 	}
 }
 
-func verifyStatus(t *testing.T, cs maistraclient.Interface, name v1.ObjectMeta, expected *v1alpha1.FederationStatusStatus,
-	assert func(*testing.T, *v1alpha1.FederationStatusStatus)) {
+func verifyStatus(t *testing.T, cs maistraclient.Interface, name metav1.ObjectMeta, expected *v1.FederationStatusStatus,
+	assert func(*testing.T, *v1.FederationStatusStatus)) {
 	t.Helper()
 
-	actual, err := cs.CoreV1alpha1().FederationStatuses(name.Namespace).Get(context.TODO(), name.Name, v1.GetOptions{})
+	actual, err := cs.CoreV1().FederationStatuses(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
 	if err != nil {
 		t.Errorf("unexpected error retrieving FederationStatus %s/%s", name.Namespace, name.Name)
 		return
