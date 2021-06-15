@@ -17,7 +17,7 @@ package common
 import (
 	"sync"
 
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
@@ -33,7 +33,7 @@ type ServiceExporter struct {
 
 var _ NameMapper = (*ServiceExporter)(nil)
 
-func NewServiceExporter(exportConfig *v1alpha1.ServiceExports, defaultMapper *ServiceExporter, domainSuffix string) *ServiceExporter {
+func NewServiceExporter(exportConfig *v1.ServiceExports, defaultMapper *ServiceExporter, domainSuffix string) *ServiceExporter {
 	return &ServiceExporter{
 		domainSuffix:  domainSuffix,
 		exportConfig:  convertServiceExportsToNameMapper(exportConfig, domainSuffix),
@@ -41,14 +41,14 @@ func NewServiceExporter(exportConfig *v1alpha1.ServiceExports, defaultMapper *Se
 	}
 }
 
-func convertServiceExportsToNameMapper(serviceExports *v1alpha1.ServiceExports, domainSuffix string) []NameMapper {
+func convertServiceExportsToNameMapper(serviceExports *v1.ServiceExports, domainSuffix string) []NameMapper {
 	if serviceExports == nil {
 		return nil
 	}
 	var exportConfig []NameMapper
 	for index, rule := range serviceExports.Spec.Exports {
 		switch rule.Type {
-		case v1alpha1.LabelSelectorType:
+		case v1.LabelSelectorType:
 			if rule.LabelSelector == nil {
 				Logger.Errorf("skipping rule %d in ServiceExports %s/%s: null labelSelector", index, serviceExports.Namespace, serviceExports.Name)
 				continue
@@ -60,7 +60,7 @@ func convertServiceExportsToNameMapper(serviceExports *v1alpha1.ServiceExports, 
 			} else {
 				exportConfig = append(exportConfig, matcher)
 			}
-		case v1alpha1.NameSelectorType:
+		case v1.NameSelectorType:
 			if rule.NameSelector == nil {
 				Logger.Errorf("skipping rule %d in ServiceExports %s/%s: null nameSelector", index, serviceExports.Namespace, serviceExports.Name)
 				continue

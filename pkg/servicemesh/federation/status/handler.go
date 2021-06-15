@@ -23,7 +23,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/pkg/log"
@@ -40,13 +40,13 @@ func newHandler(manager *manager, mesh types.NamespacedName) *handler {
 		manager:   manager,
 		mesh:      mesh,
 		logger:    manager.logger.WithLabels("mesh", mesh.String()),
-		discovery: map[string]*v1alpha1.DiscoveryRemoteStatus{},
-		exports:   map[v1alpha1.ServiceKey]v1alpha1.MeshServiceMapping{},
-		imports:   map[string]v1alpha1.MeshServiceMapping{},
-		status: v1alpha1.FederationStatusDetails{
+		discovery: map[string]*v1.DiscoveryRemoteStatus{},
+		exports:   map[v1.ServiceKey]v1.MeshServiceMapping{},
+		imports:   map[string]v1.MeshServiceMapping{},
+		status: v1.FederationStatusDetails{
 			Mesh:    mesh.String(),
-			Exports: []v1alpha1.MeshServiceMapping{},
-			Imports: []v1alpha1.MeshServiceMapping{},
+			Exports: []v1.MeshServiceMapping{},
+			Imports: []v1.MeshServiceMapping{},
 		},
 	}
 }
@@ -57,16 +57,16 @@ type handler struct {
 	mesh    types.NamespacedName
 	logger  *log.Scope
 
-	discovery map[string]*v1alpha1.DiscoveryRemoteStatus
-	exports   map[v1alpha1.ServiceKey]v1alpha1.MeshServiceMapping
-	imports   map[string]v1alpha1.MeshServiceMapping
+	discovery map[string]*v1.DiscoveryRemoteStatus
+	exports   map[v1.ServiceKey]v1.MeshServiceMapping
+	imports   map[string]v1.MeshServiceMapping
 
 	discoveryDirty bool
 	exportsDirty   bool
 	importsDirty   bool
 	dirty          bool
 
-	status v1alpha1.FederationStatusDetails
+	status v1.FederationStatusDetails
 }
 
 var _ Handler = (*handler)(nil)
@@ -166,7 +166,7 @@ func (h *handler) RemoteWatchAccepted(source string) {
 		if ok {
 			h.logger.Debugf("RemoteWatchAccepted called when watch status already exists: %s", source)
 		} else {
-			remoteStatus = &v1alpha1.DiscoveryRemoteStatus{
+			remoteStatus = &v1.DiscoveryRemoteStatus{
 				Source: source,
 			}
 			h.discovery[source] = remoteStatus
@@ -240,16 +240,16 @@ func (h *handler) RemoteWatchTerminated(source string) {
 	}
 }
 
-func statusServiceKeyFor(service model.ServiceKey) v1alpha1.ServiceKey {
-	return v1alpha1.ServiceKey{
+func statusServiceKeyFor(service model.ServiceKey) v1.ServiceKey {
+	return v1.ServiceKey{
 		Name:      service.Name,
 		Namespace: service.Namespace,
 		Hostname:  service.Hostname,
 	}
 }
 
-func statusMappingFor(service model.ServiceKey, exportedName string) v1alpha1.MeshServiceMapping {
-	return v1alpha1.MeshServiceMapping{
+func statusMappingFor(service model.ServiceKey, exportedName string) v1.MeshServiceMapping {
+	return v1.MeshServiceMapping{
 		LocalService: statusServiceKeyFor(service),
 		ExportedName: exportedName,
 	}
@@ -386,7 +386,7 @@ func (h *handler) Flush() error {
 	return nil
 }
 
-func (h *handler) currentStatus() *v1alpha1.FederationStatusDetails {
+func (h *handler) currentStatus() *v1.FederationStatusDetails {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -398,7 +398,7 @@ func (h *handler) currentStatus() *v1alpha1.FederationStatusDetails {
 
 	// see if we need to update the export status
 	if h.exportsDirty {
-		exports := []v1alpha1.MeshServiceMapping{}
+		exports := []v1.MeshServiceMapping{}
 		for _, mapping := range h.exports {
 			exports = append(exports, mapping)
 		}
@@ -419,7 +419,7 @@ func (h *handler) currentStatus() *v1alpha1.FederationStatusDetails {
 
 	// see if we need to update the import status
 	if h.importsDirty {
-		imports := []v1alpha1.MeshServiceMapping{}
+		imports := []v1.MeshServiceMapping{}
 		for _, mapping := range h.imports {
 			imports = append(imports, mapping)
 		}
@@ -430,7 +430,7 @@ func (h *handler) currentStatus() *v1alpha1.FederationStatusDetails {
 
 	// see if we need to update the discovery status
 	if h.discoveryDirty {
-		var remoteStatuses []v1alpha1.DiscoveryRemoteStatus
+		var remoteStatuses []v1.DiscoveryRemoteStatus
 		for _, status := range h.discovery {
 			remoteStatuses = append(remoteStatuses, *status)
 		}

@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"maistra.io/api/core/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "maistra.io/api/core/v1"
 
 	configmemory "istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
@@ -93,27 +93,27 @@ func (m *fakeStatusHandler) Flush() error {
 }
 
 func TestServiceList(t *testing.T) {
-	federation := &v1alpha1.MeshFederation{
-		ObjectMeta: v1.ObjectMeta{
+	federation := &v1.MeshFederation{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1alpha1.MeshFederationSpec{
-			Security: &v1alpha1.MeshFederationSecurity{
+		Spec: v1.MeshFederationSpec{
+			Security: &v1.MeshFederationSecurity{
 				ClientID: "federation-egress.other-mesh.svc.cluster.local",
 			},
 		},
 	}
-	exportAllServices := &v1alpha1.ServiceExports{
-		ObjectMeta: v1.ObjectMeta{
+	exportAllServices := &v1.ServiceExports{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1alpha1.ServiceExportsSpec{
-			Exports: []v1alpha1.ServiceExportRule{
+		Spec: v1.ServiceExportsSpec{
+			Exports: []v1.ServiceExportRule{
 				{
-					Type:         v1alpha1.NameSelectorType,
-					NameSelector: &v1alpha1.ServiceNameMapping{},
+					Type:         v1.NameSelectorType,
+					NameSelector: &v1.ServiceNameMapping{},
 				},
 			},
 		},
@@ -121,8 +121,8 @@ func TestServiceList(t *testing.T) {
 	testCases := []struct {
 		name           string
 		remoteName     string
-		defaultExports *v1alpha1.ServiceExports
-		serviceExports *v1alpha1.ServiceExports
+		defaultExports *v1.ServiceExports
+		serviceExports *v1.ServiceExports
 		services       []*model.Service
 		serviceEvents  []struct {
 			event model.Event
@@ -141,21 +141,21 @@ func TestServiceList(t *testing.T) {
 		{
 			name:       "exported service, no gateway",
 			remoteName: "test-remote",
-			serviceExports: &v1alpha1.ServiceExports{
-				ObjectMeta: v1.ObjectMeta{
+			serviceExports: &v1.ServiceExports{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1alpha1.ServiceExportsSpec{
-					Exports: []v1alpha1.ServiceExportRule{
+				Spec: v1.ServiceExportsSpec{
+					Exports: []v1.ServiceExportRule{
 						{
-							Type: v1alpha1.NameSelectorType,
-							NameSelector: &v1alpha1.ServiceNameMapping{
-								Name: v1alpha1.ServiceName{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								Name: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
-								Alias: &v1alpha1.ServiceName{
+								Alias: &v1.ServiceName{
 									Namespace: "federation",
 									Name:      "service",
 								},
@@ -224,21 +224,21 @@ func TestServiceList(t *testing.T) {
 		{
 			name:       "exported service + gateway",
 			remoteName: "test-remote",
-			serviceExports: &v1alpha1.ServiceExports{
-				ObjectMeta: v1.ObjectMeta{
+			serviceExports: &v1.ServiceExports{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1alpha1.ServiceExportsSpec{
-					Exports: []v1alpha1.ServiceExportRule{
+				Spec: v1.ServiceExportsSpec{
+					Exports: []v1.ServiceExportRule{
 						{
-							Type: v1alpha1.NameSelectorType,
-							NameSelector: &v1alpha1.ServiceNameMapping{
-								Name: v1alpha1.ServiceName{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								Name: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
-								Alias: &v1alpha1.ServiceName{
+								Alias: &v1.ServiceName{
 									Namespace: "federation",
 									Name:      "service",
 								},
@@ -465,32 +465,32 @@ func getServiceList(t *testing.T, addr, remoteName string) federationmodel.Servi
 }
 
 func TestWatch(t *testing.T) {
-	federation := &v1alpha1.MeshFederation{
-		ObjectMeta: v1.ObjectMeta{
+	federation := &v1.MeshFederation{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1alpha1.MeshFederationSpec{
-			Security: &v1alpha1.MeshFederationSecurity{
+		Spec: v1.MeshFederationSpec{
+			Security: &v1.MeshFederationSecurity{
 				ClientID: "federation-egress.other-mesh.svc.cluster.local",
 			},
 		},
 	}
-	exportProductPage := &v1alpha1.ServiceExports{
-		ObjectMeta: v1.ObjectMeta{
+	exportProductPage := &v1.ServiceExports{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1alpha1.ServiceExportsSpec{
-			Exports: []v1alpha1.ServiceExportRule{
+		Spec: v1.ServiceExportsSpec{
+			Exports: []v1.ServiceExportRule{
 				{
-					Type: v1alpha1.NameSelectorType,
-					NameSelector: &v1alpha1.ServiceNameMapping{
-						Name: v1alpha1.ServiceName{
+					Type: v1.NameSelectorType,
+					NameSelector: &v1.ServiceNameMapping{
+						Name: v1.ServiceName{
 							Namespace: "bookinfo",
 							Name:      "productpage",
 						},
-						Alias: &v1alpha1.ServiceName{
+						Alias: &v1.ServiceName{
 							Namespace: "federation",
 							Name:      "service",
 						},
@@ -502,9 +502,9 @@ func TestWatch(t *testing.T) {
 	testCases := []struct {
 		name           string
 		remoteName     string
-		defaultExports *v1alpha1.ServiceExports
-		serviceExports *v1alpha1.ServiceExports
-		updatedExports *v1alpha1.ServiceExports
+		defaultExports *v1.ServiceExports
+		serviceExports *v1.ServiceExports
+		updatedExports *v1.ServiceExports
 		services       []*model.Service
 		serviceEvents  []struct {
 			event model.Event
@@ -594,21 +594,21 @@ func TestWatch(t *testing.T) {
 			name:           "no gateways, service exported name changes, filtered service",
 			remoteName:     "test-remote",
 			serviceExports: exportProductPage,
-			updatedExports: &v1alpha1.ServiceExports{
-				ObjectMeta: v1.ObjectMeta{
+			updatedExports: &v1.ServiceExports{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1alpha1.ServiceExportsSpec{
-					Exports: []v1alpha1.ServiceExportRule{
+				Spec: v1.ServiceExportsSpec{
+					Exports: []v1.ServiceExportRule{
 						{
-							Type: v1alpha1.NameSelectorType,
-							NameSelector: &v1alpha1.ServiceNameMapping{
-								Name: v1alpha1.ServiceName{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								Name: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
-								Alias: &v1alpha1.ServiceName{
+								Alias: &v1.ServiceName{
 									Namespace: "cluster",
 									Name:      "service",
 								},

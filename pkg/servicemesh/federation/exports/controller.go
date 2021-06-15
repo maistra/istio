@@ -25,9 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1alpha1"
+	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1"
 	maistraclient "maistra.io/api/client/versioned"
-	"maistra.io/api/core/v1alpha1"
+	v1 "maistra.io/api/core/v1"
 
 	kubecontroller "istio.io/istio/pkg/kube/controller"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
@@ -37,7 +37,7 @@ import (
 const controllerName = "federation-exports-controller"
 
 type ServiceExportManager interface {
-	UpdateExportsForMesh(exports *v1alpha1.ServiceExports) error
+	UpdateExportsForMesh(exports *v1.ServiceExports) error
 	DeleteExportsForMesh(name string)
 }
 
@@ -78,13 +78,13 @@ func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRoll
 			return cache.NewSharedIndexInformer(
 				&cache.ListWatch{
 					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return cs.CoreV1alpha1().ServiceExports(namespace).List(context.TODO(), options)
+						return cs.CoreV1().ServiceExports(namespace).List(context.TODO(), options)
 					},
 					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						return cs.CoreV1alpha1().ServiceExports(namespace).Watch(context.TODO(), options)
+						return cs.CoreV1().ServiceExports(namespace).Watch(context.TODO(), options)
 					},
 				},
-				&v1alpha1.MeshFederation{},
+				&v1.MeshFederation{},
 				opt.ResyncPeriod,
 				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 			)
@@ -130,7 +130,7 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.cs.CoreV1alpha1().ServiceExports(namespace).Get(ctx, name, metav1.GetOptions{})
+	instance, err := c.cs.CoreV1().ServiceExports(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
 			// Request object not found, could have been deleted after reconcile request.
