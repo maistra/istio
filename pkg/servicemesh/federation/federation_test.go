@@ -21,7 +21,6 @@ import (
 	"istio.io/istio/pilot/pkg/networking/core/v1alpha3"
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
 	"istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/servicemesh/federation/common"
 )
 
 func TestInvalidOptions(t *testing.T) {
@@ -32,9 +31,7 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "client",
 			opt: Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient: nil,
-				},
+				KubeClient:        nil,
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               &model.Environment{},
@@ -43,9 +40,7 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "service-controller",
 			opt: Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient: kube.NewFakeClient(),
-				},
+				KubeClient:        kube.NewFakeClient(),
 				ServiceController: nil,
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               &model.Environment{},
@@ -54,9 +49,7 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "xds-updater",
 			opt: Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient: kube.NewFakeClient(),
-				},
+				KubeClient:        kube.NewFakeClient(),
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        nil,
 				Env:               &model.Environment{},
@@ -65,9 +58,7 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "env",
 			opt: Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient: kube.NewFakeClient(),
-				},
+				KubeClient:        kube.NewFakeClient(),
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               nil,

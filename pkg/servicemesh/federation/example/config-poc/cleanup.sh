@@ -14,12 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-oc delete -n mesh1-system meshfederation/mesh2
-oc delete -n mesh2-system meshfederation/mesh1
+# shellcheck disable=SC1091
+source common.sh
 
-oc delete project mesh1-system
-oc delete project mesh2-system
-# oc delete project mesh1-exports
-# oc delete project mesh2-imports
-oc delete project mesh1-bookinfo
-oc delete project mesh2-bookinfo
+oc1 delete -n mesh1-system servicemeshpeer/mesh2
+oc2 delete -n mesh2-system servicemeshpeer/mesh1
+
+oc1 delete project mesh1-system
+oc2 delete project mesh2-system
+# oc1 delete project mesh1-exports
+# oc2 delete project mesh2-imports
+oc1 delete project mesh1-bookinfo
+oc2 delete project mesh2-bookinfo
