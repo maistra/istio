@@ -60,9 +60,12 @@ func ApplyListenerPatches(
 		return listener
 	}
 
-	relevantFilterChains := []string{fmt.Sprintf("0.0.0.0_%d", proxy.ServiceInstances[0].Endpoint.EndpointPort)}
-	for _, si := range proxy.ServiceInstances {
-		relevantFilterChains = append(relevantFilterChains, fmt.Sprintf("%s_%d", si.Endpoint.Address, si.Endpoint.EndpointPort))
+	var relevantFilterChains []string
+	if len(proxy.ServiceInstances) > 0 {
+		relevantFilterChains = []string{fmt.Sprintf("0.0.0.0_%d", proxy.ServiceInstances[0].Endpoint.EndpointPort)}
+		for _, si := range proxy.ServiceInstances {
+			relevantFilterChains = append(relevantFilterChains, fmt.Sprintf("%s_%d", si.Endpoint.Address, si.Endpoint.EndpointPort))
+		}
 	}
 
 	for fcIndex, fc := range listener.FilterChains {
