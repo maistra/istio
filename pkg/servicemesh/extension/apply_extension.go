@@ -15,6 +15,7 @@
 package extension
 
 import (
+	"encoding/json"
 	"fmt"
 
 	udpa "github.com/cncf/udpa/go/udpa/type/v1"
@@ -22,7 +23,6 @@ import (
 	hcm_filter "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	xdsutil "github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	structpb "github.com/golang/protobuf/ptypes/struct"
-	structpb2 "google.golang.org/protobuf/types/known/structpb"
 	v1 "maistra.io/api/core/v1"
 	v1alpha1 "maistra.io/api/core/v1alpha1"
 
@@ -167,23 +167,19 @@ func popAppend(list []*hcm_filter.HttpFilter,
 }
 
 func toEnvoyHTTPFilter(extension *maistramodel.ExtensionWrapper) *hcm_filter.HttpFilter {
-	var configField *structpb.Value
+	var configuration string
 
 	if rawV1Alpha1Config, ok := extension.Config.Data[v1alpha1.RawV1Alpha1Config]; ok {
-		// Extension uses old config format (string), so pass it as a string
-		configField = &structpb.Value{Kind: &structpb.Value_StringValue{StringValue: rawV1Alpha1Config.(string)}}
+		// Extension uses old config format (string), so push it as a raw string
+		configuration = rawV1Alpha1Config.(string)
 	} else {
-		// Otherwise, send it as a proper JSON object
-		configuration, err := structpb2.NewStruct(extension.Config.Data)
+		// Otherwise convert the struct (json) to string and push it as string, since Envoy doesn't handle well protobuf.StructValue
+		rawBytes, err := json.Marshal(extension.Config.Data)
 		if err != nil {
 			log.Errorf("invalid configuration for extension %s: %v", extension.Name, err)
 			return nil
 		}
-
-		configField = &structpb.Value{Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-			"@type": {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/google.protobuf.Struct"}},
-			"value": {Kind: &structpb.Value_StructValue{StructValue: configuration}},
-		}}}}
+		configuration = string(rawBytes)
 	}
 
 	return &hcm_filter.HttpFilter{
@@ -194,9 +190,12 @@ func toEnvoyHTTPFilter(extension *maistramodel.ExtensionWrapper) *hcm_filter.Htt
 				Value: &structpb.Struct{
 					Fields: map[string]*structpb.Value{
 						"config": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-							"name":          {Kind: &structpb.Value_StringValue{StringValue: extension.Name}},
-							"rootId":        {Kind: &structpb.Value_StringValue{StringValue: extension.Name + "_root"}},
-							"configuration": configField,
+							"name":   {Kind: &structpb.Value_StringValue{StringValue: extension.Name}},
+							"rootId": {Kind: &structpb.Value_StringValue{StringValue: extension.Name + "_root"}},
+							"configuration": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+								"@type": {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/google.protobuf.StringValue"}},
+								"value": {Kind: &structpb.Value_StringValue{StringValue: configuration}},
+							}}}},
 							"vmConfig": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
 								"code": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
 									"remote": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
