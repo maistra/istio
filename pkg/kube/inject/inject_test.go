@@ -310,6 +310,11 @@ func TestIntoResourceFile(t *testing.T) {
 				"values.istio_cni.chained=false",
 			},
 		},
+		{
+			// Verifies that the maistra env annotation is honored.
+			in:   "maistra_env_annotations.yaml",
+			want: "maistra_env_annotations.yaml.injected",
+		},
 	}
 
 	for i, c := range cases {

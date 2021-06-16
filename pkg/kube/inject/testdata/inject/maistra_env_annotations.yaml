@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resource
+spec:
+  replicas: 7
+  selector:
+    matchLabels:
+      app: resource
+  template:
+    metadata:
+      annotations:
+        sidecar.maistra.io/proxyEnv: "{ \"maistra_test_env\": \"env_value\", \"maistra_test_env_2\": \"env_value_2\" }"
+      labels:
+        app: resource
+    spec:
+      containers:
+      - name: resource
+        image: "fake.docker.io/google-samples/traffic-go-gke:1.0"
+        ports:
+        - name: http
+          containerPort: 80
