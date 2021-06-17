@@ -30,6 +30,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/cheggaaa/pb/v3 v3.0.5
+	github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403
 	github.com/cncf/xds/go v0.0.0-20210312221358-fbca930ec8ed
 	github.com/containernetworking/cni v0.7.0-alpha1
 	github.com/containernetworking/plugins v0.7.3
@@ -105,9 +106,9 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 	helm.sh/helm/v3 v3.4.2
 	honnef.co/go/tools v0.0.1-2020.1.5 // indirect
-	istio.io/api v0.0.0-20210503211644-902e709f95c4
-	istio.io/client-go v1.9.2
-	istio.io/gogo-genproto v0.0.0-20210420211914-9cbf6943c732
+	istio.io/api v0.0.0-20210607161139-ab961225b5e9
+	istio.io/client-go v1.9.5-0.20210607162355-6a6709ba5473
+	istio.io/gogo-genproto v0.0.0-20210607161305-c0bb66452590
 	istio.io/pkg v0.0.0-20201230223204-2d0a1c8bd9e5
 	k8s.io/api v0.20.1
 	k8s.io/apiextensions-apiserver v0.20.1
