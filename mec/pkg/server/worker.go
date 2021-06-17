@@ -143,7 +143,13 @@ func (w *Worker) processEvent(event ExtensionEvent) error {
 			pullPolicy = corev1.PullAlways
 		}
 
-		img, err = w.pullStrategy.PullImage(imageRef, extension.Namespace, pullPolicy, extension.Spec.ImagePullSecrets)
+		img, err = w.pullStrategy.PullImage(
+			imageRef,
+			extension.Namespace,
+			pullPolicy,
+			extension.Spec.ImagePullSecrets,
+			extension.Name,
+			extension.UID)
 		if err != nil {
 			message := fmt.Sprintf("failed to pull image %q: %v", imageRef.String(), err)
 			if err := w.updateStatusNotReady(extension, message); err != nil {

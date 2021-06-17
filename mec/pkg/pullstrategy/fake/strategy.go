@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/mec/pkg/model"
@@ -83,7 +84,9 @@ type PullStrategy struct {
 func (p *PullStrategy) PullImage(imageRef *model.ImageRef,
 	namespace string,
 	pullPolicy corev1.PullPolicy,
-	pullSecrets []corev1.LocalObjectReference) (model.Image, error) {
+	pullSecrets []corev1.LocalObjectReference,
+	smeName string,
+	smeUID types.UID) (model.Image, error) {
 
 	if p.pulledImages == nil {
 		p.pulledImages = make(map[string]model.Image)
