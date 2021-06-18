@@ -15,38 +15,33 @@
 package imports
 
 import (
-	"context"
 	"fmt"
+	"time"
 
-	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1"
-	maistraclient "maistra.io/api/client/versioned"
 	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
 	"istio.io/istio/pilot/pkg/serviceregistry/federation"
 	kubecontroller "istio.io/istio/pkg/kube/controller"
-	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 )
 
 const controllerName = "federation-imports-controller"
 
 type Options struct {
-	common.ControllerOptions
+	ResourceManager   common.ResourceManager
+	ResyncPeriod      time.Duration
 	ServiceController *aggregate.Controller
 }
 
 type Controller struct {
 	*kubecontroller.Controller
-	cs                maistraclient.Interface
+	rm                common.ResourceManager
 	serviceController *aggregate.Controller
 }
 
@@ -56,64 +51,25 @@ func NewController(opt Options) (*Controller, error) {
 		return nil, fmt.Errorf("invalid Options specified for federation import controller: %s", err)
 	}
 
-	cs, err := maistraclient.NewForConfig(opt.KubeClient.RESTConfig())
-	if err != nil {
-		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
-	}
-
-	mrc := opt.KubeClient.GetMemberRoll()
-
-	return internalNewController(cs, mrc, opt), nil
-}
-
-// allows using a fake client set for testing purposes
-func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
 	logger := common.Logger.WithLabels("component", controllerName)
-	var informer cache.SharedIndexInformer
-	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
-	if mrc != nil && false {
-		newInformer := func(namespace string) cache.SharedIndexInformer {
-			return cache.NewSharedIndexInformer(
-				&cache.ListWatch{
-					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return cs.CoreV1().ServiceImports(namespace).List(context.TODO(), options)
-					},
-					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						return cs.CoreV1().ServiceImports(namespace).Watch(context.TODO(), options)
-					},
-				},
-				&v1.MeshFederation{},
-				opt.ResyncPeriod,
-				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-			)
-		}
-
-		namespaceSet := xnsinformers.NewNamespaceSet()
-		informer = xnsinformers.NewMultiNamespaceInformer(namespaceSet, opt.ResyncPeriod, newInformer)
-		mrc.Register(namespaceSet, controllerName)
-	} else {
-		informer = maistrainformers.NewServiceImportsInformer(
-			cs, opt.Namespace, opt.ResyncPeriod,
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
-	}
 
 	controller := &Controller{
-		cs:                cs,
+		rm:                opt.ResourceManager,
 		serviceController: opt.ServiceController,
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
-		Informer:     informer,
+		Informer:     controller.rm.ServiceImportsInformer().Informer(),
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
 	})
 	controller.Controller = internalController
 
-	return controller
+	return controller, nil
 }
 
-func (c *Controller) HasSynced() bool {
-	return c.Controller.HasSynced()
+func (c *Controller) RunInformer(stopChan <-chan struct{}) {
+	// no-op, informer is started by the shared factory in Federation.Start()
 }
 
 func (c *Controller) reconcile(resourceName string) error {
@@ -122,13 +78,11 @@ func (c *Controller) reconcile(resourceName string) error {
 		c.Logger.Debugf("Completed reconciliation of ServiceImports %s", resourceName)
 	}()
 
-	ctx := context.TODO()
-
 	namespace, name, err := cache.SplitMetaNamespaceKey(resourceName)
 	if err != nil {
 		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.cs.CoreV1().ServiceImports(namespace).Get(ctx, name, metav1.GetOptions{})
+	instance, err := c.rm.ServiceImportsInformer().Lister().ServiceImports(namespace).Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -177,8 +131,8 @@ func (c *Controller) updateImportsForMesh(instance *v1.ServiceImports) {
 
 func (opt Options) validate() error {
 	var allErrors []error
-	if opt.KubeClient == nil {
-		allErrors = append(allErrors, fmt.Errorf("the KubeClient field must not be nil"))
+	if opt.ResourceManager == nil {
+		allErrors = append(allErrors, fmt.Errorf("the ResourceManager field must not be nil"))
 	}
 	if opt.ServiceController == nil {
 		allErrors = append(allErrors, fmt.Errorf("the ServiceController field must not be nil"))

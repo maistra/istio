@@ -34,9 +34,9 @@ type FakeServiceImports struct {
 	ns   string
 }
 
-var serviceimportsResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "serviceimports"}
+var serviceimportsResource = schema.GroupVersionResource{Group: "maistra.io", Version: "v1", Resource: "serviceimports"}
 
-var serviceimportsKind = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceImports"}
+var serviceimportsKind = schema.GroupVersionKind{Group: "maistra.io", Version: "v1", Kind: "ServiceImports"}
 
 // Get takes name of the serviceImports, and returns the corresponding serviceImports object, and an error if there is any.
 func (c *FakeServiceImports) Get(ctx context.Context, name string, options v1.GetOptions) (result *corev1.ServiceImports, err error) {

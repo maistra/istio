@@ -34,9 +34,9 @@ type FakeServiceMeshExtensions struct {
 	ns   string
 }
 
-var servicemeshextensionsResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "servicemeshextensions"}
+var servicemeshextensionsResource = schema.GroupVersionResource{Group: "maistra.io", Version: "v1", Resource: "servicemeshextensions"}
 
-var servicemeshextensionsKind = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceMeshExtension"}
+var servicemeshextensionsKind = schema.GroupVersionKind{Group: "maistra.io", Version: "v1", Kind: "ServiceMeshExtension"}
 
 // Get takes name of the serviceMeshExtension, and returns the corresponding serviceMeshExtension object, and an error if there is any.
 func (c *FakeServiceMeshExtensions) Get(ctx context.Context, name string, options v1.GetOptions) (result *corev1.ServiceMeshExtension, err error) {

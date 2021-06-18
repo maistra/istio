@@ -2,6 +2,8 @@ module istio.io/istio
 
 go 1.15
 
+replace maistra.io/api => ../../maistra.io/api
+
 replace github.com/spf13/viper => github.com/istio/viper v1.3.3-0.20190515210538-2789fed3109c
 
 // Old version had no license
@@ -58,7 +60,7 @@ require (
 	github.com/kr/pretty v0.2.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.0.5
-	github.com/maistra/xns-informer v0.0.0-20210413152253-f6302cf13b64
+	github.com/maistra/xns-informer v0.0.0-20210428123712-dd35b3eddedc
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mholt/archiver/v3 v3.3.2
 	github.com/miekg/dns v1.1.34

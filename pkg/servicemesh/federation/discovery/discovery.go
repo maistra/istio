@@ -61,8 +61,18 @@ func (e *storeErrorChecker) Is(other error) bool {
 	return other.Error() == e.s
 }
 
+type notFoundErrorChecker struct{}
+
+func (e *notFoundErrorChecker) Error() string {
+	return "item not found"
+}
+
+func (e *notFoundErrorChecker) Is(other error) bool {
+	return other.Error() == "item not found" || strings.HasSuffix(other.Error(), "does not exist")
+}
+
 var (
-	memoryStoreErrNotFound      = &storeErrorChecker{"item not found"}
+	memoryStoreErrNotFound      = &notFoundErrorChecker{}
 	memoryStoreErrAlreadyExists = &storeErrorChecker{"item already exists"}
 )
 
@@ -76,38 +86,38 @@ func (c *Controller) deleteDiscoveryResources(
 	// XXX: the only errors possible on delete are "does not exist" and "unknown
 	// type", so maybe we should just skip error checking?
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Serviceentries.Resource().GroupVersionKind(),
-		rootName, instance.Namespace); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		c.Logger.Errorf("error deleting discovery Service %s for Federation cluster %s: %v",
+		rootName, instance.Namespace); err != nil && !errors.Is(memoryStoreErrNotFound, err) {
+		c.Logger.Errorf("error deleting discovery Service %s for Federation cluster %s: %s",
 			rootName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
-		rootName, instance.Namespace); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		c.Logger.Errorf("error deleting discovery VirtualService %s for Federation cluster %s: %v",
+		rootName, instance.Namespace); err != nil && !errors.Is(memoryStoreErrNotFound, err) {
+		c.Logger.Errorf("error deleting discovery VirtualService %s for Federation cluster %s: %s",
 			rootName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
-		ingressName, instance.Namespace); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		c.Logger.Errorf("error deleting discovery ingress Gateway %s for Federation cluster %s: %v",
+		ingressName, instance.Namespace); err != nil && !errors.Is(memoryStoreErrNotFound, err) {
+		c.Logger.Errorf("error deleting discovery ingress Gateway %s for Federation cluster %s: %s",
 			ingressName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
-		egressName, instance.Namespace); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		c.Logger.Errorf("error deleting discovery egress Gateway %s for Federation cluster %s: %v",
+		egressName, instance.Namespace); err != nil && !errors.Is(memoryStoreErrNotFound, err) {
+		c.Logger.Errorf("error deleting discovery egress Gateway %s for Federation cluster %s: %s",
 			egressName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),
-		rootName, instance.Namespace); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		c.Logger.Errorf("error deleting discovery DestinationRule %s for Federation cluster %s: %v",
+		rootName, instance.Namespace); err != nil && !errors.Is(memoryStoreErrNotFound, err) {
+		c.Logger.Errorf("error deleting discovery DestinationRule %s for Federation cluster %s: %s",
 			rootName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
-		rootName, instance.Namespace); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		c.Logger.Errorf("error deleting discovery AuthorizationPolicy %s for Federation cluster %s: %v",
+		rootName, instance.Namespace); err != nil && !errors.Is(memoryStoreErrNotFound, err) {
+		c.Logger.Errorf("error deleting discovery AuthorizationPolicy %s for Federation cluster %s: %s",
 			rootName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
@@ -120,47 +130,47 @@ func (c *Controller) createDiscoveryResources(
 
 	defer func() {
 		if err != nil {
-			c.Logger.Errorf("error creating discovery configuration for Federation cluster %s: %v", instance.Name, err)
+			c.Logger.Errorf("error creating discovery configuration for Federation cluster %s: %s", instance.Name, err)
 			c.Logger.Infof("rolling back discovery Service for %s", instance.Name)
 			if s != nil {
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Serviceentries.Resource().GroupVersionKind(),
 					s.Name, s.Namespace); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery Service %s: %v", s.Name, newErr)
+					c.Logger.Errorf("error deleting discovery Service %s: %s", s.Name, newErr)
 				}
 			}
 			c.Logger.Infof("rolling back discovery AuthorizationPolicy for Federation cluster %s", instance.Name)
 			if ap != nil {
 				if newErr := c.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
 					ap.Name, ap.Namespace); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery AuthorizationPolicy %s: %v", ap.Name, newErr)
+					c.Logger.Errorf("error deleting discovery AuthorizationPolicy %s: %s", ap.Name, newErr)
 				}
 			}
 			if dr != nil {
 				c.Logger.Infof("rolling back discovery DestinationRule for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),
 					dr.Name, dr.Namespace); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery DestinationRule %s: %v", dr.Name, newErr)
+					c.Logger.Errorf("error deleting discovery DestinationRule %s: %s", dr.Name, newErr)
 				}
 			}
 			if ig != nil {
 				c.Logger.Infof("rolling back discovery ingress Gateway for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 					ig.Name, ig.Namespace); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery ingress Gateway %s: %v", ig.Name, newErr)
+					c.Logger.Errorf("error deleting discovery ingress Gateway %s: %s", ig.Name, newErr)
 				}
 			}
 			if eg != nil {
 				c.Logger.Infof("rolling back discovery egress Gateway for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 					eg.Name, eg.Namespace); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery ingress Gateway %s: %v", eg.Name, newErr)
+					c.Logger.Errorf("error deleting discovery ingress Gateway %s: %s", eg.Name, newErr)
 				}
 			}
 			if vs != nil {
 				c.Logger.Infof("rolling back discovery VirtualService for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
 					vs.Name, vs.Namespace); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery VirtualService %s: %v", vs.Name, newErr)
+					c.Logger.Errorf("error deleting discovery VirtualService %s: %s", vs.Name, newErr)
 				}
 			}
 		}
@@ -169,7 +179,7 @@ func (c *Controller) createDiscoveryResources(
 	s = c.discoveryService(instance)
 	_, err = c.Create(*s)
 	if err != nil {
-		if errors.Is(err, memoryStoreErrAlreadyExists) {
+		if errors.Is(memoryStoreErrAlreadyExists, err) {
 			// XXX: We don't support upgrade, so ignore this for now
 			err = nil
 		} else {
@@ -181,7 +191,7 @@ func (c *Controller) createDiscoveryResources(
 	ap = c.discoveryAuthorizationPolicy(instance)
 	_, err = c.Create(*ap)
 	if err != nil {
-		if errors.Is(err, memoryStoreErrAlreadyExists) {
+		if errors.Is(memoryStoreErrAlreadyExists, err) {
 			// XXX: We don't support upgrade, so ignore this for now
 			err = nil
 		} else {
@@ -193,7 +203,7 @@ func (c *Controller) createDiscoveryResources(
 	dr = c.discoveryDestinationRule(instance)
 	_, err = c.Create(*dr)
 	if err != nil {
-		if errors.Is(err, memoryStoreErrAlreadyExists) {
+		if errors.Is(memoryStoreErrAlreadyExists, err) {
 			// XXX: We don't support upgrade, so ignore this for now
 			err = nil
 		} else {
@@ -205,7 +215,7 @@ func (c *Controller) createDiscoveryResources(
 	ig = c.discoveryIngressGateway(instance)
 	_, err = c.Create(*ig)
 	if err != nil {
-		if errors.Is(err, memoryStoreErrAlreadyExists) {
+		if errors.Is(memoryStoreErrAlreadyExists, err) {
 			// XXX: We don't support upgrade, so ignore this for now
 			err = nil
 		} else {
@@ -217,7 +227,7 @@ func (c *Controller) createDiscoveryResources(
 	eg = c.discoveryEgressGateway(instance)
 	_, err = c.Create(*eg)
 	if err != nil {
-		if errors.Is(err, memoryStoreErrAlreadyExists) {
+		if errors.Is(memoryStoreErrAlreadyExists, err) {
 			// XXX: We don't support upgrade, so ignore this for now
 			err = nil
 		} else {
@@ -228,7 +238,7 @@ func (c *Controller) createDiscoveryResources(
 	vs = c.discoveryVirtualService(instance, meshConfig)
 	_, err = c.Create(*vs)
 	if err != nil {
-		if errors.Is(err, memoryStoreErrAlreadyExists) {
+		if errors.Is(memoryStoreErrAlreadyExists, err) {
 			// XXX: We don't support upgrade, so ignore this for now
 			err = nil
 		} else {

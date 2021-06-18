@@ -34,9 +34,9 @@ type FakeMeshFederations struct {
 	ns   string
 }
 
-var meshfederationsResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "meshfederations"}
+var meshfederationsResource = schema.GroupVersionResource{Group: "maistra.io", Version: "v1", Resource: "meshfederations"}
 
-var meshfederationsKind = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "MeshFederation"}
+var meshfederationsKind = schema.GroupVersionKind{Group: "maistra.io", Version: "v1", Kind: "MeshFederation"}
 
 // Get takes name of the meshFederation, and returns the corresponding meshFederation object, and an error if there is any.
 func (c *FakeMeshFederations) Get(ctx context.Context, name string, options v1.GetOptions) (result *corev1.MeshFederation, err error) {

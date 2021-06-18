@@ -676,7 +676,7 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/maistra/xns-informer v0.0.0-20210413152253-f6302cf13b64
+# github.com/maistra/xns-informer v0.0.0-20210428123712-dd35b3eddedc
 ## explicit
 github.com/maistra/xns-informer/pkg/generated/istio
 github.com/maistra/xns-informer/pkg/generated/istio/internalinterfaces
@@ -1707,7 +1707,7 @@ k8s.io/utils/exec
 k8s.io/utils/integer
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20210615164742-3bcdf945c8f3
+# maistra.io/api v0.0.0-20210615164742-3bcdf945c8f3 => ../../maistra.io/api
 ## explicit
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core
@@ -1727,6 +1727,12 @@ maistra.io/api/client/versioned/typed/core/v1alpha1
 maistra.io/api/client/versioned/typed/core/v1alpha1/fake
 maistra.io/api/client/versioned/typed/core/v2
 maistra.io/api/client/versioned/typed/core/v2/fake
+maistra.io/api/client/xnsinformer
+maistra.io/api/client/xnsinformer/core
+maistra.io/api/client/xnsinformer/core/v1
+maistra.io/api/client/xnsinformer/core/v1alpha1
+maistra.io/api/client/xnsinformer/core/v2
+maistra.io/api/client/xnsinformer/internalinterfaces
 maistra.io/api/core/v1
 maistra.io/api/core/v1alpha1
 maistra.io/api/core/v2
@@ -1807,6 +1813,7 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0
 ## explicit
 sigs.k8s.io/yaml
+# maistra.io/api => ../../maistra.io/api
 # github.com/spf13/viper => github.com/istio/viper v1.3.3-0.20190515210538-2789fed3109c
 # github.com/chzyer/logex => github.com/chzyer/logex v1.1.11-0.20170329064859-445be9e134b2
 # github.com/docker/distribution => github.com/docker/distribution v2.7.1+incompatible

@@ -16,16 +16,18 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/tools/cache"
+	maistrainformerscorev1 "maistra.io/api/client/informers/externalversions/core/v1"
+	maistraclient "maistra.io/api/client/versioned"
 	"maistra.io/api/client/versioned/fake"
-	maistrav1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/api/mesh/v1alpha1"
 	configmemory "istio.io/istio/pilot/pkg/config/memory"
@@ -41,11 +43,11 @@ import (
 
 type fakeManager struct{}
 
-func (m *fakeManager) AddMeshFederation(_ *maistrav1.MeshFederation, _ *maistrav1.ServiceExports, _ status.Handler) error {
+func (m *fakeManager) AddMeshFederation(_ *v1.MeshFederation, _ *v1.ServiceExports, _ status.Handler) error {
 	return nil
 }
 func (m *fakeManager) DeleteMeshFederation(_ string) {}
-func (m *fakeManager) UpdateExportsForMesh(_ *maistrav1.ServiceExports) error {
+func (m *fakeManager) UpdateExportsForMesh(_ *v1.ServiceExports) error {
 	return nil
 }
 func (m *fakeManager) DeleteExportsForMesh(_ string) {}
@@ -67,11 +69,51 @@ func (m *fakeStatusManager) PushStatus() error {
 	return nil
 }
 
+type fakeResourceManager struct{}
+
+func (m *fakeResourceManager) MaistraClientSet() maistraclient.Interface {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) KubeClient() kube.Client {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) MeshFederationInformer() maistrainformerscorev1.MeshFederationInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) ServiceExportsInformer() maistrainformerscorev1.ServiceExportsInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) ServiceImportsInformer() maistrainformerscorev1.ServiceImportsInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) DefaultServiceExports(namespace string) (*v1.ServiceExports, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) DefaultServiceImports(namespace string) (*v1.ServiceImports, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) Start(stopCh <-chan struct{}) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) HasSynced() bool {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool {
+	panic("not implemented") // TODO: Implement
+}
+
 func TestValidOptions(t *testing.T) {
 	opt := Options{
-		ControllerOptions: common.ControllerOptions{
-			KubeClient: kube.NewFakeClient(),
-		},
+		ResourceManager:   &fakeResourceManager{},
 		ServiceController: &aggregate.Controller{},
 		XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 		Env:               &model.Environment{},
@@ -88,11 +130,9 @@ func TestInvalidOptions(t *testing.T) {
 		opt  Options
 	}{
 		{
-			name: "client",
+			name: "resource-manager",
 			opt: Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient: nil,
-				},
+				ResourceManager:   nil,
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               &model.Environment{},
@@ -101,9 +141,7 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "service-controller",
 			opt: Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient: kube.NewFakeClient(),
-				},
+				ResourceManager:   &fakeResourceManager{},
 				ServiceController: nil,
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               &model.Environment{},
@@ -112,9 +150,7 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "xds-updater",
 			opt: Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient: kube.NewFakeClient(),
-				},
+				ResourceManager:   &fakeResourceManager{},
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        nil,
 				Env:               &model.Environment{},
@@ -123,9 +159,7 @@ func TestInvalidOptions(t *testing.T) {
 		{
 			name: "env",
 			opt: Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient: kube.NewFakeClient(),
-				},
+				ResourceManager:   &fakeResourceManager{},
 				ServiceController: &aggregate.Controller{},
 				XDSUpdater:        &v1alpha3.FakeXdsUpdater{},
 				Env:               nil,
@@ -173,14 +207,22 @@ func newTestOptions(discoveryAddress string) options {
 }
 
 func TestReconcile(t *testing.T) {
+	name := "test"
+	namespace := "test"
 	resyncPeriod := 30 * time.Second
 	options := newTestOptions("test.address")
-	controller := internalNewController(fake.NewSimpleClientset(), nil, Options{
-		ControllerOptions: common.ControllerOptions{
-			KubeClient:   kube.NewFakeClient(),
-			ResyncPeriod: resyncPeriod,
-			Namespace:    "",
-		},
+	rm, err := common.NewResourceManager(common.ControllerOptions{
+		KubeClient:   kube.NewFakeClient(),
+		MaistraCS:    fake.NewSimpleClientset(),
+		ResyncPeriod: resyncPeriod,
+		Namespace:    namespace,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unable to create ResourceManager: %s", err)
+	}
+	controller, err := NewController(Options{
+		ResourceManager:   rm,
+		ResyncPeriod:      resyncPeriod,
 		ServiceController: options.serviceController,
 		XDSUpdater:        options.xdsUpdater,
 		Env:               options.env,
@@ -188,17 +230,18 @@ func TestReconcile(t *testing.T) {
 		StatusManager:     &fakeStatusManager{},
 		ConfigStore:       configmemory.NewController(configmemory.Make(Schemas)),
 	})
+	if err != nil {
+		t.Fatalf("unable to create Controller: %s", err)
+	}
 
-	name := "test"
-	namespace := "test"
-	federation := &maistrav1.MeshFederation{
+	federation := &v1.MeshFederation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: maistrav1.MeshFederationSpec{
+		Spec: v1.MeshFederationSpec{
 			NetworkAddress: "test.mesh",
-			Gateways: maistrav1.MeshFederationGateways{
+			Gateways: v1.MeshFederationGateways{
 				Ingress: corev1.LocalObjectReference{
 					Name: "test-ingress",
 				},
@@ -206,7 +249,7 @@ func TestReconcile(t *testing.T) {
 					Name: "test-egress",
 				},
 			},
-			Security: maistrav1.MeshFederationSecurity{
+			Security: v1.MeshFederationSecurity{
 				ClientID:            "cluster.local/ns/test-mesh/sa/test-egress-service-account",
 				TrustDomain:         "test.local",
 				CertificateChain:    "dummy",
@@ -215,36 +258,33 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 	}
-	cs := controller.cs
-	fedwatch, err := cs.CoreV1().MeshFederations(namespace).Watch(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		t.Errorf("failed to watch for MeshFederation")
-		return
-	}
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go rm.Start(stopCh)
+	fedAdded := make(chan struct{})
+	fedDeleted := make(chan struct{})
+	rm.MeshFederationInformer().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			close(fedAdded)
+		},
+		DeleteFunc: func(obj interface{}) {
+			close(fedDeleted)
+		},
+	})
+	cs := rm.MaistraClientSet()
 	newFederation, err := cs.CoreV1().MeshFederations(namespace).Create(context.TODO(), federation, metav1.CreateOptions{})
 	if err != nil {
 		t.Errorf("failed to create MeshFederation")
-		fedwatch.Stop()
 		return
 	}
 	// wait for object to show up
-	func() {
-		defer fedwatch.Stop()
-		select {
-		case event := <-fedwatch.ResultChan():
-			if event.Type == watch.Added {
-				metaObj, _ := meta.Accessor(event.Object)
-				if metaObj != nil && metaObj.GetName() == name && metaObj.GetNamespace() == namespace {
-					break
-				}
-			}
-			t.Errorf("unexpected watch event: %#v", event)
-		case <-time.After(5 * time.Second):
-			t.Errorf("timed out waiting for watch event")
-		}
-	}()
+	select {
+	case <-fedAdded:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for watch event")
+	}
 	if err := controller.reconcile(fmt.Sprintf("%s/%s", namespace, name)); err != nil {
-		t.Errorf("unexpected error reconciling new MeshFederation: %#v", err)
+		t.Fatalf("unexpected error reconciling new MeshFederation: %s", err)
 	}
 	// verify registry has been created
 	if controller.getRegistry(newFederation.Name) == nil {
@@ -277,33 +317,17 @@ func TestReconcile(t *testing.T) {
 	}
 
 	// now delete
-	fedwatch, err = cs.CoreV1().MeshFederations(namespace).Watch(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		t.Errorf("failed to watch for MeshFederation")
-		return
-	}
 	if err = cs.CoreV1().MeshFederations(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 		t.Errorf("error deleting MeshFederation")
-		fedwatch.Stop()
 		return
 	}
 
 	// wait for deletion to show up
-	func() {
-		defer fedwatch.Stop()
-		select {
-		case event := <-fedwatch.ResultChan():
-			if event.Type == watch.Deleted {
-				metaObj, _ := meta.Accessor(event.Object)
-				if metaObj != nil && metaObj.GetName() == name && metaObj.GetNamespace() == namespace {
-					break
-				}
-			}
-			t.Errorf("unexpected watch event: %#v", event)
-		case <-time.After(5 * time.Second):
-			t.Errorf("timed out waiting for watch event")
-		}
-	}()
+	select {
+	case <-fedDeleted:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for watch event")
+	}
 
 	if err := controller.reconcile(fmt.Sprintf("%s/%s", namespace, name)); err != nil {
 		t.Errorf("unexpected error reconciling new MeshFederation: %#v", err)

@@ -19,25 +19,18 @@ import (
 	"sync"
 	"time"
 
-	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	maistrainformers "maistra.io/api/client/informers/externalversions/core/v1"
-	maistraclient "maistra.io/api/client/versioned"
 	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
 	federationregistry "istio.io/istio/pilot/pkg/serviceregistry/federation"
-	"istio.io/istio/pkg/kube"
 	kubecontroller "istio.io/istio/pkg/kube/controller"
-	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/server"
 	"istio.io/istio/pkg/servicemesh/federation/status"
@@ -46,7 +39,8 @@ import (
 const controllerName = "federation-discovery-controller"
 
 type Options struct {
-	common.ControllerOptions
+	ResourceManager   common.ResourceManager
+	ResyncPeriod      time.Duration
 	ServiceController *aggregate.Controller
 	XDSUpdater        model.XDSUpdater
 	Env               *model.Environment
@@ -62,8 +56,7 @@ type Controller struct {
 	model.ConfigStoreCache
 	localNetwork      string
 	localClusterID    string
-	kubeClient        kube.Client
-	cs                maistraclient.Interface
+	rm                common.ResourceManager
 	env               *model.Environment
 	federationManager server.FederationManager
 	statusManager     status.Manager
@@ -83,53 +76,13 @@ func NewController(opt Options) (*Controller, error) {
 		return nil, err
 	}
 
-	cs, err := maistraclient.NewForConfig(opt.KubeClient.RESTConfig())
-	if err != nil {
-		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
-	}
-
-	mrc := opt.KubeClient.GetMemberRoll()
-
-	return internalNewController(cs, mrc, opt), nil
-}
-
-// allows using a fake client set for testing purposes
-func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRollController, opt Options) *Controller {
 	logger := common.Logger.WithLabels("component", controllerName)
-	var informer cache.SharedIndexInformer
-	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
-	if mrc != nil && false {
-		newInformer := func(namespace string) cache.SharedIndexInformer {
-			return cache.NewSharedIndexInformer(
-				&cache.ListWatch{
-					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-						return cs.CoreV1().MeshFederations(namespace).List(context.TODO(), options)
-					},
-					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-						return cs.CoreV1().MeshFederations(namespace).Watch(context.TODO(), options)
-					},
-				},
-				&v1.MeshFederation{},
-				opt.ResyncPeriod,
-				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-			)
-		}
-
-		namespaceSet := xnsinformers.NewNamespaceSet()
-		informer = xnsinformers.NewMultiNamespaceInformer(namespaceSet, opt.ResyncPeriod, newInformer)
-		mrc.Register(namespaceSet, controllerName)
-	} else {
-		informer = maistrainformers.NewMeshFederationInformer(
-			cs, opt.Namespace, opt.ResyncPeriod,
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
-	}
 
 	controller := &Controller{
 		ConfigStoreCache:  opt.ConfigStore,
 		localClusterID:    opt.LocalClusterID,
 		localNetwork:      opt.LocalNetwork,
-		kubeClient:        opt.KubeClient,
-		cs:                cs,
+		rm:                opt.ResourceManager,
 		env:               opt.Env,
 		sc:                opt.ServiceController,
 		stopChannels:      make(map[string]chan struct{}),
@@ -139,14 +92,14 @@ func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRoll
 		statusManager:     opt.StatusManager,
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
-		Informer:     informer,
+		Informer:     opt.ResourceManager.MeshFederationInformer().Informer(),
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
 	})
 	controller.Controller = internalController
 
-	return controller
+	return controller, nil
 }
 
 func (c *Controller) Run(stopChan <-chan struct{}) {
@@ -160,6 +113,10 @@ func (c *Controller) Run(stopChan <-chan struct{}) {
 
 func (c *Controller) HasSynced() bool {
 	return c.Controller.HasSynced()
+}
+
+func (c *Controller) RunInformer(stopChan <-chan struct{}) {
+	// no-op, informer is started by the shared factory in Federation.Start()
 }
 
 func (c *Controller) reconcile(resourceName string) error {
@@ -177,13 +134,7 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.cs.CoreV1().MeshFederations(namespace).Get(
-		ctx, name, metav1.GetOptions{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "MeshFederation",
-				APIVersion: v1.SchemeGroupVersion.String(),
-			},
-		})
+	instance, err := c.rm.MeshFederationInformer().Lister().MeshFederations(namespace).Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -238,17 +189,17 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 	} else {
 		// if there's no existing registry
 		c.Logger.Infof("Creating export handler for Federation to %s", instance.Name)
-		exportConfig, err := c.cs.CoreV1().ServiceExports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		exportConfig, err := c.rm.ServiceExportsInformer().Lister().ServiceExports(instance.Namespace).Get(instance.Name)
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
 			c.Logger.Errorf("error retrieving ServiceExports associated with MeshFederation %s: %s", instance.Name, err)
 			return err
 		}
-		defaultImportConfig, err := c.cs.CoreV1().ServiceImports(instance.Namespace).Get(context.TODO(), "default", metav1.GetOptions{})
+		defaultImportConfig, err := c.rm.DefaultServiceImports(instance.Namespace)
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
 			c.Logger.Errorf("error retrieving default ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
 			return err
 		}
-		importConfig, err := c.cs.CoreV1().ServiceImports(instance.Namespace).Get(context.TODO(), instance.Name, metav1.GetOptions{})
+		importConfig, err := c.rm.ServiceImportsInformer().Lister().ServiceImports(instance.Namespace).Get(instance.Name)
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
 			c.Logger.Errorf("error retrieving ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
 			return err
@@ -272,7 +223,7 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 			EgressService:  egressGatewayService,
 			Namespace:      instance.Namespace,
 			UseDirectCalls: instance.Spec.Security.AllowDirectOutbound,
-			KubeClient:     c.kubeClient,
+			KubeClient:     c.rm.KubeClient(),
 			ConfigStore:    c.ConfigStoreCache,
 			StatusHandler:  statusHandler,
 			XDSUpdater:     c.xds,
@@ -354,8 +305,8 @@ func (c *Controller) getRegistry(name string) serviceregistry.Instance {
 
 func (opt Options) validate() error {
 	var allErrors []error
-	if opt.KubeClient == nil {
-		allErrors = append(allErrors, fmt.Errorf("the KubeClient field must not be nil"))
+	if opt.ResourceManager == nil {
+		allErrors = append(allErrors, fmt.Errorf("the ResourceManager field must not be nil"))
 	}
 	if opt.ServiceController == nil {
 		allErrors = append(allErrors, fmt.Errorf("the ServiceController field must not be nil"))
