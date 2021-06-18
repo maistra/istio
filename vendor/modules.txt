@@ -696,7 +696,7 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/maistra/xns-informer v0.0.0-20210602150316-33463c1f7d6d
+# github.com/maistra/xns-informer v0.0.0-20210707160032-977ec17e2e0e
 ## explicit
 github.com/maistra/xns-informer/pkg/generated/istio
 github.com/maistra/xns-informer/pkg/generated/istio/internalinterfaces
@@ -1249,7 +1249,7 @@ helm.sh/helm/v3/pkg/chartutil
 helm.sh/helm/v3/pkg/engine
 # honnef.co/go/tools v0.0.1-2020.1.5
 ## explicit
-# istio.io/api v0.0.0-20210419172736-e076ff10ec38
+# istio.io/api v0.0.0-20210503211644-902e709f95c4 => github.com/istio/api v0.0.0-20210419172736-e076ff10ec38
 ## explicit
 istio.io/api/analysis/v1alpha1
 istio.io/api/annotation
@@ -1751,7 +1751,7 @@ k8s.io/utils/exec
 k8s.io/utils/integer
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20210629173915-572b0bea99cd
+# maistra.io/api v0.0.0-20210707161232-45777cba6a0f
 ## explicit
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core
@@ -1771,6 +1771,12 @@ maistra.io/api/client/versioned/typed/core/v1alpha1
 maistra.io/api/client/versioned/typed/core/v1alpha1/fake
 maistra.io/api/client/versioned/typed/core/v2
 maistra.io/api/client/versioned/typed/core/v2/fake
+maistra.io/api/client/xnsinformer
+maistra.io/api/client/xnsinformer/core
+maistra.io/api/client/xnsinformer/core/v1
+maistra.io/api/client/xnsinformer/core/v1alpha1
+maistra.io/api/client/xnsinformer/core/v2
+maistra.io/api/client/xnsinformer/internalinterfaces
 maistra.io/api/core/v1
 maistra.io/api/core/v1alpha1
 maistra.io/api/core/v2
@@ -1853,6 +1859,7 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0
 ## explicit
 sigs.k8s.io/yaml
+# istio.io/api => github.com/istio/api v0.0.0-20210419172736-e076ff10ec38
 # github.com/spf13/viper => github.com/istio/viper v1.3.3-0.20190515210538-2789fed3109c
 # github.com/chzyer/logex => github.com/chzyer/logex v1.1.11-0.20170329064859-445be9e134b2
 # github.com/docker/distribution => github.com/docker/distribution v2.7.1+incompatible

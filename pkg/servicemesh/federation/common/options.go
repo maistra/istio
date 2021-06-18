@@ -15,13 +15,33 @@
 package common
 
 import (
+	"fmt"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/errors"
+	maistraclient "maistra.io/api/client/versioned"
 
 	"istio.io/istio/pkg/kube"
 )
 
 type ControllerOptions struct {
 	KubeClient   kube.Client
+	MaistraCS    maistraclient.Interface
 	ResyncPeriod time.Duration
 	Namespace    string
+}
+
+func (opt ControllerOptions) validate() error {
+	var allErrors []error
+	if opt.KubeClient == nil {
+		allErrors = append(allErrors, fmt.Errorf("the KubeClient field must not be nil"))
+	}
+	if opt.MaistraCS == nil {
+		allErrors = append(allErrors, fmt.Errorf("the MaistraCS field must not be nil"))
+	}
+	if opt.ResyncPeriod == 0 {
+		opt.ResyncPeriod = DefaultResyncPeriod
+		Logger.WithLabels("component", "ControllerOptions").Infof("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
+	}
+	return errors.NewAggregate(allErrors)
 }

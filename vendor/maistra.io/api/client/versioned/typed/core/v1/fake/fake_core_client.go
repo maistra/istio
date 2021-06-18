@@ -26,10 +26,6 @@ type FakeCoreV1 struct {
 	*testing.Fake
 }
 
-func (c *FakeCoreV1) FederationStatuses(namespace string) v1.FederationStatusInterface {
-	return &FakeFederationStatuses{c, namespace}
-}
-
 func (c *FakeCoreV1) MeshFederations(namespace string) v1.MeshFederationInterface {
 	return &FakeMeshFederations{c, namespace}
 }

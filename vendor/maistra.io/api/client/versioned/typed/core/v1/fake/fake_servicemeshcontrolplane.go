@@ -34,9 +34,9 @@ type FakeServiceMeshControlPlanes struct {
 	ns   string
 }
 
-var servicemeshcontrolplanesResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "servicemeshcontrolplanes"}
+var servicemeshcontrolplanesResource = schema.GroupVersionResource{Group: "maistra.io", Version: "v1", Resource: "servicemeshcontrolplanes"}
 
-var servicemeshcontrolplanesKind = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceMeshControlPlane"}
+var servicemeshcontrolplanesKind = schema.GroupVersionKind{Group: "maistra.io", Version: "v1", Kind: "ServiceMeshControlPlane"}
 
 // Get takes name of the serviceMeshControlPlane, and returns the corresponding serviceMeshControlPlane object, and an error if there is any.
 func (c *FakeServiceMeshControlPlanes) Get(ctx context.Context, name string, options v1.GetOptions) (result *corev1.ServiceMeshControlPlane, err error) {

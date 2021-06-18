@@ -49,6 +49,5 @@ func init() {
 		&MeshFederation{}, &MeshFederationList{},
 		&ServiceExports{}, &ServiceExportsList{},
 		&ServiceImports{}, &ServiceImportsList{},
-		&FederationStatus{}, &FederationStatusList{},
 	)
 }
