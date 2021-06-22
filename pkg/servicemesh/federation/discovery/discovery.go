@@ -82,9 +82,15 @@ func (c *Controller) deleteDiscoveryResources(
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
-		rootName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
-		c.Logger.Errorf("error deleting discovery VirtualService %s for Federation cluster %s: %v",
-			rootName, instance.Name, err)
+		ingressName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
+		c.Logger.Errorf("error deleting discovery ingress VirtualService %s for Federation cluster %s: %v",
+			ingressName, instance.Name, err)
+		allErrors = append(allErrors, err)
+	}
+	if err := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
+		egressName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
+		c.Logger.Errorf("error deleting discovery egress VirtualService %s for Federation cluster %s: %v",
+			egressName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
@@ -100,9 +106,9 @@ func (c *Controller) deleteDiscoveryResources(
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),
-		rootName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
+		egressName, instance.Namespace, nil); err != nil && !errors.Is(err, memoryStoreErrNotFound) {
 		c.Logger.Errorf("error deleting discovery DestinationRule %s for Federation cluster %s: %v",
-			rootName, instance.Name, err)
+			egressName, instance.Name, err)
 		allErrors = append(allErrors, err)
 	}
 	if err := c.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
@@ -116,7 +122,7 @@ func (c *Controller) deleteDiscoveryResources(
 
 func (c *Controller) createDiscoveryResources(
 	_ context.Context, instance *v1.MeshFederation, meshConfig *meshv1alpha1.MeshConfig) (err error) {
-	var s, ap, dr, ig, eg, vs *config.Config
+	var s, ap, dr, ig, eg, evs, ivs *config.Config
 
 	defer func() {
 		if err != nil {
@@ -156,11 +162,18 @@ func (c *Controller) createDiscoveryResources(
 					c.Logger.Errorf("error deleting discovery ingress Gateway %s: %v", eg.Name, newErr)
 				}
 			}
-			if vs != nil {
-				c.Logger.Infof("rolling back discovery VirtualService for Federation cluster %s", instance.Name)
+			if evs != nil {
+				c.Logger.Infof("rolling back discovery egress VirtualService for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
-					vs.Name, vs.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery VirtualService %s: %v", vs.Name, newErr)
+					evs.Name, evs.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
+					c.Logger.Errorf("error deleting discovery VirtualService %s: %v", evs.Name, newErr)
+				}
+			}
+			if ivs != nil {
+				c.Logger.Infof("rolling back discovery ingress VirtualService for Federation cluster %s", instance.Name)
+				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
+					ivs.Name, ivs.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
+					c.Logger.Errorf("error deleting discovery VirtualService %s: %v", ivs.Name, newErr)
 				}
 			}
 		}
@@ -225,18 +238,29 @@ func (c *Controller) createDiscoveryResources(
 		}
 	}
 
-	vs = c.discoveryVirtualService(instance, meshConfig)
-	_, err = c.Create(*vs)
+	evs = c.discoveryEgressVirtualService(instance)
+	_, err = c.Create(*evs)
 	if err != nil {
 		if errors.Is(err, memoryStoreErrAlreadyExists) {
 			// XXX: We don't support upgrade, so ignore this for now
 			err = nil
 		} else {
-			vs = nil
+			evs = nil
 			return
 		}
 	}
 
+	ivs = c.discoveryIngressVirtualService(instance, meshConfig)
+	_, err = c.Create(*ivs)
+	if err != nil {
+		if errors.Is(err, memoryStoreErrAlreadyExists) {
+			// XXX: We don't support upgrade, so ignore this for now
+			err = nil
+		} else {
+			ivs = nil
+			return
+		}
+	}
 	return
 }
 
@@ -264,16 +288,12 @@ func federationEgressLabels(instance *v1.MeshFederation) map[string]string {
 	}
 }
 
-func serviceAddressPort(addr string) (string, string) {
+func istiodServiceAddress(addr string) string {
 	portIndex := strings.Index(addr, ":")
 	if portIndex >= 0 {
-		return addr[:portIndex], addr[portIndex:]
+		return addr[:portIndex]
 	}
-	return addr, "80"
-}
-
-func (c *Controller) discoveryHostname(instance *v1.MeshFederation) string {
-	return fmt.Sprintf("discovery.%s.svc.%s.local", instance.Namespace, instance.Name)
+	return addr
 }
 
 func (c *Controller) discoveryService(instance *v1.MeshFederation) *config.Config {
@@ -281,8 +301,36 @@ func (c *Controller) discoveryService(instance *v1.MeshFederation) *config.Confi
 	// to give the gateway an endpoint to route to (i.e. it creates a cluster with an endpoint in the gateway).
 	// This should turn into a service entry for the other mesh's network.
 	name := discoveryResourceName(instance)
-	discoveryHost := instance.Spec.NetworkAddress
-	discoveryPort := common.DefaultDiscoveryPort
+	discoveryPort := instance.Spec.Remote.DiscoveryPort
+	if discoveryPort == 0 {
+		discoveryPort = common.DefaultDiscoveryPort
+	}
+	serviceSpec := &rawnetworking.ServiceEntry{
+		Hosts: []string{
+			common.DiscoveryServiceHostname(instance),
+		},
+		Location: rawnetworking.ServiceEntry_MESH_EXTERNAL,
+		Ports: []*rawnetworking.Port{
+			{
+				Name:       "https-discovery",
+				Number:     uint32(discoveryPort),
+				Protocol:   "HTTPS",
+				TargetPort: uint32(discoveryPort),
+			},
+		},
+		Resolution: rawnetworking.ServiceEntry_DNS,
+		ExportTo: []string{
+			".",
+		},
+	}
+	for _, address := range instance.Spec.Remote.Addresses {
+		serviceSpec.Endpoints = append(serviceSpec.Endpoints, &rawnetworking.WorkloadEntry{
+			Address: address,
+			Ports: map[string]uint32{
+				"https-discovery": uint32(discoveryPort),
+			},
+		})
+	}
 	service := &config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Serviceentries.Resource().GroupVersionKind(),
@@ -292,32 +340,7 @@ func (c *Controller) discoveryService(instance *v1.MeshFederation) *config.Confi
 				"topology.istio.io/network": fmt.Sprintf("network-%s", instance.Name),
 			},
 		},
-		Spec: &rawnetworking.ServiceEntry{
-			Hosts: []string{
-				c.discoveryHostname(instance),
-			},
-			Location: rawnetworking.ServiceEntry_MESH_EXTERNAL,
-			Ports: []*rawnetworking.Port{
-				{
-					Name:       "https-discovery",
-					Number:     uint32(8188),
-					Protocol:   "HTTPS",
-					TargetPort: uint32(8188),
-				},
-			},
-			Resolution: rawnetworking.ServiceEntry_DNS,
-			Endpoints: []*rawnetworking.WorkloadEntry{
-				{
-					Address: discoveryHost,
-					Ports: map[string]uint32{
-						"https-discovery": uint32(discoveryPort),
-					},
-				},
-			},
-			ExportTo: []string{
-				".",
-			},
-		},
+		Spec: serviceSpec,
 	}
 	return service
 }
@@ -430,18 +453,81 @@ func (c *Controller) discoveryAuthorizationPolicy(instance *v1.MeshFederation) *
 	return ap
 }
 
-func (c *Controller) discoveryVirtualService(
+func (c *Controller) discoveryEgressVirtualService(instance *v1.MeshFederation) *config.Config {
+	// VirtualService used to route inbound and outbound discovery requests.
+	name := discoveryEgressResourceName(instance)
+	egressGatewayName := fmt.Sprintf("%s/%s", instance.Namespace, name)
+	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s", instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.GetDomainSuffix())
+	discoveryService := common.DiscoveryServiceHostname(instance)
+	discoveryPort := common.DefaultDiscoveryPort
+	remoteDiscoveryPort := discoveryPort
+	if instance.Spec.Remote.DiscoveryPort > 0 {
+		remoteDiscoveryPort = int(instance.Spec.Remote.DiscoveryPort)
+	}
+	vs := &config.Config{
+		Meta: config.Meta{
+			GroupVersionKind: collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
+			Name:             name,
+			Namespace:        instance.Namespace,
+		},
+		Spec: &rawnetworking.VirtualService{
+			Hosts: []string{
+				egressGatewayService,
+			},
+			Gateways: []string{
+				egressGatewayName,
+			},
+			ExportTo: []string{
+				".",
+			},
+			Http: []*rawnetworking.HTTPRoute{
+				{
+					// Outbound discovery requests
+					Name: name,
+					Match: []*rawnetworking.HTTPMatchRequest{
+						{
+							Port: uint32(discoveryPort),
+							Headers: map[string]*rawnetworking.StringMatch{
+								"discovery-service": {
+									MatchType: &rawnetworking.StringMatch_Exact{
+										Exact: discoveryService,
+									},
+								},
+							},
+						},
+					},
+					Rewrite: &rawnetworking.HTTPRewrite{
+						// Allows us to get the correct endpoint for outbound
+						Authority: discoveryService,
+					},
+					Route: []*rawnetworking.HTTPRouteDestination{
+						{
+							Destination: &rawnetworking.Destination{
+								Host: discoveryService,
+								Port: &rawnetworking.PortSelector{
+									Number: uint32(remoteDiscoveryPort),
+								},
+								// to configure mtls appropriately
+								Subset: name,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return vs
+}
+
+func (c *Controller) discoveryIngressVirtualService(
 	instance *v1.MeshFederation, meshConfig *meshv1alpha1.MeshConfig) *config.Config {
 	// VirtualService used to route inbound and outbound discovery requests.
-	name := discoveryResourceName(instance)
-	istiodService, _ := serviceAddressPort(meshConfig.DefaultConfig.DiscoveryAddress)
+	name := discoveryIngressResourceName(instance)
+	istiodService := istiodServiceAddress(meshConfig.DefaultConfig.DiscoveryAddress)
 	if svcIndex := strings.LastIndex(istiodService, ".svc"); svcIndex >= 0 {
 		istiodService = istiodService[:svcIndex] + ".svc." + c.env.GetDomainSuffix()
 	}
-	ingressGatewayName := fmt.Sprintf("%s/%s-ingress", instance.Namespace, name)
-	egressGatewayName := fmt.Sprintf("%s/%s-egress", instance.Namespace, name)
-	discoveryService := c.discoveryHostname(instance)
-	discoveryHost := instance.Spec.NetworkAddress
+	ingressGatewayName := fmt.Sprintf("%s/%s", instance.Namespace, name)
 	discoveryPort := common.DefaultDiscoveryPort
 	vs := &config.Config{
 		Meta: config.Meta{
@@ -455,47 +541,11 @@ func (c *Controller) discoveryVirtualService(
 			},
 			Gateways: []string{
 				ingressGatewayName,
-				egressGatewayName,
 			},
 			ExportTo: []string{
 				".",
 			},
 			Http: []*rawnetworking.HTTPRoute{
-				{
-					// Outbound discovery requests
-					Name: fmt.Sprintf("%s-egress", name),
-					Match: []*rawnetworking.HTTPMatchRequest{
-						{
-							Gateways: []string{
-								egressGatewayName,
-							},
-							Headers: map[string]*rawnetworking.StringMatch{
-								"discovery-address": {
-									MatchType: &rawnetworking.StringMatch_Exact{
-										Exact: discoveryHost,
-									},
-								},
-							},
-							Port: uint32(discoveryPort),
-						},
-					},
-					Rewrite: &rawnetworking.HTTPRewrite{
-						// Allows us to get the correct endpoint for outbound
-						Authority: discoveryService,
-					},
-					Route: []*rawnetworking.HTTPRouteDestination{
-						{
-							Destination: &rawnetworking.Destination{
-								Host: discoveryService,
-								Port: &rawnetworking.PortSelector{
-									Number: uint32(discoveryPort),
-								},
-								// to configure mtls appropriately
-								Subset: name,
-							},
-						},
-					},
-				},
 				{
 					// inbound descovery /services/ requests
 					Name: fmt.Sprintf("%s-ingress-services", name),
@@ -566,9 +616,12 @@ func (c *Controller) discoveryVirtualService(
 
 func (c *Controller) discoveryDestinationRule(instance *v1.MeshFederation) *config.Config {
 	// DestinationRule to configure mTLS for outbound discovery requests
-	name := discoveryResourceName(instance)
-	discoveryHost := c.discoveryHostname(instance)
-	discoveryPort := common.DefaultDiscoveryPort
+	name := discoveryEgressResourceName(instance)
+	discoveryHost := common.DiscoveryServiceHostname(instance)
+	discoveryPort := instance.Spec.Remote.DiscoveryPort
+	if discoveryPort == 0 {
+		discoveryPort = common.DefaultDiscoveryPort
+	}
 	dr := &config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),

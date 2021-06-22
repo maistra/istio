@@ -80,14 +80,14 @@ type MeshFederationSecurity struct {
 	// +required
 	TrustDomain string `json:"trustDomain,omitempty"`
 
-	// Name of secret containing certificate chain to be used to validate
-	// the remote.  This is also used to validate certificates used by the
-	// remote services (both client and server certificates).
-	// XXX: maybe this is only used to initiate a connection, with the actual
-	// certs stored in the status field, as retrieved from the remote mesh, or
-	// maybe this identifies an endpoint used to retrieve a cert chain, a la jwks
+	// Name of ConfigMap containing certificate chain to be used to
+	// validate the remote.  This is also used to validate certificates used by
+	// the remote services (both client and server certificates).  The name of
+	// the entry should be root-cert.pem.  If unspecified, it will look for a
+	// ConfigMap named <meshfederation-name>-ca-root-cert, e.g. if this resource is
+	// named mesh1, it will look for a ConfigMap named mesh1-ca-root-cert.
 	// +optional
-	CertificateChain string `json:"certificateChain,omitempty"`
+	CertificateChain corev1.TypedLocalObjectReference `json:"certificateChain,omitempty"`
 
 	// AllowDirectInbound determines whether or not external service
 	// invocations will be terminated at the ingress gateway.
@@ -114,16 +114,27 @@ type MeshFederationGateways struct {
 
 // TODO
 type MeshFederationSpec struct {
-	// NetworkAddress is the address used to communicate with the external mesh.
-	// Port 15443 will be used for service traffic and port 8188 will be used
-	// for service discovery.
-	// XXX: should this be an array?
+	// Remote configures details related to the remote mesh with which this mesh
+	// is federating.
 	// +required
-	NetworkAddress string `json:"networkAddress,omitempty"`
+	Remote MeshFederationRemote `json:"remote,omitempty"`
 
 	Gateways MeshFederationGateways `json:"gateways,omitempty"`
 
 	Security MeshFederationSecurity `json:"security,omitempty"`
+}
+
+type MeshFederationRemote struct {
+	// Addresses are the addresses to which discovery and service requests
+	// should be sent (i.e. the addresses of ingress gateways on the remote
+	// mesh).  These may be specified as resolveable DNS names or IP addresses.
+	Addresses []string `json:"addresses,omitempty"`
+	// DiscoveryPort is the port on which the addresses are handling discovery
+	// requests.  Defaults to 8188, if unspecified.
+	DiscoveryPort int32 `json:"discoveryPort,omitempty"`
+	// ServicePort is the port on which the addresses are handling service
+	// requests.  Defaults to 15443, if unspecified.
+	ServicePort int32 `json:"servicePort,omitempty"`
 }
 
 // TODO
