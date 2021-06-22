@@ -162,7 +162,7 @@ func (s *meshServer) createOrUpdateAuthorizationPolicy(target *federationmodel.S
 										target.Hostname,
 									},
 									Ports: []string{
-										strconv.FormatInt(common.FederationPort, 10),
+										strconv.FormatInt(common.DefaultFederationPort, 10),
 									},
 								},
 							},
@@ -221,7 +221,7 @@ func (s *meshServer) gatewayForExport(source federationmodel.ServiceKey, target 
 					},
 					Port: &rawnetworking.Port{
 						Name:     "tls-federation",
-						Number:   uint32(common.FederationPort),
+						Number:   uint32(common.DefaultFederationPort),
 						Protocol: "TLS",
 					},
 					Tls: &rawnetworking.ServerTLSSettings{

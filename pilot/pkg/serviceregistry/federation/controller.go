@@ -48,24 +48,21 @@ var _ model.ServiceDiscovery = &Controller{}
 var _ model.Controller = &Controller{}
 var _ serviceregistry.Instance = &Controller{}
 
-const (
-	federationPort = common.FederationPort
-)
-
 // Controller aggregates data across different registries and monitors for changes
 type Controller struct {
-	networkAddress string
-	egressService  string
-	egressName     string
-	discoveryURL   string
-	useDirectCalls bool
-	namespace      string
-	localClusterID string
-	localNetwork   string
-	clusterID      string
-	network        string
-	resyncPeriod   time.Duration
-	backoffPolicy  *backoff.ExponentialBackOff
+	remote               *v1.MeshFederationRemote
+	egressService        string
+	egressName           string
+	discoveryURL         string
+	discoveryServiceName string
+	useDirectCalls       bool
+	namespace            string
+	localClusterID       string
+	localNetwork         string
+	clusterID            string
+	network              string
+	resyncPeriod         time.Duration
+	backoffPolicy        *backoff.ExponentialBackOff
 
 	logger *log.Scope
 
@@ -100,7 +97,7 @@ type existingImport struct {
 }
 
 type Options struct {
-	NetworkAddress string
+	Remote         *v1.MeshFederationRemote
 	EgressService  string
 	EgressName     string
 	UseDirectCalls bool
@@ -173,33 +170,34 @@ func NewController(opt Options, mesh *v1.MeshFederation, defaultImportConfig, im
 	}
 	locality := mergeLocality(importLocality, defaultLocality)
 	return &Controller{
-		discoveryURL:        fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, opt.EgressService, common.DefaultDiscoveryPort),
-		egressService:       opt.EgressService,
-		egressName:          opt.EgressName,
-		networkAddress:      opt.NetworkAddress,
-		useDirectCalls:      opt.UseDirectCalls,
-		namespace:           opt.Namespace,
-		localClusterID:      opt.LocalClusterID,
-		localNetwork:        opt.LocalNetwork,
-		clusterID:           opt.ClusterID,
-		network:             opt.Network,
-		localDomainSuffix:   localDomainSuffix,
-		defaultDomainSuffix: defaultDomainSuffix,
-		defaultNameMapper:   defaultNameMapper,
-		defaultLocality:     defaultLocality,
-		importLocality:      importLocality,
-		locality:            locality,
-		importNameMapper:    common.NewServiceImporter(importConfig, defaultNameMapper, defaultDomainSuffix, localDomainSuffix),
-		imports:             map[federationmodel.ServiceKey]*existingImport{},
-		serviceStore:        map[host.Name]*model.Service{},
-		instanceStore:       map[host.Name][]*model.ServiceInstance{},
-		kubeClient:          opt.KubeClient,
-		statusHandler:       opt.StatusHandler,
-		configStore:         opt.ConfigStore,
-		xdsUpdater:          opt.XDSUpdater,
-		resyncPeriod:        opt.ResyncPeriod,
-		backoffPolicy:       backoffPolicy,
-		logger:              common.Logger.WithLabels("component", "federation-registry"),
+		discoveryURL:         fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, opt.EgressService, common.DefaultDiscoveryPort),
+		discoveryServiceName: common.DiscoveryServiceHostname(mesh),
+		egressService:        opt.EgressService,
+		egressName:           opt.EgressName,
+		remote:               opt.Remote.DeepCopy(),
+		useDirectCalls:       opt.UseDirectCalls,
+		namespace:            opt.Namespace,
+		localClusterID:       opt.LocalClusterID,
+		localNetwork:         opt.LocalNetwork,
+		clusterID:            opt.ClusterID,
+		network:              opt.Network,
+		localDomainSuffix:    localDomainSuffix,
+		defaultDomainSuffix:  defaultDomainSuffix,
+		defaultNameMapper:    defaultNameMapper,
+		defaultLocality:      defaultLocality,
+		importLocality:       importLocality,
+		locality:             locality,
+		importNameMapper:     common.NewServiceImporter(importConfig, defaultNameMapper, defaultDomainSuffix, localDomainSuffix),
+		imports:              map[federationmodel.ServiceKey]*existingImport{},
+		serviceStore:         map[host.Name]*model.Service{},
+		instanceStore:        map[host.Name][]*model.ServiceInstance{},
+		kubeClient:           opt.KubeClient,
+		statusHandler:        opt.StatusHandler,
+		configStore:          opt.ConfigStore,
+		xdsUpdater:           opt.XDSUpdater,
+		resyncPeriod:         opt.ResyncPeriod,
+		backoffPolicy:        backoffPolicy,
+		logger:               common.Logger.WithLabels("component", "federation-registry"),
 	}
 }
 
@@ -241,8 +239,8 @@ func (c *Controller) Provider() serviceregistry.ProviderID {
 	return serviceregistry.Federation
 }
 
-func (c *Controller) NetworkAddress() string {
-	return c.networkAddress
+func (c *Controller) Remote() *v1.MeshFederationRemote {
+	return c.remote
 }
 
 func (c *Controller) pollServices() *federationmodel.ServiceListMessage {
@@ -252,7 +250,7 @@ func (c *Controller) pollServices() *federationmodel.ServiceListMessage {
 		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
 		return nil
 	}
-	req.Header.Add("discovery-address", c.networkAddress)
+	req.Header.Add("discovery-service", c.discoveryServiceName)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		c.logger.Errorf("Failed to GET URL: '%s': %s", url, err)
@@ -415,17 +413,23 @@ func (c *Controller) createService(opts createServiceOptions) (*model.Service, [
 
 func (c *Controller) gatewayForNetworkAddress() []*model.Gateway {
 	var gateways []*model.Gateway
-	addrs, err := c.getIPAddrsForHostOrIP(c.networkAddress)
-	if err != nil {
-		c.logger.Errorf("error resolving IP addr for federation network %s: %v", c.networkAddress, err)
-	} else {
-		c.logger.Debugf("adding gateway %s endpoints for cluster %s", c.networkAddress, c.clusterID)
-		for _, ip := range addrs {
-			c.logger.Debugf("adding gateway %s endpoint %s for cluster %s", c.networkAddress, ip, c.clusterID)
-			gateways = append(gateways, &model.Gateway{
-				Addr: ip,
-				Port: federationPort,
-			})
+	remotePort := c.remote.ServicePort
+	if remotePort == 0 {
+		remotePort = common.DefaultFederationPort
+	}
+	for _, address := range c.remote.Addresses {
+		addrs, err := c.getIPAddrsForHostOrIP(address)
+		if err != nil {
+			c.logger.Errorf("error resolving IP addr for federation network %s: %v", address, err)
+		} else {
+			c.logger.Debugf("adding gateway %s endpoints for cluster %s", address, c.clusterID)
+			for _, ip := range addrs {
+				c.logger.Debugf("adding gateway %s endpoint %s for cluster %s", address, ip, c.clusterID)
+				gateways = append(gateways, &model.Gateway{
+					Addr: ip,
+					Port: uint32(remotePort),
+				})
+			}
 		}
 	}
 	return gateways
@@ -477,7 +481,7 @@ func (c *Controller) getEgressServiceAddrs() ([]*model.Gateway, []string) {
 	var sas []string
 	for _, subset := range endpoints.Subsets {
 		for index, address := range subset.Addresses {
-			if subset.Ports[index].Port == common.FederationPort {
+			if subset.Ports[index].Port == common.DefaultFederationPort {
 				ips, err := c.getIPAddrsForHostOrIP(address.IP)
 				if err != nil {
 					c.logger.Errorf("error converting to IP address from %s: %s", address.IP, err)
@@ -486,7 +490,7 @@ func (c *Controller) getEgressServiceAddrs() ([]*model.Gateway, []string) {
 				for _, ip := range ips {
 					addrs = append(addrs, &model.Gateway{
 						Addr: ip,
-						Port: federationPort,
+						Port: uint32(common.DefaultFederationPort),
 					})
 					sas = append(sas, serviceAccountByIP[ip])
 				}
@@ -947,7 +951,7 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
 		return nil
 	}
-	req.Header.Add("discovery-address", c.networkAddress)
+	req.Header.Add("discovery-service", c.discoveryServiceName)
 	resp, err := http.DefaultClient.Do(req)
 	defer func() {
 		status := ""

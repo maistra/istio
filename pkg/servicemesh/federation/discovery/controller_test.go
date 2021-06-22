@@ -174,10 +174,23 @@ func newTestOptions(discoveryAddress string) options {
 
 func TestReconcile(t *testing.T) {
 	resyncPeriod := 30 * time.Second
+	name := "test"
+	namespace := "test"
 	options := newTestOptions("test.address")
+	kubeClient := kube.NewFakeClient(
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "dummy",
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				"root-cert.pem": "dummy-cert-pem",
+			},
+		},
+	)
 	controller := internalNewController(fake.NewSimpleClientset(), nil, Options{
 		ControllerOptions: common.ControllerOptions{
-			KubeClient:   kube.NewFakeClient(),
+			KubeClient:   kubeClient,
 			ResyncPeriod: resyncPeriod,
 			Namespace:    "",
 		},
@@ -189,15 +202,15 @@ func TestReconcile(t *testing.T) {
 		ConfigStore:       configmemory.NewController(configmemory.Make(Schemas)),
 	})
 
-	name := "test"
-	namespace := "test"
 	federation := &maistrav1.MeshFederation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
 		Spec: maistrav1.MeshFederationSpec{
-			NetworkAddress: "test.mesh",
+			Remote: maistrav1.MeshFederationRemote{
+				Addresses: []string{"test.mesh"},
+			},
 			Gateways: maistrav1.MeshFederationGateways{
 				Ingress: corev1.LocalObjectReference{
 					Name: "test-ingress",
@@ -207,14 +220,24 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			Security: maistrav1.MeshFederationSecurity{
-				ClientID:            "cluster.local/ns/test-mesh/sa/test-egress-service-account",
-				TrustDomain:         "test.local",
-				CertificateChain:    "dummy",
+				ClientID:    "cluster.local/ns/test-mesh/sa/test-egress-service-account",
+				TrustDomain: "test.local",
+				CertificateChain: corev1.TypedLocalObjectReference{
+					Name: "dummy",
+				},
 				AllowDirectInbound:  false,
 				AllowDirectOutbound: false,
 			},
 		},
 	}
+
+	// start kubeClient so informers are populated
+	stop := make(chan struct{})
+	defer func() { close(stop) }()
+	go kubeClient.KubeInformer().Core().V1().ConfigMaps().Informer().Run(stop)
+	for !kubeClient.KubeInformer().Core().V1().ConfigMaps().Informer().HasSynced() {
+	}
+
 	cs := controller.cs
 	fedwatch, err := cs.CoreV1().MeshFederations(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -256,7 +279,11 @@ func TestReconcile(t *testing.T) {
 		t.Errorf("resource doesn't exist")
 	}
 	if resource := controller.Get(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
-		discoveryResourceName(federation), namespace); resource == nil {
+		discoveryEgressResourceName(federation), namespace); resource == nil {
+		t.Errorf("resource doesn't exist")
+	}
+	if resource := controller.Get(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
+		discoveryIngressResourceName(federation), namespace); resource == nil {
 		t.Errorf("resource doesn't exist")
 	}
 	if resource := controller.Get(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
@@ -268,7 +295,7 @@ func TestReconcile(t *testing.T) {
 		t.Errorf("resource doesn't exist")
 	}
 	if resource := controller.Get(collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),
-		discoveryResourceName(federation), namespace); resource == nil {
+		discoveryEgressResourceName(federation), namespace); resource == nil {
 		t.Errorf("resource doesn't exist")
 	}
 	if resource := controller.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),

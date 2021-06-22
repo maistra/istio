@@ -37,15 +37,17 @@ echo "Waiting for mesh2 installation to complete"
 oc wait --for condition=Ready -n mesh2-system smmr/default --timeout 180s
 
 echo "Retrieving root certificates"
-MESH1_CERT=$(oc get configmap -n mesh1-system istio-ca-root-cert -o jsonpath='{.data.root-cert\.pem}' | sed ':a;N;$!ba;s/\n/\\\n      /g')
-MESH2_CERT=$(oc get configmap -n mesh2-system istio-ca-root-cert -o jsonpath='{.data.root-cert\.pem}' | sed ':a;N;$!ba;s/\n/\\\n      /g')
+MESH1_CERT=$(oc get configmap -n mesh1-system istio-ca-root-cert -o jsonpath='{.data.root-cert\.pem}' | sed ':a;N;$!ba;s/\n/\\\n    /g')
+MESH2_CERT=$(oc get configmap -n mesh2-system istio-ca-root-cert -o jsonpath='{.data.root-cert\.pem}' | sed ':a;N;$!ba;s/\n/\\\n    /g')
 
 echo "Enabling federation for mesh1"
-sed "s:{{MESH2_CERT}}:$MESH2_CERT:g" export/meshfederation.yaml | oc create -f -
+sed "s:{{MESH2_CERT}}:$MESH2_CERT:g" export/configmap.yaml | oc create -f -
+oc create -f export/meshfederation.yaml
 oc create -f export/serviceexports.yaml
 
 echo "Enabling federation for mesh2"
-sed "s:{{MESH1_CERT}}:$MESH1_CERT:g" import/meshfederation.yaml | oc create -f -
+sed "s:{{MESH1_CERT}}:$MESH1_CERT:g" import/configmap.yaml | oc create -f -
+oc create -f import/meshfederation.yaml
 oc create -f import/serviceimports.yaml
 
 echo "Installing mongodb k8s Service for mesh2"

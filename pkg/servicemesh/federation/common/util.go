@@ -15,12 +15,27 @@
 package common
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	kubelabels "k8s.io/apimachinery/pkg/labels"
+	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/spiffe"
 )
+
+// DiscoveryServiceHostname returns the hostname used to represent a remote's
+// discovery service in the local mesh.
+func DiscoveryServiceHostname(instance *v1.MeshFederation) string {
+	return fmt.Sprintf("discovery.%s.svc.%s.local", instance.Namespace, instance.Name)
+}
+
+// DefaultFederationCARootResourceName is the default name used for the resource
+// containing the root CA for a remote mesh.
+func DefaultFederationCARootResourceName(instance *v1.MeshFederation) string {
+	return fmt.Sprintf("%s-ca-root-cert", instance.Name)
+}
 
 // EndpointsForService returns the Endpoints for the named service.
 func EndpointsForService(client kube.Client, name, namespace string) (*corev1.Endpoints, error) {

@@ -4,14 +4,18 @@ metadata:
   name: mesh1
   namespace: mesh2-system
 spec:
-  networkAddress: federation-ingress.mesh1-system.svc.cluster.local
+  remote:
+    addresses:
+    - mesh2-ingress.mesh1-system.svc.cluster.local
   gateways:
     ingress:
-      name: federation-ingress
+      name: mesh1-ingress
     egress:
-      name: federation-egress
+      name: mesh1-egress
   security:
     trustDomain: mesh1.local
-    clientID: mesh1.local/ns/mesh1-system/sa/federation-egress-service-account
-    certificateChain: |
-      {{MESH1_CERT}}
+    clientID: mesh1.local/ns/mesh1-system/sa/mesh2-egress-service-account
+    # same as default, if certificateChain is omitted
+    certificateChain:
+      kind: ConfigMap
+      name: mesh1-ca-root-cert
