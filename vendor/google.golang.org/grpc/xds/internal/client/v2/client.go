@@ -22,14 +22,12 @@ package v2
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpclog"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -70,7 +68,6 @@ func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIC
 		cc:        cc,
 		parent:    opts.Parent,
 		nodeProto: nodeProto,
-		loadStore: opts.LoadStore,
 		logger:    opts.Logger,
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
@@ -89,60 +86,11 @@ type client struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	parent    xdsclient.UpdateHandler
-	loadStore *load.Store
 	logger    *grpclog.PrefixLogger
 
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
 	cc        *grpc.ClientConn
 	nodeProto *v2corepb.Node
-
-	mu sync.Mutex
-	// ldsResourceName is the LDS resource_name to watch. It is set to the first
-	// LDS resource_name to watch, and removed when the LDS watch is canceled.
-	//
-	// It's from the dial target of the parent ClientConn. RDS resource
-	// processing needs this to do the host matching.
-	ldsResourceName string
-	ldsWatchCount   int
-}
-
-// AddWatch overrides the transport helper's AddWatch to save the LDS
-// resource_name. This is required when handling an RDS response to perform host
-// matching.
-func (v2c *client) AddWatch(rType xdsclient.ResourceType, rName string) {
-	v2c.mu.Lock()
-	// Special handling for LDS, because RDS needs the LDS resource_name for
-	// response host matching.
-	if rType == xdsclient.ListenerResource {
-		// Set hostname to the first LDS resource_name, and reset it when the
-		// last LDS watch is removed. The upper level Client isn't expected to
-		// watchLDS more than once.
-		v2c.ldsWatchCount++
-		if v2c.ldsWatchCount == 1 {
-			v2c.ldsResourceName = rName
-		}
-	}
-	v2c.mu.Unlock()
-	v2c.TransportHelper.AddWatch(rType, rName)
-}
-
-// RemoveWatch overrides the transport helper's RemoveWatch to clear the LDS
-// resource_name when the last watch is removed.
-func (v2c *client) RemoveWatch(rType xdsclient.ResourceType, rName string) {
-	v2c.mu.Lock()
-	// Special handling for LDS, because RDS needs the LDS resource_name for
-	// response host matching.
-	if rType == xdsclient.ListenerResource {
-		// Set hostname to the first LDS resource_name, and reset it when the
-		// last LDS watch is removed. The upper level Client isn't expected to
-		// watchLDS more than once.
-		v2c.ldsWatchCount--
-		if v2c.ldsWatchCount == 0 {
-			v2c.ldsResourceName = ""
-		}
-	}
-	v2c.mu.Unlock()
-	v2c.TransportHelper.RemoveWatch(rType, rName)
 }
 
 func (v2c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {
@@ -233,8 +181,9 @@ func (v2c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 	return rType, resp.GetVersionInfo(), resp.GetNonce(), err
 }
 
-// handleLDSResponse processes an LDS response received from the xDS server. On
-// receipt of a good response, it also invokes the registered watcher callback.
+// handleLDSResponse processes an LDS response received from the management
+// server. On receipt of a good response, it also invokes the registered watcher
+// callback.
 func (v2c *client) handleLDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 	update, err := xdsclient.UnmarshalListener(resp.GetResources(), v2c.logger)
 	if err != nil {
@@ -244,15 +193,11 @@ func (v2c *client) handleLDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 	return nil
 }
 
-// handleRDSResponse processes an RDS response received from the xDS server. On
-// receipt of a good response, it caches validated resources and also invokes
-// the registered watcher callback.
+// handleRDSResponse processes an RDS response received from the management
+// server. On receipt of a good response, it caches validated resources and also
+// invokes the registered watcher callback.
 func (v2c *client) handleRDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	v2c.mu.Lock()
-	hostname := v2c.ldsResourceName
-	v2c.mu.Unlock()
-
-	update, err := xdsclient.UnmarshalRouteConfig(resp.GetResources(), hostname, v2c.logger)
+	update, err := xdsclient.UnmarshalRouteConfig(resp.GetResources(), v2c.logger)
 	if err != nil {
 		return err
 	}
@@ -260,8 +205,9 @@ func (v2c *client) handleRDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 	return nil
 }
 
-// handleCDSResponse processes an CDS response received from the xDS server. On
-// receipt of a good response, it also invokes the registered watcher callback.
+// handleCDSResponse processes an CDS response received from the management
+// server. On receipt of a good response, it also invokes the registered watcher
+// callback.
 func (v2c *client) handleCDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 	update, err := xdsclient.UnmarshalCluster(resp.GetResources(), v2c.logger)
 	if err != nil {

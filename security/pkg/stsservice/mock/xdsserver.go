@@ -258,3 +258,19 @@ func (c *XDSCallbacks) OnFetchRequest(context.Context, *discovery.DiscoveryReque
 func (c *XDSCallbacks) OnFetchResponse(*discovery.DiscoveryRequest, *discovery.DiscoveryResponse) {
 	xdsServerLog.Infof("on fetch response")
 }
+
+func (c *XDSCallbacks) OnDeltaStreamOpen(ctx context.Context, i int64, s string) error {
+	panic("implement me")
+}
+
+func (c *XDSCallbacks) OnDeltaStreamClosed(i int64) {
+	panic("implement me")
+}
+
+func (c *XDSCallbacks) OnStreamDeltaRequest(i int64, request *discovery.DeltaDiscoveryRequest) error {
+	panic("implement me")
+}
+
+func (c *XDSCallbacks) OnStreamDeltaResponse(i int64, request *discovery.DeltaDiscoveryRequest, response *discovery.DeltaDiscoveryResponse) {
+	panic("implement me")
+}

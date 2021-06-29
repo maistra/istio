@@ -142,6 +142,8 @@ func (m *UpdateFailureState) Validate() error {
 
 	// no validation rules for Details
 
+	// no validation rules for VersionInfo
+
 	return nil
 }
 
@@ -1130,6 +1132,8 @@ func (m *ListenersConfigDump_DynamicListener) Validate() error {
 		}
 	}
 
+	// no validation rules for ClientStatus
+
 	return nil
 }
 
@@ -1308,6 +1312,18 @@ func (m *ClustersConfigDump_DynamicCluster) Validate() error {
 		}
 	}
 
+	if v, ok := interface{}(m.GetErrorState()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ClustersConfigDump_DynamicClusterValidationError{
+				field:  "ErrorState",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for ClientStatus
+
 	return nil
 }
 
@@ -1485,6 +1501,18 @@ func (m *RoutesConfigDump_DynamicRouteConfig) Validate() error {
 			}
 		}
 	}
+
+	if v, ok := interface{}(m.GetErrorState()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return RoutesConfigDump_DynamicRouteConfigValidationError{
+				field:  "ErrorState",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for ClientStatus
 
 	return nil
 }
@@ -1685,6 +1713,18 @@ func (m *ScopedRoutesConfigDump_DynamicScopedRouteConfigs) Validate() error {
 		}
 	}
 
+	if v, ok := interface{}(m.GetErrorState()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ScopedRoutesConfigDump_DynamicScopedRouteConfigsValidationError{
+				field:  "ErrorState",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for ClientStatus
+
 	return nil
 }
 
@@ -1783,6 +1823,18 @@ func (m *SecretsConfigDump_DynamicSecret) Validate() error {
 			}
 		}
 	}
+
+	if v, ok := interface{}(m.GetErrorState()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return SecretsConfigDump_DynamicSecretValidationError{
+				field:  "ErrorState",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for ClientStatus
 
 	return nil
 }
@@ -2051,6 +2103,18 @@ func (m *EndpointsConfigDump_DynamicEndpointConfig) Validate() error {
 			}
 		}
 	}
+
+	if v, ok := interface{}(m.GetErrorState()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EndpointsConfigDump_DynamicEndpointConfigValidationError{
+				field:  "ErrorState",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for ClientStatus
 
 	return nil
 }
