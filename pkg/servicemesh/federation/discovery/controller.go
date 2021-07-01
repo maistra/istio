@@ -71,6 +71,7 @@ type Controller struct {
 	xds               model.XDSUpdater
 	mu                sync.Mutex
 	stopChannels      map[string]chan struct{}
+	trustBundles      map[string]string
 }
 
 var _ model.ConfigStore = (*Controller)(nil)
@@ -135,6 +136,7 @@ func internalNewController(cs maistraclient.Interface, mrc memberroll.MemberRoll
 		xds:               opt.XDSUpdater,
 		federationManager: opt.FederationManager,
 		statusManager:     opt.StatusManager,
+		trustBundles:      map[string]string{},
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
 		Informer:     informer,
@@ -209,6 +211,10 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 
 	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
 		instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.GetDomainSuffix())
+
+	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.CertificateChain != "" {
+		c.updateRootCert(instance.Spec.Security.TrustDomain, instance.Spec.Security.CertificateChain)
+	}
 
 	// check for existing registry
 	if registry != nil {
@@ -296,6 +302,11 @@ func (c *Controller) delete(ctx context.Context, instance *v1.MeshFederation) er
 	// delete the server
 	c.federationManager.DeleteMeshFederation(instance.Name)
 
+	// delete trust bundle
+	if instance.Spec.Security.TrustDomain != "" {
+		c.updateRootCert(instance.Spec.Security.TrustDomain, "")
+	}
+
 	// delete the registry
 	registry := c.getRegistry(instance.Name)
 	if registry != nil {
@@ -357,4 +368,32 @@ func (opt Options) validate() error {
 		common.Logger.WithLabels("component", controllerName).Warnf("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
 	}
 	return utilerrors.NewAggregate(allErrors)
+}
+
+func (c *Controller) updateRootCert(trustDomain string, rootCert string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if rootCert == "" {
+		delete(c.trustBundles, trustDomain)
+	} else if existingCert, ok := c.trustBundles[trustDomain]; !ok || existingCert != rootCert {
+		c.trustBundles[trustDomain] = rootCert
+	} else {
+		// we didn't update the trust bundles, so we return early without pushing
+		return
+	}
+	c.xds.ConfigUpdate(&model.PushRequest{
+		Full:   true,
+		Reason: []model.TriggerReason{model.GlobalUpdate},
+	})
+}
+
+func (c *Controller) GetTrustBundles() map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// make a copy
+	ret := map[string]string{}
+	for td, cert := range c.trustBundles {
+		ret[td] = cert
+	}
+	return ret
 }

@@ -82,6 +82,16 @@ func (m *UdpProxyConfig) Validate() error {
 
 	}
 
+	if v, ok := interface{}(m.GetUpstreamSocketConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return UdpProxyConfigValidationError{
+				field:  "UpstreamSocketConfig",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	switch m.RouteSpecifier.(type) {
 
 	case *UdpProxyConfig_Cluster:
@@ -174,6 +184,15 @@ func (m *UdpProxyConfig_HashPolicy) Validate() error {
 			return UdpProxyConfig_HashPolicyValidationError{
 				field:  "SourceIp",
 				reason: "value must equal true",
+			}
+		}
+
+	case *UdpProxyConfig_HashPolicy_Key:
+
+		if utf8.RuneCountInString(m.GetKey()) < 1 {
+			return UdpProxyConfig_HashPolicyValidationError{
+				field:  "Key",
+				reason: "value length must be at least 1 runes",
 			}
 		}
 

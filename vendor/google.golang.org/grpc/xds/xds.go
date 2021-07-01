@@ -16,16 +16,21 @@
  *
  */
 
-// Package xds contains xds implementation. Users need to import this package to
-// get all xds functionality.
+// Package xds contains an implementation of the xDS suite of protocols, to be
+// used by gRPC client and server applications.
+//
+// On the client-side, users simply need to import this package to get all xDS
+// functionality. On the server-side, users need to use the GRPCServer type
+// exported by this package instead of the regular grpc.Server.
 //
 // See https://github.com/grpc/grpc-go/tree/master/examples/features/xds for
 // example.
 package xds
 
 import (
-	_ "google.golang.org/grpc/xds/internal/balancer"  // Register the balancers.
-	_ "google.golang.org/grpc/xds/internal/client/v2" // Register the v2 xDS API client.
-	_ "google.golang.org/grpc/xds/internal/client/v3" // Register the v3 xDS API client.
-	_ "google.golang.org/grpc/xds/internal/resolver"  // Register the xds_resolver.
+	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
+	_ "google.golang.org/grpc/xds/internal/balancer"                // Register the balancers.
+	_ "google.golang.org/grpc/xds/internal/client/v2"               // Register the v2 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/client/v3"               // Register the v3 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/resolver"                // Register the xds_resolver.
 )

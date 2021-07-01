@@ -289,6 +289,8 @@ func NewServer(args *PilotArgs) (*Server, error) {
 				IstiodNamespace:   args.Namespace,
 				IstiodPodName:     args.PodName,
 			})
+			s.XDSServer.Generators[v3.TrustBundleType] = &xds.TbdsGenerator{TrustBundleProvider: s.federation}
+
 			if err != nil {
 				return nil, fmt.Errorf("error initializing federation: %v", err)
 			}

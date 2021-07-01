@@ -14,7 +14,9 @@
 
 package model
 
-import hashstructure "github.com/mitchellh/hashstructure/v2"
+import (
+	hashstructure "github.com/mitchellh/hashstructure/v2"
+)
 
 type ServiceKey struct {
 	Name      string `json:"name,omitempty"`
@@ -71,4 +73,8 @@ func (s *ServiceMessage) GenerateChecksum() uint64 {
 		return 0
 	}
 	return checksum
+}
+
+type TrustBundleProvider interface {
+	GetTrustBundles() map[string]string
 }

@@ -661,6 +661,7 @@ func TestMergeAnyWithStruct(t *testing.T) {
 	expectedHCM.AddUserAgent = userHCM.AddUserAgent
 	expectedHCM.StreamIdleTimeout = userHCM.StreamIdleTimeout
 	expectedHCM.UseRemoteAddress = userHCM.UseRemoteAddress
+	// nolint: staticcheck
 	expectedHCM.XffNumTrustedHops = userHCM.XffNumTrustedHops
 	expectedHCM.HttpFilters = append(expectedHCM.HttpFilters, userHCM.HttpFilters...)
 	expectedHCM.ServerName = userHCM.ServerName
