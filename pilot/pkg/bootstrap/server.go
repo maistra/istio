@@ -288,6 +288,13 @@ func NewServer(args *PilotArgs) (*Server, error) {
 				ServiceController: s.ServiceController(),
 				IstiodNamespace:   args.Namespace,
 				IstiodPodName:     args.PodName,
+				GetCARootCertFn: func() string {
+					caRoot := s.fetchCARoot()
+					if caRoot != nil {
+						return caRoot[constants.CACertNamespaceConfigMapDataName]
+					}
+					return ""
+				},
 			})
 			s.XDSServer.Generators[v3.TrustBundleType] = &xds.TbdsGenerator{TrustBundleProvider: s.federation}
 

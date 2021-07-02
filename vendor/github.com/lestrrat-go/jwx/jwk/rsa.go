@@ -1,73 +1,72 @@
 package jwk
 
 import (
-	"bytes"
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"encoding/binary"
 	"math/big"
 
+	"github.com/lestrrat-go/blackmagic"
 	"github.com/lestrrat-go/jwx/internal/base64"
-	"github.com/lestrrat-go/jwx/internal/blackmagic"
 	"github.com/lestrrat-go/jwx/internal/pool"
 	"github.com/pkg/errors"
 )
 
-func NewRSAPublicKey() RSAPublicKey {
-	return newRSAPublicKey()
-}
-
-func newRSAPublicKey() *rsaPublicKey {
-	return &rsaPublicKey{
-		privateParams: make(map[string]interface{}),
-	}
-}
-
-func NewRSAPrivateKey() RSAPrivateKey {
-	return newRSAPrivateKey()
-}
-
-func newRSAPrivateKey() *rsaPrivateKey {
-	return &rsaPrivateKey{
-		privateParams: make(map[string]interface{}),
-	}
-}
-
 func (k *rsaPrivateKey) FromRaw(rawKey *rsa.PrivateKey) error {
-	k.d = rawKey.D.Bytes()
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	d, err := bigIntToBytes(rawKey.D)
+	if err != nil {
+		return errors.Wrap(err, `invalid rsa.PrivateKey`)
+	}
+	k.d = d
+
 	if len(rawKey.Primes) < 2 {
 		return errors.Errorf(`invalid number of primes in rsa.PrivateKey: need 2, got %d`, len(rawKey.Primes))
 	}
 
-	k.p = rawKey.Primes[0].Bytes()
-	k.q = rawKey.Primes[1].Bytes()
+	p, err := bigIntToBytes(rawKey.Primes[0])
+	if err != nil {
+		return errors.Wrap(err, `invalid rsa.PrivateKey`)
+	}
+	k.p = p
 
-	if v := rawKey.Precomputed.Dp; v != nil {
-		k.dp = v.Bytes()
+	q, err := bigIntToBytes(rawKey.Primes[1])
+	if err != nil {
+		return errors.Wrap(err, `invalid rsa.PrivateKey`)
 	}
-	if v := rawKey.Precomputed.Dq; v != nil {
-		k.dq = v.Bytes()
+	k.q = q
+
+	// dp, dq, qi are optional values
+	if v, err := bigIntToBytes(rawKey.Precomputed.Dp); err == nil {
+		k.dp = v
 	}
-	if v := rawKey.Precomputed.Qinv; v != nil {
-		k.qi = v.Bytes()
+	if v, err := bigIntToBytes(rawKey.Precomputed.Dq); err == nil {
+		k.dq = v
+	}
+	if v, err := bigIntToBytes(rawKey.Precomputed.Qinv); err == nil {
+		k.qi = v
 	}
 
-	k.n = rawKey.PublicKey.N.Bytes()
-	data := make([]byte, 8)
-	binary.BigEndian.PutUint64(data, uint64(rawKey.PublicKey.E))
-	i := 0
-	for ; i < len(data); i++ {
-		if data[i] != 0x0 {
-			break
-		}
+	// public key part
+	n, e, err := rsaPublicKeyByteValuesFromRaw(&rawKey.PublicKey)
+	if err != nil {
+		return errors.Wrap(err, `invalid rsa.PrivateKey`)
 	}
-	k.e = data[i:]
+	k.n = n
+	k.e = e
 
 	return nil
 }
 
-func (k *rsaPublicKey) FromRaw(rawKey *rsa.PublicKey) error {
-	k.n = rawKey.N.Bytes()
+func rsaPublicKeyByteValuesFromRaw(rawKey *rsa.PublicKey) ([]byte, []byte, error) {
+	n, err := bigIntToBytes(rawKey.N)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, `invalid rsa.PublicKey`)
+	}
+
 	data := make([]byte, 8)
 	binary.BigEndian.PutUint64(data, uint64(rawKey.E))
 	i := 0
@@ -76,12 +75,27 @@ func (k *rsaPublicKey) FromRaw(rawKey *rsa.PublicKey) error {
 			break
 		}
 	}
-	k.e = data[i:]
+	return n, data[i:], nil
+}
+
+func (k *rsaPublicKey) FromRaw(rawKey *rsa.PublicKey) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	n, e, err := rsaPublicKeyByteValuesFromRaw(rawKey)
+	if err != nil {
+		return errors.Wrap(err, `invalid rsa.PrivateKey`)
+	}
+	k.n = n
+	k.e = e
 
 	return nil
 }
 
 func (k *rsaPrivateKey) Raw(v interface{}) error {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
 	var d, q, p big.Int // note: do not use from sync.Pool
 
 	d.SetBytes(k.d)
@@ -126,6 +140,7 @@ func (k *rsaPrivateKey) Raw(v interface{}) error {
 	if qi != nil {
 		key.Precomputed.Qinv = qi
 	}
+	key.Precomputed.CRTValues = []rsa.CRTValue{}
 
 	return blackmagic.AssignIfCompatible(v, &key)
 }
@@ -133,6 +148,9 @@ func (k *rsaPrivateKey) Raw(v interface{}) error {
 // Raw takes the values stored in the Key object, and creates the
 // corresponding *rsa.PublicKey object.
 func (k *rsaPublicKey) Raw(v interface{}) error {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
 	var key rsa.PublicKey
 
 	n := pool.GetBigInt()
@@ -148,22 +166,41 @@ func (k *rsaPublicKey) Raw(v interface{}) error {
 	return blackmagic.AssignIfCompatible(v, &key)
 }
 
-func (k rsaPrivateKey) PublicKey() (RSAPublicKey, error) {
-	var key rsa.PrivateKey
-	if err := k.Raw(&key); err != nil {
-		return nil, errors.Wrap(err, `failed to materialize key to generate public key`)
+func makeRSAPublicKey(v interface {
+	Iterate(context.Context) HeaderIterator
+}) (Key, error) {
+	newKey := NewRSAPublicKey()
+
+	// Iterate and copy everything except for the bits that should not be in the public key
+	for iter := v.Iterate(context.TODO()); iter.Next(context.TODO()); {
+		pair := iter.Pair()
+		switch pair.Key {
+		case RSADKey, RSADPKey, RSADQKey, RSAPKey, RSAQKey, RSAQIKey:
+			continue
+		default:
+			if err := newKey.Set(pair.Key.(string), pair.Value); err != nil {
+				return nil, errors.Wrapf(err, `failed to set field %s`, pair.Key)
+			}
+		}
 	}
 
-	newKey := NewRSAPublicKey()
-	if err := newKey.FromRaw(&key.PublicKey); err != nil {
-		return nil, errors.Wrap(err, `failed to initialize RSAPublicKey`)
-	}
 	return newKey, nil
+}
+
+func (k *rsaPrivateKey) PublicKey() (Key, error) {
+	return makeRSAPublicKey(k)
+}
+
+func (k *rsaPublicKey) PublicKey() (Key, error) {
+	return makeRSAPublicKey(k)
 }
 
 // Thumbprint returns the JWK thumbprint using the indicated
 // hashing algorithm, according to RFC 7638
 func (k rsaPrivateKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
 	var key rsa.PrivateKey
 	if err := k.Raw(&key); err != nil {
 		return nil, errors.Wrap(err, `failed to materialize RSA private key`)
@@ -172,6 +209,9 @@ func (k rsaPrivateKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
 }
 
 func (k rsaPublicKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
 	var key rsa.PublicKey
 	if err := k.Raw(&key); err != nil {
 		return nil, errors.Wrap(err, `failed to materialize RSA public key`)
@@ -180,7 +220,9 @@ func (k rsaPublicKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
 }
 
 func rsaThumbprint(hash crypto.Hash, key *rsa.PublicKey) ([]byte, error) {
-	var buf bytes.Buffer
+	buf := pool.GetBytesBuffer()
+	defer pool.ReleaseBytesBuffer(buf)
+
 	buf.WriteString(`{"e":"`)
 	buf.WriteString(base64.EncodeUint64ToString(uint64(key.E)))
 	buf.WriteString(`","kty":"RSA","n":"`)

@@ -93,7 +93,7 @@ func TestBinarySizes(t *testing.T) {
 		// For now, having two small a range will result in lots of "merge conflicts"
 		"istioctl":        {60, 100},
 		"pilot-agent":     {30, 60}, // Maistra increases this from 45 to accommodate ServiceMeshExtensions
-		"pilot-discovery": {60, 82}, // Maistra increases this from 80 to accommodate federation
+		"pilot-discovery": {60, 85}, // Maistra increases this from 80 to accommodate federation
 		"bug-report":      {60, 100},
 	}
 

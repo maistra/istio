@@ -62,6 +62,7 @@ type Options struct {
 	LocalClusterID    string
 	IstiodNamespace   string
 	IstiodPodName     string
+	GetCARootCertFn   func() string
 }
 
 type Federation struct {
@@ -83,10 +84,11 @@ func New(opt Options) (*Federation, error) {
 	}
 	configStore := newConfigStore()
 	server, err := server.NewServer(server.Options{
-		BindAddress: opt.BindAddress,
-		Env:         opt.Env,
-		Network:     opt.LocalNetwork,
-		ConfigStore: configStore,
+		BindAddress:     opt.BindAddress,
+		Env:             opt.Env,
+		Network:         opt.LocalNetwork,
+		ConfigStore:     configStore,
+		GetCARootCertFn: opt.GetCARootCertFn,
 	})
 	if err != nil {
 		return nil, err

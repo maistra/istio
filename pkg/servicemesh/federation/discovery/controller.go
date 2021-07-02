@@ -14,7 +14,10 @@
 package discovery
 
 import (
+	"bytes"
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"sync"
 	"time"
@@ -41,6 +44,7 @@ import (
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/server"
 	"istio.io/istio/pkg/servicemesh/federation/status"
+	"istio.io/istio/pkg/spiffe"
 )
 
 const controllerName = "federation-discovery-controller"
@@ -211,9 +215,48 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 
 	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
 		instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.GetDomainSuffix())
-
-	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.CertificateChain != "" {
-		c.updateRootCert(instance.Spec.Security.TrustDomain, instance.Spec.Security.CertificateChain)
+	var err error
+	var remoteCert string
+	if instance.Spec.Security.TrustDomain != "" {
+		extraTrustedCerts := []*x509.Certificate{}
+		if instance.Spec.Security.CertificateChain != "" {
+			// if fetching fails, we'll use what the user supplied as remote root
+			remoteCert = instance.Spec.Security.CertificateChain
+			block, _ := pem.Decode([]byte(instance.Spec.Security.CertificateChain))
+			if block == nil {
+				c.Logger.Warnf("failed to parse certificate from MeshFederation resource '%s'", instance.Name)
+			} else {
+				extraTrustedCerts, err = x509.ParseCertificates(block.Bytes)
+				if err != nil {
+					c.Logger.Warnf("failed to parse certificate from MeshFederation resource '%s'", instance.Name)
+				}
+			}
+		}
+		endpoint := fmt.Sprintf("https://%s:%d/trust_bundle", instance.Spec.NetworkAddress, 8188)
+		tbMap, err := spiffe.RetrieveSpiffeBundleRootCerts(
+			map[string]string{
+				instance.Spec.Security.TrustDomain: endpoint,
+			},
+			extraTrustedCerts,
+		)
+		if err != nil {
+			c.Logger.Errorf("failed to retrieve certificate from NetworkAddress for MeshFederation resource '%s'", instance.Name)
+		} else {
+			remoteCert = ""
+			for _, cert := range tbMap[instance.Spec.Security.TrustDomain] {
+				b := &pem.Block{
+					Type:  "CERTIFICATE",
+					Bytes: cert.Raw,
+				}
+				var buf bytes.Buffer
+				if err := pem.Encode(&buf, b); err != nil {
+					c.Logger.Errorf("failed to encode certificate retrieved from %s into PEM format: %s", endpoint, err)
+				} else {
+					remoteCert += buf.String()
+				}
+			}
+		}
+		c.updateRootCert(instance.Spec.Security.TrustDomain, remoteCert)
 	}
 
 	// check for existing registry

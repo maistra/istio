@@ -1,40 +1,38 @@
 package jwk
 
 import (
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-go/blackmagic"
 	"github.com/lestrrat-go/jwx/internal/base64"
-	"github.com/lestrrat-go/jwx/internal/blackmagic"
 	"github.com/lestrrat-go/jwx/internal/ecutil"
 	"github.com/lestrrat-go/jwx/jwa"
 	"github.com/pkg/errors"
 )
 
-func NewECDSAPublicKey() ECDSAPublicKey {
-	return newECDSAPublicKey()
-}
-
-func newECDSAPublicKey() *ecdsaPublicKey {
-	return &ecdsaPublicKey{
-		privateParams: make(map[string]interface{}),
-	}
-}
-
-func NewECDSAPrivateKey() ECDSAPrivateKey {
-	return newECDSAPrivateKey()
-}
-
-func newECDSAPrivateKey() *ecdsaPrivateKey {
-	return &ecdsaPrivateKey{
-		privateParams: make(map[string]interface{}),
-	}
+func init() {
+	ecutil.RegisterCurve(elliptic.P256(), jwa.P256)
+	ecutil.RegisterCurve(elliptic.P384(), jwa.P384)
+	ecutil.RegisterCurve(elliptic.P521(), jwa.P521)
 }
 
 func (k *ecdsaPublicKey) FromRaw(rawKey *ecdsa.PublicKey) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	if rawKey.X == nil {
+		return errors.Errorf(`invalid ecdsa.PublicKey`)
+	}
+
+	if rawKey.Y == nil {
+		return errors.Errorf(`invalid ecdsa.PublicKey`)
+	}
+
 	xbuf := ecutil.AllocECPointBuffer(rawKey.X, rawKey.Curve)
 	ybuf := ecutil.AllocECPointBuffer(rawKey.Y, rawKey.Curve)
 	defer ecutil.ReleaseECPointBuffer(xbuf)
@@ -45,29 +43,33 @@ func (k *ecdsaPublicKey) FromRaw(rawKey *ecdsa.PublicKey) error {
 	k.y = make([]byte, len(ybuf))
 	copy(k.y, ybuf)
 
-	switch rawKey.Curve {
-	case elliptic.P256():
-		if err := k.Set(ECDSACrvKey, jwa.P256); err != nil {
-			return errors.Wrap(err, `failed to set header`)
-		}
-	case elliptic.P384():
-		if err := k.Set(ECDSACrvKey, jwa.P384); err != nil {
-			return errors.Wrap(err, `failed to set header`)
-		}
-	case elliptic.P521():
-		if err := k.Set(ECDSACrvKey, jwa.P521); err != nil {
-			return errors.Wrap(err, `failed to set header`)
-		}
-	default:
+	var crv jwa.EllipticCurveAlgorithm
+	if tmp, ok := ecutil.AlgorithmForCurve(rawKey.Curve); ok {
+		crv = tmp
+	} else {
 		return errors.Errorf(`invalid elliptic curve %s`, rawKey.Curve)
 	}
+	k.crv = &crv
 
 	return nil
 }
 
 func (k *ecdsaPrivateKey) FromRaw(rawKey *ecdsa.PrivateKey) error {
-	xbuf := ecutil.AllocECPointBuffer(rawKey.X, rawKey.Curve)
-	ybuf := ecutil.AllocECPointBuffer(rawKey.Y, rawKey.Curve)
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	if rawKey.PublicKey.X == nil {
+		return errors.Errorf(`invalid ecdsa.PrivateKey`)
+	}
+	if rawKey.PublicKey.Y == nil {
+		return errors.Errorf(`invalid ecdsa.PrivateKey`)
+	}
+	if rawKey.D == nil {
+		return errors.Errorf(`invalid ecdsa.PrivateKey`)
+	}
+
+	xbuf := ecutil.AllocECPointBuffer(rawKey.PublicKey.X, rawKey.Curve)
+	ybuf := ecutil.AllocECPointBuffer(rawKey.PublicKey.Y, rawKey.Curve)
 	dbuf := ecutil.AllocECPointBuffer(rawKey.D, rawKey.Curve)
 	defer ecutil.ReleaseECPointBuffer(xbuf)
 	defer ecutil.ReleaseECPointBuffer(ybuf)
@@ -80,36 +82,22 @@ func (k *ecdsaPrivateKey) FromRaw(rawKey *ecdsa.PrivateKey) error {
 	k.d = make([]byte, len(dbuf))
 	copy(k.d, dbuf)
 
-	switch rawKey.Curve {
-	case elliptic.P256():
-		if err := k.Set(ECDSACrvKey, jwa.P256); err != nil {
-			return errors.Wrap(err, "failed to write header")
-		}
-	case elliptic.P384():
-		if err := k.Set(ECDSACrvKey, jwa.P384); err != nil {
-			return errors.Wrap(err, "failed to write header")
-		}
-	case elliptic.P521():
-		if err := k.Set(ECDSACrvKey, jwa.P521); err != nil {
-			return errors.Wrap(err, "failed to write header")
-		}
-	default:
+	var crv jwa.EllipticCurveAlgorithm
+	if tmp, ok := ecutil.AlgorithmForCurve(rawKey.Curve); ok {
+		crv = tmp
+	} else {
 		return errors.Errorf(`invalid elliptic curve %s`, rawKey.Curve)
 	}
+	k.crv = &crv
 
 	return nil
 }
 
 func buildECDSAPublicKey(alg jwa.EllipticCurveAlgorithm, xbuf, ybuf []byte) (*ecdsa.PublicKey, error) {
-	var curve elliptic.Curve
-	switch alg {
-	case jwa.P256:
-		curve = elliptic.P256()
-	case jwa.P384:
-		curve = elliptic.P384()
-	case jwa.P521:
-		curve = elliptic.P521()
-	default:
+	var crv elliptic.Curve
+	if tmp, ok := ecutil.CurveForAlgorithm(alg); ok {
+		crv = tmp
+	} else {
 		return nil, errors.Errorf(`invalid curve algorithm %s`, alg)
 	}
 
@@ -117,11 +105,14 @@ func buildECDSAPublicKey(alg jwa.EllipticCurveAlgorithm, xbuf, ybuf []byte) (*ec
 	x.SetBytes(xbuf)
 	y.SetBytes(ybuf)
 
-	return &ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}, nil
+	return &ecdsa.PublicKey{Curve: crv, X: &x, Y: &y}, nil
 }
 
 // Raw returns the EC-DSA public key represented by this JWK
 func (k *ecdsaPublicKey) Raw(v interface{}) error {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
 	pubk, err := buildECDSAPublicKey(k.Crv(), k.x, k.y)
 	if err != nil {
 		return errors.Wrap(err, `failed to build public key`)
@@ -131,6 +122,9 @@ func (k *ecdsaPublicKey) Raw(v interface{}) error {
 }
 
 func (k *ecdsaPrivateKey) Raw(v interface{}) error {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
 	pubk, err := buildECDSAPublicKey(k.Crv(), k.x, k.y)
 	if err != nil {
 		return errors.Wrap(err, `failed to build public key`)
@@ -145,17 +139,33 @@ func (k *ecdsaPrivateKey) Raw(v interface{}) error {
 	return blackmagic.AssignIfCompatible(v, &key)
 }
 
-func (k *ecdsaPrivateKey) PublicKey() (ECDSAPublicKey, error) {
-	var privk ecdsa.PrivateKey
-	if err := k.Raw(&privk); err != nil {
-		return nil, errors.Wrap(err, `failed to materialize ECDSA private key`)
+func makeECDSAPublicKey(v interface {
+	Iterate(context.Context) HeaderIterator
+}) (Key, error) {
+	newKey := NewECDSAPublicKey()
+
+	// Iterate and copy everything except for the bits that should not be in the public key
+	for iter := v.Iterate(context.TODO()); iter.Next(context.TODO()); {
+		pair := iter.Pair()
+		switch pair.Key {
+		case ECDSADKey:
+			continue
+		default:
+			if err := newKey.Set(pair.Key.(string), pair.Value); err != nil {
+				return nil, errors.Wrapf(err, `failed to set field %s`, pair.Key)
+			}
+		}
 	}
 
-	newKey := NewECDSAPublicKey()
-	if err := newKey.FromRaw(&privk.PublicKey); err != nil {
-		return nil, errors.Wrap(err, `failed to initialize ECDSAPublicKey`)
-	}
 	return newKey, nil
+}
+
+func (k *ecdsaPrivateKey) PublicKey() (Key, error) {
+	return makeECDSAPublicKey(k)
+}
+
+func (k *ecdsaPublicKey) PublicKey() (Key, error) {
+	return makeECDSAPublicKey(k)
 }
 
 func ecdsaThumbprint(hash crypto.Hash, crv, x, y string) []byte {
@@ -173,6 +183,9 @@ func ecdsaThumbprint(hash crypto.Hash, crv, x, y string) []byte {
 // Thumbprint returns the JWK thumbprint using the indicated
 // hashing algorithm, according to RFC 7638
 func (k ecdsaPublicKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
 	var key ecdsa.PublicKey
 	if err := k.Raw(&key); err != nil {
 		return nil, errors.Wrap(err, `failed to materialize ecdsa.PublicKey for thumbprint generation`)
@@ -194,6 +207,9 @@ func (k ecdsaPublicKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
 // Thumbprint returns the JWK thumbprint using the indicated
 // hashing algorithm, according to RFC 7638
 func (k ecdsaPrivateKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
 	var key ecdsa.PrivateKey
 	if err := k.Raw(&key); err != nil {
 		return nil, errors.Wrap(err, `failed to materialize ecdsa.PrivateKey for thumbprint generation`)

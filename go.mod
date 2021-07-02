@@ -54,7 +54,7 @@ require (
 	github.com/kr/pretty v0.2.1
 	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/godebug v1.1.0
-	github.com/lestrrat-go/jwx v1.0.6
+	github.com/lestrrat-go/jwx v1.2.1
 	github.com/maistra/xns-informer v0.0.0-20210602150316-33463c1f7d6d
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mholt/archiver/v3 v3.5.0
@@ -77,7 +77,7 @@ require (
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/yl2chen/cidranger v1.0.2
 	go.opencensus.io v0.22.5

@@ -43,10 +43,11 @@ const (
 )
 
 type Options struct {
-	BindAddress string
-	Env         *model.Environment
-	Network     string
-	ConfigStore model.ConfigStoreCache
+	BindAddress     string
+	Env             *model.Environment
+	Network         string
+	ConfigStore     model.ConfigStoreCache
+	GetCARootCertFn func() string
 }
 
 type FederationManager interface {
@@ -64,6 +65,10 @@ type Server struct {
 	env        *model.Environment
 	listener   net.Listener
 	httpServer *http.Server
+
+	trustBundle         *bundleDoc
+	getCARootCert       func() string
+	lastSeenRootCertPEM string
 
 	configStore model.ConfigStoreCache
 
@@ -97,14 +102,16 @@ func NewServer(opt Options) (*Server, error) {
 			ReadTimeout:    10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 		},
-		configStore: opt.ConfigStore,
-		meshes:      &sync.Map{},
-		network:     opt.Network,
-		listener:    listener,
+		getCARootCert: opt.GetCARootCertFn,
+		configStore:   opt.ConfigStore,
+		meshes:        &sync.Map{},
+		network:       opt.Network,
+		listener:      listener,
 	}
 	mux := mux.NewRouter()
 	mux.HandleFunc("/services/{mesh}", fed.handleServiceList)
 	mux.HandleFunc("/watch/{mesh}", fed.handleWatch)
+	mux.HandleFunc("/trust_bundle", fed.handleTrustBundle)
 	fed.httpServer.Handler = mux
 	return fed, nil
 }
@@ -226,6 +233,10 @@ func (s *Server) Run(stopCh <-chan struct{}) {
 	go func() {
 		_ = s.httpServer.Serve(s.listener)
 	}()
+	err := s.refreshTrustBundle()
+	if err != nil {
+		s.logger.Errorf("failed to initialize trust bundle endpoint:", err)
+	}
 	<-stopCh
 	_ = s.httpServer.Shutdown(context.TODO())
 }
