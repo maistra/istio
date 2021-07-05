@@ -117,7 +117,7 @@ func (smmrc *serviceMeshMemberRollController) Start(stop chan struct{}) {
 	for _, obj := range smmrc.informer.GetStore().List() {
 		serviceMeshMemberRoll := getServiceMeshMemberRoll(obj)
 		if smmrc.memberRollName == serviceMeshMemberRoll.Name {
-			seedNamespaces := smmrc.getNamespaces(serviceMeshMemberRoll.Status.ConfiguredMembers)
+			seedNamespaces := serviceMeshMemberRoll.Status.ConfiguredMembers
 			smmrc.setSeedNamespaces(seedNamespaces)
 			break
 		}
@@ -151,8 +151,8 @@ func (smmrc *serviceMeshMemberRollController) getSeedNamespaces() []string {
 	return smmrc.seedNamespaces
 }
 
-func (smmrc *serviceMeshMemberRollController) setSeedNamespaces(seedNamespaces []string) {
-	sort.Strings(seedNamespaces)
+func (smmrc *serviceMeshMemberRollController) setSeedNamespaces(namespaces []string) {
+	seedNamespaces := append(namespaces[:0:0], namespaces...)
 	smmrc.lock.Lock()
 	defer smmrc.lock.Unlock()
 	smmrc.seedNamespaces = seedNamespaces
@@ -165,7 +165,7 @@ func (smmrc *serviceMeshMemberRollController) newServiceMeshMemberRollListener(l
 		currentNamespaces: nil,
 		name:              name,
 	}
-	handler.updateNamespaces("add", smmrc.memberRollName, smmrc.getNamespaces(smmrc.getSeedNamespaces()))
+	handler.updateNamespaces("add", smmrc.memberRollName, smmrc.getSeedNamespaces())
 	return handler
 }
 
