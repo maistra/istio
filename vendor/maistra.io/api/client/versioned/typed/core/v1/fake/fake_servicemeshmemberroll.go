@@ -34,9 +34,9 @@ type FakeServiceMeshMemberRolls struct {
 	ns   string
 }
 
-var servicemeshmemberrollsResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "servicemeshmemberrolls"}
+var servicemeshmemberrollsResource = schema.GroupVersionResource{Group: "maistra.io", Version: "v1", Resource: "servicemeshmemberrolls"}
 
-var servicemeshmemberrollsKind = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceMeshMemberRoll"}
+var servicemeshmemberrollsKind = schema.GroupVersionKind{Group: "maistra.io", Version: "v1", Kind: "ServiceMeshMemberRoll"}
 
 // Get takes name of the serviceMeshMemberRoll, and returns the corresponding serviceMeshMemberRoll object, and an error if there is any.
 func (c *FakeServiceMeshMemberRolls) Get(ctx context.Context, name string, options v1.GetOptions) (result *corev1.ServiceMeshMemberRoll, err error) {

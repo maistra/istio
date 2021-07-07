@@ -15,14 +15,18 @@
 package status
 
 import (
+	"context"
+	"encoding/json"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pkg/servicemesh/federation/model"
@@ -37,17 +41,18 @@ const (
 
 func newHandler(manager *manager, mesh types.NamespacedName) *handler {
 	return &handler{
-		manager:   manager,
-		mesh:      mesh,
-		logger:    manager.logger.WithLabels("mesh", mesh.String()),
-		discovery: map[string]*v1.DiscoveryRemoteStatus{},
-		exports:   map[v1.ServiceKey]v1.MeshServiceMapping{},
-		imports:   map[string]v1.MeshServiceMapping{},
-		status: v1.FederationStatusDetails{
-			Mesh:    mesh.String(),
-			Exports: []v1.MeshServiceMapping{},
-			Imports: []v1.MeshServiceMapping{},
-		},
+		manager:        manager,
+		mesh:           mesh,
+		logger:         manager.logger.WithLabels("mesh", mesh.String()),
+		discovery:      map[string]*v1.DiscoveryRemoteStatus{},
+		exports:        map[v1.ServiceKey]v1.MeshServiceMapping{},
+		exportsStatus:  []v1.MeshServiceMapping{},
+		imports:        map[string]v1.MeshServiceMapping{},
+		importsStatus:  []v1.MeshServiceMapping{},
+		discoveryDirty: true,
+		watchDirty:     true,
+		exportsDirty:   true,
+		importsDirty:   true,
 	}
 }
 
@@ -64,9 +69,11 @@ type handler struct {
 	discoveryDirty bool
 	exportsDirty   bool
 	importsDirty   bool
-	dirty          bool
+	watchDirty     bool
 
-	status v1.FederationStatusDetails
+	discoveryStatus v1.MeshDiscoveryStatus
+	exportsStatus   []v1.MeshServiceMapping
+	importsStatus   []v1.MeshServiceMapping
 }
 
 var _ Handler = (*handler)(nil)
@@ -78,10 +85,10 @@ func (h *handler) WatchInitiated() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.status.Discovery.Watch.Connected = false
-	h.status.Discovery.Watch.LastConnected = metav1.Now()
+	h.discoveryStatus.Watch.Connected = false
+	h.discoveryStatus.Watch.LastConnected = metav1.Now()
 
-	h.dirty = true
+	h.watchDirty = true
 
 	// we don't flush on initiation, as we expect either a Watching() or
 	// WatchTerminated() immediately following this
@@ -94,9 +101,9 @@ func (h *handler) Watching() {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 
-		h.status.Discovery.Watch.Connected = true
+		h.discoveryStatus.Watch.Connected = true
 
-		h.dirty = true
+		h.watchDirty = true
 	}()
 
 	if err := h.Flush(); err != nil {
@@ -110,9 +117,9 @@ func (h *handler) WatchEventReceived() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.status.Discovery.Watch.LastEvent = metav1.Now()
+	h.discoveryStatus.Watch.LastEvent = metav1.Now()
 
-	h.dirty = true
+	h.watchDirty = true
 }
 
 func (h *handler) FullSyncComplete() {
@@ -122,9 +129,9 @@ func (h *handler) FullSyncComplete() {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 
-		h.status.Discovery.Watch.LastFullSync = metav1.Now()
+		h.discoveryStatus.Watch.LastFullSync = metav1.Now()
 
-		h.dirty = true
+		h.watchDirty = true
 	}()
 
 	if err := h.Flush(); err != nil {
@@ -139,14 +146,14 @@ func (h *handler) WatchTerminated(status string) {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 
-		if h.status.Discovery.Watch.Connected {
+		if h.discoveryStatus.Watch.Connected {
 			// only update the disconnect time if we successfully connected
-			h.status.Discovery.Watch.LastDisconnect = metav1.Now()
+			h.discoveryStatus.Watch.LastDisconnect = metav1.Now()
 		}
-		h.status.Discovery.Watch.Connected = false
-		h.status.Discovery.Watch.LastDisconnectStatus = status
+		h.discoveryStatus.Watch.Connected = false
+		h.discoveryStatus.Watch.LastDisconnectStatus = status
 
-		h.dirty = true
+		h.watchDirty = true
 	}()
 
 	if err := h.Flush(); err != nil {
@@ -352,8 +359,10 @@ func (h *handler) ImportRemoved(exportedName string) {
 	h.importsDirty = true
 }
 
-func (h *handler) isDirty() bool {
-	return h.dirty || h.exportsDirty || h.importsDirty || h.discoveryDirty
+func (h *handler) shouldPush() (bool, bool) {
+	// only push exports/imports if we're the leader
+	isLeader := h.manager.IsLeader()
+	return h.watchDirty || h.discoveryDirty || (isLeader && (h.exportsDirty || h.importsDirty)), isLeader
 }
 
 func (h *handler) pruneOldRemotes() {
@@ -373,27 +382,13 @@ func (h *handler) pruneOldRemotes() {
 
 // Write status
 func (h *handler) Flush() error {
-	push := func() bool {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		h.pruneOldRemotes()
-		return h.isDirty()
-	}()
-
-	if push {
-		return h.manager.PushStatus()
-	}
-	return nil
-}
-
-func (h *handler) currentStatus() *v1.FederationStatusDetails {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-
 	h.pruneOldRemotes()
-	if !h.isDirty() {
-		// nothing to do
-		return h.status.DeepCopy()
+	push, isLeader := h.shouldPush()
+
+	if !push {
+		return nil
 	}
 
 	// see if we need to update the export status
@@ -413,7 +408,7 @@ func (h *handler) currentStatus() *v1.FederationStatusDetails {
 			}
 			return diff < 0
 		})
-		h.status.Exports = exports
+		h.exportsStatus = exports
 		h.exportsDirty = false
 	}
 
@@ -424,7 +419,7 @@ func (h *handler) currentStatus() *v1.FederationStatusDetails {
 			imports = append(imports, mapping)
 		}
 		sort.Slice(imports, func(i, j int) bool { return strings.Compare(imports[i].ExportedName, imports[j].ExportedName) < 0 })
-		h.status.Imports = imports
+		h.importsStatus = imports
 		h.importsDirty = false
 	}
 
@@ -438,11 +433,112 @@ func (h *handler) currentStatus() *v1.FederationStatusDetails {
 			func(i, j int) bool {
 				return strings.Compare(remoteStatuses[i].Source, remoteStatuses[j].Source) < 0
 			})
-		h.status.Discovery.Remotes = remoteStatuses
+		h.discoveryStatus.Remotes = remoteStatuses
 		h.discoveryDirty = false
 	}
 
-	h.dirty = false
+	mf, err := h.manager.rm.MaistraClientSet().CoreV1().MeshFederations(h.mesh.Namespace).Get(context.TODO(), h.mesh.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsGone(err) || apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	oldStatus := mf.Status.DeepCopy()
+	newStatus := &v1.MeshFederationStatus{}
 
-	return h.status.DeepCopy()
+	newStatus.DiscoveryStatus = oldStatus.DeepCopy().DiscoveryStatus
+	if h.discoveryStatus.Watch.Connected {
+		newStatus.DiscoveryStatus.Active = h.setDiscoveryStatus(newStatus.DiscoveryStatus.Active, h.discoveryStatus)
+		newStatus.DiscoveryStatus.Inactive = h.clearDiscoveryStatus(newStatus.DiscoveryStatus.Inactive)
+	} else {
+		newStatus.DiscoveryStatus.Inactive = h.setDiscoveryStatus(newStatus.DiscoveryStatus.Inactive, h.discoveryStatus)
+		newStatus.DiscoveryStatus.Active = h.clearDiscoveryStatus(newStatus.DiscoveryStatus.Active)
+	}
+
+	if isLeader {
+		newStatus.Exports = h.exportsStatus
+		newStatus.Imports = h.importsStatus
+
+		// clean up deleted pods
+		newStatus.DiscoveryStatus.Inactive = h.removeDeadPods(newStatus.DiscoveryStatus.Inactive)
+		newStatus.DiscoveryStatus.Active = h.removeDeadPods(newStatus.DiscoveryStatus.Active)
+
+		// TODO: add updates to conditions
+	} else {
+		newStatus.Exports = oldStatus.Exports
+		newStatus.Imports = oldStatus.Imports
+	}
+
+	newBytes, err := json.Marshal(&v1.MeshFederation{
+		Status: *newStatus,
+	})
+	if err != nil {
+		return err
+	}
+	oldBytes, err := json.Marshal(&v1.MeshFederation{
+		Status: *oldStatus,
+	})
+	if err != nil {
+		return err
+	}
+
+	h.manager.logger.Debugf("old bytes:\n%s\n", string(oldBytes))
+	h.manager.logger.Debugf("new bytes:\n%s\n", string(newBytes))
+
+	// XXX: the created patch does not merge properly and can cause duplicate entries in discovery status
+	patch, err := strategicpatch.CreateTwoWayMergePatchUsingLookupPatchMeta(oldBytes, newBytes, federationStatusPatchMetadata)
+	if err != nil {
+		return err
+	}
+
+	h.manager.logger.Debugf("status patch:\n%s\n", string(patch))
+
+	if len(patch) == 0 || string(patch) == "{}" {
+		// nothing to patch
+		return nil
+	}
+	_, err = h.manager.rm.MaistraClientSet().CoreV1().MeshFederations(h.mesh.Namespace).Patch(context.TODO(), h.mesh.Name,
+		types.MergePatchType, patch, metav1.PatchOptions{}, "status")
+	if err != nil && !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
+		return err
+	}
+	h.watchDirty = false
+	return nil
+}
+
+func (h *handler) setDiscoveryStatus(statuses []v1.FederationPodDiscoveryStatus, newStatus v1.MeshDiscoveryStatus) []v1.FederationPodDiscoveryStatus {
+	count := len(statuses)
+	index := sort.Search(count, func(i int) bool { return statuses[i].Pod == h.manager.name.Name })
+	if index < count {
+		status := statuses[index]
+		status.MeshDiscoveryStatus = newStatus
+		statuses[index] = status
+		return statuses
+	}
+	statuses = append(statuses, v1.FederationPodDiscoveryStatus{Pod: h.manager.name.Name, MeshDiscoveryStatus: newStatus})
+	sort.Slice(statuses, func(i, j int) bool { return strings.Compare(statuses[i].Pod, statuses[j].Pod) < 0 })
+	return statuses
+}
+
+func (h *handler) clearDiscoveryStatus(statuses []v1.FederationPodDiscoveryStatus) []v1.FederationPodDiscoveryStatus {
+	count := len(statuses)
+	index := sort.Search(count, func(i int) bool { return statuses[i].Pod == h.manager.name.Name })
+	if index < count {
+		return append(statuses[:index], statuses[index+1:]...)
+	}
+	return statuses
+}
+
+func (h *handler) removeDeadPods(statuses []v1.FederationPodDiscoveryStatus) []v1.FederationPodDiscoveryStatus {
+	var filteredStatuses []v1.FederationPodDiscoveryStatus
+	for index, status := range statuses {
+		// XXX: this shouldn't be necessary, but patching isn't working correctly
+		if index == 0 || statuses[index].Pod != statuses[index-1].Pod {
+			if _, err := h.manager.rm.KubeClient().KubeInformer().Core().V1().Pods().Lister().Pods(h.manager.name.Namespace).Get(status.Pod); err == nil {
+				filteredStatuses = append(filteredStatuses, status)
+			}
+		}
+	}
+	return filteredStatuses
 }

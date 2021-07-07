@@ -72,7 +72,6 @@ import (
 	"istio.io/istio/pkg/kube/inject"
 	"istio.io/istio/pkg/servicemesh/controller/extension"
 	"istio.io/istio/pkg/servicemesh/federation"
-	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/k8s/chiron"
 	"istio.io/istio/security/pkg/pki/ca"
@@ -275,19 +274,17 @@ func NewServer(args *PilotArgs) (*Server, error) {
 		} else {
 			var err error
 			s.federation, err = federation.New(federation.Options{
-				ControllerOptions: common.ControllerOptions{
-					KubeClient:   s.kubeClient,
-					ResyncPeriod: args.RegistryOptions.KubeOptions.ResyncPeriod,
-					Namespace:    args.RegistryOptions.ClusterRegistriesNamespace,
-				},
-				LocalClusterID:    s.clusterID,
-				LocalNetwork:      features.NetworkName,
-				BindAddress:       args.ServerOptions.FederationAddr,
-				Env:               s.environment,
-				XDSUpdater:        s.XDSServer,
-				ServiceController: s.ServiceController(),
-				IstiodNamespace:   args.Namespace,
-				IstiodPodName:     args.PodName,
+				KubeClient:          s.kubeClient,
+				ResyncPeriod:        args.RegistryOptions.KubeOptions.ResyncPeriod,
+				FederationNamespace: args.RegistryOptions.ClusterRegistriesNamespace,
+				LocalClusterID:      s.clusterID,
+				LocalNetwork:        features.NetworkName,
+				BindAddress:         args.ServerOptions.FederationAddr,
+				Env:                 s.environment,
+				XDSUpdater:          s.XDSServer,
+				ServiceController:   s.ServiceController(),
+				IstiodNamespace:     args.Namespace,
+				IstiodPodName:       args.PodName,
 			})
 			s.XDSServer.Generators[v3.TrustBundleType] = &xds.TbdsGenerator{TrustBundleProvider: s.federation}
 

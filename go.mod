@@ -2,6 +2,9 @@ module istio.io/istio
 
 go 1.15
 
+// pin to v1.9.5
+replace istio.io/api => github.com/istio/api v0.0.0-20210419172736-e076ff10ec38
+
 replace github.com/spf13/viper => github.com/istio/viper v1.3.3-0.20190515210538-2789fed3109c
 
 // Old version had no license
@@ -55,7 +58,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.0.6
-	github.com/maistra/xns-informer v0.0.0-20210602150316-33463c1f7d6d
+	github.com/maistra/xns-informer v0.0.0-20210707160032-977ec17e2e0e
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mholt/archiver/v3 v3.5.0
 	github.com/miekg/dns v1.1.35
@@ -102,7 +105,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 	helm.sh/helm/v3 v3.4.2
 	honnef.co/go/tools v0.0.1-2020.1.5 // indirect
-	istio.io/api v0.0.0-20210419172736-e076ff10ec38
+	istio.io/api v0.0.0-20210503211644-902e709f95c4
 	istio.io/client-go v1.9.2
 	istio.io/gogo-genproto v0.0.0-20210420211914-9cbf6943c732
 	istio.io/pkg v0.0.0-20201230223204-2d0a1c8bd9e5
@@ -114,7 +117,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20210312000640-9f480bcdc475
 	k8s.io/kubectl v0.20.1
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
-	maistra.io/api v0.0.0-20210629173915-572b0bea99cd
+	maistra.io/api v0.0.0-20210707161232-45777cba6a0f
 	sigs.k8s.io/controller-runtime v0.7.0
 	sigs.k8s.io/service-apis v0.1.0
 	sigs.k8s.io/yaml v1.2.0
