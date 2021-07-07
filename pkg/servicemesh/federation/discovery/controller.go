@@ -16,6 +16,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -212,8 +213,12 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
 		instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.GetDomainSuffix())
 
-	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.CertificateChain != "" {
-		c.updateRootCert(instance.Spec.Security.TrustDomain, instance.Spec.Security.CertificateChain)
+	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.TrustDomain != c.env.Mesh().GetTrustDomain() {
+		rootCert, err := c.getRootCertForMesh(instance)
+		if err != nil {
+			return err
+		}
+		c.updateRootCert(instance.Spec.Security.TrustDomain, rootCert)
 	}
 
 	// check for existing registry
@@ -228,7 +233,7 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 		// check to see if it needs updating
 		// TODO: support updates
 		if federationRegistry, ok := registry.(*federationregistry.Controller); ok {
-			if federationRegistry.NetworkAddress() != instance.Spec.NetworkAddress {
+			if !reflect.DeepEqual(federationRegistry.Remote(), &instance.Spec.Remote) {
 				// TODO: support updates
 				c.Logger.Warnf("updating NetworkAddress for MeshFederation (%s) is not supported", instance.Name)
 			}
@@ -264,10 +269,10 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 			return err
 		}
 
-		c.Logger.Infof("Initializing Federation service registry for %q at %s", instance.Name, instance.Spec.NetworkAddress)
+		c.Logger.Infof("Initializing Federation service registry for %q at %s", instance.Name, instance.Spec.Remote.Addresses)
 		// create a registry instance
 		options := federationregistry.Options{
-			NetworkAddress: instance.Spec.NetworkAddress,
+			Remote:         instance.Spec.Remote.DeepCopy(),
 			EgressName:     instance.Spec.Gateways.Egress.Name,
 			EgressService:  egressGatewayService,
 			Namespace:      instance.Namespace,
@@ -368,6 +373,30 @@ func (opt Options) validate() error {
 		common.Logger.WithLabels("component", controllerName).Warnf("ResyncPeriod not specified, defaulting to %s", opt.ResyncPeriod)
 	}
 	return utilerrors.NewAggregate(allErrors)
+}
+
+func (c *Controller) getRootCertForMesh(instance *v1.MeshFederation) (string, error) {
+	if instance == nil {
+		return "", nil
+	}
+	name := instance.Spec.Security.CertificateChain.Name
+	if name == "" {
+		name = common.DefaultFederationCARootResourceName(instance)
+	}
+	entryKey := common.DefaultFederationRootCertName
+	switch instance.Spec.Security.CertificateChain.Kind {
+	case "", "ConfigMap":
+		cm, err := c.kubeClient.KubeInformer().Core().V1().ConfigMaps().Lister().ConfigMaps(instance.Namespace).Get(name)
+		if err != nil {
+			return "", err
+		}
+		if cert, exists := cm.Data[entryKey]; exists {
+			return cert, nil
+		}
+		return "", fmt.Errorf("missing entry %s in ConfigMap %s/%s", entryKey, instance.Namespace, name)
+	default:
+		return "", fmt.Errorf("unknown Kind for CertificateChain object reference: %s", instance.Spec.Security.CertificateChain.Kind)
+	}
 }
 
 func (c *Controller) updateRootCert(trustDomain string, rootCert string) {

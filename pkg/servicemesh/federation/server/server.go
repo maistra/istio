@@ -530,7 +530,7 @@ func (s *meshServer) updateGatewayServiceAccounts() bool {
 		return false
 	}
 	s.gatewaySAs = append([]string(nil), gatewayService.ServiceAccounts...)
-	for _, si := range s.env.InstancesByPort(gatewayService, common.FederationPort, nil) {
+	for _, si := range s.env.InstancesByPort(gatewayService, common.DefaultFederationPort, nil) {
 		s.gatewaySAs = append(s.gatewaySAs, si.Endpoint.ServiceAccount)
 	}
 	sort.Slice(s.gatewaySAs, func(i, j int) bool { return strings.Compare(s.gatewaySAs[i], s.gatewaySAs[j]) < 0 })
