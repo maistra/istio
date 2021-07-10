@@ -90,8 +90,9 @@ func newMultiListerWatcher(namespaces []string, f func(string) cache.ListerWatch
 }
 
 // Proxy the event on behalf of each namespace
-func (mlw *multiListerWatcher) handleEvents(event *watch.Event) {
+func (mlw *multiListerWatcher) handleEvents(listerHasStopped <-chan struct{}, event *watch.Event) {
 	select {
+	case <-listerHasStopped:
 	case <-mlw.stopped:
 	case mlw.events <- event:
 	}
