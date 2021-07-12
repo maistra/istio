@@ -112,7 +112,7 @@ func TestListInformer(t *testing.T) {
 				return w, nil
 			},
 		}
-	}, &v1.Pod{}, 0, func(event *watch.Event) {
+	}, &v1.Pod{}, 0, func(listerHasStopped <-chan struct{}, event *watch.Event) {
 		events <- event
 	}, func(namespace string) {
 		drained <- namespace
@@ -206,7 +206,7 @@ func TestTombstone(t *testing.T) {
 				return w, nil
 			},
 		}
-	}, &v1.Pod{}, 0, func(event *watch.Event) {
+	}, &v1.Pod{}, 0, func(listerHasStopped <-chan struct{}, event *watch.Event) {
 		events <- event
 	}, func(namespace string) {
 	})
@@ -227,4 +227,51 @@ func TestTombstone(t *testing.T) {
 	checkEvents(t, testNamespace, events, watch.Deleted, prefix, 2, 2)
 
 	li.stop()
+}
+
+func TestDrainNamespaceWhileSendingEventsBlocked(t *testing.T) {
+	testNamespace := "test_namespace"
+
+	events := make(chan *watch.Event)
+	eventSending := make(chan struct{})
+
+	w := watch.NewRaceFreeFake()
+	li := newListerInformer(testNamespace, func(string) cache.ListerWatcher {
+		return &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return createPodList(testNamespace, "", 0), nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return w, nil
+			},
+		}
+	}, &v1.Pod{}, 0, func(listerHasStopped <-chan struct{}, event *watch.Event) {
+		eventSending <- struct{}{}
+		events <- event
+	}, func(namespace string) {
+	})
+
+	// send event in the background, if broken this will hold the lock and cause drain to block
+	go func() {
+		li.sendEvent(&watch.Event{
+			Type:   watch.Added,
+			Object: createPod(testNamespace, "prefix", 2),
+		})
+	}()
+
+	<-eventSending
+
+	drained := make(chan struct{})
+	go func() {
+		li.drain()
+		drained <- struct{}{}
+	}()
+
+	timeout := time.NewTimer(2 * time.Second)
+	select {
+	case <-timeout.C:
+		t.Error("Call to drain blocked by event in flight")
+	case <-drained:
+	}
+	<-events
 }

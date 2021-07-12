@@ -39,33 +39,36 @@ import (
  * namespace so that the upper level cache is consistent.
  */
 type listerInformer struct {
-	namespace  string
-	informer   cache.SharedInformer
-	lllw       *listLenListerWatcher
-	events     func(*watch.Event)
-	stopped    chan struct{}
-	hasStopped bool
-	draining   bool
-	drained    func(string)
-	lock       sync.RWMutex
+	namespace        string
+	informer         cache.SharedInformer
+	lllw             *listLenListerWatcher
+	events           func(<-chan struct{}, *watch.Event)
+	stoppedInformer  chan struct{}
+	stopInformerOnce sync.Once
+	listerHasStopped chan struct{}
+	stopListerOnce   sync.Once
+	draining         bool
+	drained          func(string)
+	lock             sync.RWMutex
 }
 
 func newListerInformer(namespace string, f func(string) cache.ListerWatcher, exampleObject runtime.Object,
-	resyncPeriod time.Duration, events func(*watch.Event), drained func(string)) *listerInformer {
+	resyncPeriod time.Duration, events func(<-chan struct{}, *watch.Event), drained func(string)) *listerInformer {
 
 	lllw := newListLenListerWatcher(f(namespace))
 	informer := cache.NewSharedInformer(lllw, exampleObject, resyncPeriod)
 
 	li := &listerInformer{
-		namespace: namespace,
-		informer:  informer,
-		lllw:      lllw,
-		events:    events,
-		stopped:   make(chan struct{}),
-		drained:   drained,
+		namespace:        namespace,
+		informer:         informer,
+		lllw:             lllw,
+		events:           events,
+		stoppedInformer:  make(chan struct{}),
+		listerHasStopped: make(chan struct{}),
+		drained:          drained,
 	}
 	informer.AddEventHandler(li)
-	go informer.Run(li.stopped)
+	go informer.Run(li.stoppedInformer)
 	return li
 }
 
@@ -83,9 +86,12 @@ func (li *listerInformer) isDraining() bool {
 }
 
 func (li *listerInformer) isStopped() bool {
-	li.lock.RLock()
-	defer li.lock.RUnlock()
-	return li.hasStopped
+	select {
+	case <-li.listerHasStopped:
+		return true
+	default:
+	}
+	return false
 }
 
 func (li *listerInformer) drain() {
@@ -104,31 +110,34 @@ func (li *listerInformer) drain() {
 	}()
 	if shouldDrain {
 		go func() {
+			defer li.drained(li.namespace)
+			defer li.stopListerInformer()
+
 			// Issue Delete events for each entry remaining in the store
 			store := li.informer.GetStore()
 			resourcesToDrain := store.List()
 			for _, resource := range resourcesToDrain {
 				li.OnDelete(resource)
 			}
-			li.lock.Lock()
-			defer li.lock.Unlock()
-			if !li.hasStopped {
-				li.hasStopped = true
-				li.drained(li.namespace)
-			}
 		}()
 	}
 }
 
 func (li *listerInformer) stopInformer() {
-	close(li.stopped)
+	close(li.stoppedInformer)
+}
+
+func (li *listerInformer) stopListerInformer() {
+	li.stopListerOnce.Do(func() {
+		close(li.listerHasStopped)
+	})
 }
 
 func (li *listerInformer) stop() {
-	li.lock.Lock()
-	defer li.lock.Unlock()
-	li.hasStopped = true
-	li.stopInformer()
+	li.stopInformerOnce.Do(func() {
+		li.stopListerInformer()
+		li.stopInformer()
+	})
 }
 
 func (li *listerInformer) newWatchEvent(eventType watch.EventType, obj interface{}) (*watch.Event, bool) {
@@ -147,11 +156,7 @@ func (li *listerInformer) newWatchEvent(eventType watch.EventType, obj interface
 }
 
 func (li *listerInformer) sendEvent(event *watch.Event) {
-	li.lock.RLock()
-	defer li.lock.RUnlock()
-	if !li.hasStopped {
-		li.events(event)
-	}
+	li.events(li.listerHasStopped, event)
 }
 
 // Adapt an OnAdd event into a watch ADDED event
