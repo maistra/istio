@@ -263,9 +263,10 @@ spec:
 				return apps.Naked.Match(echo.Namespace(ns.Name()))
 			}}
 			for _, tc := range cases {
+				var cfg string
 				echotest.New(ctx, apps.All).
 					SetupForPair(func(t framework.TestContext, src, dst echo.Instances) error {
-						cfg := yml.MustApplyNamespace(t, tmpl.MustEvaluate(
+						cfg = yml.MustApplyNamespace(t, tmpl.MustEvaluate(
 							tc.config,
 							map[string]string{
 								"dst": dst[0].Config().Service,
@@ -275,7 +276,10 @@ spec:
 							return err
 						}
 						util.WaitForConfig(t, cfg, ns)
-						defer t.Config().DeleteYAMLOrFail(t, ns.Name(), cfg)
+						return nil
+					}).
+					TeardownForPair(func(t framework.TestContext, src, dst echo.Instances) error {
+						t.Config().DeleteYAMLOrFail(t, ns.Name(), cfg)
 						return nil
 					}).
 					From(srcFilter...).
