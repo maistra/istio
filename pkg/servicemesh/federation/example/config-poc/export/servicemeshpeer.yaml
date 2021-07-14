@@ -1,5 +1,5 @@
-apiVersion: maistra.io/v1
-kind: MeshFederation
+apiVersion: federation.maistra.io/v1
+kind: ServiceMeshPeer
 metadata:
   name: mesh2
   namespace: mesh1-system

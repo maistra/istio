@@ -42,13 +42,13 @@ MESH2_CERT=$(oc get configmap -n mesh2-system istio-ca-root-cert -o jsonpath='{.
 
 echo "Enabling federation for mesh1"
 sed "s:{{MESH2_CERT}}:$MESH2_CERT:g" export/configmap.yaml | oc create -f -
-oc create -f export/meshfederation.yaml
-oc create -f export/serviceexports.yaml
+oc create -f export/servicemeshpeer.yaml
+oc create -f export/exportedserviceset.yaml
 
 echo "Enabling federation for mesh2"
 sed "s:{{MESH1_CERT}}:$MESH1_CERT:g" import/configmap.yaml | oc create -f -
-oc create -f import/meshfederation.yaml
-oc create -f import/serviceimports.yaml
+oc create -f import/servicemeshpeer.yaml
+oc create -f import/importedserviceset.yaml
 
 echo "Installing mongodb k8s Service for mesh2"
 oc create -f import/mongodb-service.yaml

@@ -26,7 +26,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 	corev1 "k8s.io/api/core/v1"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/api/label"
 	"istio.io/istio/pilot/pkg/model"
@@ -50,7 +50,7 @@ var _ serviceregistry.Instance = &Controller{}
 
 // Controller aggregates data across different registries and monitors for changes
 type Controller struct {
-	remote               *v1.MeshFederationRemote
+	remote               *v1.ServiceMeshPeerRemote
 	egressService        string
 	egressName           string
 	discoveryURL         string
@@ -73,11 +73,10 @@ type Controller struct {
 
 	localDomainSuffix   string
 	defaultDomainSuffix string
-	defaultNameMapper   common.NameMapper
 	importNameMapper    common.NameMapper
-	defaultLocality     *v1.ServiceImportLocality
-	importLocality      *v1.ServiceImportLocality
-	locality            *v1.ServiceImportLocality
+	defaultLocality     *v1.ImportedServiceLocality
+	importLocality      *v1.ImportedServiceLocality
+	locality            *v1.ImportedServiceLocality
 
 	storeLock      sync.RWMutex
 	imports        map[federationmodel.ServiceKey]*existingImport
@@ -97,7 +96,7 @@ type existingImport struct {
 }
 
 type Options struct {
-	Remote         *v1.MeshFederationRemote
+	Remote         *v1.ServiceMeshPeerRemote
 	EgressService  string
 	EgressName     string
 	UseDirectCalls bool
@@ -114,7 +113,7 @@ type Options struct {
 	ResyncPeriod   time.Duration
 }
 
-func defaultDomainSuffixForMesh(mesh *v1.MeshFederation) string {
+func defaultDomainSuffixForMesh(mesh *v1.ServiceMeshPeer) string {
 	return fmt.Sprintf("svc.%s-imports.local", mesh.Name)
 }
 
@@ -125,10 +124,10 @@ func localDomainSuffix(domainSuffix string) string {
 	return "svc." + domainSuffix
 }
 
-func mergeLocality(locality *v1.ServiceImportLocality, defaults *v1.ServiceImportLocality) *v1.ServiceImportLocality {
-	merged := v1.ServiceImportLocality{}
+func mergeLocality(locality *v1.ImportedServiceLocality, defaults *v1.ImportedServiceLocality) *v1.ImportedServiceLocality {
+	merged := v1.ImportedServiceLocality{}
 	if defaults == nil {
-		defaults = &v1.ServiceImportLocality{}
+		defaults = &v1.ImportedServiceLocality{}
 		if locality == nil {
 			return nil
 		}
@@ -155,18 +154,14 @@ func mergeLocality(locality *v1.ServiceImportLocality, defaults *v1.ServiceImpor
 }
 
 // NewController creates a new Aggregate controller
-func NewController(opt Options, mesh *v1.MeshFederation, defaultImportConfig, importConfig *v1.ServiceImports) *Controller {
+func NewController(opt Options, mesh *v1.ServiceMeshPeer, importConfig *v1.ImportedServiceSet) *Controller {
 	backoffPolicy := backoff.NewExponentialBackOff()
 	backoffPolicy.MaxElapsedTime = 0
 	localDomainSuffix := localDomainSuffix(opt.DomainSuffix)
 	defaultDomainSuffix := defaultDomainSuffixForMesh(mesh)
-	defaultNameMapper := common.NewServiceImporter(defaultImportConfig, nil, defaultDomainSuffix, localDomainSuffix)
-	var importLocality, defaultLocality *v1.ServiceImportLocality
+	var importLocality, defaultLocality *v1.ImportedServiceLocality
 	if importConfig != nil {
 		importLocality = importConfig.Spec.Locality
-	}
-	if defaultImportConfig != nil {
-		defaultLocality = defaultImportConfig.Spec.Locality
 	}
 	locality := mergeLocality(importLocality, defaultLocality)
 	return &Controller{
@@ -183,11 +178,10 @@ func NewController(opt Options, mesh *v1.MeshFederation, defaultImportConfig, im
 		network:              opt.Network,
 		localDomainSuffix:    localDomainSuffix,
 		defaultDomainSuffix:  defaultDomainSuffix,
-		defaultNameMapper:    defaultNameMapper,
 		defaultLocality:      defaultLocality,
 		importLocality:       importLocality,
 		locality:             locality,
-		importNameMapper:     common.NewServiceImporter(importConfig, defaultNameMapper, defaultDomainSuffix, localDomainSuffix),
+		importNameMapper:     common.NewServiceImporter(importConfig, nil, defaultDomainSuffix, localDomainSuffix),
 		imports:              map[federationmodel.ServiceKey]*existingImport{},
 		serviceStore:         map[host.Name]*model.Service{},
 		instanceStore:        map[host.Name][]*model.ServiceInstance{},
@@ -201,11 +195,11 @@ func NewController(opt Options, mesh *v1.MeshFederation, defaultImportConfig, im
 	}
 }
 
-func (c *Controller) UpdateImportConfig(importConfig *v1.ServiceImports) {
+func (c *Controller) UpdateImportConfig(importConfig *v1.ImportedServiceSet) {
 	func() {
 		c.storeLock.Lock()
 		defer c.storeLock.Unlock()
-		c.importNameMapper = common.NewServiceImporter(importConfig, c.defaultNameMapper, c.defaultDomainSuffix, c.localDomainSuffix)
+		c.importNameMapper = common.NewServiceImporter(importConfig, nil, c.defaultDomainSuffix, c.localDomainSuffix)
 		if importConfig == nil {
 			c.importLocality = nil
 		} else {
@@ -216,7 +210,7 @@ func (c *Controller) UpdateImportConfig(importConfig *v1.ServiceImports) {
 	c.resync()
 }
 
-func (c *Controller) UpdateDefaultImportConfig(importConfig *v1.ServiceImports) {
+func (c *Controller) UpdateDefaultImportConfig(importConfig *v1.ImportedServiceSet) {
 	func() {
 		c.storeLock.Lock()
 		defer c.storeLock.Unlock()
@@ -239,7 +233,7 @@ func (c *Controller) Provider() serviceregistry.ProviderID {
 	return serviceregistry.Federation
 }
 
-func (c *Controller) Remote() *v1.MeshFederationRemote {
+func (c *Controller) Remote() *v1.ServiceMeshPeerRemote {
 	return c.remote
 }
 
@@ -331,7 +325,7 @@ type createServiceOptions struct {
 	serviceVisibility visibility.Instance
 	networkGateways   []*model.Gateway
 	sas               []string
-	locality          *v1.ServiceImportLocality
+	locality          *v1.ImportedServiceLocality
 }
 
 func (c *Controller) createService(opts createServiceOptions) (*model.Service, []*model.ServiceInstance) {

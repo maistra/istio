@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/leaderelection"
 	"istio.io/istio/pkg/servicemesh/federation/common"
@@ -28,19 +28,28 @@ import (
 	"istio.io/pkg/log"
 )
 
-var federationStatusPatchMetadata strategicpatch.LookupPatchMeta
+var (
+	peerStatusPatchMetadata   strategicpatch.LookupPatchMeta
+	exportStatusPatchMetadata strategicpatch.LookupPatchMeta
+	importStatusPatchMetadata strategicpatch.LookupPatchMeta
+)
 
 func init() {
 	var err error
-	federationStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1.MeshFederation{})
-	if err != nil {
-		panic("error creating strategicpatch.LookupPatchMeta for use with FederationStatus resources")
+	if peerStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1.ServiceMeshPeer{}); err != nil {
+		panic("error creating strategicpatch.LookupPatchMeta for use with ServiceMeshPeer resources")
+	}
+	if exportStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1.ExportedServiceSet{}); err != nil {
+		panic("error creating strategicpatch.LookupPatchMeta for use with ExportedServiceSet resources")
+	}
+	if importStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1.ImportedServiceSet{}); err != nil {
+		panic("error creating strategicpatch.LookupPatchMeta for use with ImportedServiceSet resources")
 	}
 }
 
 type Manager interface {
-	FederationAdded(mesh types.NamespacedName) Handler
-	FederationDeleted(mesh types.NamespacedName)
+	PeerAdded(mesh types.NamespacedName) Handler
+	PeerDeleted(mesh types.NamespacedName)
 	HandlerFor(mesh types.NamespacedName) Handler
 	IsLeader() bool
 	PushStatus() error
@@ -120,7 +129,7 @@ func (m *manager) IsLeader() bool {
 	return m.isLeader
 }
 
-func (m *manager) FederationAdded(mesh types.NamespacedName) Handler {
+func (m *manager) PeerAdded(mesh types.NamespacedName) Handler {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -133,7 +142,7 @@ func (m *manager) FederationAdded(mesh types.NamespacedName) Handler {
 	return handler
 }
 
-func (m *manager) FederationDeleted(mesh types.NamespacedName) {
+func (m *manager) PeerDeleted(mesh types.NamespacedName) {
 	func() {
 		m.mu.Lock()
 		defer m.mu.Unlock()

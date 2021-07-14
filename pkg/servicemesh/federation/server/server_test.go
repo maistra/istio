@@ -23,7 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	configmemory "istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
@@ -93,24 +93,24 @@ func (m *fakeStatusHandler) Flush() error {
 }
 
 func TestServiceList(t *testing.T) {
-	federation := &v1.MeshFederation{
+	federation := &v1.ServiceMeshPeer{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1.MeshFederationSpec{
-			Security: v1.MeshFederationSecurity{
+		Spec: v1.ServiceMeshPeerSpec{
+			Security: v1.ServiceMeshPeerSecurity{
 				ClientID: "federation-egress.other-mesh.svc.cluster.local",
 			},
 		},
 	}
-	exportAllServices := &v1.ServiceExports{
+	exportAllServices := &v1.ExportedServiceSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1.ServiceExportsSpec{
-			Exports: []v1.ServiceExportRule{
+		Spec: v1.ExportedServiceSetSpec{
+			ExportRules: []v1.ExportedServiceRule{
 				{
 					Type:         v1.NameSelectorType,
 					NameSelector: &v1.ServiceNameMapping{},
@@ -121,8 +121,8 @@ func TestServiceList(t *testing.T) {
 	testCases := []struct {
 		name           string
 		remoteName     string
-		defaultExports *v1.ServiceExports
-		serviceExports *v1.ServiceExports
+		defaultExports *v1.ExportedServiceSet
+		serviceExports *v1.ExportedServiceSet
 		services       []*model.Service
 		serviceEvents  []struct {
 			event model.Event
@@ -141,17 +141,17 @@ func TestServiceList(t *testing.T) {
 		{
 			name:       "exported service, no gateway",
 			remoteName: "test-remote",
-			serviceExports: &v1.ServiceExports{
+			serviceExports: &v1.ExportedServiceSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1.ServiceExportsSpec{
-					Exports: []v1.ServiceExportRule{
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
 						{
 							Type: v1.NameSelectorType,
 							NameSelector: &v1.ServiceNameMapping{
-								Name: v1.ServiceName{
+								ServiceName: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
@@ -224,17 +224,17 @@ func TestServiceList(t *testing.T) {
 		{
 			name:       "exported service + gateway",
 			remoteName: "test-remote",
-			serviceExports: &v1.ServiceExports{
+			serviceExports: &v1.ExportedServiceSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1.ServiceExportsSpec{
-					Exports: []v1.ServiceExportRule{
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
 						{
 							Type: v1.NameSelectorType,
 							NameSelector: &v1.ServiceNameMapping{
-								Name: v1.ServiceName{
+								ServiceName: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
@@ -428,7 +428,7 @@ func TestServiceList(t *testing.T) {
 			go s.Run(stopCh)
 			defer close(stopCh)
 			s.resyncNetworkGateways()
-			s.AddMeshFederation(federation, tc.serviceExports, &fakeStatusHandler{})
+			s.AddPeer(federation, tc.serviceExports, &fakeStatusHandler{})
 			for _, e := range tc.serviceEvents {
 				s.UpdateService(e.svc, e.event)
 			}
@@ -465,28 +465,28 @@ func getServiceList(t *testing.T, addr, remoteName string) federationmodel.Servi
 }
 
 func TestWatch(t *testing.T) {
-	federation := &v1.MeshFederation{
+	federation := &v1.ServiceMeshPeer{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1.MeshFederationSpec{
-			Security: v1.MeshFederationSecurity{
+		Spec: v1.ServiceMeshPeerSpec{
+			Security: v1.ServiceMeshPeerSecurity{
 				ClientID: "federation-egress.other-mesh.svc.cluster.local",
 			},
 		},
 	}
-	exportProductPage := &v1.ServiceExports{
+	exportProductPage := &v1.ExportedServiceSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-remote",
 			Namespace: "istio-system-test",
 		},
-		Spec: v1.ServiceExportsSpec{
-			Exports: []v1.ServiceExportRule{
+		Spec: v1.ExportedServiceSetSpec{
+			ExportRules: []v1.ExportedServiceRule{
 				{
 					Type: v1.NameSelectorType,
 					NameSelector: &v1.ServiceNameMapping{
-						Name: v1.ServiceName{
+						ServiceName: v1.ServiceName{
 							Namespace: "bookinfo",
 							Name:      "productpage",
 						},
@@ -502,9 +502,9 @@ func TestWatch(t *testing.T) {
 	testCases := []struct {
 		name           string
 		remoteName     string
-		defaultExports *v1.ServiceExports
-		serviceExports *v1.ServiceExports
-		updatedExports *v1.ServiceExports
+		defaultExports *v1.ExportedServiceSet
+		serviceExports *v1.ExportedServiceSet
+		updatedExports *v1.ExportedServiceSet
 		services       []*model.Service
 		serviceEvents  []struct {
 			event model.Event
@@ -594,17 +594,17 @@ func TestWatch(t *testing.T) {
 			name:           "no gateways, service exported name changes, filtered service",
 			remoteName:     "test-remote",
 			serviceExports: exportProductPage,
-			updatedExports: &v1.ServiceExports{
+			updatedExports: &v1.ExportedServiceSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-remote",
 					Namespace: "istio-system-test",
 				},
-				Spec: v1.ServiceExportsSpec{
-					Exports: []v1.ServiceExportRule{
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
 						{
 							Type: v1.NameSelectorType,
 							NameSelector: &v1.ServiceNameMapping{
-								Name: v1.ServiceName{
+								ServiceName: v1.ServiceName{
 									Namespace: "bookinfo",
 									Name:      "productpage",
 								},
@@ -747,7 +747,7 @@ func TestWatch(t *testing.T) {
 			go s.Run(stopCh)
 			defer close(stopCh)
 			s.resyncNetworkGateways()
-			s.AddMeshFederation(federation, tc.serviceExports, &fakeStatusHandler{})
+			s.AddPeer(federation, tc.serviceExports, &fakeStatusHandler{})
 			req, err := http.NewRequest("GET", "http://"+s.Addr()+"/watch/"+tc.remoteName, nil)
 			if err != nil {
 				t.Fatal(err)

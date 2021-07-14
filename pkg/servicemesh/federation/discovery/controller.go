@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/cache"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
@@ -93,7 +93,7 @@ func NewController(opt Options) (*Controller, error) {
 		trustBundles:      map[string]string{},
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
-		Informer:     opt.ResourceManager.MeshFederationInformer().Informer(),
+		Informer:     opt.ResourceManager.PeerInformer().Informer(),
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
@@ -121,12 +121,12 @@ func (c *Controller) RunInformer(stopChan <-chan struct{}) {
 }
 
 func (c *Controller) reconcile(resourceName string) error {
-	c.Logger.Debugf("Reconciling MeshFederation %s", resourceName)
+	c.Logger.Debugf("Reconciling ServiceMeshPeer %s", resourceName)
 	defer func() {
 		if err := c.statusManager.PushStatus(); err != nil {
 			c.Logger.Errorf("error pushing FederationStatus for mesh %s: %s", resourceName, err)
 		}
-		c.Logger.Debugf("Completed reconciliation of MeshFederation %s", resourceName)
+		c.Logger.Debugf("Completed reconciliation of ServiceMeshPeer %s", resourceName)
 	}()
 
 	ctx := context.TODO()
@@ -135,20 +135,20 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.rm.MeshFederationInformer().Lister().MeshFederations(namespace).Get(name)
+	instance, err := c.rm.PeerInformer().Lister().ServiceMeshPeers(namespace).Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			err = c.delete(ctx, &v1.MeshFederation{
+			err = c.delete(ctx, &v1.ServiceMeshPeer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: namespace,
 				},
 			})
 			if err == nil {
-				c.Logger.Info("MeshFederation deleted")
+				c.Logger.Info("ServiceMeshPeer deleted")
 			}
 		}
 		// Error reading the object
@@ -158,7 +158,7 @@ func (c *Controller) reconcile(resourceName string) error {
 	return c.update(ctx, instance)
 }
 
-func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) error {
+func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) error {
 	registry := c.getRegistry(instance.Name)
 
 	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
@@ -186,7 +186,7 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 		if federationRegistry, ok := registry.(*federationregistry.Controller); ok {
 			if !reflect.DeepEqual(federationRegistry.Remote(), &instance.Spec.Remote) {
 				// TODO: support updates
-				c.Logger.Warnf("updating NetworkAddress for MeshFederation (%s) is not supported", instance.Name)
+				c.Logger.Warnf("updating NetworkAddress for ServiceMeshPeer (%s) is not supported", instance.Name)
 			}
 		} else {
 			return fmt.Errorf("registry %s is not a Federation registry (type=%T)", instance.Name, registry)
@@ -194,24 +194,19 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 	} else {
 		// if there's no existing registry
 		c.Logger.Infof("Creating export handler for Federation to %s", instance.Name)
-		exportConfig, err := c.rm.ServiceExportsInformer().Lister().ServiceExports(instance.Namespace).Get(instance.Name)
+		exportConfig, err := c.rm.ExportsInformer().Lister().ExportedServiceSets(instance.Namespace).Get(instance.Name)
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
-			c.Logger.Errorf("error retrieving ServiceExports associated with MeshFederation %s: %s", instance.Name, err)
+			c.Logger.Errorf("error retrieving ServiceExports associated with ServiceMeshPeer %s: %s", instance.Name, err)
 			return err
 		}
-		defaultImportConfig, err := c.rm.DefaultServiceImports(instance.Namespace)
+		importConfig, err := c.rm.ImportsInformer().Lister().ImportedServiceSets(instance.Namespace).Get(instance.Name)
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
-			c.Logger.Errorf("error retrieving default ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
-			return err
-		}
-		importConfig, err := c.rm.ServiceImportsInformer().Lister().ServiceImports(instance.Namespace).Get(instance.Name)
-		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
-			c.Logger.Errorf("error retrieving ServiceImports associated with MeshFederation %s: %s", instance.Name, err)
+			c.Logger.Errorf("error retrieving ServiceImports associated with ServiceMeshPeer %s: %s", instance.Name, err)
 			return err
 		}
 
-		statusHandler := c.statusManager.FederationAdded(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
-		if err := c.federationManager.AddMeshFederation(instance, exportConfig, statusHandler); err != nil {
+		statusHandler := c.statusManager.PeerAdded(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
+		if err := c.federationManager.AddPeer(instance, exportConfig, statusHandler); err != nil {
 			return err
 		}
 
@@ -239,7 +234,7 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 			ClusterID:      instance.Name,
 			Network:        fmt.Sprintf("network-%s", instance.Name),
 		}
-		registry = federationregistry.NewController(options, instance, defaultImportConfig, importConfig)
+		registry = federationregistry.NewController(options, instance, importConfig)
 		// register the new instance
 		c.sc.AddRegistry(registry)
 
@@ -253,10 +248,10 @@ func (c *Controller) update(ctx context.Context, instance *v1.MeshFederation) er
 	return nil
 }
 
-func (c *Controller) delete(ctx context.Context, instance *v1.MeshFederation) error {
+func (c *Controller) delete(ctx context.Context, instance *v1.ServiceMeshPeer) error {
 	var allErrors []error
 	// delete the server
-	c.federationManager.DeleteMeshFederation(instance.Name)
+	c.federationManager.DeletePeer(instance.Name)
 
 	// delete trust bundle
 	if instance.Spec.Security.TrustDomain != "" {
@@ -288,7 +283,7 @@ func (c *Controller) delete(ctx context.Context, instance *v1.MeshFederation) er
 		allErrors = append(allErrors, err)
 	}
 
-	c.statusManager.FederationDeleted(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
+	c.statusManager.PeerDeleted(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
 
 	return utilerrors.NewAggregate(allErrors)
 }
@@ -326,7 +321,7 @@ func (opt Options) validate() error {
 	return utilerrors.NewAggregate(allErrors)
 }
 
-func (c *Controller) getRootCertForMesh(instance *v1.MeshFederation) (string, error) {
+func (c *Controller) getRootCertForMesh(instance *v1.ServiceMeshPeer) (string, error) {
 	if instance == nil {
 		return "", nil
 	}

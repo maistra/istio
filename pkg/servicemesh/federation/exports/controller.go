@@ -21,7 +21,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/cache"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	kubecontroller "istio.io/istio/pkg/kube/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
@@ -30,7 +30,7 @@ import (
 const controllerName = "federation-exports-controller"
 
 type ServiceExportManager interface {
-	UpdateExportsForMesh(exports *v1.ServiceExports) error
+	UpdateExportsForMesh(exports *v1.ExportedServiceSet) error
 	DeleteExportsForMesh(name string)
 }
 
@@ -59,7 +59,7 @@ func NewController(opt Options) (*Controller, error) {
 		exportManager: opt.ServiceExportManager,
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
-		Informer:     opt.ResourceManager.ServiceExportsInformer().Informer(),
+		Informer:     opt.ResourceManager.ExportsInformer().Informer(),
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
@@ -83,7 +83,7 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.rm.ServiceExportsInformer().Lister().ServiceExports(namespace).Get(name)
+	instance, err := c.rm.ExportsInformer().Lister().ExportedServiceSets(namespace).Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
 			// Request object not found, could have been deleted after reconcile request.

@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	meshv1alpha1 "istio.io/api/mesh/v1alpha1"
 	rawnetworking "istio.io/api/networking/v1alpha3"
@@ -77,7 +77,7 @@ var (
 )
 
 func (c *Controller) deleteDiscoveryResources(
-	_ context.Context, instance *v1.MeshFederation) error {
+	_ context.Context, instance *v1.ServiceMeshPeer) error {
 	c.Logger.Infof("deleting discovery resources for Federation cluster %s", instance.Name)
 	var allErrors []error
 	rootName := discoveryResourceName(instance)
@@ -131,7 +131,7 @@ func (c *Controller) deleteDiscoveryResources(
 }
 
 func (c *Controller) createDiscoveryResources(
-	_ context.Context, instance *v1.MeshFederation, meshConfig *meshv1alpha1.MeshConfig) (err error) {
+	_ context.Context, instance *v1.ServiceMeshPeer, meshConfig *meshv1alpha1.MeshConfig) (err error) {
 	var s, ap, dr, ig, eg, evs, ivs *config.Config
 
 	defer func() {
@@ -274,25 +274,25 @@ func (c *Controller) createDiscoveryResources(
 	return
 }
 
-func discoveryResourceName(instance *v1.MeshFederation) string {
+func discoveryResourceName(instance *v1.ServiceMeshPeer) string {
 	return fmt.Sprintf("federation-discovery-%s", instance.Name)
 }
 
-func discoveryEgressResourceName(instance *v1.MeshFederation) string {
+func discoveryEgressResourceName(instance *v1.ServiceMeshPeer) string {
 	return fmt.Sprintf("%s-egress", discoveryResourceName(instance))
 }
 
-func discoveryIngressResourceName(instance *v1.MeshFederation) string {
+func discoveryIngressResourceName(instance *v1.ServiceMeshPeer) string {
 	return fmt.Sprintf("%s-ingress", discoveryResourceName(instance))
 }
 
-func federationIngressLabels(instance *v1.MeshFederation) map[string]string {
+func federationIngressLabels(instance *v1.ServiceMeshPeer) map[string]string {
 	return map[string]string{
 		"service.istio.io/canonical-name": instance.Spec.Gateways.Ingress.Name,
 	}
 }
 
-func federationEgressLabels(instance *v1.MeshFederation) map[string]string {
+func federationEgressLabels(instance *v1.ServiceMeshPeer) map[string]string {
 	return map[string]string{
 		"service.istio.io/canonical-name": instance.Spec.Gateways.Egress.Name,
 	}
@@ -306,7 +306,7 @@ func istiodServiceAddress(addr string) string {
 	return addr
 }
 
-func (c *Controller) discoveryService(instance *v1.MeshFederation) *config.Config {
+func (c *Controller) discoveryService(instance *v1.ServiceMeshPeer) *config.Config {
 	// This is used for routing out of the egress gateway, primarily to configure mtls for discovery and
 	// to give the gateway an endpoint to route to (i.e. it creates a cluster with an endpoint in the gateway).
 	// This should turn into a service entry for the other mesh's network.
@@ -355,7 +355,7 @@ func (c *Controller) discoveryService(instance *v1.MeshFederation) *config.Confi
 	return service
 }
 
-func (c *Controller) discoveryIngressGateway(instance *v1.MeshFederation) *config.Config {
+func (c *Controller) discoveryIngressGateway(instance *v1.ServiceMeshPeer) *config.Config {
 	// Gateway definition for handling inbound discovery requests
 	name := discoveryIngressResourceName(instance)
 	discoveryPort := common.DefaultDiscoveryPort
@@ -388,7 +388,7 @@ func (c *Controller) discoveryIngressGateway(instance *v1.MeshFederation) *confi
 	return gateway
 }
 
-func (c *Controller) discoveryEgressGateway(instance *v1.MeshFederation) *config.Config {
+func (c *Controller) discoveryEgressGateway(instance *v1.ServiceMeshPeer) *config.Config {
 	// Gateway definition for routing outbound discovery.  This is used to terminate source mtls for discovery.
 	name := discoveryEgressResourceName(instance)
 	egressGatewayServiceName := fmt.Sprintf("%s.%s.svc.%s",
@@ -421,7 +421,7 @@ func (c *Controller) discoveryEgressGateway(instance *v1.MeshFederation) *config
 	return gateway
 }
 
-func (c *Controller) discoveryAuthorizationPolicy(instance *v1.MeshFederation) *config.Config {
+func (c *Controller) discoveryAuthorizationPolicy(instance *v1.ServiceMeshPeer) *config.Config {
 	// AuthorizationPolicy used to restrict inbound discovery requests to known clients.
 	name := discoveryResourceName(instance)
 	discoveryPort := common.DefaultDiscoveryPort
@@ -463,7 +463,7 @@ func (c *Controller) discoveryAuthorizationPolicy(instance *v1.MeshFederation) *
 	return ap
 }
 
-func (c *Controller) discoveryEgressVirtualService(instance *v1.MeshFederation) *config.Config {
+func (c *Controller) discoveryEgressVirtualService(instance *v1.ServiceMeshPeer) *config.Config {
 	// VirtualService used to route inbound and outbound discovery requests.
 	name := discoveryEgressResourceName(instance)
 	egressGatewayName := fmt.Sprintf("%s/%s", instance.Namespace, name)
@@ -530,7 +530,7 @@ func (c *Controller) discoveryEgressVirtualService(instance *v1.MeshFederation) 
 }
 
 func (c *Controller) discoveryIngressVirtualService(
-	instance *v1.MeshFederation, meshConfig *meshv1alpha1.MeshConfig) *config.Config {
+	instance *v1.ServiceMeshPeer, meshConfig *meshv1alpha1.MeshConfig) *config.Config {
 	// VirtualService used to route inbound and outbound discovery requests.
 	name := discoveryIngressResourceName(instance)
 	istiodService := istiodServiceAddress(meshConfig.DefaultConfig.DiscoveryAddress)
@@ -624,7 +624,7 @@ func (c *Controller) discoveryIngressVirtualService(
 	return vs
 }
 
-func (c *Controller) discoveryDestinationRule(instance *v1.MeshFederation) *config.Config {
+func (c *Controller) discoveryDestinationRule(instance *v1.ServiceMeshPeer) *config.Config {
 	// DestinationRule to configure mTLS for outbound discovery requests
 	name := discoveryEgressResourceName(instance)
 	discoveryHost := common.DiscoveryServiceHostname(instance)

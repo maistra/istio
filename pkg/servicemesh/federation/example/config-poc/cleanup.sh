@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-oc delete -n mesh1-system meshfederation/mesh2
-oc delete -n mesh2-system meshfederation/mesh1
+oc delete -n mesh1-system servicemeshpeer/mesh2
+oc delete -n mesh2-system servicemeshpeer/mesh1
 
 oc delete project mesh1-system
 oc delete project mesh2-system

@@ -22,9 +22,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/cache"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
-	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
 	"istio.io/istio/pilot/pkg/serviceregistry/federation"
 	kubecontroller "istio.io/istio/pkg/kube/controller"
@@ -58,7 +57,7 @@ func NewController(opt Options) (*Controller, error) {
 		serviceController: opt.ServiceController,
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
-		Informer:     controller.rm.ServiceImportsInformer().Informer(),
+		Informer:     controller.rm.ImportsInformer().Informer(),
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
@@ -82,7 +81,7 @@ func (c *Controller) reconcile(resourceName string) error {
 	if err != nil {
 		c.Logger.Errorf("error splitting resource name: %s", resourceName)
 	}
-	instance, err := c.rm.ServiceImportsInformer().Lister().ServiceImports(namespace).Get(name)
+	instance, err := c.rm.ImportsInformer().Lister().ImportedServiceSets(namespace).Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -100,7 +99,7 @@ func (c *Controller) reconcile(resourceName string) error {
 }
 
 func (c *Controller) deleteImportsForMesh(namespace, name string) {
-	c.updateImportsForMesh(&v1.ServiceImports{
+	c.updateImportsForMesh(&v1.ImportedServiceSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -108,22 +107,12 @@ func (c *Controller) deleteImportsForMesh(namespace, name string) {
 	})
 }
 
-func (c *Controller) updateImportsForMesh(instance *v1.ServiceImports) {
-	if instance.Name == "default" {
-		for _, registry := range c.serviceController.GetRegistries() {
-			if registry.Provider() == serviceregistry.Federation {
-				if federationRegistry, ok := registry.(*federation.Controller); ok {
-					federationRegistry.UpdateDefaultImportConfig(instance)
-				}
-			}
-		}
-	} else {
-		for _, registry := range c.serviceController.GetRegistries() {
-			if registry.Cluster() == instance.Name {
-				if federationRegistry, ok := registry.(*federation.Controller); ok {
-					federationRegistry.UpdateImportConfig(instance)
-					break
-				}
+func (c *Controller) updateImportsForMesh(instance *v1.ImportedServiceSet) {
+	for _, registry := range c.serviceController.GetRegistries() {
+		if registry.Cluster() == instance.Name {
+			if federationRegistry, ok := registry.(*federation.Controller); ok {
+				federationRegistry.UpdateImportConfig(instance)
+				break
 			}
 		}
 	}
