@@ -28,6 +28,7 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 	versioned "maistra.io/api/client/versioned"
 	core "maistra.io/api/client/xnsinformer/core"
+	federation "maistra.io/api/client/xnsinformer/federation"
 	internalinterfaces "maistra.io/api/client/xnsinformer/internalinterfaces"
 )
 
@@ -173,8 +174,13 @@ type SharedInformerFactory interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
 	Core() core.Interface
+	Federation() federation.Interface
 }
 
 func (f *sharedInformerFactory) Core() core.Interface {
 	return core.New(f, f.namespaces, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Federation() federation.Interface {
+	return federation.New(f, f.namespaces, f.tweakListOptions)
 }

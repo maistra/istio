@@ -23,37 +23,37 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ServiceExport is the Schema for configuring exported services.  The name of
-// the ServiceExports resource must match the name of a MeshFederation resource
+// ExportedServiceSet is the Schema for configuring exported services.  The name of
+// the ExportedServiceSet resource must match the name of a ServiceMeshPeer resource
 // defining the remote mesh to which the services will be exported.
-type ServiceExports struct {
+type ExportedServiceSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec defines rules for matching services to be exported.
-	Spec   ServiceExportsSpec  `json:"spec,omitempty"`
-	Status ServiceExportStatus `json:"status,omitempty"`
+	Spec   ExportedServiceSetSpec   `json:"spec,omitempty"`
+	Status ExportedServiceSetStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ServiceExportList contains a list of ServiceExport
-type ServiceExportsList struct {
+// ExportedServiceSetList contains a list of ExportedServiceSet
+type ExportedServiceSetList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ServiceExports `json:"items"`
+	Items           []ExportedServiceSet `json:"items"`
 }
 
-type ServiceExportsSpec struct {
-	// Exports are the rules that determine which services are exported from the
+type ExportedServiceSetSpec struct {
+	// ExportRules are the rules that determine which services are exported from the
 	// mesh.  The list is processed in order and the first spec in the list that
 	// applies to a service is the one that will be applied.  This allows more
 	// specific selectors to be placed before more general selectors.
-	Exports []ServiceExportRule `json:"exports,omitempty"`
+	ExportRules []ExportedServiceRule `json:"exportRules,omitempty"`
 }
 
-type ServiceExportRule struct {
+type ExportedServiceRule struct {
 	// Type of rule.  One of Name or Label.
 	// +required
 	Type ServiceImportExportSelectorType `json:"type"`
@@ -67,5 +67,12 @@ type ServiceExportRule struct {
 	NameSelector *ServiceNameMapping `json:"nameSelector,omitempty"`
 }
 
-type ServiceExportStatus struct {
+type ExportedServiceSetStatus struct {
+	// Exports provides details about the services exported by this mesh.
+	// +required
+	// +listType=map
+	// +listMapKey=exportedName
+	// +patchMergeKey=exportedName
+	// +patchStrategy=merge,retainKeys
+	ExportedServices []PeerServiceMapping `json:"exportedServices"`
 }

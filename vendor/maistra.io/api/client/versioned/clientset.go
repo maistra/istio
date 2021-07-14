@@ -25,6 +25,7 @@ import (
 	corev1 "maistra.io/api/client/versioned/typed/core/v1"
 	corev1alpha1 "maistra.io/api/client/versioned/typed/core/v1alpha1"
 	corev2 "maistra.io/api/client/versioned/typed/core/v2"
+	federationv1 "maistra.io/api/client/versioned/typed/federation/v1"
 )
 
 type Interface interface {
@@ -32,6 +33,7 @@ type Interface interface {
 	CoreV1() corev1.CoreV1Interface
 	CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface
 	CoreV2() corev2.CoreV2Interface
+	FederationV1() federationv1.FederationV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -41,6 +43,7 @@ type Clientset struct {
 	coreV1       *corev1.CoreV1Client
 	coreV1alpha1 *corev1alpha1.CoreV1alpha1Client
 	coreV2       *corev2.CoreV2Client
+	federationV1 *federationv1.FederationV1Client
 }
 
 // CoreV1 retrieves the CoreV1Client
@@ -56,6 +59,11 @@ func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
 // CoreV2 retrieves the CoreV2Client
 func (c *Clientset) CoreV2() corev2.CoreV2Interface {
 	return c.coreV2
+}
+
+// FederationV1 retrieves the FederationV1Client
+func (c *Clientset) FederationV1() federationv1.FederationV1Interface {
+	return c.federationV1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -91,6 +99,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.federationV1, err = federationv1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
 	if err != nil {
@@ -106,6 +118,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 	cs.coreV1 = corev1.NewForConfigOrDie(c)
 	cs.coreV1alpha1 = corev1alpha1.NewForConfigOrDie(c)
 	cs.coreV2 = corev2.NewForConfigOrDie(c)
+	cs.federationV1 = federationv1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -117,6 +130,7 @@ func New(c rest.Interface) *Clientset {
 	cs.coreV1 = corev1.New(c)
 	cs.coreV1alpha1 = corev1alpha1.New(c)
 	cs.coreV2 = corev2.New(c)
+	cs.federationV1 = federationv1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

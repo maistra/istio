@@ -23,8 +23,8 @@ import (
 type ServiceImportExportSelectorType string
 
 const (
-	LabelSelectorType ServiceImportExportSelectorType = "Label"
-	NameSelectorType  ServiceImportExportSelectorType = "Name"
+	LabelSelectorType ServiceImportExportSelectorType = "LabelSelector"
+	NameSelectorType  ServiceImportExportSelectorType = "NameSelector"
 )
 
 type ServiceName struct {
@@ -44,8 +44,8 @@ func (s ServiceName) String() string {
 const MatchAny = "*"
 
 type ServiceNameMapping struct {
-	Name  ServiceName  `json:"name,omitempty"`
-	Alias *ServiceName `json:"alias,omitempty"`
+	ServiceName `json:",inline"`
+	Alias       *ServiceName `json:"alias,omitempty"`
 }
 
 type ServiceImportExportLabelelector struct {
@@ -72,4 +72,33 @@ type ServiceImportExportLabelelector struct {
 	Aliases []ServiceNameMapping `json:"aliases,omitempty"`
 }
 
+// ServiceKey provides all the details about a Service
+type ServiceKey struct {
+	// Name represents the simple name of the service, e.g. the metadata.name
+	// field of a kubernetes Service.
+	// +required
+	Name string `json:"name"`
+	// Namespace represents the namespace within which the service resides.
+	// +required
+	Namespace string `json:"namespace"`
+	// Hostname represents fully qualified domain name (FQDN) used to access
+	// the service.
+	// +required
+	Hostname string `json:"hostname"`
+}
 
+// PeerServiceMapping represents the name mapping between an exported service
+// and its local counterpart.
+type PeerServiceMapping struct {
+	// LocalService represents the service in the local (i.e. this) mesh. For an
+	// exporting mesh, this would be the service being exported. For an
+	// importing mesh, this would be the imported service.
+	// +required
+	LocalService ServiceKey `json:"localService"`
+	// ExportedName represents the fully qualified domain name (FQDN) of an
+	// exported service.  For an exporting mesh, this is the name that is
+	// exported to the remote mesh. For an importing mesh, this would be the
+	// name of the service exported by the remote mesh.
+	// +required
+	ExportedName string `json:"exportedName"`
+}

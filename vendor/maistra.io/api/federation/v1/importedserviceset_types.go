@@ -23,29 +23,29 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ServiceImports is the Schema for configuring imported services.  The name of
-// the ServiceImports resource must match the name of a MeshFederation resource
+// ImportedServiceSet is the Schema for configuring imported services.  The name of
+// the ImportedServiceSet resource must match the name of a ServiceMeshPeer resource
 // defining the remote mesh from which the services will be imported.
-type ServiceImports struct {
+type ImportedServiceSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec defines rules for matching services to be imported.
-	Spec   ServiceImportsSpec   `json:"spec,omitempty"`
-	Status ServiceImportsStatus `json:"status,omitempty"`
+	Spec   ImportedServiceSetSpec   `json:"spec,omitempty"`
+	Status ImportedServiceSetStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ServiceImportsList contains a list of ServiceImport
-type ServiceImportsList struct {
+// ImportedServiceSetList contains a list of ImportedService
+type ImportedServiceSetList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ServiceImports `json:"items"`
+	Items           []ImportedServiceSet `json:"items"`
 }
 
-type ServiceImportsSpec struct {
+type ImportedServiceSetSpec struct {
 	// DomainSuffix specifies the domain suffix to be applies to imported
 	// services.  If no domain suffix is specified, imported services will be
 	// named as follows:
@@ -56,17 +56,17 @@ type ServiceImportsSpec struct {
 	// +optional
 	DomainSuffix string `json:"domainSuffix,omitempty"`
 	// Locality within which imported services should be associated.
-	Locality *ServiceImportLocality `json:"locality,omitempty"`
-	// Imports are the rules that determine which services are imported to the
+	Locality *ImportedServiceLocality `json:"locality,omitempty"`
+	// ImportRules are the rules that determine which services are imported to the
 	// mesh.  The list is processed in order and the first spec in the list that
 	// applies to a service is the one that will be applied.  This allows more
 	// specific selectors to be placed before more general selectors.
-	Imports []ServiceImportRule `json:"imports,omitempty"`
+	ImportRules []ImportedServiceRule `json:"importRules,omitempty"`
 }
 
-type ServiceImportRule struct {
+type ImportedServiceRule struct {
 	// DomainSuffix applies the specified suffix to services imported by this
-	// rule.  The behavior is identical to that of ServiceImportsSpec.DomainSuffix.
+	// rule.  The behavior is identical to that of ImportedServiceSetSpec.DomainSuffix.
 	// +optional
 	DomainSuffix string `json:"domainSuffix,omitempty"`
 	// ImportAsLocal imports the service as a local service in the mesh.  For
@@ -86,7 +86,7 @@ type ServiceImportRule struct {
 	NameSelector *ServiceNameMapping `json:"nameSelector,omitempty"`
 }
 
-type ServiceImportLocality struct {
+type ImportedServiceLocality struct {
 	// Region within which imported services are located.
 	Region string `json:"region,omitempty"`
 	// Zone within which imported services are located.  If Zone is specified,
@@ -97,5 +97,12 @@ type ServiceImportLocality struct {
 	Subzone string `json:"subzone,omitempty"`
 }
 
-type ServiceImportsStatus struct {
+type ImportedServiceSetStatus struct {
+	// Imports provides details about the services imported by this mesh.
+	// +required
+	// +listType=map
+	// +listMapKey=exportedName
+	// +patchMergeKey=exportedName
+	// +patchStrategy=merge,retainKeys
+	ImportedServices []PeerServiceMapping `json:"importedServices"`
 }

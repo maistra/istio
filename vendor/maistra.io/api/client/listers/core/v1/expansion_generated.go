@@ -16,30 +16,6 @@
 
 package v1
 
-// MeshFederationListerExpansion allows custom methods to be added to
-// MeshFederationLister.
-type MeshFederationListerExpansion interface{}
-
-// MeshFederationNamespaceListerExpansion allows custom methods to be added to
-// MeshFederationNamespaceLister.
-type MeshFederationNamespaceListerExpansion interface{}
-
-// ServiceExportsListerExpansion allows custom methods to be added to
-// ServiceExportsLister.
-type ServiceExportsListerExpansion interface{}
-
-// ServiceExportsNamespaceListerExpansion allows custom methods to be added to
-// ServiceExportsNamespaceLister.
-type ServiceExportsNamespaceListerExpansion interface{}
-
-// ServiceImportsListerExpansion allows custom methods to be added to
-// ServiceImportsLister.
-type ServiceImportsListerExpansion interface{}
-
-// ServiceImportsNamespaceListerExpansion allows custom methods to be added to
-// ServiceImportsNamespaceLister.
-type ServiceImportsNamespaceListerExpansion interface{}
-
 // ServiceMeshControlPlaneListerExpansion allows custom methods to be added to
 // ServiceMeshControlPlaneLister.
 type ServiceMeshControlPlaneListerExpansion interface{}

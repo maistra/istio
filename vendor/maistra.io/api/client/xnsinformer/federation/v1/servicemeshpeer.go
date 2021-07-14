@@ -25,36 +25,36 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
-	v1 "maistra.io/api/client/listers/core/v1"
+	v1 "maistra.io/api/client/listers/federation/v1"
 	versioned "maistra.io/api/client/versioned"
 	internalinterfaces "maistra.io/api/client/xnsinformer/internalinterfaces"
-	corev1 "maistra.io/api/core/v1"
+	federationv1 "maistra.io/api/federation/v1"
 )
 
-// ServiceExportsInformer provides access to a shared informer and lister for
-// ServiceExports.
-type ServiceExportsInformer interface {
+// ServiceMeshPeerInformer provides access to a shared informer and lister for
+// ServiceMeshPeers.
+type ServiceMeshPeerInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.ServiceExportsLister
+	Lister() v1.ServiceMeshPeerLister
 }
 
-type serviceExportsInformer struct {
+type serviceMeshPeerInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespaces       informers.NamespaceSet
 }
 
-// NewServiceExportsInformer constructs a new informer for ServiceExports type.
+// NewServiceMeshPeerInformer constructs a new informer for ServiceMeshPeer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewServiceExportsInformer(client versioned.Interface, namespaces informers.NamespaceSet, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredServiceExportsInformer(client, namespaces, resyncPeriod, indexers, nil)
+func NewServiceMeshPeerInformer(client versioned.Interface, namespaces informers.NamespaceSet, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredServiceMeshPeerInformer(client, namespaces, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredServiceExportsInformer constructs a new informer for ServiceExports type.
+// NewFilteredServiceMeshPeerInformer constructs a new informer for ServiceMeshPeer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredServiceExportsInformer(client versioned.Interface, namespaces informers.NamespaceSet, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredServiceMeshPeerInformer(client versioned.Interface, namespaces informers.NamespaceSet, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	newInformer := func(namespace string) cache.SharedIndexInformer {
 		return cache.NewSharedIndexInformer(
 			&cache.ListWatch{
@@ -62,16 +62,16 @@ func NewFilteredServiceExportsInformer(client versioned.Interface, namespaces in
 					if tweakListOptions != nil {
 						tweakListOptions(&options)
 					}
-					return client.CoreV1().ServiceExports(namespace).List(context.TODO(), options)
+					return client.FederationV1().ServiceMeshPeers(namespace).List(context.TODO(), options)
 				},
 				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 					if tweakListOptions != nil {
 						tweakListOptions(&options)
 					}
-					return client.CoreV1().ServiceExports(namespace).Watch(context.TODO(), options)
+					return client.FederationV1().ServiceMeshPeers(namespace).Watch(context.TODO(), options)
 				},
 			},
-			&corev1.ServiceExports{},
+			&federationv1.ServiceMeshPeer{},
 			resyncPeriod,
 			indexers,
 		)
@@ -80,14 +80,14 @@ func NewFilteredServiceExportsInformer(client versioned.Interface, namespaces in
 	return informers.NewMultiNamespaceInformer(namespaces, resyncPeriod, newInformer)
 }
 
-func (f *serviceExportsInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredServiceExportsInformer(client, f.namespaces, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *serviceMeshPeerInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredServiceMeshPeerInformer(client, f.namespaces, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *serviceExportsInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&corev1.ServiceExports{}, f.defaultInformer)
+func (f *serviceMeshPeerInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&federationv1.ServiceMeshPeer{}, f.defaultInformer)
 }
 
-func (f *serviceExportsInformer) Lister() v1.ServiceExportsLister {
-	return v1.NewServiceExportsLister(f.Informer().GetIndexer())
+func (f *serviceMeshPeerInformer) Lister() v1.ServiceMeshPeerLister {
+	return v1.NewServiceMeshPeerLister(f.Informer().GetIndexer())
 }

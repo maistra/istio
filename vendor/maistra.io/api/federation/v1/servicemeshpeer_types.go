@@ -25,28 +25,28 @@ import (
 // +kubebuilder:resource:categories=maistra-io
 // +groupName=maistra.io
 
-// MeshFederation is the Schema for joining two meshes together.  The resource
+// ServiceMeshPeer is the Schema for joining two meshes together.  The resource
 // name will be used to identify the 'cluster' to which imported services
 // belong.
-type MeshFederation struct {
+type ServiceMeshPeer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MeshFederationSpec   `json:"spec,omitempty"`
-	Status MeshFederationStatus `json:"status,omitempty"`
+	Spec   ServiceMeshPeerSpec   `json:"spec,omitempty"`
+	Status ServiceMeshPeerStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// MeshFederationList contains a list of MeshFederation
-type MeshFederationList struct {
+// ServiceMeshPeerList contains a list of ServiceMeshPeer
+type ServiceMeshPeerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []MeshFederation `json:"items"`
+	Items           []ServiceMeshPeer `json:"items"`
 }
 
-type MeshFederationSecurity struct {
+type ServiceMeshPeerSecurity struct {
 	// ClientID of the remote mesh.  This is used to authenticate incoming
 	// requrests from the remote mesh's discovery client.
 	// +required
@@ -78,7 +78,7 @@ type MeshFederationSecurity struct {
 	AllowDirectOutbound bool `json:"-"`
 }
 
-type MeshFederationGateways struct {
+type ServiceMeshPeerGateways struct {
 	// Gateway through which inbound federated service traffic will travel.
 	// +optional
 	Ingress corev1.LocalObjectReference `json:"ingress,omitempty"`
@@ -88,24 +88,24 @@ type MeshFederationGateways struct {
 	Egress corev1.LocalObjectReference `json:"egress,omitempty"`
 }
 
-// MeshFederationSpec configures details required to support federation with
+// ServiceMeshPeerSpec configures details required to support federation with
 // another service mesh.
-type MeshFederationSpec struct {
+type ServiceMeshPeerSpec struct {
 	// Remote configures details related to the remote mesh with which this mesh
 	// is federating.
 	// +required
-	Remote MeshFederationRemote `json:"remote,omitempty"`
+	Remote ServiceMeshPeerRemote `json:"remote,omitempty"`
 
 	// Gateways configures the gateways used to facilitate ingress and egress
 	// with the other mesh.
-	Gateways MeshFederationGateways `json:"gateways,omitempty"`
+	Gateways ServiceMeshPeerGateways `json:"gateways,omitempty"`
 
 	// Security configures details for securing communication with the other
 	// mesh.
-	Security MeshFederationSecurity `json:"security,omitempty"`
+	Security ServiceMeshPeerSecurity `json:"security,omitempty"`
 }
 
-type MeshFederationRemote struct {
+type ServiceMeshPeerRemote struct {
 	// Addresses are the addresses to which discovery and service requests
 	// should be sent (i.e. the addresses of ingress gateways on the remote
 	// mesh).  These may be specified as resolveable DNS names or IP addresses.
@@ -118,33 +118,19 @@ type MeshFederationRemote struct {
 	ServicePort int32 `json:"servicePort,omitempty"`
 }
 
-// MeshFederationStatus provides information related to the other mesh.
-type MeshFederationStatus struct {
+// ServiceMeshPeerStatus provides information related to the other mesh.
+type ServiceMeshPeerStatus struct {
 	// DiscoveryStatus represents the discovery status of each pilot/istiod pod
 	// in the mesh.
 	// +optional
-	DiscoveryStatus FederationDiscoveryStatus `json:"discoveryStatus,omitempty"`
-	// Exports provides details about the services exported by this mesh.
-	// +required
-	// +listType=map
-	// +listMapKey=exportedName
-	// +patchMergeKey=exportedName
-	// +patchStrategy=merge,retainKeys
-	Exports []MeshServiceMapping `json:"exports"`
-	// Imports provides details about the services imported by this mesh.
-	// +required
-	// +listType=map
-	// +listMapKey=exportedName
-	// +patchMergeKey=exportedName
-	// +patchStrategy=merge,retainKeys
-	Imports []MeshServiceMapping `json:"imports"`
+	DiscoveryStatus ServiceMeshPeerDiscoveryStatus `json:"discoveryStatus,omitempty"`
 }
 
-// FederationDiscoveryStatus provides details about the discovery status of each
+// ServiceMeshPeerDiscoveryStatus provides details about the discovery status of each
 // pilot/istiod instance in the mesh.  This is separated into lists of active
 // and inactive pods.  Active pods will all have their watch.connected value set
 // to true.
-type FederationDiscoveryStatus struct {
+type ServiceMeshPeerDiscoveryStatus struct {
 	// Active represents the pilot/istiod pods actively watching the other mesh
 	// for discovery.
 	// +optional
@@ -153,7 +139,7 @@ type FederationDiscoveryStatus struct {
 	// +listMapKey=pod
 	// +patchMergeKey=pod
 	// +patchStrategy=merge,retainKeys
-	Active []FederationPodDiscoveryStatus `json:"active,omitempty"`
+	Active []PodPeerDiscoveryStatus `json:"active,omitempty"`
 	// Inactive represents the pilot/istiod pods not actively watching the other
 	// mesh for discovery.
 	// +optional
@@ -162,55 +148,24 @@ type FederationDiscoveryStatus struct {
 	// +listMapKey=pod
 	// +patchMergeKey=pod
 	// +patchStrategy=merge,retainKeys
-	Inactive []FederationPodDiscoveryStatus `json:"inactive,omitempty"`
+	Inactive []PodPeerDiscoveryStatus `json:"inactive,omitempty"`
 }
 
-// FederationPodDiscoveryStatus provides discovery details related to a specific
+// PodPeerDiscoveryStatus provides discovery details related to a specific
 // pilot/istiod pod.
-type FederationPodDiscoveryStatus struct {
-	// Discovery provides details about the connection to the remote mesh.
+type PodPeerDiscoveryStatus struct {
+	// PeerDiscoveryStatus provides details about the connection to the remote mesh.
 	// +required
-	MeshDiscoveryStatus `json:",inline"`
+	PeerDiscoveryStatus `json:",inline"`
 	// Pod is the pod name to which these details apply.  This maps to a
 	// a pilot/istiod pod.
 	// +required
 	Pod string `json:"pod"`
 }
 
-// ServiceKey provides all the details about a Service
-type ServiceKey struct {
-	// Name represents the simple name of the service, e.g. the metadata.name
-	// field of a kubernetes Service.
-	// +required
-	Name string `json:"name"`
-	// Namespace represents the namespace within which the service resides.
-	// +required
-	Namespace string `json:"namespace"`
-	// Hostname represents fully qualified domain name (FQDN) used to access
-	// the service.
-	// +required
-	Hostname string `json:"hostname"`
-}
-
-// MeshServiceMapping represents the name mapping between an exported service
-// and its local counterpart.
-type MeshServiceMapping struct {
-	// LocalService represents the service in the local (i.e. this) mesh. For an
-	// exporting mesh, this would be the service being exported. For an
-	// importing mesh, this would be the imported service.
-	// +required
-	LocalService ServiceKey `json:"localService"`
-	// ExportedName represents the fully qualified domain name (FQDN) of an
-	// exported service.  For an exporting mesh, this is the name that is
-	// exported to the remote mesh. For an importing mesh, this would be the
-	// name of the service exported by the remote mesh.
-	// +required
-	ExportedName string `json:"exportedName"`
-}
-
-// MeshDiscoveryStatus represents the status of the discovery connection between
+// PeerDiscoveryStatus represents the status of the discovery connection between
 // meshes.
-type MeshDiscoveryStatus struct {
+type PeerDiscoveryStatus struct {
 	// Remotes represents details related to the inbound connections from remote
 	// meshes.
 	// +optional

@@ -26,7 +26,7 @@ import (
 
 var (
 	// SchemeGroupVersion is group version used to register these objects
-	SchemeGroupVersion = schema.GroupVersion{Group: "maistra.io", Version: "v1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "federation.maistra.io", Version: "v1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
@@ -42,9 +42,8 @@ func Resource(resource string) schema.GroupResource {
 
 func init() {
 	SchemeBuilder.Register(
-		&ServiceMeshExtension{}, &ServiceMeshExtensionList{},
-		&ServiceMeshControlPlane{}, &ServiceMeshControlPlaneList{},
-		&ServiceMeshMember{}, &ServiceMeshMemberList{},
-		&ServiceMeshMemberRoll{}, &ServiceMeshMemberRollList{},
+		&ServiceMeshPeer{}, &ServiceMeshPeerList{},
+		&ExportedServiceSet{}, &ExportedServiceSetList{},
+		&ImportedServiceSet{}, &ImportedServiceSetList{},
 	)
 }

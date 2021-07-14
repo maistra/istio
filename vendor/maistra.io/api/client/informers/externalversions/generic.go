@@ -24,6 +24,7 @@ import (
 	v1 "maistra.io/api/core/v1"
 	v1alpha1 "maistra.io/api/core/v1alpha1"
 	v2 "maistra.io/api/core/v2"
+	federationv1 "maistra.io/api/federation/v1"
 )
 
 // GenericInformer is type of SharedIndexInformer which will locate and delegate to other
@@ -53,12 +54,6 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=core, Version=v1
-	case v1.SchemeGroupVersion.WithResource("meshfederations"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().MeshFederations().Informer()}, nil
-	case v1.SchemeGroupVersion.WithResource("serviceexports"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceExports().Informer()}, nil
-	case v1.SchemeGroupVersion.WithResource("serviceimports"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceImports().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("servicemeshcontrolplanes"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1().ServiceMeshControlPlanes().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("servicemeshextensions"):
@@ -75,6 +70,14 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=core, Version=v2
 	case v2.SchemeGroupVersion.WithResource("servicemeshcontrolplanes"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V2().ServiceMeshControlPlanes().Informer()}, nil
+
+		// Group=federation.maistra.io, Version=v1
+	case federationv1.SchemeGroupVersion.WithResource("exportedservicesets"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Federation().V1().ExportedServiceSets().Informer()}, nil
+	case federationv1.SchemeGroupVersion.WithResource("importedservicesets"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Federation().V1().ImportedServiceSets().Informer()}, nil
+	case federationv1.SchemeGroupVersion.WithResource("servicemeshpeers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Federation().V1().ServiceMeshPeers().Informer()}, nil
 
 	}
 

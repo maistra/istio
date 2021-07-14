@@ -25,64 +25,64 @@ import (
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 	internalinterfaces "maistra.io/api/client/informers/externalversions/internalinterfaces"
-	v1 "maistra.io/api/client/listers/core/v1"
+	v1 "maistra.io/api/client/listers/federation/v1"
 	versioned "maistra.io/api/client/versioned"
-	corev1 "maistra.io/api/core/v1"
+	federationv1 "maistra.io/api/federation/v1"
 )
 
-// ServiceExportsInformer provides access to a shared informer and lister for
-// ServiceExports.
-type ServiceExportsInformer interface {
+// ExportedServiceSetInformer provides access to a shared informer and lister for
+// ExportedServiceSets.
+type ExportedServiceSetInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.ServiceExportsLister
+	Lister() v1.ExportedServiceSetLister
 }
 
-type serviceExportsInformer struct {
+type exportedServiceSetInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewServiceExportsInformer constructs a new informer for ServiceExports type.
+// NewExportedServiceSetInformer constructs a new informer for ExportedServiceSet type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewServiceExportsInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredServiceExportsInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewExportedServiceSetInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredExportedServiceSetInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredServiceExportsInformer constructs a new informer for ServiceExports type.
+// NewFilteredExportedServiceSetInformer constructs a new informer for ExportedServiceSet type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredServiceExportsInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredExportedServiceSetInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CoreV1().ServiceExports(namespace).List(context.TODO(), options)
+				return client.FederationV1().ExportedServiceSets(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CoreV1().ServiceExports(namespace).Watch(context.TODO(), options)
+				return client.FederationV1().ExportedServiceSets(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&corev1.ServiceExports{},
+		&federationv1.ExportedServiceSet{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *serviceExportsInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredServiceExportsInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *exportedServiceSetInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredExportedServiceSetInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *serviceExportsInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&corev1.ServiceExports{}, f.defaultInformer)
+func (f *exportedServiceSetInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&federationv1.ExportedServiceSet{}, f.defaultInformer)
 }
 
-func (f *serviceExportsInformer) Lister() v1.ServiceExportsLister {
-	return v1.NewServiceExportsLister(f.Informer().GetIndexer())
+func (f *exportedServiceSetInformer) Lister() v1.ExportedServiceSetLister {
+	return v1.NewExportedServiceSetLister(f.Informer().GetIndexer())
 }
