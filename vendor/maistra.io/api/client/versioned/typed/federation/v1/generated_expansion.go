@@ -16,10 +16,8 @@
 
 package v1
 
-type ServiceMeshControlPlaneExpansion interface{}
+type ExportedServiceSetExpansion interface{}
 
-type ServiceMeshExtensionExpansion interface{}
+type ImportedServiceSetExpansion interface{}
 
-type ServiceMeshMemberExpansion interface{}
-
-type ServiceMeshMemberRollExpansion interface{}
+type ServiceMeshPeerExpansion interface{}

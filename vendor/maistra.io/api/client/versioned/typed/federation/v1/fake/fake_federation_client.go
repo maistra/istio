@@ -19,32 +19,28 @@ package fake
 import (
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
-	v1 "maistra.io/api/client/versioned/typed/core/v1"
+	v1 "maistra.io/api/client/versioned/typed/federation/v1"
 )
 
-type FakeCoreV1 struct {
+type FakeFederationV1 struct {
 	*testing.Fake
 }
 
-func (c *FakeCoreV1) ServiceMeshControlPlanes(namespace string) v1.ServiceMeshControlPlaneInterface {
-	return &FakeServiceMeshControlPlanes{c, namespace}
+func (c *FakeFederationV1) ExportedServiceSets(namespace string) v1.ExportedServiceSetInterface {
+	return &FakeExportedServiceSets{c, namespace}
 }
 
-func (c *FakeCoreV1) ServiceMeshExtensions(namespace string) v1.ServiceMeshExtensionInterface {
-	return &FakeServiceMeshExtensions{c, namespace}
+func (c *FakeFederationV1) ImportedServiceSets(namespace string) v1.ImportedServiceSetInterface {
+	return &FakeImportedServiceSets{c, namespace}
 }
 
-func (c *FakeCoreV1) ServiceMeshMembers(namespace string) v1.ServiceMeshMemberInterface {
-	return &FakeServiceMeshMembers{c, namespace}
-}
-
-func (c *FakeCoreV1) ServiceMeshMemberRolls(namespace string) v1.ServiceMeshMemberRollInterface {
-	return &FakeServiceMeshMemberRolls{c, namespace}
+func (c *FakeFederationV1) ServiceMeshPeers(namespace string) v1.ServiceMeshPeerInterface {
+	return &FakeServiceMeshPeers{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeCoreV1) RESTClient() rest.Interface {
+func (c *FakeFederationV1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

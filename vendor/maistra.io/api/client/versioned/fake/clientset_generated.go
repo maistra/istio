@@ -29,6 +29,8 @@ import (
 	fakecorev1alpha1 "maistra.io/api/client/versioned/typed/core/v1alpha1/fake"
 	corev2 "maistra.io/api/client/versioned/typed/core/v2"
 	fakecorev2 "maistra.io/api/client/versioned/typed/core/v2/fake"
+	federationv1 "maistra.io/api/client/versioned/typed/federation/v1"
+	fakefederationv1 "maistra.io/api/client/versioned/typed/federation/v1/fake"
 )
 
 // NewSimpleClientset returns a clientset that will respond with the provided objects.
@@ -91,4 +93,9 @@ func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
 // CoreV2 retrieves the CoreV2Client
 func (c *Clientset) CoreV2() corev2.CoreV2Interface {
 	return &fakecorev2.FakeCoreV2{Fake: &c.Fake}
+}
+
+// FederationV1 retrieves the FederationV1Client
+func (c *Clientset) FederationV1() federationv1.FederationV1Interface {
+	return &fakefederationv1.FakeFederationV1{Fake: &c.Fake}
 }

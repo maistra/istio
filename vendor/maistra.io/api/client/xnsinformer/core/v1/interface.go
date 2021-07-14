@@ -23,12 +23,6 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// MeshFederations returns a MeshFederationInformer.
-	MeshFederations() MeshFederationInformer
-	// ServiceExports returns a ServiceExportsInformer.
-	ServiceExports() ServiceExportsInformer
-	// ServiceImports returns a ServiceImportsInformer.
-	ServiceImports() ServiceImportsInformer
 	// ServiceMeshControlPlanes returns a ServiceMeshControlPlaneInformer.
 	ServiceMeshControlPlanes() ServiceMeshControlPlaneInformer
 	// ServiceMeshExtensions returns a ServiceMeshExtensionInformer.
@@ -48,21 +42,6 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespaces informers.NamespaceSet, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespaces: namespaces, tweakListOptions: tweakListOptions}
-}
-
-// MeshFederations returns a MeshFederationInformer.
-func (v *version) MeshFederations() MeshFederationInformer {
-	return &meshFederationInformer{factory: v.factory, namespaces: v.namespaces, tweakListOptions: v.tweakListOptions}
-}
-
-// ServiceExports returns a ServiceExportsInformer.
-func (v *version) ServiceExports() ServiceExportsInformer {
-	return &serviceExportsInformer{factory: v.factory, namespaces: v.namespaces, tweakListOptions: v.tweakListOptions}
-}
-
-// ServiceImports returns a ServiceImportsInformer.
-func (v *version) ServiceImports() ServiceImportsInformer {
-	return &serviceImportsInformer{factory: v.factory, namespaces: v.namespaces, tweakListOptions: v.tweakListOptions}
 }
 
 // ServiceMeshControlPlanes returns a ServiceMeshControlPlaneInformer.

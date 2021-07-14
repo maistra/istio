@@ -26,6 +26,7 @@ import (
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 	core "maistra.io/api/client/informers/externalversions/core"
+	federation "maistra.io/api/client/informers/externalversions/federation"
 	internalinterfaces "maistra.io/api/client/informers/externalversions/internalinterfaces"
 	versioned "maistra.io/api/client/versioned"
 )
@@ -171,8 +172,13 @@ type SharedInformerFactory interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
 	Core() core.Interface
+	Federation() federation.Interface
 }
 
 func (f *sharedInformerFactory) Core() core.Interface {
 	return core.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Federation() federation.Interface {
+	return federation.New(f, f.namespace, f.tweakListOptions)
 }

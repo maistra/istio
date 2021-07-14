@@ -25,6 +25,7 @@ import (
 	corev1 "maistra.io/api/core/v1"
 	corev1alpha1 "maistra.io/api/core/v1alpha1"
 	corev2 "maistra.io/api/core/v2"
+	federationv1 "maistra.io/api/federation/v1"
 )
 
 var scheme = runtime.NewScheme()
@@ -34,6 +35,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	corev1.AddToScheme,
 	corev1alpha1.AddToScheme,
 	corev2.AddToScheme,
+	federationv1.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition

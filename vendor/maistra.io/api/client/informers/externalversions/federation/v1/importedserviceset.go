@@ -25,64 +25,64 @@ import (
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 	internalinterfaces "maistra.io/api/client/informers/externalversions/internalinterfaces"
-	v1 "maistra.io/api/client/listers/core/v1"
+	v1 "maistra.io/api/client/listers/federation/v1"
 	versioned "maistra.io/api/client/versioned"
-	corev1 "maistra.io/api/core/v1"
+	federationv1 "maistra.io/api/federation/v1"
 )
 
-// MeshFederationInformer provides access to a shared informer and lister for
-// MeshFederations.
-type MeshFederationInformer interface {
+// ImportedServiceSetInformer provides access to a shared informer and lister for
+// ImportedServiceSets.
+type ImportedServiceSetInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.MeshFederationLister
+	Lister() v1.ImportedServiceSetLister
 }
 
-type meshFederationInformer struct {
+type importedServiceSetInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewMeshFederationInformer constructs a new informer for MeshFederation type.
+// NewImportedServiceSetInformer constructs a new informer for ImportedServiceSet type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewMeshFederationInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredMeshFederationInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewImportedServiceSetInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredImportedServiceSetInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredMeshFederationInformer constructs a new informer for MeshFederation type.
+// NewFilteredImportedServiceSetInformer constructs a new informer for ImportedServiceSet type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredMeshFederationInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredImportedServiceSetInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CoreV1().MeshFederations(namespace).List(context.TODO(), options)
+				return client.FederationV1().ImportedServiceSets(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CoreV1().MeshFederations(namespace).Watch(context.TODO(), options)
+				return client.FederationV1().ImportedServiceSets(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&corev1.MeshFederation{},
+		&federationv1.ImportedServiceSet{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *meshFederationInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredMeshFederationInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *importedServiceSetInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredImportedServiceSetInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *meshFederationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&corev1.MeshFederation{}, f.defaultInformer)
+func (f *importedServiceSetInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&federationv1.ImportedServiceSet{}, f.defaultInformer)
 }
 
-func (f *meshFederationInformer) Lister() v1.MeshFederationLister {
-	return v1.NewMeshFederationLister(f.Informer().GetIndexer())
+func (f *importedServiceSetInformer) Lister() v1.ImportedServiceSetLister {
+	return v1.NewImportedServiceSetLister(f.Informer().GetIndexer())
 }
