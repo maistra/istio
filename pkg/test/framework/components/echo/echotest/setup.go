@@ -53,9 +53,22 @@ func (t *T) SetupForPair(setupFn func(ctx framework.TestContext, src echo.Instan
 	return t
 }
 
+func (t *T) TeardownForPair(teardownFn func(ctx framework.TestContext, src echo.Instances, dst echo.Instances) error) *T {
+	t.deploymentPairTeardown = append(t.deploymentPairTeardown, teardownFn)
+	return t
+}
+
 func (t *T) setupPair(ctx framework.TestContext, src echo.Instances, dst echo.Instances) {
 	for _, setupFn := range t.deploymentPairSetup {
 		if err := setupFn(ctx, src, dst); err != nil {
+			ctx.Fatal(err)
+		}
+	}
+}
+
+func (t *T) teardownPair(ctx framework.TestContext, src echo.Instances, dst echo.Instances) {
+	for _, teardownFn := range t.deploymentPairTeardown {
+		if err := teardownFn(ctx, src, dst); err != nil {
 			ctx.Fatal(err)
 		}
 	}

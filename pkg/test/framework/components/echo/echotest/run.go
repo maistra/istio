@@ -31,6 +31,7 @@ func (t *T) Run(testFn perInstanceTest) {
 		t.setup(ctx, srcInstances)
 		t.toEachDeployment(ctx, func(ctx framework.TestContext, dstInstances echo.Instances) {
 			t.setupPair(ctx, srcInstances, dstInstances)
+			defer t.teardownPair(ctx, srcInstances, dstInstances)
 			t.fromEachCluster(ctx, srcInstances, dstInstances, testFn)
 		})
 	})
