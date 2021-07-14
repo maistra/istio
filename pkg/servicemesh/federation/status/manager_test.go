@@ -26,12 +26,13 @@ import (
 	"k8s.io/client-go/tools/cache"
 	maistraclient "maistra.io/api/client/versioned"
 	"maistra.io/api/client/versioned/fake"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/leaderelection"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/model"
+	"istio.io/pkg/log"
 )
 
 var (
@@ -55,11 +56,15 @@ func TestStatusManager(t *testing.T) {
 		Namespace: namespace,
 	}
 	testCases := []struct {
-		name       string
-		mesh       types.NamespacedName
-		events     []func(h Handler)
-		status     []v1.MeshFederationStatus
-		assertions []func(t *testing.T, status *v1.MeshFederationStatus)
+		name   string
+		mesh   types.NamespacedName
+		events []func(h Handler)
+		status []struct {
+			peer    v1.ServiceMeshPeerStatus
+			exports v1.ExportedServiceSetStatus
+			imports v1.ImportedServiceSetStatus
+		}
+		assertions []func(t *testing.T, status *v1.ServiceMeshPeerStatus)
 	}{
 		{
 			name: "initial-status",
@@ -77,26 +82,30 @@ func TestStatusManager(t *testing.T) {
 					h.WatchTerminated("503")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.MeshFederationStatus){
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
 				nil,
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					if status.DiscoveryStatus.Inactive[0].Watch.LastConnected.IsZero() {
 						t.Errorf("expected LastConnected to be updated")
 					}
 				},
 			},
-			status: []v1.MeshFederationStatus{
+			status: []struct {
+				peer    v1.ServiceMeshPeerStatus
+				exports v1.ExportedServiceSetStatus
+				imports v1.ImportedServiceSetStatus
+			}{
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Watch: v1.DiscoveryWatchStatus{
-										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-											Connected: false,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Watch: v1.DiscoveryWatchStatus{
+											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+												Connected: false,
+											},
 										},
 									},
 								},
@@ -105,17 +114,17 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Watch: v1.DiscoveryWatchStatus{
-										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-											Connected:            false,
-											LastDisconnectStatus: "503",
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Watch: v1.DiscoveryWatchStatus{
+											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+												Connected:            false,
+												LastDisconnectStatus: "503",
+											},
 										},
 									},
 								},
@@ -140,31 +149,35 @@ func TestStatusManager(t *testing.T) {
 					h.WatchTerminated("200")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.MeshFederationStatus){
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
 				nil,
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					if status.DiscoveryStatus.Active[0].Watch.LastConnected.IsZero() {
 						t.Errorf("expected LastConnected to be updated")
 					}
 				},
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					if status.DiscoveryStatus.Inactive[0].Watch.LastDisconnect.IsZero() {
 						t.Errorf("expected LastDisconnect to be updated")
 					}
 				},
 			},
-			status: []v1.MeshFederationStatus{
+			status: []struct {
+				peer    v1.ServiceMeshPeerStatus
+				exports v1.ExportedServiceSetStatus
+				imports v1.ImportedServiceSetStatus
+			}{
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Watch: v1.DiscoveryWatchStatus{
-										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-											Connected: false,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Watch: v1.DiscoveryWatchStatus{
+											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+												Connected: false,
+											},
 										},
 									},
 								},
@@ -173,16 +186,16 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Active: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Watch: v1.DiscoveryWatchStatus{
-										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-											Connected: true,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Active: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Watch: v1.DiscoveryWatchStatus{
+											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+												Connected: true,
+											},
 										},
 									},
 								},
@@ -191,17 +204,17 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Watch: v1.DiscoveryWatchStatus{
-										DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-											Connected:            false,
-											LastDisconnectStatus: "200",
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Watch: v1.DiscoveryWatchStatus{
+											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+												Connected:            false,
+												LastDisconnectStatus: "200",
+											},
 										},
 									},
 								},
@@ -228,14 +241,14 @@ func TestStatusManager(t *testing.T) {
 					h.RemoteWatchTerminated("10.10.10.10")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.MeshFederationStatus){
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					if status.DiscoveryStatus.Inactive[0].Remotes[0].LastConnected.IsZero() {
 						t.Errorf("expected LastConnected to be updated")
 					}
 				},
 				nil,
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					// full sync causes a push, so we can also verify that an event was seen
 					if status.DiscoveryStatus.Inactive[0].Remotes[0].LastEvent.IsZero() {
 						t.Errorf("expected LastEvent to be updated")
@@ -244,26 +257,30 @@ func TestStatusManager(t *testing.T) {
 						t.Errorf("expected LastFullSync to be updated")
 					}
 				},
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					if status.DiscoveryStatus.Inactive[0].Remotes[0].LastDisconnect.IsZero() {
 						t.Errorf("expected LastDisconnect to be updated")
 					}
 				},
 			},
-			status: []v1.MeshFederationStatus{
+			status: []struct {
+				peer    v1.ServiceMeshPeerStatus
+				exports v1.ExportedServiceSetStatus
+				imports v1.ImportedServiceSetStatus
+			}{
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Remotes: []v1.DiscoveryRemoteStatus{
-										{
-											Source: "10.10.10.10",
-											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-												Connected: true,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Remotes: []v1.DiscoveryRemoteStatus{
+											{
+												Source: "10.10.10.10",
+												DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+													Connected: true,
+												},
 											},
 										},
 									},
@@ -273,18 +290,18 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Remotes: []v1.DiscoveryRemoteStatus{
-										{
-											Source: "10.10.10.10",
-											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-												Connected: true,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Remotes: []v1.DiscoveryRemoteStatus{
+											{
+												Source: "10.10.10.10",
+												DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+													Connected: true,
+												},
 											},
 										},
 									},
@@ -294,18 +311,18 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Remotes: []v1.DiscoveryRemoteStatus{
-										{
-											Source: "10.10.10.10",
-											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-												Connected: true,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Remotes: []v1.DiscoveryRemoteStatus{
+											{
+												Source: "10.10.10.10",
+												DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+													Connected: true,
+												},
 											},
 										},
 									},
@@ -315,18 +332,18 @@ func TestStatusManager(t *testing.T) {
 					},
 				},
 				{
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{},
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-								MeshDiscoveryStatus: v1.MeshDiscoveryStatus{
-									Remotes: []v1.DiscoveryRemoteStatus{
-										{
-											Source: "10.10.10.10",
-											DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
-												Connected: false,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+									PeerDiscoveryStatus: v1.PeerDiscoveryStatus{
+										Remotes: []v1.DiscoveryRemoteStatus{
+											{
+												Source: "10.10.10.10",
+												DiscoveryConnectionStatus: v1.DiscoveryConnectionStatus{
+													Connected: false,
+												},
 											},
 										},
 									},
@@ -371,60 +388,70 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.MeshFederationStatus){
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
 				nil, nil, nil,
 			},
-			status: []v1.MeshFederationStatus{
+			status: []struct {
+				peer    v1.ServiceMeshPeerStatus
+				exports v1.ExportedServiceSetStatus
+				imports v1.ImportedServiceSetStatus
+			}{
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{
-						{
-							LocalService: v1.ServiceKey{
-								Name:      "real-service",
-								Namespace: "real-namespace",
-								Hostname:  "real-service.real-namespace.svc.cluster.local",
+					exports: v1.ExportedServiceSetStatus{
+						ExportedServices: []v1.PeerServiceMapping{
+							{
+								LocalService: v1.ServiceKey{
+									Name:      "real-service",
+									Namespace: "real-namespace",
+									Hostname:  "real-service.real-namespace.svc.cluster.local",
+								},
+								ExportedName: "exported-service.exported-namespace.svc.mesh.local",
 							},
-							ExportedName: "exported-service.exported-namespace.svc.mesh.local",
 						},
 					},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{
-						{
-							LocalService: v1.ServiceKey{
-								Name:      "real-service",
-								Namespace: "real-namespace",
-								Hostname:  "real-service.real-namespace.svc.cluster.local",
+					exports: v1.ExportedServiceSetStatus{
+						ExportedServices: []v1.PeerServiceMapping{
+							{
+								LocalService: v1.ServiceKey{
+									Name:      "real-service",
+									Namespace: "real-namespace",
+									Hostname:  "real-service.real-namespace.svc.cluster.local",
+								},
+								ExportedName: "updated-exported-service.exported-namespace.svc.mesh.local",
 							},
-							ExportedName: "updated-exported-service.exported-namespace.svc.mesh.local",
 						},
 					},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 			},
 		},
@@ -462,53 +489,57 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.MeshFederationStatus){
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
 				nil, nil, nil, nil,
 			},
-			status: []v1.MeshFederationStatus{
+			status: []struct {
+				peer    v1.ServiceMeshPeerStatus
+				exports v1.ExportedServiceSetStatus
+				imports v1.ImportedServiceSetStatus
+			}{
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 			},
 		},
@@ -540,61 +571,71 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.MeshFederationStatus){
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					if status.DiscoveryStatus.Inactive[0].Watch.LastEvent.IsZero() {
 						t.Errorf("expected LastEvent to be updated")
 					}
 				},
 				nil, nil,
 			},
-			status: []v1.MeshFederationStatus{
+			status: []struct {
+				peer    v1.ServiceMeshPeerStatus
+				exports v1.ExportedServiceSetStatus
+				imports v1.ImportedServiceSetStatus
+			}{
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{
-						{
-							LocalService: v1.ServiceKey{
-								Name:      "local-service",
-								Namespace: "local-namespace",
-								Hostname:  "local-service.local-namespace.svc.test-mesh.local",
+					imports: v1.ImportedServiceSetStatus{
+						ImportedServices: []v1.PeerServiceMapping{
+							{
+								LocalService: v1.ServiceKey{
+									Name:      "local-service",
+									Namespace: "local-namespace",
+									Hostname:  "local-service.local-namespace.svc.test-mesh.local",
+								},
+								ExportedName: "exported-service.exported-namespace.svc.mesh.local",
 							},
-							ExportedName: "exported-service.exported-namespace.svc.mesh.local",
 						},
 					},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Exports: []v1.MeshServiceMapping{},
-					Imports: []v1.MeshServiceMapping{
-						{
-							LocalService: v1.ServiceKey{},
-							ExportedName: "exported-service.exported-namespace.svc.mesh.local",
+					imports: v1.ImportedServiceSetStatus{
+						ImportedServices: []v1.PeerServiceMapping{
+							{
+								LocalService: v1.ServiceKey{},
+								ExportedName: "exported-service.exported-namespace.svc.mesh.local",
+							},
 						},
 					},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 			},
 		},
@@ -626,8 +667,8 @@ func TestStatusManager(t *testing.T) {
 					h.FullSyncComplete()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.MeshFederationStatus){
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					if !status.DiscoveryStatus.Inactive[0].Watch.LastEvent.IsZero() {
 						t.Errorf("did not expect LastEvent to be updated")
 					}
@@ -636,7 +677,7 @@ func TestStatusManager(t *testing.T) {
 					}
 				},
 				nil, nil,
-				func(t *testing.T, status *v1.MeshFederationStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
 					// this should have been updated in one of the previous events
 					if status.DiscoveryStatus.Inactive[0].Watch.LastEvent.IsZero() {
 						t.Errorf("expected LastEvent to be updated")
@@ -646,54 +687,59 @@ func TestStatusManager(t *testing.T) {
 					}
 				},
 			},
-			status: []v1.MeshFederationStatus{
+			status: []struct {
+				peer    v1.ServiceMeshPeerStatus
+				exports v1.ExportedServiceSetStatus
+				imports v1.ImportedServiceSetStatus
+			}{
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
 						},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-							},
-						},
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
+							}},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
 							},
-						},
-					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
+						}},
 				},
 				{
-					DiscoveryStatus: v1.FederationDiscoveryStatus{
-						Inactive: []v1.FederationPodDiscoveryStatus{
-							{
-								Pod: istiodName.Name,
-							},
-						},
+					peer: v1.ServiceMeshPeerStatus{
+						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+							Inactive: []v1.PodPeerDiscoveryStatus{
+								{
+									Pod: istiodName.Name,
+								},
+							}},
 					},
-					Imports: []v1.MeshServiceMapping{},
-					Exports: []v1.MeshServiceMapping{},
 				},
 			},
 		},
 	}
+	logOpts := log.DefaultOptions()
+	logOpts.SetOutputLevel("federation", log.DebugLevel)
+	logOpts.JSONEncoding = false
+	log.Configure(logOpts)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// verify test is setup correctly
@@ -708,10 +754,13 @@ func TestStatusManager(t *testing.T) {
 			go kubeClient.KubeInformer().Core().V1().Pods().Informer().Run(stop)
 			for !kubeClient.KubeInformer().Core().V1().Pods().Informer().HasSynced() {
 			}
-			cs := fake.NewSimpleClientset()
+			cs := fake.NewSimpleClientset(
+				&v1.ExportedServiceSet{ObjectMeta: metav1.ObjectMeta{Name: tc.mesh.Name, Namespace: tc.mesh.Namespace}},
+				&v1.ImportedServiceSet{ObjectMeta: metav1.ObjectMeta{Name: tc.mesh.Name, Namespace: tc.mesh.Namespace}})
 			rm, err := common.NewResourceManager(common.ControllerOptions{
-				KubeClient: kubeClient,
-				MaistraCS:  cs,
+				KubeClient:   kubeClient,
+				MaistraCS:    cs,
+				ResyncPeriod: 1 * time.Millisecond,
 			}, nil)
 			if err != nil {
 				t.Fatalf("error creating ResourceManager: %s", err)
@@ -719,7 +768,7 @@ func TestStatusManager(t *testing.T) {
 			stopChan := make(chan struct{})
 			defer close(stopChan)
 			go rm.Start(stopChan)
-			cs.CoreV1().MeshFederations(namespace).Create(context.TODO(), &v1.MeshFederation{
+			cs.FederationV1().ServiceMeshPeers(namespace).Create(context.TODO(), &v1.ServiceMeshPeer{
 				ObjectMeta: meshName,
 			}, metav1.CreateOptions{})
 			leaderStarted := make(chan struct{})
@@ -736,20 +785,22 @@ func TestStatusManager(t *testing.T) {
 				close(stopChan)
 				t.Fatalf("timed out waiting for leader election")
 			}
-			manager.FederationAdded(tc.mesh)
+			for !rm.ExportsInformer().Informer().HasSynced() ||
+				!rm.ImportsInformer().Informer().HasSynced() ||
+				!rm.PeerInformer().Informer().HasSynced() {
+			}
+			manager.PeerAdded(tc.mesh)
 			if err := manager.PushStatus(); err != nil {
 				t.Fatalf("error updating initial status: %s", err)
 			}
-			verifyStatus(t, cs, tc.mesh, &v1.MeshFederationStatus{
-				DiscoveryStatus: v1.FederationDiscoveryStatus{
-					Inactive: []v1.FederationPodDiscoveryStatus{
+			verifyPeerStatus(t, cs, tc.mesh, &v1.ServiceMeshPeerStatus{
+				DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
+					Inactive: []v1.PodPeerDiscoveryStatus{
 						{
 							Pod: istiodName.Name,
 						},
 					},
 				},
-				Exports: []v1.MeshServiceMapping{},
-				Imports: []v1.MeshServiceMapping{},
 			}, nil)
 
 			handler := manager.HandlerFor(types.NamespacedName{Namespace: tc.mesh.Namespace, Name: tc.mesh.Name})
@@ -757,20 +808,23 @@ func TestStatusManager(t *testing.T) {
 				t.Fatalf("nil handler for %s/%s", tc.mesh.Namespace, tc.mesh.Name)
 			}
 			for index, f := range tc.events {
+				t.Logf("processing event %d", index)
 				f(handler)
-				verifyStatus(t, cs, tc.mesh, &tc.status[index], tc.assertions[index])
+				verifyPeerStatus(t, cs, tc.mesh, &tc.status[index].peer, tc.assertions[index])
+				verifyExportStatus(t, cs, tc.mesh, &tc.status[index].exports)
+				verifyImportStatus(t, cs, tc.mesh, &tc.status[index].imports)
 			}
 		})
 	}
 }
 
-func verifyStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName, expected *v1.MeshFederationStatus,
-	assert func(*testing.T, *v1.MeshFederationStatus)) {
+func verifyPeerStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName, expected *v1.ServiceMeshPeerStatus,
+	assert func(*testing.T, *v1.ServiceMeshPeerStatus)) {
 	t.Helper()
 
-	actual, err := cs.CoreV1().MeshFederations(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+	actual, err := cs.FederationV1().ServiceMeshPeers(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
 	if err != nil {
-		t.Errorf("unexpected error retrieving FederationStatus %s/%s: %s", name.Namespace, name.Name, err)
+		t.Errorf("unexpected error retrieving ServiceMeshPeer %s/%s: %s", name.Namespace, name.Name, err)
 		return
 	}
 	if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
@@ -778,5 +832,33 @@ func verifyStatus(t *testing.T, cs maistraclient.Interface, name types.Namespace
 	}
 	if assert != nil {
 		assert(t, &actual.Status)
+	}
+}
+
+func verifyExportStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName,
+	expected *v1.ExportedServiceSetStatus) {
+	t.Helper()
+
+	actual, err := cs.FederationV1().ExportedServiceSets(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("unexpected error retrieving ExportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
+		return
+	}
+	if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
+		t.Errorf("comparison failed, -got +want:\n%s", diff)
+	}
+}
+
+func verifyImportStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName,
+	expected *v1.ImportedServiceSetStatus) {
+	t.Helper()
+
+	actual, err := cs.FederationV1().ImportedServiceSets(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("unexpected error retrieving ImportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
+		return
+	}
+	if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
+		t.Errorf("comparison failed, -got +want:\n%s", diff)
 	}
 }

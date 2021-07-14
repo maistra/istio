@@ -17,10 +17,9 @@ package common
 import (
 	"reflect"
 
-	maistrainformerscorev1 "maistra.io/api/client/informers/externalversions/core/v1"
+	maistrainformersfederationv1 "maistra.io/api/client/informers/externalversions/federation/v1"
 	maistraclient "maistra.io/api/client/versioned"
 	maistraxnsinformer "maistra.io/api/client/xnsinformer"
-	v1 "maistra.io/api/core/v1"
 
 	"istio.io/istio/pkg/kube"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
@@ -29,11 +28,9 @@ import (
 type ResourceManager interface {
 	MaistraClientSet() maistraclient.Interface
 	KubeClient() kube.Client
-	MeshFederationInformer() maistrainformerscorev1.MeshFederationInformer
-	ServiceExportsInformer() maistrainformerscorev1.ServiceExportsInformer
-	ServiceImportsInformer() maistrainformerscorev1.ServiceImportsInformer
-	DefaultServiceExports(namespace string) (*v1.ServiceExports, error)
-	DefaultServiceImports(namespace string) (*v1.ServiceImports, error)
+	PeerInformer() maistrainformersfederationv1.ServiceMeshPeerInformer
+	ExportsInformer() maistrainformersfederationv1.ExportedServiceSetInformer
+	ImportsInformer() maistrainformersfederationv1.ImportedServiceSetInformer
 	Start(stopCh <-chan struct{})
 	HasSynced() bool
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
@@ -56,12 +53,12 @@ func NewResourceManager(opts ControllerOptions, mrc memberroll.MemberRollControl
 		mcs:  opts.MaistraCS,
 		kc:   opts.KubeClient,
 		inff: informerFactory,
-		mfi:  informerFactory.Core().V1().MeshFederations(),
-		sei:  informerFactory.Core().V1().ServiceExports(),
-		sii:  informerFactory.Core().V1().ServiceImports(),
+		pi:   informerFactory.Federation().V1().ServiceMeshPeers(),
+		sei:  informerFactory.Federation().V1().ExportedServiceSets(),
+		sii:  informerFactory.Federation().V1().ImportedServiceSets(),
 	}
 	// create the informers now, so they're registered with the factory
-	rm.mfi.Informer()
+	rm.pi.Informer()
 	rm.sei.Informer()
 	rm.sii.Informer()
 	return rm, nil
@@ -71,9 +68,9 @@ type resourceManager struct {
 	mcs  maistraclient.Interface
 	kc   kube.Client
 	inff maistraxnsinformer.SharedInformerFactory
-	mfi  maistrainformerscorev1.MeshFederationInformer
-	sei  maistrainformerscorev1.ServiceExportsInformer
-	sii  maistrainformerscorev1.ServiceImportsInformer
+	pi   maistrainformersfederationv1.ServiceMeshPeerInformer
+	sei  maistrainformersfederationv1.ExportedServiceSetInformer
+	sii  maistrainformersfederationv1.ImportedServiceSetInformer
 }
 
 var _ ResourceManager = (*resourceManager)(nil)
@@ -91,29 +88,21 @@ func (rm *resourceManager) Start(stopCh <-chan struct{}) {
 }
 
 func (rm *resourceManager) HasSynced() bool {
-	return rm.mfi.Informer().HasSynced() && rm.sei.Informer().HasSynced() && rm.sii.Informer().HasSynced()
+	return rm.pi.Informer().HasSynced() && rm.sei.Informer().HasSynced() && rm.sii.Informer().HasSynced()
 }
 
 func (rm *resourceManager) WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool {
 	return rm.inff.WaitForCacheSync(stopCh)
 }
 
-func (rm *resourceManager) MeshFederationInformer() maistrainformerscorev1.MeshFederationInformer {
-	return rm.mfi
+func (rm *resourceManager) PeerInformer() maistrainformersfederationv1.ServiceMeshPeerInformer {
+	return rm.pi
 }
 
-func (rm *resourceManager) ServiceExportsInformer() maistrainformerscorev1.ServiceExportsInformer {
+func (rm *resourceManager) ExportsInformer() maistrainformersfederationv1.ExportedServiceSetInformer {
 	return rm.sei
 }
 
-func (rm *resourceManager) ServiceImportsInformer() maistrainformerscorev1.ServiceImportsInformer {
+func (rm *resourceManager) ImportsInformer() maistrainformersfederationv1.ImportedServiceSetInformer {
 	return rm.sii
-}
-
-func (rm *resourceManager) DefaultServiceExports(namespace string) (*v1.ServiceExports, error) {
-	return rm.sei.Lister().ServiceExports(namespace).Get("default")
-}
-
-func (rm *resourceManager) DefaultServiceImports(namespace string) (*v1.ServiceImports, error) {
-	return rm.sii.Lister().ServiceImports(namespace).Get("default")
 }

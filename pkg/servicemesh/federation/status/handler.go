@@ -26,8 +26,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/pkg/log"
@@ -43,12 +44,12 @@ func newHandler(manager *manager, mesh types.NamespacedName) *handler {
 	return &handler{
 		manager:        manager,
 		mesh:           mesh,
-		logger:         manager.logger.WithLabels("mesh", mesh.String()),
+		logger:         manager.logger.WithLabels("peer", mesh.String()),
 		discovery:      map[string]*v1.DiscoveryRemoteStatus{},
-		exports:        map[v1.ServiceKey]v1.MeshServiceMapping{},
-		exportsStatus:  []v1.MeshServiceMapping{},
-		imports:        map[string]v1.MeshServiceMapping{},
-		importsStatus:  []v1.MeshServiceMapping{},
+		exports:        map[v1.ServiceKey]v1.PeerServiceMapping{},
+		exportsStatus:  []v1.PeerServiceMapping{},
+		imports:        map[string]v1.PeerServiceMapping{},
+		importsStatus:  []v1.PeerServiceMapping{},
 		discoveryDirty: true,
 		watchDirty:     true,
 		exportsDirty:   true,
@@ -63,17 +64,17 @@ type handler struct {
 	logger  *log.Scope
 
 	discovery map[string]*v1.DiscoveryRemoteStatus
-	exports   map[v1.ServiceKey]v1.MeshServiceMapping
-	imports   map[string]v1.MeshServiceMapping
+	exports   map[v1.ServiceKey]v1.PeerServiceMapping
+	imports   map[string]v1.PeerServiceMapping
 
 	discoveryDirty bool
 	exportsDirty   bool
 	importsDirty   bool
 	watchDirty     bool
 
-	discoveryStatus v1.MeshDiscoveryStatus
-	exportsStatus   []v1.MeshServiceMapping
-	importsStatus   []v1.MeshServiceMapping
+	discoveryStatus v1.PeerDiscoveryStatus
+	exportsStatus   []v1.PeerServiceMapping
+	importsStatus   []v1.PeerServiceMapping
 }
 
 var _ Handler = (*handler)(nil)
@@ -107,7 +108,7 @@ func (h *handler) Watching() {
 	}()
 
 	if err := h.Flush(); err != nil {
-		h.logger.Errorf("error updating status for MeshFederation %s: %s", h.mesh, err)
+		h.logger.Errorf("error updating status for ServiceMeshPeer %s: %s", h.mesh, err)
 	}
 }
 
@@ -135,7 +136,7 @@ func (h *handler) FullSyncComplete() {
 	}()
 
 	if err := h.Flush(); err != nil {
-		h.logger.Errorf("error updating status for MeshFederation %s: %s", h.mesh, err)
+		h.logger.Errorf("error updating status for ServiceMeshPeer %s: %s", h.mesh, err)
 	}
 }
 
@@ -157,7 +158,7 @@ func (h *handler) WatchTerminated(status string) {
 	}()
 
 	if err := h.Flush(); err != nil {
-		h.logger.Errorf("error updating status for MeshFederation %s: %s", h.mesh, err)
+		h.logger.Errorf("error updating status for ServiceMeshPeer %s: %s", h.mesh, err)
 	}
 }
 
@@ -185,7 +186,7 @@ func (h *handler) RemoteWatchAccepted(source string) {
 	}()
 
 	if err := h.Flush(); err != nil {
-		h.logger.Errorf("error updating status for MeshFederation %s: %s", h.mesh, err)
+		h.logger.Errorf("error updating status for ServiceMeshPeer %s: %s", h.mesh, err)
 	}
 }
 
@@ -219,7 +220,7 @@ func (h *handler) FullSyncSent(source string) {
 	}()
 
 	if err := h.Flush(); err != nil {
-		h.logger.Errorf("error updating status for MeshFederation %s: %s", h.mesh, err)
+		h.logger.Errorf("error updating status for ServiceMeshPeer %s: %s", h.mesh, err)
 	}
 }
 
@@ -243,7 +244,7 @@ func (h *handler) RemoteWatchTerminated(source string) {
 	}()
 
 	if err := h.Flush(); err != nil {
-		h.logger.Errorf("error updating status for MeshFederation %s: %s", h.mesh, err)
+		h.logger.Errorf("error updating status for ServiceMeshPeer %s: %s", h.mesh, err)
 	}
 }
 
@@ -255,8 +256,8 @@ func statusServiceKeyFor(service model.ServiceKey) v1.ServiceKey {
 	}
 }
 
-func statusMappingFor(service model.ServiceKey, exportedName string) v1.MeshServiceMapping {
-	return v1.MeshServiceMapping{
+func statusMappingFor(service model.ServiceKey, exportedName string) v1.PeerServiceMapping {
+	return v1.PeerServiceMapping{
 		LocalService: statusServiceKeyFor(service),
 		ExportedName: exportedName,
 	}
@@ -388,12 +389,13 @@ func (h *handler) Flush() error {
 	push, isLeader := h.shouldPush()
 
 	if !push {
+		h.logger.Debugf("no status changes to push")
 		return nil
 	}
 
 	// see if we need to update the export status
 	if h.exportsDirty {
-		exports := []v1.MeshServiceMapping{}
+		var exports []v1.PeerServiceMapping
 		for _, mapping := range h.exports {
 			exports = append(exports, mapping)
 		}
@@ -414,7 +416,7 @@ func (h *handler) Flush() error {
 
 	// see if we need to update the import status
 	if h.importsDirty {
-		imports := []v1.MeshServiceMapping{}
+		var imports []v1.PeerServiceMapping
 		for _, mapping := range h.imports {
 			imports = append(imports, mapping)
 		}
@@ -437,15 +439,16 @@ func (h *handler) Flush() error {
 		h.discoveryDirty = false
 	}
 
-	mf, err := h.manager.rm.MaistraClientSet().CoreV1().MeshFederations(h.mesh.Namespace).Get(context.TODO(), h.mesh.Name, metav1.GetOptions{})
+	mf, err := h.manager.rm.PeerInformer().Lister().ServiceMeshPeers(h.mesh.Namespace).Get(h.mesh.Name)
 	if err != nil {
 		if apierrors.IsGone(err) || apierrors.IsNotFound(err) {
+			h.logger.Debugf("could not locate ServiceMeshPeer %s for status update", h.mesh)
 			return nil
 		}
 		return err
 	}
 	oldStatus := mf.Status.DeepCopy()
-	newStatus := &v1.MeshFederationStatus{}
+	newStatus := &v1.ServiceMeshPeerStatus{}
 
 	newStatus.DiscoveryStatus = oldStatus.DeepCopy().DiscoveryStatus
 	if h.discoveryStatus.Watch.Connected {
@@ -456,72 +459,138 @@ func (h *handler) Flush() error {
 		newStatus.DiscoveryStatus.Active = h.clearDiscoveryStatus(newStatus.DiscoveryStatus.Active)
 	}
 
+	var allErrors []error
 	if isLeader {
-		newStatus.Exports = h.exportsStatus
-		newStatus.Imports = h.importsStatus
-
 		// clean up deleted pods
 		newStatus.DiscoveryStatus.Inactive = h.removeDeadPods(newStatus.DiscoveryStatus.Inactive)
 		newStatus.DiscoveryStatus.Active = h.removeDeadPods(newStatus.DiscoveryStatus.Active)
-
-		// TODO: add updates to conditions
-	} else {
-		newStatus.Exports = oldStatus.Exports
-		newStatus.Imports = oldStatus.Imports
+		if err := h.patchExports(); err != nil && !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
+			allErrors = append(allErrors, err)
+		}
+		if err := h.patchImports(); err != nil && !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
+			allErrors = append(allErrors, err)
+		}
 	}
-
-	newBytes, err := json.Marshal(&v1.MeshFederation{
-		Status: *newStatus,
-	})
-	if err != nil {
-		return err
-	}
-	oldBytes, err := json.Marshal(&v1.MeshFederation{
-		Status: *oldStatus,
-	})
-	if err != nil {
-		return err
-	}
-
-	h.manager.logger.Debugf("old bytes:\n%s\n", string(oldBytes))
-	h.manager.logger.Debugf("new bytes:\n%s\n", string(newBytes))
 
 	// XXX: the created patch does not merge properly and can cause duplicate entries in discovery status
-	patch, err := strategicpatch.CreateTwoWayMergePatchUsingLookupPatchMeta(oldBytes, newBytes, federationStatusPatchMetadata)
+	patch, err := h.createPatch(&v1.ServiceMeshPeer{Status: *newStatus}, &v1.ServiceMeshPeer{Status: *oldStatus}, peerStatusPatchMetadata)
 	if err != nil {
 		return err
 	}
 
-	h.manager.logger.Debugf("status patch:\n%s\n", string(patch))
+	h.logger.Debugf("status patch:\n%s\n", string(patch))
 
 	if len(patch) == 0 || string(patch) == "{}" {
 		// nothing to patch
+		h.logger.Debugf("no status updates for ServiceMeshPeer %s", h.mesh)
 		return nil
 	}
-	_, err = h.manager.rm.MaistraClientSet().CoreV1().MeshFederations(h.mesh.Namespace).Patch(context.TODO(), h.mesh.Name,
+	_, err = h.manager.rm.MaistraClientSet().FederationV1().ServiceMeshPeers(h.mesh.Namespace).Patch(context.TODO(), h.mesh.Name,
 		types.MergePatchType, patch, metav1.PatchOptions{}, "status")
 	if err != nil && !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
-		return err
+		return utilerrors.NewAggregate(append(allErrors, err))
 	}
 	h.watchDirty = false
+	return utilerrors.NewAggregate(allErrors)
+}
+
+func (h *handler) patchExports() error {
+	exportSet, err := h.manager.rm.ExportsInformer().Lister().ExportedServiceSets(h.mesh.Namespace).Get(h.mesh.Name)
+	if err != nil {
+		if (apierrors.IsGone(err) || apierrors.IsNotFound(err)) && len(h.exports) == 0 {
+			h.logger.Debugf("could not locate ExportedServiceSet %s for status update", h.mesh)
+			return nil
+		}
+		return err
+	}
+
+	patch, err := h.createPatch(&v1.ExportedServiceSet{Status: v1.ExportedServiceSetStatus{ExportedServices: h.exportsStatus}},
+		&v1.ExportedServiceSet{Status: exportSet.DeepCopy().Status}, exportStatusPatchMetadata)
+	if err != nil {
+		return err
+	}
+
+	if len(patch) == 0 || string(patch) == "{}" {
+		// nothing to patch
+		h.logger.Debugf("no status updates for ExportedServiceSet %s", h.mesh)
+		return nil
+	}
+
+	if _, err := h.manager.rm.MaistraClientSet().FederationV1().ExportedServiceSets(h.mesh.Namespace).
+		Patch(context.TODO(), h.mesh.Name, types.MergePatchType, patch, metav1.PatchOptions{}, "status"); err != nil {
+		if !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
+			return err
+		}
+	}
 	return nil
 }
 
-func (h *handler) setDiscoveryStatus(statuses []v1.FederationPodDiscoveryStatus, newStatus v1.MeshDiscoveryStatus) []v1.FederationPodDiscoveryStatus {
+func (h *handler) patchImports() error {
+	importSet, err := h.manager.rm.ImportsInformer().Lister().ImportedServiceSets(h.mesh.Namespace).Get(h.mesh.Name)
+	if err != nil {
+		if (apierrors.IsGone(err) || apierrors.IsNotFound(err)) && len(h.exports) == 0 {
+			h.logger.Debugf("could not locate ImportedServiceSet %s for status update", h.mesh)
+			return nil
+		}
+		return err
+	}
+
+	patch, err := h.createPatch(&v1.ImportedServiceSet{Status: v1.ImportedServiceSetStatus{ImportedServices: h.importsStatus}},
+		&v1.ImportedServiceSet{Status: importSet.DeepCopy().Status}, importStatusPatchMetadata)
+	if err != nil {
+		return err
+	}
+
+	if len(patch) == 0 || string(patch) == "{}" {
+		// nothing to patch
+		h.logger.Debugf("no status updates for ImportedServiceSet %s", h.mesh)
+		return nil
+	}
+
+	if _, err := h.manager.rm.MaistraClientSet().FederationV1().ImportedServiceSets(h.mesh.Namespace).
+		Patch(context.TODO(), h.mesh.Name, types.MergePatchType, patch, metav1.PatchOptions{}, "status"); err != nil {
+		if !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *handler) createPatch(newObj, oldObj interface{}, metadata strategicpatch.LookupPatchMeta) ([]byte, error) {
+	newBytes, err := json.Marshal(newObj)
+	if err != nil {
+		return nil, err
+	}
+	oldBytes, err := json.Marshal(oldObj)
+	if err != nil {
+		return nil, err
+	}
+
+	h.logger.Debugf("old bytes:\n%s\n", string(oldBytes))
+	h.logger.Debugf("new bytes:\n%s\n", string(newBytes))
+
+	patch, err := strategicpatch.CreateTwoWayMergePatchUsingLookupPatchMeta(oldBytes, newBytes, metadata)
+	if err != nil {
+		return nil, err
+	}
+	return patch, nil
+}
+
+func (h *handler) setDiscoveryStatus(statuses []v1.PodPeerDiscoveryStatus, newStatus v1.PeerDiscoveryStatus) []v1.PodPeerDiscoveryStatus {
 	count := len(statuses)
 	index := sort.Search(count, func(i int) bool { return statuses[i].Pod == h.manager.name.Name })
 	if index < count {
 		status := statuses[index]
-		status.MeshDiscoveryStatus = newStatus
+		status.PeerDiscoveryStatus = newStatus
 		statuses[index] = status
 		return statuses
 	}
-	statuses = append(statuses, v1.FederationPodDiscoveryStatus{Pod: h.manager.name.Name, MeshDiscoveryStatus: newStatus})
+	statuses = append(statuses, v1.PodPeerDiscoveryStatus{Pod: h.manager.name.Name, PeerDiscoveryStatus: newStatus})
 	sort.Slice(statuses, func(i, j int) bool { return strings.Compare(statuses[i].Pod, statuses[j].Pod) < 0 })
 	return statuses
 }
 
-func (h *handler) clearDiscoveryStatus(statuses []v1.FederationPodDiscoveryStatus) []v1.FederationPodDiscoveryStatus {
+func (h *handler) clearDiscoveryStatus(statuses []v1.PodPeerDiscoveryStatus) []v1.PodPeerDiscoveryStatus {
 	count := len(statuses)
 	index := sort.Search(count, func(i int) bool { return statuses[i].Pod == h.manager.name.Name })
 	if index < count {
@@ -530,8 +599,8 @@ func (h *handler) clearDiscoveryStatus(statuses []v1.FederationPodDiscoveryStatu
 	return statuses
 }
 
-func (h *handler) removeDeadPods(statuses []v1.FederationPodDiscoveryStatus) []v1.FederationPodDiscoveryStatus {
-	var filteredStatuses []v1.FederationPodDiscoveryStatus
+func (h *handler) removeDeadPods(statuses []v1.PodPeerDiscoveryStatus) []v1.PodPeerDiscoveryStatus {
+	var filteredStatuses []v1.PodPeerDiscoveryStatus
 	for index, status := range statuses {
 		// XXX: this shouldn't be necessary, but patching isn't working correctly
 		if index == 0 || statuses[index].Pod != statuses[index-1].Pod {

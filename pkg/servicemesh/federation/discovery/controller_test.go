@@ -24,10 +24,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
-	maistrainformerscorev1 "maistra.io/api/client/informers/externalversions/core/v1"
+	maistrainformersfederationv1 "maistra.io/api/client/informers/externalversions/federation/v1"
 	maistraclient "maistra.io/api/client/versioned"
 	"maistra.io/api/client/versioned/fake"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/api/mesh/v1alpha1"
 	configmemory "istio.io/istio/pilot/pkg/config/memory"
@@ -43,11 +43,11 @@ import (
 
 type fakeManager struct{}
 
-func (m *fakeManager) AddMeshFederation(_ *v1.MeshFederation, _ *v1.ServiceExports, _ status.Handler) error {
+func (m *fakeManager) AddPeer(_ *v1.ServiceMeshPeer, _ *v1.ExportedServiceSet, _ status.Handler) error {
 	return nil
 }
-func (m *fakeManager) DeleteMeshFederation(_ string) {}
-func (m *fakeManager) UpdateExportsForMesh(_ *v1.ServiceExports) error {
+func (m *fakeManager) DeletePeer(_ string) {}
+func (m *fakeManager) UpdateExportsForMesh(_ *v1.ExportedServiceSet) error {
 	return nil
 }
 func (m *fakeManager) DeleteExportsForMesh(_ string) {}
@@ -58,11 +58,11 @@ func (m *fakeStatusManager) IsLeader() bool {
 	return true
 }
 
-func (m *fakeStatusManager) FederationAdded(mesh types.NamespacedName) status.Handler {
+func (m *fakeStatusManager) PeerAdded(mesh types.NamespacedName) status.Handler {
 	return nil
 }
 
-func (m *fakeStatusManager) FederationDeleted(mesh types.NamespacedName) {
+func (m *fakeStatusManager) PeerDeleted(mesh types.NamespacedName) {
 }
 
 func (m *fakeStatusManager) HandlerFor(mesh types.NamespacedName) status.Handler {
@@ -83,23 +83,15 @@ func (m *fakeResourceManager) KubeClient() kube.Client {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *fakeResourceManager) MeshFederationInformer() maistrainformerscorev1.MeshFederationInformer {
+func (m *fakeResourceManager) PeerInformer() maistrainformersfederationv1.ServiceMeshPeerInformer {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *fakeResourceManager) ServiceExportsInformer() maistrainformerscorev1.ServiceExportsInformer {
+func (m *fakeResourceManager) ExportsInformer() maistrainformersfederationv1.ExportedServiceSetInformer {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *fakeResourceManager) ServiceImportsInformer() maistrainformerscorev1.ServiceImportsInformer {
-	panic("not implemented") // TODO: Implement
-}
-
-func (m *fakeResourceManager) DefaultServiceExports(namespace string) (*v1.ServiceExports, error) {
-	panic("not implemented") // TODO: Implement
-}
-
-func (m *fakeResourceManager) DefaultServiceImports(namespace string) (*v1.ServiceImports, error) {
+func (m *fakeResourceManager) ImportsInformer() maistrainformersfederationv1.ImportedServiceSetInformer {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -249,16 +241,16 @@ func TestReconcile(t *testing.T) {
 		t.Fatalf("unable to create Controller: %s", err)
 	}
 
-	federation := &v1.MeshFederation{
+	federation := &v1.ServiceMeshPeer{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: v1.MeshFederationSpec{
-			Remote: v1.MeshFederationRemote{
+		Spec: v1.ServiceMeshPeerSpec{
+			Remote: v1.ServiceMeshPeerRemote{
 				Addresses: []string{"test.mesh"},
 			},
-			Gateways: v1.MeshFederationGateways{
+			Gateways: v1.ServiceMeshPeerGateways{
 				Ingress: corev1.LocalObjectReference{
 					Name: "test-ingress",
 				},
@@ -266,7 +258,7 @@ func TestReconcile(t *testing.T) {
 					Name: "test-egress",
 				},
 			},
-			Security: v1.MeshFederationSecurity{
+			Security: v1.ServiceMeshPeerSecurity{
 				ClientID:    "cluster.local/ns/test-mesh/sa/test-egress-service-account",
 				TrustDomain: "test.local",
 				CertificateChain: corev1.TypedLocalObjectReference{
@@ -285,7 +277,7 @@ func TestReconcile(t *testing.T) {
 	}
 	fedAdded := make(chan struct{})
 	fedDeleted := make(chan struct{})
-	rm.MeshFederationInformer().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	rm.PeerInformer().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			close(fedAdded)
 		},
@@ -294,9 +286,9 @@ func TestReconcile(t *testing.T) {
 		},
 	})
 	cs := rm.MaistraClientSet()
-	newFederation, err := cs.CoreV1().MeshFederations(namespace).Create(context.TODO(), federation, metav1.CreateOptions{})
+	newFederation, err := cs.FederationV1().ServiceMeshPeers(namespace).Create(context.TODO(), federation, metav1.CreateOptions{})
 	if err != nil {
-		t.Errorf("failed to create MeshFederation")
+		t.Errorf("failed to create ServiceMeshPeer")
 		return
 	}
 	// wait for object to show up
@@ -306,7 +298,7 @@ func TestReconcile(t *testing.T) {
 		t.Fatalf("timed out waiting for watch event")
 	}
 	if err := controller.reconcile(fmt.Sprintf("%s/%s", namespace, name)); err != nil {
-		t.Fatalf("unexpected error reconciling new MeshFederation: %s", err)
+		t.Fatalf("unexpected error reconciling new ServiceMeshPeer: %s", err)
 	}
 	// verify registry has been created
 	if controller.getRegistry(newFederation.Name) == nil {
@@ -343,8 +335,8 @@ func TestReconcile(t *testing.T) {
 	}
 
 	// now delete
-	if err = cs.CoreV1().MeshFederations(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
-		t.Errorf("error deleting MeshFederation")
+	if err = cs.FederationV1().ServiceMeshPeers(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+		t.Errorf("error deleting ServiceMeshPeer")
 		return
 	}
 
@@ -356,7 +348,7 @@ func TestReconcile(t *testing.T) {
 	}
 
 	if err := controller.reconcile(fmt.Sprintf("%s/%s", namespace, name)); err != nil {
-		t.Errorf("unexpected error reconciling new MeshFederation: %#v", err)
+		t.Errorf("unexpected error reconciling new ServiceMeshPeer: %#v", err)
 	}
 	// verify registry has been deleted
 	if controller.getRegistry(newFederation.Name) != nil {

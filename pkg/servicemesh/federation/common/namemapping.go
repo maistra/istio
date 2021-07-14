@@ -19,7 +19,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
@@ -57,7 +57,7 @@ func newNameMatcher(mapping *v1.ServiceNameMapping, domainSuffix string) NameMap
 	}
 	return &nameMatcher{
 		domainSuffix: domainSuffix,
-		match:        mapping.Name,
+		match:        mapping.ServiceName,
 		alias:        alias,
 	}
 }

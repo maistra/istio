@@ -28,7 +28,7 @@ import (
 	"github.com/gorilla/mux"
 	hashstructure "github.com/mitchellh/hashstructure/v2"
 	"k8s.io/apimachinery/pkg/util/errors"
-	v1 "maistra.io/api/core/v1"
+	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/host"
@@ -50,9 +50,9 @@ type Options struct {
 }
 
 type FederationManager interface {
-	AddMeshFederation(mesh *v1.MeshFederation, exports *v1.ServiceExports, statusHandler status.Handler) error
-	DeleteMeshFederation(name string)
-	UpdateExportsForMesh(exports *v1.ServiceExports) error
+	AddPeer(mesh *v1.ServiceMeshPeer, exports *v1.ExportedServiceSet, statusHandler status.Handler) error
+	DeletePeer(name string)
+	UpdateExportsForMesh(exports *v1.ExportedServiceSet) error
 	DeleteExportsForMesh(name string)
 }
 
@@ -67,8 +67,7 @@ type Server struct {
 
 	configStore model.ConfigStoreCache
 
-	defaultExportConfig *common.ServiceExporter
-	meshes              *sync.Map
+	meshes *sync.Map
 
 	// XXX: we need to decide if we really want to allow this or not.
 	// Gateway configuration is managed explicitly through the MeshFederation
@@ -117,12 +116,12 @@ func exportDomainSuffix(mesh string) string {
 	return fmt.Sprintf("svc.%s-exports.local", mesh)
 }
 
-func (s *Server) ingressServiceName(mesh *v1.MeshFederation) string {
+func (s *Server) ingressServiceName(mesh *v1.ServiceMeshPeer) string {
 	return fmt.Sprintf("%s.%s.svc.%s", mesh.Spec.Gateways.Ingress.Name, mesh.Namespace, s.env.GetDomainSuffix())
 }
 
-func (s *Server) AddMeshFederation(mesh *v1.MeshFederation, exports *v1.ServiceExports, statusHandler status.Handler) error {
-	exportConfig := common.NewServiceExporter(exports, s.defaultExportConfig, exportDomainSuffix(mesh.Name))
+func (s *Server) AddPeer(mesh *v1.ServiceMeshPeer, exports *v1.ExportedServiceSet, statusHandler status.Handler) error {
+	exportConfig := common.NewServiceExporter(exports, nil, exportDomainSuffix(mesh.Name))
 
 	untypedMeshServer, ok := s.meshes.Load(mesh.Name)
 	if untypedMeshServer != nil && ok {
@@ -145,7 +144,7 @@ func (s *Server) AddMeshFederation(mesh *v1.MeshFederation, exports *v1.ServiceE
 	return nil
 }
 
-func (s *Server) DeleteMeshFederation(name string) {
+func (s *Server) DeletePeer(name string) {
 	ms, ok := s.meshes.Load(name)
 	s.meshes.Delete(name)
 	if ms == nil || !ok {
@@ -154,12 +153,12 @@ func (s *Server) DeleteMeshFederation(name string) {
 	ms.(*meshServer).stop()
 }
 
-func (s *Server) UpdateExportsForMesh(exports *v1.ServiceExports) error {
+func (s *Server) UpdateExportsForMesh(exports *v1.ExportedServiceSet) error {
 	untypedMeshServer, ok := s.meshes.Load(exports.Name)
 	if untypedMeshServer == nil || !ok {
 		return fmt.Errorf("cannot update exporter for non-existent federation: %s", exports.Name)
 	}
-	untypedMeshServer.(*meshServer).updateExportConfig(common.NewServiceExporter(exports, s.defaultExportConfig, exportDomainSuffix(exports.Name)))
+	untypedMeshServer.(*meshServer).updateExportConfig(common.NewServiceExporter(exports, nil, exportDomainSuffix(exports.Name)))
 	return nil
 }
 
@@ -317,7 +316,7 @@ type meshServer struct {
 
 	env *model.Environment
 
-	mesh         *v1.MeshFederation
+	mesh         *v1.ServiceMeshPeer
 	exportConfig *common.ServiceExporter
 
 	statusHandler status.Handler
