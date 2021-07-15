@@ -6,7 +6,9 @@ metadata:
 spec:
   remote:
     addresses:
-    - mesh1-ingress.mesh2-system.svc.cluster.local
+    - {{MESH2_ADDRESS}}
+    discoveryPort: {{MESH2_DISCOVERY_PORT}}
+    servicePort: {{MESH2_SERVICE_PORT}}
   gateways:
     ingress:
       name: mesh2-ingress
