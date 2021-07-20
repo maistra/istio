@@ -113,6 +113,7 @@ oc2 -n mesh2-bookinfo apply -f https://raw.githubusercontent.com/maistra/istio/m
 oc2 -n mesh2-bookinfo apply -f https://raw.githubusercontent.com/maistra/istio/maistra-2.0/samples/bookinfo/platform/kube/bookinfo-ratings-v2.yaml
 oc2 -n mesh2-bookinfo apply -f https://raw.githubusercontent.com/maistra/istio/maistra-2.0/samples/bookinfo/networking/bookinfo-gateway.yaml
 oc2 -n mesh2-bookinfo apply -f https://raw.githubusercontent.com/maistra/istio/maistra-2.0/samples/bookinfo/networking/destination-rule-all.yaml
+oc2 -n mesh2-bookinfo apply -f https://raw.githubusercontent.com/maistra/istio/maistra-2.0/samples/bookinfo/networking/virtual-service-reviews-v3.yaml
 
 log "Installing mongodb k8s Service for mesh2"
 oc2 apply -f import/mongodb-service.yaml
