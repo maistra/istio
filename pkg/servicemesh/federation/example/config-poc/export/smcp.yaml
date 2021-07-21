@@ -77,6 +77,9 @@ spec:
             labels:
               # to prevent mesh2-ingress's service from including default ingress pods
               federation.maistra.io/ingress-for: mesh2
+            annotations:
+              # use the network load balancer on AWS
+              service.beta.kubernetes.io/aws-load-balancer-type: nlb
           ports:
           # required for handling service requests from mesh2
           - port: 15443
