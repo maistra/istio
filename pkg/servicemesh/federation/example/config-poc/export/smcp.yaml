@@ -12,11 +12,11 @@ spec:
         imagePullPolicy: Always
   addons:
     grafana:
-      enabled: false
+      enabled: true
     kiali:
-      enabled: false
+      enabled: true
     prometheus:
-      enabled: false
+      enabled: true
   tracing:
     type: Jaeger
     sampling: 10000
