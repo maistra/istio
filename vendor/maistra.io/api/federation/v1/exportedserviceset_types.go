@@ -60,7 +60,7 @@ type ExportedServiceRule struct {
 	// LabelSelector provides a mechanism for selecting services to export by
 	// using a label selector to match Service resources for export.
 	// +optional
-	LabelSelector *ServiceImportExportLabelelector `json:"labelSelector,omitempty"`
+	LabelSelector *ServiceImportExportLabelSelector `json:"labelSelector,omitempty"`
 	// NameSelector provides a simple name matcher for exporting services in
 	// the mesh.
 	// +optional

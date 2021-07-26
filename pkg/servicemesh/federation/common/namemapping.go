@@ -98,7 +98,7 @@ type labelMatcher struct {
 
 var _ NameMapper = (*labelMatcher)(nil)
 
-func newLabelMatcher(labelSelector *v1.ServiceImportExportLabelelector, domainSuffix string) (NameMapper, error) {
+func newLabelMatcher(labelSelector *v1.ServiceImportExportLabelSelector, domainSuffix string) (NameMapper, error) {
 	selector, err := metav1.LabelSelectorAsSelector(&labelSelector.Selector)
 	if err != nil {
 		return nil, err

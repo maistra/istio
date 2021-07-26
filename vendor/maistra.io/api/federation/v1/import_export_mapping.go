@@ -48,7 +48,7 @@ type ServiceNameMapping struct {
 	Alias       *ServiceName `json:"alias,omitempty"`
 }
 
-type ServiceImportExportLabelelector struct {
+type ServiceImportExportLabelSelector struct {
 	// Namespace specifies to which namespace the selector applies.  An empty
 	// value applies to all namespaces in the mesh.
 	// +optional
