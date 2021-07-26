@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if [ -z "${MESH1_KUBECONFIG}" ] || [ -z "${MESH2_KUBECONFIG}" ]; then
+if [ ! -f "${MESH1_KUBECONFIG}" ] || [ ! -f "${MESH2_KUBECONFIG}" ]; then
   echo "Environment variables MESH1_KUBECONFIG and/or MESH2_KUBECONFIG aren't set."
   echo "Please point each to the kubeconfig file of the cluster you want to deploy"
   echo "the federated service meshes to. The first cluster exports services;"
@@ -28,7 +28,7 @@ if [ -z "${MESH1_KUBECONFIG}" ] || [ -z "${MESH2_KUBECONFIG}" ]; then
 fi
 
 oc1() {
-  if [ -n "${MESH1_KUBECONFIG}" ]; then
+  if [ -f "${MESH1_KUBECONFIG}" ]; then
     oc --kubeconfig="${MESH1_KUBECONFIG}" "$@"
   else
     oc "$@"
@@ -36,7 +36,7 @@ oc1() {
 }
 
 oc2() {
-  if [ -n "${MESH2_KUBECONFIG}" ]; then
+  if [ -f "${MESH2_KUBECONFIG}" ]; then
     oc --kubeconfig="${MESH2_KUBECONFIG}" "$@"
   else
     oc "$@"
