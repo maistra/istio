@@ -15,6 +15,7 @@
 package federation
 
 import (
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -68,6 +69,7 @@ type Options struct {
 	LocalClusterID      string
 	IstiodNamespace     string
 	IstiodPodName       string
+	TLSConfig           *tls.Config
 }
 
 type Federation struct {
@@ -109,6 +111,7 @@ func internalNew(opt Options, cs maistraclient.Interface) (*Federation, error) {
 		Env:         opt.Env,
 		Network:     opt.LocalNetwork,
 		ConfigStore: configStore,
+		TLSConfig:   opt.TLSConfig,
 	})
 	if err != nil {
 		return nil, err

@@ -267,12 +267,45 @@ func NewServer(args *PilotArgs) (*Server, error) {
 		return nil, err
 	}
 
+	// Parse and validate Istiod Address.
+	istiodHost, _, err := e.GetDiscoveryAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create Istiod certs and setup watches.
+	if err := s.initIstiodCerts(args, string(istiodHost)); err != nil {
+		return nil, err
+	}
+
+	// Initialize the SPIFFE peer cert verifier.
+	if err := s.setPeerCertVerifier(args.ServerOptions.TLSOptions); err != nil {
+		return nil, err
+	}
+
 	// federation support must be initialized before config and service controllers
 	if features.EnableFederation {
 		if s.kubeClient == nil {
 			log.Errorf("could not initialize federation discovery server: kubeClient is nil")
 		} else {
 			var err error
+			tlsCfg := &tls.Config{
+				GetCertificate:   s.getIstiodCertificate,
+				ClientAuth:       tls.VerifyClientCertIfGiven,
+				ClientCAs:        s.peerCertVerifier.GetGeneralCertPool(),
+				MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+				MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+				CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+				CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
+				VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+					err := s.peerCertVerifier.VerifyPeerCert(rawCerts, verifiedChains)
+					if err != nil {
+						log.Infof("Could not verify certificate: %v", err)
+					}
+					return err
+				},
+			}
+
 			s.federation, err = federation.New(federation.Options{
 				KubeClient:          s.kubeClient,
 				ResyncPeriod:        args.RegistryOptions.KubeOptions.ResyncPeriod,
@@ -285,6 +318,7 @@ func NewServer(args *PilotArgs) (*Server, error) {
 				ServiceController:   s.ServiceController(),
 				IstiodNamespace:     args.Namespace,
 				IstiodPodName:       args.PodName,
+				TLSConfig:           tlsCfg,
 			})
 			s.XDSServer.Generators[v3.TrustBundleType] = &xds.TbdsGenerator{TrustBundleProvider: s.federation}
 
@@ -306,22 +340,6 @@ func NewServer(args *PilotArgs) (*Server, error) {
 	}
 
 	s.initJwtPolicy()
-
-	// Parse and validate Istiod Address.
-	istiodHost, _, err := e.GetDiscoveryAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	// Create Istiod certs and setup watches.
-	if err := s.initIstiodCerts(args, string(istiodHost)); err != nil {
-		return nil, err
-	}
-
-	// Initialize the SPIFFE peer cert verifier.
-	if err := s.setPeerCertVerifier(args.ServerOptions.TLSOptions); err != nil {
-		return nil, err
-	}
 
 	// Secure gRPC Server must be initialized after CA is created as may use a Citadel generated cert.
 	if err := s.initSecureDiscoveryService(args); err != nil {

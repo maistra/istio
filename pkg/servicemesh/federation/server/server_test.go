@@ -15,11 +15,14 @@
 package server
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,10 +33,19 @@ import (
 	serviceregistrymemory "istio.io/istio/pilot/pkg/serviceregistry/memory"
 	"istio.io/istio/pkg/config/protocol"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
+	istioenv "istio.io/istio/pkg/test/env"
 )
 
 var (
 	ignoreChecksum = cmp.FilterPath(func(p cmp.Path) bool { return p.String() == "Checksum" }, cmp.Ignore())
+	httpsClient    = http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+		Timeout: time.Second,
+	}
 )
 
 type fakeStatusHandler struct{}
@@ -417,13 +429,7 @@ func TestServiceList(t *testing.T) {
 			env := &model.Environment{
 				ServiceDiscovery: serviceDiscovery,
 			}
-
-			s, _ := NewServer(Options{
-				BindAddress: "127.0.0.1:0",
-				Env:         env,
-				Network:     "network1",
-				ConfigStore: configmemory.NewController(configmemory.Make(Schemas)),
-			})
+			s := createServer(env)
 			stopCh := make(chan struct{})
 			go s.Run(stopCh)
 			defer close(stopCh)
@@ -444,8 +450,27 @@ func TestServiceList(t *testing.T) {
 	}
 }
 
+func createServer(env *model.Environment) *Server {
+	cert, _ := tls.LoadX509KeyPair(
+		filepath.Join(istioenv.IstioSrc, "./tests/testdata/certs/pilot/cert-chain.pem"),
+		filepath.Join(istioenv.IstioSrc, "./tests/testdata/certs/pilot/key.pem"))
+
+	s, _ := NewServer(Options{
+		BindAddress: "127.0.0.1:0",
+		Env:         env,
+		Network:     "network1",
+		ConfigStore: configmemory.NewController(configmemory.Make(Schemas)),
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{
+				cert,
+			},
+		},
+	})
+	return s
+}
+
 func getServiceList(t *testing.T, addr, remoteName string) federationmodel.ServiceListMessage {
-	resp, err := http.Get("http://" + addr + "/services/" + remoteName)
+	resp, err := httpsClient.Get("https://" + addr + "/services/" + remoteName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -736,23 +761,17 @@ func TestWatch(t *testing.T) {
 			env := &model.Environment{
 				ServiceDiscovery: serviceDiscovery,
 			}
-
-			s, _ := NewServer(Options{
-				BindAddress: "127.0.0.1:0",
-				Env:         env,
-				Network:     "network1",
-				ConfigStore: configmemory.NewController(configmemory.Make(Schemas)),
-			})
+			s := createServer(env)
 			stopCh := make(chan struct{})
 			go s.Run(stopCh)
 			defer close(stopCh)
 			s.resyncNetworkGateways()
 			s.AddPeer(federation, tc.serviceExports, &fakeStatusHandler{})
-			req, err := http.NewRequest("GET", "http://"+s.Addr()+"/watch/"+tc.remoteName, nil)
+			req, err := http.NewRequest("GET", "https://"+s.Addr()+"/watch/"+tc.remoteName, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := httpsClient.Do(req)
 			if err != nil {
 				t.Fatal(err)
 			}
