@@ -293,6 +293,11 @@ func TestInjection(t *testing.T) {
 			inFilePath: "custom-template.iop.yaml",
 		},
 		{
+			// Verifies that the maistra env annotation is honored.
+			in:   "maistra_env_annotations.yaml",
+			want: "maistra_env_annotations.yaml.injected",
+		},
+		{
 			in:   "tcp-probes.yaml",
 			want: "tcp-probes.yaml.injected",
 		},
