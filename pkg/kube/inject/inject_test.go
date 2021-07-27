@@ -272,6 +272,11 @@ func TestInjection(t *testing.T) {
 			want:       "custom-template.yaml.injected",
 			inFilePath: "custom-template.iop.yaml",
 		},
+		{
+			// Verifies that the maistra env annotation is honored.
+			in:   "maistra_env_annotations.yaml",
+			want: "maistra_env_annotations.yaml.injected",
+		},
 	}
 	// Keep track of tests we add options above
 	// We will search for all test files and skip these ones
