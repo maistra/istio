@@ -67,13 +67,13 @@ func TestRequestAuthentication(t *testing.T) {
 			defer g.DeleteConfigOrFail(t, ns, jwtPolicies...)
 
 			var a, b, c, d, e, f echo.Instance
-			echoboot.NewBuilder(ctx).
-				With(&a, util.EchoConfig("a", ns, false, nil)).
-				With(&b, util.EchoConfig("b", ns, false, nil)).
-				With(&c, util.EchoConfig("c", ns, false, nil)).
-				With(&d, util.EchoConfig("d", ns, false, nil)).
-				With(&e, util.EchoConfig("e", ns, false, nil)).
-				With(&f, util.EchoConfig("f", ns, false, nil)).
+			echoboot.NewBuilderOrFail(ctx, ctx).
+				With(&a, util.EchoConfig("a", ns, false, nil, g, p)).
+				With(&b, util.EchoConfig("b", ns, false, nil, g, p)).
+				With(&c, util.EchoConfig("c", ns, false, nil, g, p)).
+				With(&d, util.EchoConfig("d", ns, false, nil, g, p)).
+				With(&e, util.EchoConfig("e", ns, false, nil, g, p)).
+				With(&f, util.EchoConfig("f", ns, false, nil, g, p)).
 				BuildOrFail(t)
 
 			testCases := []authn.TestCase{
