@@ -16,6 +16,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -47,6 +48,7 @@ type Options struct {
 	Env         *model.Environment
 	Network     string
 	ConfigStore model.ConfigStoreCache
+	TLSConfig   *tls.Config
 }
 
 type FederationManager interface {
@@ -95,6 +97,7 @@ func NewServer(opt Options) (*Server, error) {
 		httpServer: &http.Server{
 			ReadTimeout:    10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
+			TLSConfig:      opt.TLSConfig,
 		},
 		configStore: opt.ConfigStore,
 		meshes:      &sync.Map{},
@@ -223,7 +226,7 @@ func (s *Server) handleWatch(response http.ResponseWriter, request *http.Request
 func (s *Server) Run(stopCh <-chan struct{}) {
 	s.logger.Infof("starting federation service discovery at %s", s.Addr())
 	go func() {
-		_ = s.httpServer.Serve(s.listener)
+		_ = s.httpServer.ServeTLS(s.listener, "", "")
 	}()
 	<-stopCh
 	_ = s.httpServer.Shutdown(context.TODO())
