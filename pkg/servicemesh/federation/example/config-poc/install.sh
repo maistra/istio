@@ -81,8 +81,8 @@ else
     if [ -z "$MESH2_ADDRESS" ]; then
       echo "LoadBalancer service mesh1-ingress has no externally reachable ip or hostname; falling back to node ports"
       MESH2_ADDRESS=$(oc2 get nodes -o json | jq -r '.items[0].status.addresses[] | select (.type == "Hostname") | .address')
-      MESH2_DISCOVERY_PORT=$(oc2 -n mesh1-system get svc mesh2-ingress -o json | jq '.spec.ports[] | select (.name == "https-discovery") | .nodePort')
-      MESH2_SERVICE_PORT=$(oc2 -n mesh1-system get svc mesh2-ingress -o json | jq '.spec.ports[] | select (.name == "tls") | .nodePort')
+      MESH2_DISCOVERY_PORT=$(oc2 -n mesh2-system get svc mesh1-ingress -o json | jq '.spec.ports[] | select (.name == "https-discovery") | .nodePort')
+      MESH2_SERVICE_PORT=$(oc2 -n mesh2-system get svc mesh1-ingress -o json | jq '.spec.ports[] | select (.name == "tls") | .nodePort')
       if [ -z "$MESH2_ADDRESS" ]; then
         echo "FATAL: Could not determine address for mesh1-ingress in mesh2"
         exit 1
