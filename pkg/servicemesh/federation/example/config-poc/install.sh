@@ -36,10 +36,10 @@ oc2 apply -f import/smcp.yaml
 oc2 apply -f import/smmr.yaml
 
 log "Waiting for mesh1 installation to complete"
-oc1 wait --for condition=Ready -n mesh1-system smmr/default --timeout 180s
+oc1 wait --for condition=Ready -n mesh1-system smmr/default --timeout 300s
 
 log "Waiting for mesh2 installation to complete"
-oc2 wait --for condition=Ready -n mesh2-system smmr/default --timeout 180s
+oc2 wait --for condition=Ready -n mesh2-system smmr/default --timeout 300s
 
 log "Retrieving root certificates"
 MESH1_CERT=$(oc1 get configmap -n mesh1-system istio-ca-root-cert -o jsonpath='{.data.root-cert\.pem}' | sed ':a;N;$!ba;s/\n/\\\n    /g')
