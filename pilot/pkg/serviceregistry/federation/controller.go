@@ -15,10 +15,12 @@
 package federation
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -41,6 +43,7 @@ import (
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/istio/pkg/servicemesh/federation/status"
+	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/pkg/log"
 )
 
@@ -50,7 +53,7 @@ var _ serviceregistry.Instance = &Controller{}
 
 // Controller aggregates data across different registries and monitors for changes
 type Controller struct {
-	remote               *v1.ServiceMeshPeerRemote
+	remote               v1.ServiceMeshPeerRemote
 	egressService        string
 	egressName           string
 	discoveryURL         string
@@ -87,7 +90,13 @@ type Controller struct {
 	egressSAs      []string
 
 	lastMessage *federationmodel.ServiceListMessage
-	stopped     int32
+	started     int32
+
+	watchDone   chan struct{}
+	watchEvents chan *federationmodel.WatchEvent
+
+	peerConfigGeneration   int64
+	importConfigGeneration int64
 }
 
 type existingImport struct {
@@ -96,16 +105,11 @@ type existingImport struct {
 }
 
 type Options struct {
-	Remote         *v1.ServiceMeshPeerRemote
-	EgressService  string
-	EgressName     string
-	UseDirectCalls bool
 	DomainSuffix   string
 	LocalClusterID string
 	LocalNetwork   string
 	ClusterID      string
 	Network        string
-	Namespace      string
 	KubeClient     kube.Client
 	StatusHandler  status.Handler
 	ConfigStore    model.ConfigStoreCache
@@ -158,44 +162,85 @@ func NewController(opt Options, mesh *v1.ServiceMeshPeer, importConfig *v1.Impor
 	backoffPolicy := backoff.NewExponentialBackOff()
 	backoffPolicy.MaxElapsedTime = 0
 	localDomainSuffix := localDomainSuffix(opt.DomainSuffix)
-	defaultDomainSuffix := defaultDomainSuffixForMesh(mesh)
-	var importLocality, defaultLocality *v1.ImportedServiceLocality
-	if importConfig != nil {
-		importLocality = importConfig.Spec.Locality
+	c := &Controller{
+		localClusterID:    opt.LocalClusterID,
+		localNetwork:      opt.LocalNetwork,
+		clusterID:         opt.ClusterID,
+		network:           opt.Network,
+		localDomainSuffix: localDomainSuffix,
+		imports:           map[federationmodel.ServiceKey]*existingImport{},
+		serviceStore:      map[host.Name]*model.Service{},
+		instanceStore:     map[host.Name][]*model.ServiceInstance{},
+		kubeClient:        opt.KubeClient,
+		statusHandler:     opt.StatusHandler,
+		configStore:       opt.ConfigStore,
+		xdsUpdater:        opt.XDSUpdater,
+		resyncPeriod:      opt.ResyncPeriod,
+		backoffPolicy:     backoffPolicy,
+		logger:            common.Logger.WithLabels("component", "federation-registry"),
+		watchEvents:       make(chan *federationmodel.WatchEvent),
 	}
-	locality := mergeLocality(importLocality, defaultLocality)
-	return &Controller{
-		discoveryURL:         fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, opt.EgressService, common.DefaultDiscoveryPort),
-		discoveryServiceName: common.DiscoveryServiceHostname(mesh),
-		egressService:        opt.EgressService,
-		egressName:           opt.EgressName,
-		remote:               opt.Remote.DeepCopy(),
-		useDirectCalls:       opt.UseDirectCalls,
-		namespace:            opt.Namespace,
-		localClusterID:       opt.LocalClusterID,
-		localNetwork:         opt.LocalNetwork,
-		clusterID:            opt.ClusterID,
-		network:              opt.Network,
-		localDomainSuffix:    localDomainSuffix,
-		defaultDomainSuffix:  defaultDomainSuffix,
-		defaultLocality:      defaultLocality,
-		importLocality:       importLocality,
-		locality:             locality,
-		importNameMapper:     common.NewServiceImporter(importConfig, nil, defaultDomainSuffix, localDomainSuffix),
-		imports:              map[federationmodel.ServiceKey]*existingImport{},
-		serviceStore:         map[host.Name]*model.Service{},
-		instanceStore:        map[host.Name][]*model.ServiceInstance{},
-		kubeClient:           opt.KubeClient,
-		statusHandler:        opt.StatusHandler,
-		configStore:          opt.ConfigStore,
-		xdsUpdater:           opt.XDSUpdater,
-		resyncPeriod:         opt.ResyncPeriod,
-		backoffPolicy:        backoffPolicy,
-		logger:               common.Logger.WithLabels("component", "federation-registry"),
+	c.UpdatePeerConfig(mesh)
+	c.UpdateImportConfig(importConfig)
+	return c
+}
+
+// UpdatePeerConfig updates all settings derived from the ServiceMeshPeer resource.
+// It will also restart the watch if the controller is already running.
+func (c *Controller) UpdatePeerConfig(peerConfig *v1.ServiceMeshPeer) {
+	if func() bool {
+		c.storeLock.RLock()
+		defer c.storeLock.RUnlock()
+		return c.peerConfigGeneration == peerConfig.Generation
+	}() {
+		return
+	}
+
+	restartWatch := func() bool {
+		c.storeLock.Lock()
+		defer c.storeLock.Unlock()
+
+		restartWatch := false
+
+		c.discoveryServiceName = common.DiscoveryServiceHostname(peerConfig)
+		c.defaultDomainSuffix = defaultDomainSuffixForMesh(peerConfig)
+		c.namespace = peerConfig.Namespace
+		c.useDirectCalls = peerConfig.Spec.Security.AllowDirectOutbound
+		if c.egressName != peerConfig.Spec.Gateways.Egress.Name {
+			c.egressName = peerConfig.Spec.Gateways.Egress.Name
+			c.egressService = fmt.Sprintf("%s.%s.%s",
+				peerConfig.Spec.Gateways.Egress.Name, c.namespace, c.localDomainSuffix)
+			c.discoveryURL = fmt.Sprintf("%s://%s:%d", common.DiscoveryScheme, c.egressService, common.DefaultDiscoveryPort)
+			restartWatch = true
+		}
+
+		if !reflect.DeepEqual(c.remote, peerConfig.Spec.Remote) {
+			c.remote = peerConfig.Spec.Remote
+			restartWatch = true
+		}
+
+		c.peerConfigGeneration = peerConfig.Generation
+
+		return restartWatch
+	}()
+	if c.hasStarted() && restartWatch {
+		c.RestartWatch()
 	}
 }
 
+// UpdateImportConfig updates the import rules that are used to select services for
+// import into the mesh and rewrite their names.
 func (c *Controller) UpdateImportConfig(importConfig *v1.ImportedServiceSet) {
+	if func() bool {
+		if importConfig == nil {
+			return false
+		}
+		c.storeLock.RLock()
+		defer c.storeLock.RUnlock()
+		return c.importConfigGeneration == importConfig.Generation
+	}() {
+		return
+	}
 	func() {
 		c.storeLock.Lock()
 		defer c.storeLock.Unlock()
@@ -204,25 +249,10 @@ func (c *Controller) UpdateImportConfig(importConfig *v1.ImportedServiceSet) {
 			c.importLocality = nil
 		} else {
 			c.importLocality = importConfig.Spec.Locality
+			c.importConfigGeneration = importConfig.Generation
 		}
 		c.locality = mergeLocality(c.importLocality, c.defaultLocality)
 	}()
-	c.resync()
-}
-
-func (c *Controller) UpdateDefaultImportConfig(importConfig *v1.ImportedServiceSet) {
-	func() {
-		c.storeLock.Lock()
-		defer c.storeLock.Unlock()
-		c.importNameMapper.UpdateDefaultMapper(common.NewServiceImporter(importConfig, nil, c.defaultDomainSuffix, c.localDomainSuffix))
-		if importConfig == nil {
-			c.defaultLocality = nil
-		} else {
-			c.defaultLocality = importConfig.Spec.Locality
-		}
-		c.locality = mergeLocality(c.importLocality, c.defaultLocality)
-	}()
-	c.resync()
 }
 
 func (c *Controller) Cluster() string {
@@ -233,42 +263,34 @@ func (c *Controller) Provider() serviceregistry.ProviderID {
 	return serviceregistry.Federation
 }
 
-func (c *Controller) Remote() *v1.ServiceMeshPeerRemote {
-	return c.remote
-}
-
-func (c *Controller) pollServices() *federationmodel.ServiceListMessage {
+func (c *Controller) pollServices() (*federationmodel.ServiceListMessage, error) {
 	url := c.discoveryURL + "/v1/services/"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
-		return nil
+		return nil, fmt.Errorf("failed to create request: '%s': %s", url, err)
 	}
 	req.Header.Add("discovery-service", c.discoveryServiceName)
+	req.Header.Add("remote", fmt.Sprint(common.RemoteChecksum(c.remote)))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		c.logger.Errorf("Failed to GET URL: '%s': %s", url, err)
-		return nil
+		return nil, fmt.Errorf("failed to GET URL: '%s': %s", url, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		c.logger.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
-		return nil
+		return nil, fmt.Errorf("status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
 	}
 
 	respBytes := []byte{}
 	_, err = resp.Body.Read(respBytes)
 	if err != nil {
-		c.logger.Errorf("Failed to read response body from URL '%s': %s", url, err)
-		return nil
+		return nil, fmt.Errorf("failed to read response body from URL '%s': %s", url, err)
 	}
 
 	var serviceList federationmodel.ServiceListMessage
 	err = json.NewDecoder(resp.Body).Decode(&serviceList)
 	if err != nil {
-		c.logger.Errorf("Failed to unmarshal response bytes: %s", err)
-		return nil
+		return nil, fmt.Errorf("failed to unmarshal response bytes: %s", err)
 	}
-	return &serviceList
+	return &serviceList, nil
 }
 
 func (c *Controller) convertExportedService(s *federationmodel.ServiceMessage) (*model.Service, []*model.ServiceInstance) {
@@ -621,30 +643,19 @@ func (c *Controller) GetProxyWorkloadLabels(proxy *model.Proxy) labels.Collectio
 
 // Run starts all the controllers
 func (c *Controller) Run(stop <-chan struct{}) {
-	eventCh := make(chan *federationmodel.WatchEvent)
 	refreshTicker := time.NewTicker(c.resyncPeriod)
 	defer refreshTicker.Stop()
-	c.resync()
-	go func() {
-		for !c.hasStopped() {
-			c.logger.Info("starting watch")
-			err := c.watch(eventCh, stop)
-			if err != nil {
-				c.logger.Errorf("watch failed: %s", err)
-				time.Sleep(c.backoffPolicy.NextBackOff())
-			} else {
-				return
-			}
-		}
-	}()
+	c.startWatch()
+	atomic.StoreInt32(&c.started, 1)
 	for {
 		select {
 		case <-stop:
 			c.logger.Info("Federation Controller terminated")
+			c.stopWatch()
 			c.stop()
 			return
-		case e := <-eventCh:
-			c.logger.Debugf("watch event received: %s service %s", e.Action, e.Service.Name)
+		case e := <-c.watchEvents:
+			c.logger.Debugf("watch event received: %v", e)
 			c.handleEvent(e)
 		case <-refreshTicker.C:
 			c.logger.Debugf("performing full resync for cluster %s", c.clusterID)
@@ -653,12 +664,18 @@ func (c *Controller) Run(stop <-chan struct{}) {
 	}
 }
 
-func (c *Controller) stop() {
-	atomic.StoreInt32(&c.stopped, 1)
+func (c *Controller) RestartWatch() {
+	c.logger.Infof("restarting watch for cluster %s", c.clusterID)
+	c.stopWatch()
+	c.startWatch()
 }
 
-func (c *Controller) hasStopped() bool {
-	return atomic.LoadInt32(&c.stopped) != 0
+func (c *Controller) stop() {
+	atomic.StoreInt32(&c.started, 0)
+}
+
+func (c *Controller) hasStarted() bool {
+	return atomic.LoadInt32(&c.started) == 1
 }
 
 func (c *Controller) handleEvent(e *federationmodel.WatchEvent) {
@@ -937,6 +954,36 @@ func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) 
 	return svc
 }
 
+func (c *Controller) startWatch() {
+	c.watchDone = make(chan struct{})
+	stopCh := c.watchDone
+	go func() {
+		defer c.logger.Info("stopping watch")
+		for {
+			select {
+			case <-stopCh:
+				// we were stopped. just return
+				return
+			default:
+			}
+			c.logger.Info("starting watch")
+			err := c.watch(c.watchEvents, stopCh)
+			if err != nil {
+				c.logger.Errorf("watch failed: %s", err)
+				time.Sleep(c.backoffPolicy.NextBackOff())
+			} else {
+				return
+			}
+		}
+	}()
+}
+
+func (c *Controller) stopWatch() {
+	if c.watchDone != nil {
+		close(c.watchDone)
+	}
+}
+
 func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-chan struct{}) error {
 	c.statusHandler.WatchInitiated()
 	url := c.discoveryURL + "/v1/watch"
@@ -946,6 +993,7 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 		return nil
 	}
 	req.Header.Add("discovery-service", c.discoveryServiceName)
+	req.Header.Add("remote", fmt.Sprint(common.RemoteChecksum(c.remote)))
 	resp, err := http.DefaultClient.Do(req)
 	defer func() {
 		status := ""
@@ -965,21 +1013,33 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 
 	c.statusHandler.Watching()
 
-	// connection was established successfully. reset backoffPolicy
+	// connection was established successfully. reset backoffPolicy and resync
 	c.backoffPolicy.Reset()
+	c.resync()
 
 	dec := json.NewDecoder(resp.Body)
 	defer resp.Body.Close()
 	for {
-		select {
-		case <-stopCh:
-			return nil
-		default:
+		reader := dec.Buffered().(*bytes.Reader)
+		for reader.Len() == 0 {
+			select {
+			case <-stopCh:
+				c.logger.Debug("watch was stopped while idle")
+				return nil
+			default:
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
 		var e federationmodel.WatchEvent
 		err := dec.Decode(&e)
 		if err != nil {
 			return err
+		}
+		select {
+		case <-stopCh:
+			c.logger.Debugf("watch was stopped, discarding event %v", e)
+			return nil
+		default:
 		}
 		eventCh <- &e
 	}
@@ -989,7 +1049,16 @@ func (c *Controller) resync() uint64 {
 	c.storeLock.Lock()
 	defer c.storeLock.Unlock()
 	c.logger.Debugf("performing full resync")
-	svcList := c.pollServices()
+	var err error
+	var svcList *federationmodel.ServiceListMessage
+	err = retry.Until(func() bool {
+		svcList, err = c.pollServices()
+		return err == nil
+	}, retry.Delay(time.Second), retry.Timeout(2*time.Minute))
+	if err != nil {
+		c.logger.Warnf("resync failed: %s", err)
+		return 0
+	}
 	c.updateGateways(svcList)
 	if svcList != nil {
 		c.convertServices(svcList)

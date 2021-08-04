@@ -34,7 +34,6 @@ func setHostname(name *federationmodel.ServiceKey, domainSuffix string) {
 
 type NameMapper interface {
 	NameForService(svc *model.Service) *federationmodel.ServiceKey
-	UpdateDefaultMapper(defaults NameMapper)
 }
 
 type nameMatcher struct {
@@ -87,8 +86,6 @@ func (m *nameMatcher) NameForService(svc *model.Service) *federationmodel.Servic
 	return nil
 }
 
-func (m *nameMatcher) UpdateDefaultMapper(_ NameMapper) {}
-
 type labelMatcher struct {
 	domainSuffix string
 	namespace    string
@@ -134,5 +131,3 @@ func (m *labelMatcher) NameForService(svc *model.Service) *federationmodel.Servi
 	}
 	return nil
 }
-
-func (m *labelMatcher) UpdateDefaultMapper(_ NameMapper) {}

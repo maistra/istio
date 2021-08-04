@@ -16,7 +16,6 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
@@ -160,10 +159,6 @@ func (c *Controller) reconcile(resourceName string) error {
 
 func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) error {
 	registry := c.getRegistry(instance.Name)
-
-	egressGatewayService := fmt.Sprintf("%s.%s.svc.%s",
-		instance.Spec.Gateways.Egress.Name, instance.Namespace, c.env.GetDomainSuffix())
-
 	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.TrustDomain != c.env.Mesh().GetTrustDomain() {
 		rootCert, err := c.getRootCertForMesh(instance)
 		if err != nil {
@@ -172,57 +167,45 @@ func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) e
 		c.updateRootCert(instance.Spec.Security.TrustDomain, rootCert)
 	}
 
+	if err := c.createDiscoveryResources(ctx, instance, c.env.Mesh()); err != nil {
+		return err
+	}
+
+	importConfig, err := c.rm.ImportsInformer().Lister().ImportedServiceSets(instance.Namespace).Get(instance.Name)
+	if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
+		c.Logger.Errorf("error retrieving ServiceImports associated with ServiceMeshPeer %s: %s", instance.Name, err)
+		return err
+	}
+
 	// check for existing registry
 	if registry != nil {
-		// if there's an existing registry
-		// make sure it's one of ours
+		// if there's an existing registry, make sure it's one of ours
 		if registry.Provider() != serviceregistry.Federation {
 			return fmt.Errorf(
 				"cannot create Federation registry for %s, registry exists and belongs to another provider (%s)",
 				instance.Name, registry.Provider())
 		}
-		// check to see if it needs updating
-		// TODO: support updates
 		if federationRegistry, ok := registry.(*federationregistry.Controller); ok {
-			if !reflect.DeepEqual(federationRegistry.Remote(), &instance.Spec.Remote) {
-				// TODO: support updates
-				c.Logger.Warnf("updating NetworkAddress for ServiceMeshPeer (%s) is not supported", instance.Name)
-			}
+			c.Logger.Debugf("updating settings for ServiceMeshPeer %s", instance.Name)
+			federationRegistry.UpdatePeerConfig(instance)
+			federationRegistry.UpdateImportConfig(importConfig)
 		} else {
 			return fmt.Errorf("registry %s is not a Federation registry (type=%T)", instance.Name, registry)
 		}
 	} else {
 		// if there's no existing registry
-		c.Logger.Infof("Creating export handler for Federation to %s", instance.Name)
 		exportConfig, err := c.rm.ExportsInformer().Lister().ExportedServiceSets(instance.Namespace).Get(instance.Name)
 		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
 			c.Logger.Errorf("error retrieving ServiceExports associated with ServiceMeshPeer %s: %s", instance.Name, err)
 			return err
 		}
-		importConfig, err := c.rm.ImportsInformer().Lister().ImportedServiceSets(instance.Namespace).Get(instance.Name)
-		if err != nil && !(apierrors.IsNotFound(err) || apierrors.IsGone(err)) {
-			c.Logger.Errorf("error retrieving ServiceImports associated with ServiceMeshPeer %s: %s", instance.Name, err)
-			return err
-		}
-
 		statusHandler := c.statusManager.PeerAdded(types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace})
 		if err := c.federationManager.AddPeer(instance, exportConfig, statusHandler); err != nil {
 			return err
 		}
-
-		c.Logger.Infof("Creating Istio resources for Federation discovery from %s", instance.Name)
-		if err := c.createDiscoveryResources(ctx, instance, c.env.Mesh()); err != nil {
-			return err
-		}
-
-		c.Logger.Infof("Initializing Federation service registry for %q at %s", instance.Name, instance.Spec.Remote.Addresses)
+		c.Logger.Infof("initializing Federation service registry for %q at %s", instance.Name, instance.Spec.Remote.Addresses)
 		// create a registry instance
 		options := federationregistry.Options{
-			Remote:         instance.Spec.Remote.DeepCopy(),
-			EgressName:     instance.Spec.Gateways.Egress.Name,
-			EgressService:  egressGatewayService,
-			Namespace:      instance.Namespace,
-			UseDirectCalls: instance.Spec.Security.AllowDirectOutbound,
 			KubeClient:     c.rm.KubeClient(),
 			ConfigStore:    c.ConfigStoreCache,
 			StatusHandler:  statusHandler,

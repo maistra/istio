@@ -59,14 +59,14 @@ func (m *fakeStatusManager) IsLeader() bool {
 }
 
 func (m *fakeStatusManager) PeerAdded(mesh types.NamespacedName) status.Handler {
-	return nil
+	return &common.FakeStatusHandler{}
 }
 
 func (m *fakeStatusManager) PeerDeleted(mesh types.NamespacedName) {
 }
 
 func (m *fakeStatusManager) HandlerFor(mesh types.NamespacedName) status.Handler {
-	return nil
+	return &common.FakeStatusHandler{}
 }
 
 func (m *fakeStatusManager) PushStatus() error {
