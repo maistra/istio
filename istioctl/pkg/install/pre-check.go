@@ -142,7 +142,7 @@ func installPreCheck(istioNamespaceFlag string, restClientGetter genericclioptio
 		{
 			namespace: istioNamespaceFlag,
 			group:     "apiextensions.k8s.io",
-			version:   "v1beta1",
+			version:   "v1",
 			name:      "CustomResourceDefinition",
 		},
 		{
