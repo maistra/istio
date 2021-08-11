@@ -1251,7 +1251,7 @@ helm.sh/helm/v3/pkg/chartutil
 helm.sh/helm/v3/pkg/engine
 # honnef.co/go/tools v0.0.1-2020.1.5
 ## explicit
-# istio.io/api v0.0.0-20210607161139-ab961225b5e9 => github.com/istio/api v0.0.0-20210419172736-e076ff10ec38
+# istio.io/api v0.0.0-20210811072739-f6a42bf29c5f => github.com/istio/api v0.0.0-20210419172736-e076ff10ec38
 ## explicit
 istio.io/api/analysis/v1alpha1
 istio.io/api/annotation
