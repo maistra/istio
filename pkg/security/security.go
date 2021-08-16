@@ -61,6 +61,12 @@ var (
 	TokenAudiences = strings.Split(env.RegisterStringVar("TOKEN_AUDIENCES", "istio-ca",
 		"A list of comma separated audiences to check in the JWT token before issuing a certificate. "+
 			"The token is accepted if it matches with one of the audiences").Get(), ",")
+
+	// DefaultKubernetesAudience specifies the default audience used by the kubernetes token issuer.
+	// This is used to support legacy first-person-jwt tokens issued to proxies.
+	DefaultKubernetesAudience = env.RegisterStringVar("DEFAULT_K8S_AUDIENCE", "https://kubernetes.default.svc",
+		"The default audience used by the kubernetes token issuer. "+
+			"This is used to support legacy first-person-jwt tokens issued to proxies.")
 )
 
 // Options provides all of the configuration parameters for secret discovery service

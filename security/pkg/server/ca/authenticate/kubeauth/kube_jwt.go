@@ -70,8 +70,6 @@ func (a *KubeJWTAuthenticator) AuthenticatorType() string {
 	return KubeJWTAuthenticatorType
 }
 
-const DefaultKubernetesAudience = "kubernetes.default.svc"
-
 // Authenticate authenticates the call using the K8s JWT from the context.
 // The returned Caller.Identities is in SPIFFE format.
 func (a *KubeJWTAuthenticator) Authenticate(ctx context.Context) (*authenticate.Caller, error) {
@@ -96,7 +94,7 @@ func (a *KubeJWTAuthenticator) Authenticate(ctx context.Context) (*authenticate.
 	// tolerate the unbound tokens.
 	if !util.IsK8SUnbound(targetJWT) || security.Require3PToken.Get() {
 		aud = security.TokenAudiences
-		if tokenAud, _ := util.ExtractJwtAud(targetJWT); len(tokenAud) == 1 && tokenAud[0] == DefaultKubernetesAudience {
+		if tokenAud, _ := util.ExtractJwtAud(targetJWT); len(tokenAud) == 1 && tokenAud[0] == security.DefaultKubernetesAudience.Get() {
 			if a.jwtPolicy == jwt.PolicyFirstParty && !security.Require3PToken.Get() {
 				// For backwards compatibility, if first-party-jwt is used and they don't require 3p, allow it but warn
 				// This is intended to support first-party-jwt on Kubernetes 1.21+, where BoundServiceAccountTokenVolume
@@ -107,7 +105,7 @@ func (a *KubeJWTAuthenticator) Authenticate(ctx context.Context) (*authenticate.
 			} else {
 				log.Warnf("Received token with aud %q, but expected %q. BoundServiceAccountTokenVolume, "+
 					"default in Kubernetes 1.21+, is not compatible with first-party-jwt",
-					DefaultKubernetesAudience, aud)
+					security.DefaultKubernetesAudience.Get(), aud)
 			}
 		}
 		// TODO: check the audience from token, no need to call
