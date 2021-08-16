@@ -79,7 +79,10 @@ func isAllowedKubernetesAudience(a string) bool {
 	// We do not use url.Parse() as it *requires* the protocol.
 	a = strings.TrimPrefix(a, "https://")
 	a = strings.TrimPrefix(a, "http://")
-	return strings.HasPrefix(a, "kubernetes.default.svc")
+	k8sAudience := security.DefaultKubernetesAudience.Get()
+	k8sAudience = strings.TrimPrefix(k8sAudience, "https://")
+	k8sAudience = strings.TrimPrefix(k8sAudience, "http://")
+	return strings.HasPrefix(a, k8sAudience)
 }
 
 func (a *KubeJWTAuthenticator) AuthenticateRequest(req *http.Request) (*security.Caller, error) {
@@ -127,8 +130,9 @@ func (a *KubeJWTAuthenticator) authenticate(targetJWT string, clusterID cluster.
 				log.Warnf("Insecure first-party-jwt option used to validate token; use third-party-jwt")
 				aud = nil
 			} else {
-				log.Warnf("Received token with aud %q, but expected 'kubernetes.default.svc'. BoundServiceAccountTokenVolume, "+
-					"default in Kubernetes 1.21+, is not compatible with first-party-jwt", aud)
+				log.Warnf("Received token with aud %q, but expected %q. BoundServiceAccountTokenVolume, "+
+					"default in Kubernetes 1.21+, is not compatible with first-party-jwt",
+					aud, security.DefaultKubernetesAudience.Get())
 			}
 		}
 		// TODO: check the audience from token, no need to call
