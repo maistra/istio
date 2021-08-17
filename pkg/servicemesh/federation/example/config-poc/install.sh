@@ -47,6 +47,8 @@ MESH2_CERT=$(oc2 get configmap -n mesh2-system istio-ca-root-cert -o jsonpath='{
 
 MESH1_DISCOVERY_PORT="8188"
 MESH1_SERVICE_PORT="15443"
+MESH2_DISCOVERY_PORT="8188"
+MESH2_SERVICE_PORT="15443"
 
 log "Retrieving ingress addresses"
 if [ "${MESH1_KUBECONFIG}" == "${MESH2_KUBECONFIG}" ]; then
@@ -73,6 +75,8 @@ else
     fi
   fi
   echo MESH1_ADDRESS="${MESH1_ADDRESS}"
+  echo MESH1_DISCOVERY_PORT="${MESH1_DISCOVERY_PORT}"
+  echo MESH1_SERVICE_PORT="${MESH1_SERVICE_PORT}"
 
   MESH2_ADDRESS=$(oc2 -n mesh2-system get svc mesh1-ingress -o jsonpath="{.status.loadBalancer.ingress[].ip}")
   if [ -z "$MESH2_ADDRESS" ]; then
@@ -90,6 +94,8 @@ else
     fi
   fi
   echo MESH2_ADDRESS="${MESH2_ADDRESS}"
+  echo MESH2_DISCOVERY_PORT="${MESH2_DISCOVERY_PORT}"
+  echo MESH2_SERVICE_PORT="${MESH2_SERVICE_PORT}"
 fi
 
 log "Enabling federation for mesh1"
