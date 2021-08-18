@@ -17,12 +17,14 @@ package status
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -395,7 +397,7 @@ func (h *handler) Flush() error {
 
 	// see if we need to update the export status
 	if h.exportsDirty {
-		var exports []v1.PeerServiceMapping
+		exports := []v1.PeerServiceMapping{}
 		for _, mapping := range h.exports {
 			exports = append(exports, mapping)
 		}
@@ -416,7 +418,7 @@ func (h *handler) Flush() error {
 
 	// see if we need to update the import status
 	if h.importsDirty {
-		var imports []v1.PeerServiceMapping
+		imports := []v1.PeerServiceMapping{}
 		for _, mapping := range h.imports {
 			imports = append(imports, mapping)
 		}
@@ -448,7 +450,7 @@ func (h *handler) Flush() error {
 		return err
 	}
 	oldStatus := mf.Status.DeepCopy()
-	newStatus := &v1.ServiceMeshPeerStatus{}
+	newStatus := &v1.ServiceMeshPeerStatus{StatusConditions: *oldStatus.StatusConditions.DeepCopy()}
 
 	newStatus.DiscoveryStatus = oldStatus.DeepCopy().DiscoveryStatus
 	if h.discoveryStatus.Watch.Connected {
@@ -472,13 +474,13 @@ func (h *handler) Flush() error {
 		}
 	}
 
+	h.updateConditions(newStatus)
+
 	// XXX: the created patch does not merge properly and can cause duplicate entries in discovery status
 	patch, err := h.createPatch(&v1.ServiceMeshPeer{Status: *newStatus}, &v1.ServiceMeshPeer{Status: *oldStatus}, peerStatusPatchMetadata)
 	if err != nil {
 		return err
 	}
-
-	h.logger.Debugf("status patch:\n%s\n", string(patch))
 
 	if len(patch) == 0 || string(patch) == "{}" {
 		// nothing to patch
@@ -494,6 +496,78 @@ func (h *handler) Flush() error {
 	return utilerrors.NewAggregate(allErrors)
 }
 
+func (h *handler) updateConditions(status *v1.ServiceMeshPeerStatus) {
+	connected, degradedMessage, servingCount, ready := func() (bool, string, int, bool) {
+		activeConnections := len(status.DiscoveryStatus.Active)
+		inactiveConnections := len(status.DiscoveryStatus.Inactive)
+		var degradedMessage string
+		if inactiveConnections > 0 {
+			degradedMessage = fmt.Sprintf("%d of %d connections are inactive", inactiveConnections, inactiveConnections+activeConnections)
+		}
+		servingCount := 0
+		for _, details := range status.DiscoveryStatus.Active {
+			for _, remote := range details.Remotes {
+				if remote.Connected {
+					servingCount++
+				}
+			}
+		}
+		for _, details := range status.DiscoveryStatus.Inactive {
+			for _, remote := range details.Remotes {
+				if remote.Connected {
+					servingCount++
+				}
+			}
+		}
+		return inactiveConnections == 0, degradedMessage, servingCount, degradedMessage == ""
+	}()
+
+	connectedCondition := v1.Condition{Type: v1.ConnectedServiceMeshPeerCondition}
+	if connected {
+		connectedCondition.Reason = "Connected"
+		connectedCondition.Status = corev1.ConditionTrue
+	} else {
+		connectedCondition.Reason = "NotConnected"
+		connectedCondition.Status = corev1.ConditionFalse
+	}
+
+	degradedCondition := v1.Condition{Type: v1.DegradedServiceMeshPeerCondition}
+	if degradedMessage == "" || !connected {
+		degradedCondition.Reason = v1.NotDegradedConditionReason
+		degradedCondition.Status = corev1.ConditionFalse
+		degradedCondition.Message = ""
+	} else {
+		degradedCondition.Reason = v1.DegradedConditionReason
+		degradedCondition.Status = corev1.ConditionTrue
+		degradedCondition.Message = degradedMessage
+	}
+
+	servingCondition := v1.Condition{Type: v1.ServingServiceMeshPeerCondition}
+	if servingCount == 0 {
+		servingCondition.Reason = v1.NotServingConditionReason
+		servingCondition.Message = fmt.Sprintf("no connections from peer '%s'", h.mesh.Name)
+		servingCondition.Status = corev1.ConditionFalse
+	} else {
+		servingCondition.Reason = v1.ServingConditionReason
+		servingCondition.Message = fmt.Sprintf("servicing %d connections from peer '%s'", servingCount, h.mesh.Name)
+		servingCondition.Status = corev1.ConditionTrue
+	}
+
+	readyCondition := v1.Condition{Type: v1.ReadyServiceMeshPeerCondition, Message: degradedMessage}
+	if ready {
+		readyCondition.Reason = v1.ReadyConditionReason
+		readyCondition.Status = corev1.ConditionTrue
+	} else {
+		readyCondition.Reason = v1.NotReadyConditionReason
+		readyCondition.Status = corev1.ConditionFalse
+	}
+
+	status.SetCondition(readyCondition)
+	status.SetCondition(connectedCondition)
+	status.SetCondition(degradedCondition)
+	status.SetCondition(servingCondition)
+}
+
 func (h *handler) patchExports() error {
 	exportSet, err := h.manager.rm.ExportsInformer().Lister().ExportedServiceSets(h.mesh.Namespace).Get(h.mesh.Name)
 	if err != nil {
@@ -504,7 +578,22 @@ func (h *handler) patchExports() error {
 		return err
 	}
 
-	patch, err := h.createPatch(&v1.ExportedServiceSet{Status: v1.ExportedServiceSetStatus{ExportedServices: h.exportsStatus}},
+	newStatus := exportSet.Status.DeepCopy()
+	condition := v1.Condition{Type: v1.ExportingExportedServiceSetCondition}
+	if len(h.exportsStatus) > 0 {
+		condition.Status = corev1.ConditionTrue
+		condition.Reason = v1.ExportingConditionReason
+	} else {
+		condition.Status = corev1.ConditionFalse
+		if len(exportSet.Spec.ExportRules) > 0 {
+			condition.Reason = v1.NoRulesMatchedConditionReason
+		} else {
+			condition.Reason = v1.NoRulesDefinedConditionReason
+		}
+	}
+	newStatus.SetCondition(condition)
+	newStatus.ExportedServices = h.exportsStatus
+	patch, err := h.createPatch(&v1.ExportedServiceSet{Status: *newStatus},
 		&v1.ExportedServiceSet{Status: exportSet.DeepCopy().Status}, exportStatusPatchMetadata)
 	if err != nil {
 		return err
@@ -535,7 +624,36 @@ func (h *handler) patchImports() error {
 		return err
 	}
 
-	patch, err := h.createPatch(&v1.ImportedServiceSet{Status: v1.ImportedServiceSetStatus{ImportedServices: h.importsStatus}},
+	newStatus := importSet.Status.DeepCopy()
+	condition := v1.Condition{Type: v1.ImportingImportedServiceSetCondition}
+	hasImportsAvailable, isImportingServices := func() (bool, bool) {
+		importsAvailable := false
+		for _, service := range h.importsStatus {
+			importsAvailable = true
+			if service.LocalService.Name != "" {
+				return importsAvailable, true
+			}
+		}
+		return importsAvailable, false
+	}()
+	if isImportingServices {
+		condition.Status = corev1.ConditionTrue
+		condition.Reason = v1.ImportingConditionReason
+	} else {
+		condition.Status = corev1.ConditionFalse
+		if hasImportsAvailable {
+			if len(importSet.Spec.ImportRules) > 0 {
+				condition.Reason = v1.NoRulesMatchedConditionReason
+			} else {
+				condition.Reason = v1.NoRulesDefinedConditionReason
+			}
+		} else {
+			condition.Reason = v1.NoExportedServicesConditionReason
+		}
+	}
+	newStatus.SetCondition(condition)
+	newStatus.ImportedServices = h.importsStatus
+	patch, err := h.createPatch(&v1.ImportedServiceSet{Status: *newStatus},
 		&v1.ImportedServiceSet{Status: importSet.DeepCopy().Status}, importStatusPatchMetadata)
 	if err != nil {
 		return err
@@ -573,6 +691,9 @@ func (h *handler) createPatch(newObj, oldObj interface{}, metadata strategicpatc
 	if err != nil {
 		return nil, err
 	}
+
+	h.logger.Debugf("status patch:\n%s\n", string(patch))
+
 	return patch, nil
 }
 

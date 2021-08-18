@@ -2,6 +2,8 @@ module istio.io/istio
 
 go 1.15
 
+replace maistra.io/api => ../../maistra.io/api
+
 // pin to v1.9.5
 replace istio.io/api => github.com/istio/api v0.0.0-20210419172736-e076ff10ec38
 

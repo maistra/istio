@@ -98,11 +98,12 @@ type ImportedServiceLocality struct {
 }
 
 type ImportedServiceSetStatus struct {
+	StatusConditions `json:",inline"`
 	// Imports provides details about the services imported by this mesh.
 	// +required
 	// +listType=map
 	// +listMapKey=exportedName
 	// +patchMergeKey=exportedName
 	// +patchStrategy=merge,retainKeys
-	ImportedServices []PeerServiceMapping `json:"importedServices"`
+	ImportedServices []PeerServiceMapping `json:"importedServices" patchStrategy:"merge,retainKeys" patchMergeKey:"exportedName"`
 }
