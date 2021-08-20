@@ -470,7 +470,7 @@ func createServer(env *model.Environment) *Server {
 }
 
 func getServiceList(t *testing.T, addr, remoteName string) federationmodel.ServiceListMessage {
-	resp, err := httpsClient.Get("https://" + addr + "/services/" + remoteName)
+	resp, err := httpsClient.Get("https://" + addr + "/v1/services/" + remoteName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -767,7 +767,7 @@ func TestWatch(t *testing.T) {
 			defer close(stopCh)
 			s.resyncNetworkGateways()
 			s.AddPeer(federation, tc.serviceExports, &fakeStatusHandler{})
-			req, err := http.NewRequest("GET", "https://"+s.Addr()+"/watch/"+tc.remoteName, nil)
+			req, err := http.NewRequest("GET", "https://"+s.Addr()+"/v1/watch/"+tc.remoteName, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

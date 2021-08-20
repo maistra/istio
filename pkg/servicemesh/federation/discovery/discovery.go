@@ -567,14 +567,14 @@ func (c *Controller) discoveryIngressVirtualService(
 							Port: uint32(discoveryPort),
 							Uri: &rawnetworking.StringMatch{
 								MatchType: &rawnetworking.StringMatch_Exact{
-									Exact: "/services/",
+									Exact: "/v1/services/",
 								},
 							},
 						},
 					},
 					Rewrite: &rawnetworking.HTTPRewrite{
 						Authority: istiodService,
-						Uri:       "/services/" + instance.Name,
+						Uri:       "/v1/services/" + instance.Name,
 					},
 					Route: []*rawnetworking.HTTPRouteDestination{
 						{
@@ -598,14 +598,14 @@ func (c *Controller) discoveryIngressVirtualService(
 							Port: uint32(discoveryPort),
 							Uri: &rawnetworking.StringMatch{
 								MatchType: &rawnetworking.StringMatch_Exact{
-									Exact: "/watch",
+									Exact: "/v1/watch",
 								},
 							},
 						},
 					},
 					Rewrite: &rawnetworking.HTTPRewrite{
 						Authority: istiodService,
-						Uri:       "/watch/" + instance.Name,
+						Uri:       "/v1/watch/" + instance.Name,
 					},
 					Route: []*rawnetworking.HTTPRouteDestination{
 						{

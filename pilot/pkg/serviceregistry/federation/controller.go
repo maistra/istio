@@ -238,7 +238,7 @@ func (c *Controller) Remote() *v1.ServiceMeshPeerRemote {
 }
 
 func (c *Controller) pollServices() *federationmodel.ServiceListMessage {
-	url := c.discoveryURL + "/services/"
+	url := c.discoveryURL + "/v1/services/"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
@@ -939,7 +939,7 @@ func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) 
 
 func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-chan struct{}) error {
 	c.statusHandler.WatchInitiated()
-	url := c.discoveryURL + "/watch"
+	url := c.discoveryURL + "/v1/watch"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		c.logger.Errorf("Failed to create request: '%s': %s", url, err)
