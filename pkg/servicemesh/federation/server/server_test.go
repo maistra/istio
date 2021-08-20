@@ -753,6 +753,52 @@ func TestWatch(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "service export removed",
+			remoteName:     "test-remote",
+			serviceExports: exportProductPage,
+			updatedExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-remote",
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+					},
+					Ports: model.PortList{
+						&model.Port{
+							Name:     "https",
+							Protocol: protocol.HTTPS,
+							Port:     443,
+						},
+					},
+				},
+			},
+			serviceEvents: nil,
+			expectedWatchEvents: []*federationmodel.WatchEvent{
+				{
+					Action: federationmodel.ActionDelete,
+					Service: &federationmodel.ServiceMessage{
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "service",
+							Namespace: "federation",
+							Hostname:  "service.federation.svc.test-remote-exports.local",
+						},
+						ServicePorts: []*federationmodel.ServicePort{
+							{
+								Name:     "https",
+								Port:     443,
+								Protocol: "HTTPS",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

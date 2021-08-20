@@ -487,12 +487,17 @@ func (s *meshServer) resync() {
 			s.logger.Debugf("skipping external service: %s", svc.Hostname)
 			continue
 		}
+		svcKey := serviceKeyForService(svc)
 		svcMessage := s.getServiceMessage(svc, s.exportConfig.NameForService(svc))
 		if svcMessage == nil {
+			if existingSvc, found := s.currentServices[svcKey]; found {
+				s.logger.Debugf("export for service %+v as %+v deleted", svcKey, existingSvc.ServiceKey)
+				s.deleteService(svcKey, existingSvc)
+				continue
+			}
 			s.logger.Debugf("skipping export of service %+v, as it does not match any export filter", serviceKeyForService(svc))
 			continue
 		}
-		svcKey := serviceKeyForService(svc)
 		if existingSvc, found := s.currentServices[svcKey]; found {
 			if existingSvc.GenerateChecksum() == svcMessage.GenerateChecksum() {
 				continue
