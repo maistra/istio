@@ -24,6 +24,7 @@ import (
 	rawnetworking "istio.io/api/networking/v1alpha3"
 	rawsecurity "istio.io/api/security/v1beta1"
 	rawtype "istio.io/api/type/v1beta1"
+	"istio.io/istio/pilot/pkg/config/kube/ior"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
@@ -207,6 +208,7 @@ func (s *meshServer) gatewayForExport(source federationmodel.ServiceKey, target 
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 			Name:             resourceName,
 			Namespace:        s.mesh.Namespace,
+			Annotations:      map[string]string{ior.ShouldManageRouteAnnotation: "false"},
 		},
 		Spec: &rawnetworking.Gateway{
 			Selector: map[string]string{
