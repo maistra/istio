@@ -160,11 +160,13 @@ func (s *Server) isExportedHostNameDuplicate(exportConfig *common.ServiceExporte
 	}
 	hosts := sets.NewString()
 	for _, svc := range services {
-		if hosts.Has(exportConfig.NameForService(svc).Hostname) {
-			s.logger.Debugf("service with duplicate hostname found: %+v", exportConfig.NameForService(svc))
-			return true
+		if svc != nil && exportConfig.NameForService(svc) != nil {
+			if hosts.Has(exportConfig.NameForService(svc).Hostname) {
+				s.logger.Debugf("service with duplicate hostname found: %+v", exportConfig.NameForService(svc))
+				return true
+			}
+			hosts.Insert(exportConfig.NameForService(svc).Hostname)
 		}
-		hosts.Insert(exportConfig.NameForService(svc).Hostname)
 	}
 	return false
 }
