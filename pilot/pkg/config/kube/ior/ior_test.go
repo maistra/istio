@@ -79,6 +79,7 @@ func TestCreate(t *testing.T) {
 		expectedRoutes int
 		expectedError  string
 		tls            bool
+		annotations    map[string]string
 	}{
 		{
 			"One host",
@@ -88,6 +89,7 @@ func TestCreate(t *testing.T) {
 			1,
 			"",
 			false,
+			nil,
 		},
 		{
 			"Two hosts",
@@ -97,6 +99,7 @@ func TestCreate(t *testing.T) {
 			2,
 			"",
 			false,
+			nil,
 		},
 		{
 			"Wildcard 1",
@@ -106,6 +109,7 @@ func TestCreate(t *testing.T) {
 			1,
 			"",
 			false,
+			nil,
 		},
 		{
 			"Wildcard 2",
@@ -115,6 +119,7 @@ func TestCreate(t *testing.T) {
 			1,
 			"",
 			false,
+			nil,
 		},
 		{
 			"Invalid gateway",
@@ -124,6 +129,7 @@ func TestCreate(t *testing.T) {
 			0,
 			"could not find a service that matches the gateway selector `istio=nonexistent'",
 			false,
+			nil,
 		},
 		{
 			"TLS 1",
@@ -133,6 +139,7 @@ func TestCreate(t *testing.T) {
 			1,
 			"",
 			true,
+			nil,
 		},
 		{
 			"Non-existing namespace",
@@ -142,6 +149,47 @@ func TestCreate(t *testing.T) {
 			0,
 			"could not handle the ADD event for non-existing",
 			false,
+			nil,
+		},
+		{
+			"Gateway not managed",
+			"istio-system",
+			[]string{"notmanaged.org"},
+			map[string]string{"istio": "ingressgateway"},
+			0,
+			"",
+			false,
+			map[string]string{ShouldManageRouteAnnotation: "false", "foo": "bar"},
+		},
+		{
+			"Gateway explicitly managed",
+			"istio-system",
+			[]string{"explicitlymanaged.org"},
+			map[string]string{"istio": "ingressgateway"},
+			1,
+			"",
+			false,
+			map[string]string{ShouldManageRouteAnnotation: "TRUE", "foo": "bar"},
+		},
+		{
+			"Gateway explicitly managed with an invalid value",
+			"istio-system",
+			[]string{"explicitlymanaged.org"},
+			map[string]string{"istio": "ingressgateway"},
+			0,
+			fmt.Sprintf("could not parse annotation %q:", ShouldManageRouteAnnotation),
+			false,
+			map[string]string{ShouldManageRouteAnnotation: "ABC", "foo": "bar"},
+		},
+		{
+			"Egress gateway must be ignored",
+			"istio-system",
+			[]string{"egress.org"},
+			map[string]string{"istio": "egressgateway"},
+			0,
+			"",
+			false,
+			nil,
 		},
 	}
 
@@ -159,7 +207,7 @@ func TestCreate(t *testing.T) {
 	for i, c := range cases {
 		t.Run(c.testName, func(t *testing.T) {
 			gatewayName := fmt.Sprintf("gw%d", i)
-			createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls)
+			createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls, c.annotations)
 
 			list, _ := getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
 			if err := getError(errorChannel); err != nil {
@@ -176,13 +224,17 @@ func TestCreate(t *testing.T) {
 				if c.expectedError != "" {
 					t.Fatalf("expected error message containing `%s', got success", c.expectedError)
 				}
-				validateRoutes(t, c.hosts, list, gatewayName, c.tls)
 
-				// Remove the gateway and expect all routes get removed
-				deleteGateway(t, store, c.ns, gatewayName)
-				_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
-				if err := getError(errorChannel); err != nil {
-					t.Fatal(err)
+				// Only continue the validation if any route is expected to be created
+				if c.expectedRoutes > 0 {
+					validateRoutes(t, c.hosts, list, gatewayName, c.tls)
+
+					// Remove the gateway and expect all routes get removed
+					deleteGateway(t, store, c.ns, gatewayName)
+					_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
+					if err := getError(errorChannel); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 
@@ -203,6 +255,9 @@ func validateRoutes(t *testing.T, hosts []string, list *routeapiv1.RouteList, ga
 		}
 		if route.Annotations["foo"] != "bar" {
 			t.Fatal("gateway annotations were not copied to route")
+		}
+		if _, found := route.Annotations[ShouldManageRouteAnnotation]; found {
+			t.Fatal(fmt.Sprintf("annotation %q should not be copied to the route", ShouldManageRouteAnnotation))
 		}
 
 		// Check hostname
@@ -291,7 +346,7 @@ func TestEdit(t *testing.T) {
 
 	controlPlane := "istio-system"
 	createIngressGateway(t, k8sClient, controlPlane, map[string]string{"istio": "ingressgateway"})
-	createGateway(t, store, controlPlane, "gw", []string{"abc.com"}, map[string]string{"istio": "ingressgateway"}, false)
+	createGateway(t, store, controlPlane, "gw", []string{"abc.com"}, map[string]string{"istio": "ingressgateway"}, false, nil)
 	mrc.setNamespaces("istio-system")
 
 	list, _ := getRoutes(t, routerClient, controlPlane, 1, time.Second)
@@ -343,7 +398,7 @@ func TestPerf(t *testing.T) {
 
 	// Now we have a lot of routes created, let's create one more gateway. We don't expect a lot of new API calls
 	countCallsReset()
-	createGateway(t, store, "ns1", "gw-ns1-1", []string{"instant.com"}, map[string]string{"istio": "ingressgateway"}, false)
+	createGateway(t, store, "ns1", "gw-ns1-1", []string{"instant.com"}, map[string]string{"istio": "ingressgateway"}, false, nil)
 	_, ignore = getRoutes(t, routerClient, "istio-system", qty+1, time.Second)
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
@@ -425,7 +480,8 @@ func createGateways(t *testing.T, store model.ConfigStoreCache, begin, end int) 
 			fmt.Sprintf("gw-ns%d", i),
 			[]string{fmt.Sprintf("d%d.com", i)},
 			map[string]string{"istio": "ingressgateway"},
-			false)
+			false,
+			nil)
 	}
 }
 
@@ -511,19 +567,25 @@ func createService(t *testing.T, client kube.Client, ns string, labels map[strin
 	}
 }
 
-func createGateway(t *testing.T, store model.ConfigStoreCache, ns string, name string, hosts []string, gwSelector map[string]string, tls bool) {
+func createGateway(t *testing.T, store model.ConfigStoreCache, ns string, name string, hosts []string, gwSelector map[string]string,
+	tls bool, annotations map[string]string) {
 	t.Helper()
 
 	var tlsConfig *networking.ServerTLSSettings
 	if tls {
 		tlsConfig = &networking.ServerTLSSettings{HttpsRedirect: true}
 	}
+
+	if annotations == nil {
+		annotations = map[string]string{"foo": "bar"}
+	}
+
 	_, err := store.Create(config.Config{
 		Meta: config.Meta{
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 			Namespace:        ns,
 			Name:             name,
-			Annotations:      map[string]string{"foo": "bar"},
+			Annotations:      annotations,
 			ResourceVersion:  "1",
 		},
 		Spec: &networking.Gateway{

@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +49,7 @@ const (
 	gatewayNameLabel            = maistraPrefix + "gateway-name"
 	gatewayNamespaceLabel       = maistraPrefix + "gateway-namespace"
 	gatewayResourceVersionLabel = maistraPrefix + "gateway-resourceVersion"
+	ShouldManageRouteAnnotation = maistraPrefix + "manageRoute"
 )
 
 type syncRoutes struct {
@@ -293,6 +295,28 @@ func (r *route) handleAdd(cfg config.Config) error {
 	return result.ErrorOrNil()
 }
 
+func isManagedByIOR(cfg config.Config) (bool, error) {
+	// We don't manage egress gateways, but we can only look for the default label here.
+	// Users can still use generic labels (e.g. "app: my-ingressgateway" as in the istio docs) to refer to the gateway pod
+	gw := cfg.Spec.(*networking.Gateway)
+	if istioLabel, ok := gw.Selector["istio"]; ok && istioLabel == "egressgateway" {
+		return false, nil
+	}
+
+	manageRouteValue, ok := cfg.Annotations[ShouldManageRouteAnnotation]
+	if !ok {
+		// Manage routes by default, when annotation is not found.
+		return true, nil
+	}
+
+	manageRoute, err := strconv.ParseBool(manageRouteValue)
+	if err != nil {
+		return false, fmt.Errorf("could not parse annotation %q: %s", ShouldManageRouteAnnotation, err)
+	}
+
+	return manageRoute, nil
+}
+
 func (r *route) handleDel(cfg config.Config) error {
 	var result *multierror.Error
 
@@ -318,6 +342,15 @@ func (r *route) handleDel(cfg config.Config) error {
 func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 	// Block until initial sync has finished
 	<-r.initialSyncRun
+
+	manageRoute, err := isManagedByIOR(cfg)
+	if err != nil {
+		return err
+	}
+	if !manageRoute {
+		IORLog.Infof("Ignoring Gateway %s/%s as it is not managed by Istiod", cfg.Namespace, cfg.Name)
+		return nil
+	}
 
 	switch event {
 	case model.EventAdd:
@@ -412,7 +445,7 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 		originalHostAnnotation: originalHost,
 	}
 	for keyName, keyValue := range metadata.Annotations {
-		if !strings.HasPrefix(keyName, "kubectl.kubernetes.io") {
+		if !strings.HasPrefix(keyName, "kubectl.kubernetes.io") && keyName != ShouldManageRouteAnnotation {
 			annotations[keyName] = keyValue
 		}
 	}
