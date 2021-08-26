@@ -159,7 +159,8 @@ func (s *Server) DeletePeer(name string) {
 func (s *Server) UpdateExportsForMesh(exports *v1.ExportedServiceSet) error {
 	untypedMeshServer, ok := s.meshes.Load(exports.Name)
 	if untypedMeshServer == nil || !ok {
-		return fmt.Errorf("cannot update exporter for non-existent federation: %s", exports.Name)
+		// not really an error; ExportedServiceSet might just be created earlier than ServiceMeshPeer
+		return nil
 	}
 	untypedMeshServer.(*meshServer).updateExportConfig(common.NewServiceExporter(exports, nil, exportDomainSuffix(exports.Name)))
 	return nil
@@ -417,7 +418,7 @@ func getClientConnectionKey(request *http.Request) string {
 }
 
 func (s *meshServer) handleWatch(response http.ResponseWriter, request *http.Request) {
-	watch := make(chan *federationmodel.WatchEvent)
+	watch := make(chan *federationmodel.WatchEvent, 10)
 	s.watchMut.Lock()
 	s.currentWatches = append(s.currentWatches, watch)
 	s.watchMut.Unlock()

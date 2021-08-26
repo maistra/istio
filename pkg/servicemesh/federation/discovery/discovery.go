@@ -44,23 +44,15 @@ func init() {
 	Schemas = schemasBuilder.Build()
 }
 
+const (
+	generationAnnotation = "reconciledGeneration"
+)
+
 var (
 	Schemas collection.Schemas
 )
 
 // only to facilitate processing errors from the store
-type storeErrorChecker struct {
-	s string
-}
-
-func (e *storeErrorChecker) Error() string {
-	return e.s
-}
-
-func (e *storeErrorChecker) Is(other error) bool {
-	return other.Error() == e.s
-}
-
 type notFoundErrorChecker struct{}
 
 func (e *notFoundErrorChecker) Error() string {
@@ -72,8 +64,7 @@ func (e *notFoundErrorChecker) Is(other error) bool {
 }
 
 var (
-	memoryStoreErrNotFound      = &notFoundErrorChecker{}
-	memoryStoreErrAlreadyExists = &storeErrorChecker{"item already exists"}
+	memoryStoreErrNotFound = &notFoundErrorChecker{}
 )
 
 func (c *Controller) deleteDiscoveryResources(
@@ -169,109 +160,86 @@ func (c *Controller) createDiscoveryResources(
 				c.Logger.Infof("rolling back discovery egress Gateway for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 					eg.Name, eg.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery ingress Gateway %s: %s", eg.Name, newErr)
+					c.Logger.Errorf("error deleting discovery egress Gateway %s: %s", eg.Name, newErr)
 				}
 			}
 			if evs != nil {
 				c.Logger.Infof("rolling back discovery egress VirtualService for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
 					evs.Name, evs.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery VirtualService %s: %s", evs.Name, newErr)
+					c.Logger.Errorf("error deleting discovery egress VirtualService %s: %s", evs.Name, newErr)
 				}
 			}
 			if ivs != nil {
 				c.Logger.Infof("rolling back discovery ingress VirtualService for Federation cluster %s", instance.Name)
 				if newErr := c.Delete(collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
 					ivs.Name, ivs.Namespace, nil); newErr != nil && !errors.Is(newErr, memoryStoreErrNotFound) {
-					c.Logger.Errorf("error deleting discovery VirtualService %s: %s", ivs.Name, newErr)
+					c.Logger.Errorf("error deleting discovery ingress VirtualService %s: %s", ivs.Name, newErr)
 				}
 			}
 		}
 	}()
 
 	s = c.discoveryService(instance)
-	_, err = c.Create(*s)
+	err = c.upsertConfig(*s)
 	if err != nil {
-		if errors.Is(memoryStoreErrAlreadyExists, err) {
-			// XXX: We don't support upgrade, so ignore this for now
-			err = nil
-		} else {
-			s = nil
-			return
-		}
+		s = nil
 	}
 
 	ap = c.discoveryAuthorizationPolicy(instance)
-	_, err = c.Create(*ap)
+	err = c.upsertConfig(*ap)
 	if err != nil {
-		if errors.Is(memoryStoreErrAlreadyExists, err) {
-			// XXX: We don't support upgrade, so ignore this for now
-			err = nil
-		} else {
-			ap = nil
-			return
-		}
+		ap = nil
 	}
 
 	dr = c.discoveryDestinationRule(instance)
-	_, err = c.Create(*dr)
+	err = c.upsertConfig(*dr)
 	if err != nil {
-		if errors.Is(memoryStoreErrAlreadyExists, err) {
-			// XXX: We don't support upgrade, so ignore this for now
-			err = nil
-		} else {
-			dr = nil
-			return
-		}
+		dr = nil
 	}
 
 	ig = c.discoveryIngressGateway(instance)
-	_, err = c.Create(*ig)
+	err = c.upsertConfig(*ig)
 	if err != nil {
-		if errors.Is(memoryStoreErrAlreadyExists, err) {
-			// XXX: We don't support upgrade, so ignore this for now
-			err = nil
-		} else {
-			ig = nil
-			return
-		}
+		ig = nil
 	}
 
 	eg = c.discoveryEgressGateway(instance)
-	_, err = c.Create(*eg)
+	err = c.upsertConfig(*eg)
 	if err != nil {
-		if errors.Is(memoryStoreErrAlreadyExists, err) {
-			// XXX: We don't support upgrade, so ignore this for now
-			err = nil
-		} else {
-			return
-		}
+		eg = nil
 	}
 
 	evs = c.discoveryEgressVirtualService(instance)
-	_, err = c.Create(*evs)
+	err = c.upsertConfig(*evs)
 	if err != nil {
-		if errors.Is(memoryStoreErrAlreadyExists, err) {
-			// XXX: We don't support upgrade, so ignore this for now
-			err = nil
-		} else {
-			evs = nil
-			return
-		}
+		evs = nil
 	}
 
 	ivs = c.discoveryIngressVirtualService(instance, meshConfig)
-	_, err = c.Create(*ivs)
+	err = c.upsertConfig(*ivs)
 	if err != nil {
-		if errors.Is(err, memoryStoreErrAlreadyExists) {
-			// XXX: We don't support upgrade, so ignore this for now
-			err = nil
-		} else {
-			ivs = nil
-			return
-		}
+		ivs = nil
 	}
 	return
+}
+
+func (c *Controller) upsertConfig(cfg config.Config) (err error) {
+	existing := c.Get(cfg.GroupVersionKind, cfg.Name, cfg.Namespace)
+	if existing == nil {
+		_, err = c.Create(cfg)
+		if err != nil {
+			return err
+		}
+	} else if existing.Annotations[generationAnnotation] != cfg.Annotations[generationAnnotation] {
+		_, err = c.Update(cfg)
+		if err != nil {
+			// don't trigger roll back
+			c.Logger.Errorf("error updating resource %s: %s", cfg.Name, err)
+			err = nil
+		}
+	}
+	return err
 }
 
 func discoveryResourceName(instance *v1.ServiceMeshPeer) string {
@@ -349,6 +317,9 @@ func (c *Controller) discoveryService(instance *v1.ServiceMeshPeer) *config.Conf
 			Labels: map[string]string{
 				"topology.istio.io/network": fmt.Sprintf("network-%s", instance.Name),
 			},
+			Annotations: map[string]string{
+				generationAnnotation: fmt.Sprintf("%d", instance.Generation),
+			},
 		},
 		Spec: serviceSpec,
 	}
@@ -364,6 +335,9 @@ func (c *Controller) discoveryIngressGateway(instance *v1.ServiceMeshPeer) *conf
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 			Name:             name,
 			Namespace:        instance.Namespace,
+			Annotations: map[string]string{
+				generationAnnotation: fmt.Sprintf("%d", instance.Generation),
+			},
 		},
 		Spec: &rawnetworking.Gateway{
 			Selector: federationIngressLabels(instance),
@@ -399,6 +373,9 @@ func (c *Controller) discoveryEgressGateway(instance *v1.ServiceMeshPeer) *confi
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
 			Name:             name,
 			Namespace:        instance.Namespace,
+			Annotations: map[string]string{
+				generationAnnotation: fmt.Sprintf("%d", instance.Generation),
+			},
 		},
 		Spec: &rawnetworking.Gateway{
 			Selector: federationEgressLabels(instance),
@@ -430,6 +407,9 @@ func (c *Controller) discoveryAuthorizationPolicy(instance *v1.ServiceMeshPeer) 
 			GroupVersionKind: collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(),
 			Name:             name,
 			Namespace:        instance.Namespace,
+			Annotations: map[string]string{
+				generationAnnotation: fmt.Sprintf("%d", instance.Generation),
+			},
 		},
 		Spec: &rawsecurity.AuthorizationPolicy{
 			Selector: &rawtype.WorkloadSelector{
@@ -479,6 +459,9 @@ func (c *Controller) discoveryEgressVirtualService(instance *v1.ServiceMeshPeer)
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
 			Name:             name,
 			Namespace:        instance.Namespace,
+			Annotations: map[string]string{
+				generationAnnotation: fmt.Sprintf("%d", instance.Generation),
+			},
 		},
 		Spec: &rawnetworking.VirtualService{
 			Hosts: []string{
@@ -501,6 +484,11 @@ func (c *Controller) discoveryEgressVirtualService(instance *v1.ServiceMeshPeer)
 								"discovery-service": {
 									MatchType: &rawnetworking.StringMatch_Exact{
 										Exact: discoveryService,
+									},
+								},
+								"remote": {
+									MatchType: &rawnetworking.StringMatch_Exact{
+										Exact: fmt.Sprint(common.RemoteChecksum(instance.Spec.Remote)),
 									},
 								},
 							},
@@ -544,6 +532,9 @@ func (c *Controller) discoveryIngressVirtualService(
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Virtualservices.Resource().GroupVersionKind(),
 			Name:             name,
 			Namespace:        instance.Namespace,
+			Annotations: map[string]string{
+				generationAnnotation: fmt.Sprintf("%d", instance.Generation),
+			},
 		},
 		Spec: &rawnetworking.VirtualService{
 			Hosts: []string{
@@ -637,6 +628,9 @@ func (c *Controller) discoveryDestinationRule(instance *v1.ServiceMeshPeer) *con
 			GroupVersionKind: collections.IstioNetworkingV1Alpha3Destinationrules.Resource().GroupVersionKind(),
 			Name:             name,
 			Namespace:        instance.Namespace,
+			Annotations: map[string]string{
+				generationAnnotation: fmt.Sprintf("%d", instance.Generation),
+			},
 		},
 		Spec: &rawnetworking.DestinationRule{
 			// the "fake" discovery service

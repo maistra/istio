@@ -17,6 +17,7 @@ package common
 import (
 	"fmt"
 
+	"github.com/mitchellh/hashstructure/v2"
 	corev1 "k8s.io/api/core/v1"
 	kubelabels "k8s.io/apimachinery/pkg/labels"
 	v1 "maistra.io/api/federation/v1"
@@ -70,4 +71,12 @@ func ServiceAccountsForService(client kube.Client, name, namespace string) (map[
 		Logger.Debugf("using ServiceAccount %s for gateway pod %s/%s", sa, pod.Namespace, pod.Name)
 	}
 	return serviceAccountByIP, nil
+}
+
+func RemoteChecksum(remote v1.ServiceMeshPeerRemote) uint64 {
+	checksum, err := hashstructure.Hash(remote, hashstructure.FormatV2, &hashstructure.HashOptions{SlicesAsSets: true})
+	if err != nil {
+		return 0
+	}
+	return checksum
 }
