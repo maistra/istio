@@ -459,8 +459,8 @@ func buildGatewayListenerTLSContext(
 		CommonTlsContext: &tls.CommonTlsContext{
 			AlpnProtocols: util.ALPNHttp,
 			TlsParams: &tls.TlsParameters{
-				TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion),
-				TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion),
+				TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion, tls_features.TLSMinProtocolVersion.Get()),
+				TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion, tls_features.TLSMaxProtocolVersion.Get()),
 				CipherSuites:              tls_features.TLSCipherSuites.Get(),
 				EcdhCurves:                tls_features.TLSECDHCurves.Get(),
 			},
@@ -514,15 +514,8 @@ func buildGatewayListenerTLSContext(
 	}
 
 	// Set TLS parameters if they are non-default
-	if len(server.Tls.CipherSuites) > 0 ||
-		server.Tls.MinProtocolVersion != networking.ServerTLSSettings_TLS_AUTO ||
-		server.Tls.MaxProtocolVersion != networking.ServerTLSSettings_TLS_AUTO {
-
-		ctx.CommonTlsContext.TlsParams = &tls.TlsParameters{
-			TlsMinimumProtocolVersion: convertTLSProtocol(server.Tls.MinProtocolVersion),
-			TlsMaximumProtocolVersion: convertTLSProtocol(server.Tls.MaxProtocolVersion),
-			CipherSuites:              filteredCipherSuites(server.Tls.CipherSuites),
-		}
+	if len(server.Tls.CipherSuites) > 0 {
+		ctx.CommonTlsContext.TlsParams.CipherSuites = filteredCipherSuites(server.Tls.CipherSuites)
 	}
 
 	return ctx
@@ -541,11 +534,13 @@ func filteredCipherSuites(suites []string) []string {
 	return ret
 }
 
-func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol) tls.TlsParameters_TlsProtocol {
+func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol, defaultTLSProtocol tls.TlsParameters_TlsProtocol) tls.TlsParameters_TlsProtocol {
 	out := tls.TlsParameters_TlsProtocol(in) // There should be a one-to-one enum mapping
-	if out < tls.TlsParameters_TLS_AUTO || out > tls.TlsParameters_TLSv1_3 {
-		log.Warnf("was not able to map TLS protocol to Envoy TLS protocol")
-		return tls.TlsParameters_TLS_AUTO
+	if out <= tls.TlsParameters_TLS_AUTO || out > tls.TlsParameters_TLSv1_3 {
+		if out != tls.TlsParameters_TLS_AUTO {
+			log.Warnf("was not able to map TLS protocol to Envoy TLS protocol")
+		}
+		return defaultTLSProtocol
 	}
 	return out
 }

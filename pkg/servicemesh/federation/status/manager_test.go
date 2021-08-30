@@ -573,7 +573,8 @@ func TestStatusManager(t *testing.T) {
 			},
 			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
 				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
-					if status.DiscoveryStatus.Inactive[0].Watch.LastEvent.IsZero() {
+					if len(status.DiscoveryStatus.Inactive) == 0 ||
+						(len(status.DiscoveryStatus.Inactive) > 0 && status.DiscoveryStatus.Inactive[0].Watch.LastEvent.IsZero()) {
 						t.Errorf("expected LastEvent to be updated")
 					}
 				},
