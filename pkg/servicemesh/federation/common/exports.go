@@ -87,13 +87,11 @@ func (se *ServiceExporter) NameForService(svc *model.Service) *federationmodel.S
 	defer se.mu.RUnlock()
 	for _, matcher := range se.exportConfig {
 		if name := matcher.NameForService(svc); name != nil {
-			setHostname(name, se.domainSuffix)
 			return name
 		}
 	}
 	if se.defaultMapper != nil {
 		if name := se.defaultMapper.NameForService(svc); name != nil {
-			setHostname(name, se.domainSuffix)
 			return name
 		}
 	}
