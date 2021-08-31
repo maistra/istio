@@ -24,16 +24,6 @@ spec:
     accessLogging:
       file:
         name: /dev/stdout
-  techPreview:
-    meshConfig:
-      defaultConfig:
-        # XXX: needs to be added to global.yaml
-        holdApplicationUntilProxyStarts: false
-        proxyMetadata:
-          # required so proxy handles dns requests, which are delegated to istiod
-          ISTIO_META_DNS_CAPTURE: "true"
-          # required to enable dns capture
-          PROXY_XDS_VIA_AGENT: "true"
   gateways:
     additionalEgress:
       # egress gateway definition for sending requests from mesh1
