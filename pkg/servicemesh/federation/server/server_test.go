@@ -32,6 +32,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	serviceregistrymemory "istio.io/istio/pilot/pkg/serviceregistry/memory"
 	"istio.io/istio/pkg/config/protocol"
+	"istio.io/istio/pkg/config/visibility"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	istioenv "istio.io/istio/pkg/test/env"
@@ -361,6 +362,206 @@ func TestServiceList(t *testing.T) {
 								Port:     443,
 								Protocol: "HTTPS",
 							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "exportTo - service invisible",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "bookinfo",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.None: true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{},
+		},
+		{
+			name:       "exportTo - service private",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "bookinfo",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.Private: true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{},
+		},
+		{
+			name:       "exportTo - service private to the same namespace",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "istio-system-test",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "istio-system-test",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.Private: true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{
+				Services: []*federationmodel.ServiceMessage{
+					{
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "productpage",
+							Namespace: "istio-system-test",
+							Hostname:  "productpage.istio-system-test.svc.test-remote-exports.local",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "exportTo - foreign namespace",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "bookinfo",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.Instance("foreign-namespace"): true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{},
+		},
+		{
+			name:       "exportTo - same namespace as control plane",
+			remoteName: "test-remote",
+			serviceExports: &v1.ExportedServiceSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-remote",
+					Namespace: "istio-system-test",
+				},
+				Spec: v1.ExportedServiceSetSpec{
+					ExportRules: []v1.ExportedServiceRule{
+						{
+							Type: v1.NameSelectorType,
+							NameSelector: &v1.ServiceNameMapping{
+								ServiceName: v1.ServiceName{
+									Namespace: "bookinfo",
+									Name:      "productpage",
+								},
+							},
+						},
+					},
+				},
+			},
+			services: []*model.Service{
+				{
+					Hostname: "productpage.bookinfo.svc.cluster.local",
+					Attributes: model.ServiceAttributes{
+						Name:      "productpage",
+						Namespace: "bookinfo",
+						ExportTo: map[visibility.Instance]bool{
+							visibility.Instance("istio-system-test"): true,
+						},
+					},
+				},
+			},
+			expectedMessage: federationmodel.ServiceListMessage{
+				Services: []*federationmodel.ServiceMessage{
+					{
+						ServiceKey: federationmodel.ServiceKey{
+							Name:      "productpage",
+							Namespace: "bookinfo",
+							Hostname:  "productpage.bookinfo.svc.test-remote-exports.local",
 						},
 					},
 				},
