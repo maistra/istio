@@ -141,7 +141,7 @@ func sliceServiceInstances(c *Controller, ep *discovery.EndpointSlice, proxy *mo
 	return out
 }
 
-func (esc *endpointSliceController) forgetEndpoint(endpoint interface{}) {
+func (esc *endpointSliceController) forgetEndpoint(endpoint interface{}) []*model.IstioEndpoint {
 	slice := endpoint.(*discovery.EndpointSlice)
 	key := kube.KeyFunc(slice.Name, slice.Namespace)
 	for _, e := range slice.Endpoints {
@@ -152,6 +152,7 @@ func (esc *endpointSliceController) forgetEndpoint(endpoint interface{}) {
 	host, _, _ := esc.getServiceInfo(slice)
 	// endpointSlice cache update
 	esc.endpointCache.Delete(host, slice.Name)
+	return esc.endpointCache.Get(host)
 }
 
 func (esc *endpointSliceController) buildIstioEndpoints(es interface{}, host host.Name) []*model.IstioEndpoint {
@@ -196,12 +197,7 @@ func (esc *endpointSliceController) buildIstioEndpointsWithService(name, namespa
 		return nil
 	}
 
-	endpoints := make([]*model.IstioEndpoint, 0)
-	for _, es := range slices {
-		endpoints = append(endpoints, esc.buildIstioEndpoints(es, host)...)
-	}
-
-	return endpoints
+	return esc.endpointCache.Get(host)
 }
 
 func (esc *endpointSliceController) getServiceInfo(es interface{}) (host.Name, string, string) {

@@ -338,7 +338,9 @@ func (s *DiscoveryServer) shouldRespond(con *Connection, request *discovery.Disc
 			s.StatusGen.OnNack(con.proxy, request)
 		}
 		con.proxy.Lock()
-		con.proxy.WatchedResources[request.TypeUrl].NonceNacked = request.ResponseNonce
+		if w, f := con.proxy.WatchedResources[request.TypeUrl]; f {
+			w.NonceNacked = request.ResponseNonce
+		}
 		con.proxy.Unlock()
 		return false
 	}
@@ -583,7 +585,6 @@ func (s *DiscoveryServer) initProxyState(node *core.Node, con *Connection) error
 		proxy.XdsResourceGenerator = s.Generators[proxy.Metadata.Generator]
 	}
 
-	recordXDSClients(proxy.Metadata.IstioVersion, 1)
 	return nil
 }
 
@@ -844,6 +845,7 @@ func (s *DiscoveryServer) addCon(conID string, con *Connection) {
 	s.adsClientsMutex.Lock()
 	defer s.adsClientsMutex.Unlock()
 	s.adsClients[conID] = con
+	recordXDSClients(con.proxy.Metadata.IstioVersion, 1)
 }
 
 func (s *DiscoveryServer) removeCon(conID string) {

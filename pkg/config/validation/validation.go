@@ -40,6 +40,7 @@ import (
 	security_beta "istio.io/api/security/v1beta1"
 	type_beta "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/features"
+	"istio.io/istio/pilot/pkg/util/sets"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/gateway"
@@ -425,23 +426,33 @@ func validateServerPort(port *networking.Port) (errs error) {
 	return
 }
 
-func validateTLSOptions(tls *networking.ServerTLSSettings) (errs error) {
+func validateTLSOptions(tls *networking.ServerTLSSettings) (v Validation) {
 	if tls == nil {
 		// no tls config at all is valid
 		return
+	}
+
+	invalidCiphers := sets.NewSet()
+	for _, cs := range tls.CipherSuites {
+		if !security.IsValidCipherSuite(cs) {
+			invalidCiphers.Insert(cs)
+		}
+	}
+	if len(invalidCiphers) > 0 {
+		return WrapWarning(fmt.Errorf("ignoring invalid cipher suites: %v", invalidCiphers.SortedList()))
 	}
 
 	if tls.Mode == networking.ServerTLSSettings_ISTIO_MUTUAL {
 		// ISTIO_MUTUAL TLS mode uses either SDS or default certificate mount paths
 		// therefore, we should fail validation if other TLS fields are set
 		if tls.ServerCertificate != "" {
-			errs = appendErrors(errs, fmt.Errorf("ISTIO_MUTUAL TLS cannot have associated server certificate"))
+			v = appendValidation(v, fmt.Errorf("ISTIO_MUTUAL TLS cannot have associated server certificate"))
 		}
 		if tls.PrivateKey != "" {
-			errs = appendErrors(errs, fmt.Errorf("ISTIO_MUTUAL TLS cannot have associated private key"))
+			v = appendValidation(v, fmt.Errorf("ISTIO_MUTUAL TLS cannot have associated private key"))
 		}
 		if tls.CaCertificates != "" {
-			errs = appendErrors(errs, fmt.Errorf("ISTIO_MUTUAL TLS cannot have associated CA bundle"))
+			v = appendValidation(v, fmt.Errorf("ISTIO_MUTUAL TLS cannot have associated CA bundle"))
 		}
 
 		return
@@ -454,20 +465,20 @@ func validateTLSOptions(tls *networking.ServerTLSSettings) (errs error) {
 	}
 	if tls.Mode == networking.ServerTLSSettings_SIMPLE {
 		if tls.ServerCertificate == "" {
-			errs = appendErrors(errs, fmt.Errorf("SIMPLE TLS requires a server certificate"))
+			v = appendValidation(v, fmt.Errorf("SIMPLE TLS requires a server certificate"))
 		}
 		if tls.PrivateKey == "" {
-			errs = appendErrors(errs, fmt.Errorf("SIMPLE TLS requires a private key"))
+			v = appendValidation(v, fmt.Errorf("SIMPLE TLS requires a private key"))
 		}
 	} else if tls.Mode == networking.ServerTLSSettings_MUTUAL {
 		if tls.ServerCertificate == "" {
-			errs = appendErrors(errs, fmt.Errorf("MUTUAL TLS requires a server certificate"))
+			v = appendValidation(v, fmt.Errorf("MUTUAL TLS requires a server certificate"))
 		}
 		if tls.PrivateKey == "" {
-			errs = appendErrors(errs, fmt.Errorf("MUTUAL TLS requires a private key"))
+			v = appendValidation(v, fmt.Errorf("MUTUAL TLS requires a private key"))
 		}
 		if tls.CaCertificates == "" {
-			errs = appendErrors(errs, fmt.Errorf("MUTUAL TLS requires a client CA bundle"))
+			v = appendValidation(v, fmt.Errorf("MUTUAL TLS requires a client CA bundle"))
 		}
 	}
 	return
@@ -644,6 +655,11 @@ var ValidateEnvoyFilter = registerValidateFunc("ValidateEnvoyFilter",
 					listenerMatch := cp.Match.GetListener()
 					if listenerMatch.FilterChain != nil {
 						if listenerMatch.FilterChain.Filter != nil {
+							if cp.ApplyTo == networking.EnvoyFilter_LISTENER || cp.ApplyTo == networking.EnvoyFilter_FILTER_CHAIN {
+								// This would be an error but is a warning for backwards compatibility
+								errs = appendValidation(errs, WrapWarning(
+									fmt.Errorf("Envoy filter: filter match has no effect when used with %v", cp.ApplyTo))) // nolint: golint,stylecheck
+							}
 							// filter names are required if network filter matches are being made
 							if listenerMatch.FilterChain.Filter.Name == "" {
 								errs = appendValidation(errs, fmt.Errorf("Envoy filter: filter match has no name to match on")) // nolint: golint,stylecheck
@@ -1942,9 +1958,14 @@ func validateTCPMatch(match *networking.L4MatchAttributes) (errs error) {
 }
 
 func validateStringMatchRegexp(sm *networking.StringMatch, where string) error {
+	switch sm.GetMatchType().(type) {
+	case *networking.StringMatch_Regex:
+	default:
+		return nil
+	}
 	re := sm.GetRegex()
 	if re == "" {
-		return nil
+		return fmt.Errorf("%q: regex string match should not be empty", where)
 	}
 
 	_, err := regexp.Compile(re)
