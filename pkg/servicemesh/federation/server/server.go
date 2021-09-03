@@ -33,6 +33,7 @@ import (
 
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/host"
+	"istio.io/istio/pkg/config/visibility"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/istio/pkg/servicemesh/federation/status"
@@ -471,6 +472,25 @@ func (s *meshServer) handleWatch(response http.ResponseWriter, request *http.Req
 	}
 }
 
+// checkServiceExportTo checks the service's `exportTo` field and returns
+// whether this service is reachable from the SMP object.
+func (s *meshServer) checkServiceExportTo(svc *model.Service) bool {
+	if len(svc.Attributes.ExportTo) == 0 {
+		return true
+	}
+	if value, exists := svc.Attributes.ExportTo[visibility.Public]; exists && value {
+		return true
+	}
+	if value, exists := svc.Attributes.ExportTo[visibility.Private]; exists && value && s.mesh.Namespace == svc.Attributes.Namespace {
+		return true
+	}
+	if value, exists := svc.Attributes.ExportTo[visibility.Instance(s.mesh.Namespace)]; exists && value {
+		return true
+	}
+
+	return false
+}
+
 func (s *meshServer) resync() {
 	s.Lock()
 	defer s.Unlock()
@@ -499,6 +519,13 @@ func (s *meshServer) resync() {
 			s.logger.Debugf("skipping export of service %+v, as it does not match any export filter", serviceKeyForService(svc))
 			continue
 		}
+
+		if !s.checkServiceExportTo(svc) {
+			s.logger.Debugf("skipping export of service %s/%s as its `exportTo` field prevents reachability from the gateway",
+				svc.Attributes.Namespace, svc.Attributes.Name)
+			continue
+		}
+
 		if existingSvc, found := s.currentServices[svcKey]; found {
 			if existingSvc.GenerateChecksum() == svcMessage.GenerateChecksum() {
 				continue
