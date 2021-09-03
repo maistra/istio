@@ -133,6 +133,7 @@ func initXdsProxy(ia *Agent) (*XdsProxy, error) {
 		xdsHeaders:            ia.cfg.XDSHeaders,
 		xdsUdsPath:            ia.cfg.XdsUdsPath,
 		wasmCache:             wasm.NewLocalFileCache(constants.IstioDataDir, wasm.DefaultWasmModulePurgeInteval, wasm.DefaultWasmModuleExpiry),
+		secretCache:           ia.secretCache,
 		ecdsUpdateChan:        make(chan *discovery.DiscoveryResponse, 10),
 		downstreamGrpcOptions: ia.cfg.DownstreamGrpcOptions,
 	}
