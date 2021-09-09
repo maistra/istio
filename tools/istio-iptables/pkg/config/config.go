@@ -50,6 +50,7 @@ type Config struct {
 	EnableInboundIPv6       bool          `json:"ENABLE_INBOUND_IPV6"`
 	DNSServersV4            []string      `json:"DNS_SERVERS_V4"`
 	DNSServersV6            []string      `json:"DNS_SERVERS_V6"`
+	CaptureAllDNS           bool          `json:"CAPTURE_ALL_DNS"`
 }
 
 func (c *Config) String() string {
@@ -69,6 +70,7 @@ func (c *Config) Print() {
 	fmt.Printf("PROXY_UID=%s\n", c.ProxyUID)
 	fmt.Printf("PROXY_GID=%s\n", c.ProxyGID)
 	fmt.Printf("REDIRECT_DNS=%v\n", c.RedirectDNS)
+	fmt.Printf("CAPTURE_ALL_DNS=%t\n", c.CaptureAllDNS)
 	fmt.Printf("INBOUND_INTERCEPTION_MODE=%s\n", c.InboundInterceptionMode)
 	fmt.Printf("INBOUND_TPROXY_MARK=%s\n", c.InboundTProxyMark)
 	fmt.Printf("INBOUND_TPROXY_ROUTE_TABLE=%s\n", c.InboundTProxyRouteTable)

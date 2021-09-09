@@ -498,21 +498,32 @@ func (iptConfigurator *IptablesConfigurator) run() {
 	}
 
 	if redirectDNS {
-		for _, s := range iptConfigurator.cfg.DNSServersV4 {
-			// redirect all TCP dns traffic on port 53 to the agent on port 15053 for all servers
-			// in etc/resolv.conf
-			// We avoid redirecting all IP ranges to avoid infinite loops when there are local DNS proxies
-			// such as: app -> istio dns server -> dnsmasq -> upstream
-			// This ensures that we do not get requests from dnsmasq sent back to the agent dns server in a loop.
-			// Note: If a user somehow configured etc/resolv.conf to point to dnsmasq and server X, and dnsmasq also
-			// pointed to server X, this would not work. However, the assumption is that is not a common case.
+		if iptConfigurator.cfg.CaptureAllDNS {
+			// Redirect all TCP dns traffic on port 53 to the agent on port 15053
+			// This will be useful for the CNI case where pod DNS server address cannot be decided.
 			iptConfigurator.iptables.AppendRuleV4(
 				constants.ISTIOOUTPUT, constants.NAT,
 				"-p", constants.TCP,
 				"--dport", "53",
-				"-d", s+"/32",
 				"-j", constants.REDIRECT,
 				"--to-ports", constants.IstioAgentDNSListenerPort)
+		} else {
+			for _, s := range iptConfigurator.cfg.DNSServersV4 {
+				// redirect all TCP dns traffic on port 53 to the agent on port 15053 for all servers
+				// in etc/resolv.conf
+				// We avoid redirecting all IP ranges to avoid infinite loops when there are local DNS proxies
+				// such as: app -> istio dns server -> dnsmasq -> upstream
+				// This ensures that we do not get requests from dnsmasq sent back to the agent dns server in a loop.
+				// Note: If a user somehow configured etc/resolv.conf to point to dnsmasq and server X, and dnsmasq also
+				// pointed to server X, this would not work. However, the assumption is that is not a common case.
+				iptConfigurator.iptables.AppendRuleV4(
+					constants.ISTIOOUTPUT, constants.NAT,
+					"-p", constants.TCP,
+					"--dport", "53",
+					"-d", s+"/32",
+					"-j", constants.REDIRECT,
+					"--to-ports", constants.IstioAgentDNSListenerPort)
+			}
 		}
 	}
 
@@ -544,17 +555,22 @@ func (iptConfigurator *IptablesConfigurator) run() {
 				"-p", "udp", "--dport", "53", "-m", "owner", "--gid-owner", gid, "-j", constants.RETURN)
 		}
 
-		// redirect all TCP dns traffic on port 53 to the agent on port 15053 for all servers
-		// in etc/resolv.conf
-		// We avoid redirecting all IP ranges to avoid infinite loops when there are local DNS proxies
-		// such as: app -> istio dns server -> dnsmasq -> upstream
-		// This ensures that we do not get requests from dnsmasq sent back to the agent dns server in a loop.
-		// Note: If a user somehow configured etc/resolv.conf to point to dnsmasq and server X, and dnsmasq also
-		// pointed to server X, this would not work. However, the assumption is that is not a common case.
-		for _, s := range iptConfigurator.cfg.DNSServersV4 {
+		if iptConfigurator.cfg.CaptureAllDNS {
 			iptConfigurator.iptables.AppendRuleV4(constants.OUTPUT, constants.NAT,
-				"-p", "udp", "--dport", "53", "-d", s+"/32",
-				"-j", constants.REDIRECT, "--to-port", constants.IstioAgentDNSListenerPort)
+				"-p", "udp", "--dport", "53", "-j", constants.REDIRECT, "--to-port", constants.IstioAgentDNSListenerPort)
+		} else {
+			// redirect all TCP dns traffic on port 53 to the agent on port 15053 for all servers
+			// in etc/resolv.conf
+			// We avoid redirecting all IP ranges to avoid infinite loops when there are local DNS proxies
+			// such as: app -> istio dns server -> dnsmasq -> upstream
+			// This ensures that we do not get requests from dnsmasq sent back to the agent dns server in a loop.
+			// Note: If a user somehow configured etc/resolv.conf to point to dnsmasq and server X, and dnsmasq also
+			// pointed to server X, this would not work. However, the assumption is that is not a common case.
+			for _, s := range iptConfigurator.cfg.DNSServersV4 {
+				iptConfigurator.iptables.AppendRuleV4(constants.OUTPUT, constants.NAT,
+					"-p", "udp", "--dport", "53", "-d", s+"/32",
+					"-j", constants.REDIRECT, "--to-port", constants.IstioAgentDNSListenerPort)
+			}
 		}
 	}
 
