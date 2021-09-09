@@ -51,6 +51,16 @@ func InsertDataToConfigMap(client corev1.ConfigMapsGetter, lister listerv1.Confi
 			if errors.IsAlreadyExists(err) || errors.HasStatusCause(err, v1.NamespaceTerminatingCause) {
 				return nil
 			}
+
+			// The lister may be outdated, thinking there's no config map when there is, so the attempt to create one will fail
+			// If this is the case, try updating it instead
+			if errors.IsAlreadyExists(err) {
+				if _, err := client.ConfigMaps(meta.Namespace).Update(context.TODO(), configmap, metav1.UpdateOptions{}); err != nil {
+					return fmt.Errorf("error when updating configmap %v: %v", configmap.Name, err)
+				}
+				return nil
+			}
+
 			return fmt.Errorf("error when creating configmap %v: %v", meta.Name, err)
 		}
 	} else {
