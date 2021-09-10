@@ -504,8 +504,14 @@ func (h *handler) patchExports() error {
 		return err
 	}
 
-	patch, err := h.createPatch(&v1.ExportedServiceSet{Status: v1.ExportedServiceSetStatus{ExportedServices: h.exportsStatus}},
-		&v1.ExportedServiceSet{Status: exportSet.DeepCopy().Status}, exportStatusPatchMetadata)
+	exportedServices := h.exportsStatus
+	if exportedServices == nil {
+		exportedServices = []v1.PeerServiceMapping{}
+	}
+	patch, err := h.createPatch(
+		&v1.ExportedServiceSet{Status: v1.ExportedServiceSetStatus{ExportedServices: exportedServices}},
+		&v1.ExportedServiceSet{Status: exportSet.DeepCopy().Status},
+		exportStatusPatchMetadata)
 	if err != nil {
 		return err
 	}
@@ -535,8 +541,14 @@ func (h *handler) patchImports() error {
 		return err
 	}
 
-	patch, err := h.createPatch(&v1.ImportedServiceSet{Status: v1.ImportedServiceSetStatus{ImportedServices: h.importsStatus}},
-		&v1.ImportedServiceSet{Status: importSet.DeepCopy().Status}, importStatusPatchMetadata)
+	importedServices := h.importsStatus
+	if importedServices == nil {
+		importedServices = []v1.PeerServiceMapping{}
+	}
+	patch, err := h.createPatch(
+		&v1.ImportedServiceSet{Status: v1.ImportedServiceSetStatus{ImportedServices: importedServices}},
+		&v1.ImportedServiceSet{Status: importSet.DeepCopy().Status},
+		importStatusPatchMetadata)
 	if err != nil {
 		return err
 	}
