@@ -21,6 +21,19 @@
     },
     "metadata": {{ .meta_json_str }}
   },
+  "layered_runtime": {
+      "layers": [
+          {
+              "name": "deprecation",
+              "static_layer": {
+                  "envoy.reloadable_features.http_reject_path_with_fragment": false,
+                  {{- if eq (or .config.ProxyMetadata.HTTP_STRIP_FRAGMENT_FROM_PATH_UNSAFE_IF_DISABLED "") "false" }}
+                  "envoy.reloadable_features.http_strip_fragment_from_path_unsafe_if_disabled": false,
+                  {{- end }}
+              }
+          }
+      ]
+  },
   "stats_config": {
     "use_all_default_tags": false,
     "stats_tags": [

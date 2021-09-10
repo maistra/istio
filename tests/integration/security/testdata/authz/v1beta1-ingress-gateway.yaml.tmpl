@@ -13,6 +13,9 @@ spec:
   rules:
     - to:
         - operation:
+            hosts: ["deny.company.com", "*.suffix.company.com", "prefix.company.*"]
+    - to:
+        - operation:
             hosts: ["internal.company.com"]
         - operation:
             paths: ["/private"]

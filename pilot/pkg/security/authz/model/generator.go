@@ -251,7 +251,7 @@ func (hostGenerator) permission(key, value string, forTCP bool) (*rbacpb.Permiss
 		return nil, fmt.Errorf("%s must not be used in TCP", key)
 	}
 
-	m := matcher.HeaderMatcher(hostHeader, value)
+	m := matcher.HostMatcher(hostHeader, value)
 	return permissionHeader(m), nil
 
 }
