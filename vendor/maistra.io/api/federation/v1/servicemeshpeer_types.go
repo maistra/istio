@@ -120,6 +120,7 @@ type ServiceMeshPeerRemote struct {
 
 // ServiceMeshPeerStatus provides information related to the other mesh.
 type ServiceMeshPeerStatus struct {
+	StatusConditions `json:",inline"`
 	// DiscoveryStatus represents the discovery status of each pilot/istiod pod
 	// in the mesh.
 	// +optional
@@ -139,7 +140,7 @@ type ServiceMeshPeerDiscoveryStatus struct {
 	// +listMapKey=pod
 	// +patchMergeKey=pod
 	// +patchStrategy=merge,retainKeys
-	Active []PodPeerDiscoveryStatus `json:"active,omitempty"`
+	Active []PodPeerDiscoveryStatus `json:"active,omitempty" patchStrategy:"merge,retainKeys" patchMergeKey:"pod"`
 	// Inactive represents the pilot/istiod pods not actively watching the other
 	// mesh for discovery.
 	// +optional
@@ -148,7 +149,7 @@ type ServiceMeshPeerDiscoveryStatus struct {
 	// +listMapKey=pod
 	// +patchMergeKey=pod
 	// +patchStrategy=merge,retainKeys
-	Inactive []PodPeerDiscoveryStatus `json:"inactive,omitempty"`
+	Inactive []PodPeerDiscoveryStatus `json:"inactive,omitempty" patchStrategy:"merge,retainKeys" patchMergeKey:"pod"`
 }
 
 // PodPeerDiscoveryStatus provides discovery details related to a specific
@@ -156,7 +157,8 @@ type ServiceMeshPeerDiscoveryStatus struct {
 type PodPeerDiscoveryStatus struct {
 	// PeerDiscoveryStatus provides details about the connection to the remote mesh.
 	// +required
-	PeerDiscoveryStatus `json:",inline"`
+	// +patchStrategy=merge,retainKeys
+	PeerDiscoveryStatus `json:",inline" patchStrategy:"merge,retainKeys"`
 	// Pod is the pod name to which these details apply.  This maps to a
 	// a pilot/istiod pod.
 	// +required
@@ -173,17 +175,19 @@ type PeerDiscoveryStatus struct {
 	// +listMapKey=source
 	// +patchMergeKey=source
 	// +patchStrategy=merge,retainKeys
-	Remotes []DiscoveryRemoteStatus `json:"remotes,omitempty"`
+	Remotes []DiscoveryRemoteStatus `json:"remotes,omitempty" patchStrategy:"merge,retainKeys" patchMergeKey:"source"`
 	// Watch represents details related to the outbound connection to the
 	// remote mesh.
 	// +required
-	Watch DiscoveryWatchStatus `json:"watch,omitempty"`
+	// +patchStrategy=merge,retainKeys
+	Watch DiscoveryWatchStatus `json:"watch,omitempty" patchStrategy:"merge,retainKeys`
 }
 
 // DiscoveryRemoteStatus represents details related to an inbound connection
 // from a remote mesh.
 type DiscoveryRemoteStatus struct {
-	DiscoveryConnectionStatus `json:",inline"`
+	// +patchStrategy=merge,retainKeys
+	DiscoveryConnectionStatus `json:",inline" patchStrategy:"merge,retainKeys"`
 	// Source represents the source of the remote watch.
 	// +required
 	Source string `json:"source"`
@@ -192,7 +196,8 @@ type DiscoveryRemoteStatus struct {
 // DiscoveryWatchStatus represents details related to the outbound connection
 // to the remote mesh.
 type DiscoveryWatchStatus struct {
-	DiscoveryConnectionStatus `json:",inline"`
+	// +patchStrategy=merge,retainKeys
+	DiscoveryConnectionStatus `json:",inline" patchStrategy:"merge,retainKeys"`
 }
 
 // DiscoveryConnectionStatus represents details related to connections with

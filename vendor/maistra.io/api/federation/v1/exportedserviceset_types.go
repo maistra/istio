@@ -68,11 +68,12 @@ type ExportedServiceRule struct {
 }
 
 type ExportedServiceSetStatus struct {
+	StatusConditions `json:",inline"`
 	// Exports provides details about the services exported by this mesh.
 	// +required
 	// +listType=map
 	// +listMapKey=exportedName
 	// +patchMergeKey=exportedName
 	// +patchStrategy=merge,retainKeys
-	ExportedServices []PeerServiceMapping `json:"exportedServices"`
+	ExportedServices []PeerServiceMapping `json:"exportedServices" patchStrategy:"merge,retainKeys" patchMergeKey:"exportedName"`
 }

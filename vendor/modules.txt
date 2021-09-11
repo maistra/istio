@@ -1753,7 +1753,7 @@ k8s.io/utils/exec
 k8s.io/utils/integer
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20210726125459-3d5819d0bd1b
+# maistra.io/api v0.0.0-20210726125459-3d5819d0bd1b => ../../maistra.io/api
 ## explicit
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core
@@ -1869,6 +1869,7 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0
 ## explicit
 sigs.k8s.io/yaml
+# maistra.io/api => ../../maistra.io/api
 # istio.io/api => github.com/istio/api v0.0.0-20210419172736-e076ff10ec38
 # github.com/spf13/viper => github.com/istio/viper v1.3.3-0.20190515210538-2789fed3109c
 # github.com/chzyer/logex => github.com/chzyer/logex v1.1.11-0.20170329064859-445be9e134b2
