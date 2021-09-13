@@ -845,6 +845,9 @@ func verifyExportStatus(t *testing.T, cs maistraclient.Interface, name types.Nam
 		t.Errorf("unexpected error retrieving ExportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
 		return
 	}
+	if expected.ExportedServices == nil {
+		expected.ExportedServices = []v1.PeerServiceMapping{}
+	}
 	if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
 		t.Errorf("comparison failed, -got +want:\n%s", diff)
 	}
@@ -858,6 +861,9 @@ func verifyImportStatus(t *testing.T, cs maistraclient.Interface, name types.Nam
 	if err != nil {
 		t.Errorf("unexpected error retrieving ImportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
 		return
+	}
+	if expected.ImportedServices == nil {
+		expected.ImportedServices = []v1.PeerServiceMapping{}
 	}
 	if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
 		t.Errorf("comparison failed, -got +want:\n%s", diff)
