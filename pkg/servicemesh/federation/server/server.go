@@ -29,6 +29,7 @@ import (
 	"github.com/gorilla/mux"
 	hashstructure "github.com/mitchellh/hashstructure/v2"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/model"
@@ -127,6 +128,10 @@ func (s *Server) ingressServiceName(mesh *v1.ServiceMeshPeer) string {
 func (s *Server) AddPeer(mesh *v1.ServiceMeshPeer, exports *v1.ExportedServiceSet, statusHandler status.Handler) error {
 	exportConfig := common.NewServiceExporter(exports, nil, exportDomainSuffix(mesh.Name))
 
+	if s.isExportedHostNameDuplicate(exportConfig) {
+		s.logger.Errorf("multiple services cannot be exported with the same hostname")
+	}
+
 	untypedMeshServer, ok := s.meshes.Load(mesh.Name)
 	if untypedMeshServer != nil && ok {
 		return fmt.Errorf("exporter already exists for federation %s", mesh.Name)
@@ -146,6 +151,25 @@ func (s *Server) AddPeer(mesh *v1.ServiceMeshPeer, exports *v1.ExportedServiceSe
 		meshServer.resync()
 	}
 	return nil
+}
+
+func (s *Server) isExportedHostNameDuplicate(exportConfig *common.ServiceExporter) bool {
+	services, err := s.env.Services()
+	if err != nil {
+		s.logger.Errorf("failed to call env.Services(): %s", err)
+		return false
+	}
+	hosts := sets.NewString()
+	for _, svc := range services {
+		if svc != nil && exportConfig.NameForService(svc) != nil {
+			if hosts.Has(exportConfig.NameForService(svc).Hostname) {
+				s.logger.Debugf("service with duplicate hostname found: %+v", exportConfig.NameForService(svc))
+				return true
+			}
+			hosts.Insert(exportConfig.NameForService(svc).Hostname)
+		}
+	}
+	return false
 }
 
 func (s *Server) DeletePeer(name string) {
