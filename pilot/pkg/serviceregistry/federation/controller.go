@@ -15,9 +15,10 @@
 package federation
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"reflect"
@@ -92,7 +93,7 @@ type Controller struct {
 	lastMessage *federationmodel.ServiceListMessage
 	started     int32
 
-	watchDone   chan struct{}
+	cancelWatch context.CancelFunc
 	watchEvents chan *federationmodel.WatchEvent
 
 	peerConfigGeneration   int64
@@ -955,36 +956,48 @@ func (c *Controller) removeServiceFromStore(service federationmodel.ServiceKey) 
 }
 
 func (c *Controller) startWatch() {
-	c.watchDone = make(chan struct{})
-	stopCh := c.watchDone
+	var ctx context.Context
+	var cancelCtx context.CancelFunc
+	ctx, cancelCtx = context.WithCancel(context.Background())
+	c.cancelWatch = cancelCtx
 	go func() {
-		defer c.logger.Info("stopping watch")
-		for {
-			select {
-			case <-stopCh:
-				// we were stopped. just return
-				return
-			default:
-			}
+		defer func() {
+			cancelCtx() // cleans up resources when watch is closed gracefully
+			c.logger.Info("watch stopped")
+		}()
+		for ctx.Err() != context.Canceled {
 			c.logger.Info("starting watch")
-			err := c.watch(c.watchEvents, stopCh)
+			err := c.watch(ctx, c.watchEvents)
 			if err != nil {
+				if err == context.Canceled {
+					c.logger.Info("watch cancelled")
+					return
+				}
 				c.logger.Errorf("watch failed: %s", err)
-				time.Sleep(c.backoffPolicy.NextBackOff())
+
+				// sleep, but still honor context cancellation
+				select {
+				case <-ctx.Done():
+					c.logger.Info("watch cancelled")
+					return
+				case <-time.After(c.backoffPolicy.NextBackOff()):
+					// start watch again after backoff
+				}
 			} else {
-				return
+				c.backoffPolicy.Reset()
+				c.logger.Info("watch closed")
 			}
 		}
 	}()
 }
 
 func (c *Controller) stopWatch() {
-	if c.watchDone != nil {
-		close(c.watchDone)
+	if c.cancelWatch != nil {
+		c.cancelWatch()
 	}
 }
 
-func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-chan struct{}) error {
+func (c *Controller) watch(ctx context.Context, eventCh chan *federationmodel.WatchEvent) error {
 	c.statusHandler.WatchInitiated()
 	url := c.discoveryURL + "/v1/watch"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -994,7 +1007,7 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 	}
 	req.Header.Add("discovery-service", c.discoveryServiceName)
 	req.Header.Add("remote", fmt.Sprint(common.RemoteChecksum(c.remote)))
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	defer func() {
 		status := ""
 		if resp != nil {
@@ -1020,26 +1033,13 @@ func (c *Controller) watch(eventCh chan *federationmodel.WatchEvent, stopCh <-ch
 	dec := json.NewDecoder(resp.Body)
 	defer resp.Body.Close()
 	for {
-		reader := dec.Buffered().(*bytes.Reader)
-		for reader.Len() == 0 {
-			select {
-			case <-stopCh:
-				c.logger.Debug("watch was stopped while idle")
-				return nil
-			default:
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
 		var e federationmodel.WatchEvent
 		err := dec.Decode(&e)
 		if err != nil {
+			if err == io.EOF {
+				return nil // server closed the connection gracefully
+			}
 			return err
-		}
-		select {
-		case <-stopCh:
-			c.logger.Debugf("watch was stopped, discarding event %v", e)
-			return nil
-		default:
 		}
 		eventCh <- &e
 	}

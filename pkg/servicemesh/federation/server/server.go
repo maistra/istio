@@ -450,6 +450,7 @@ func (s *meshServer) handleWatch(response http.ResponseWriter, request *http.Req
 		select {
 		case event = <-watch:
 		case <-request.Context().Done():
+			s.logger.Debugf("watch handler: request context closed")
 			return
 		}
 		respBytes, err := json.Marshal(event)
