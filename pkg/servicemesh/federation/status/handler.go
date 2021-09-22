@@ -478,7 +478,7 @@ func (h *handler) Flush() error {
 		return err
 	}
 
-	h.logger.Debugf("status patch:\n%s\n", string(patch))
+	h.logger.Debugf("status patch: %s", string(patch))
 
 	if len(patch) == 0 || string(patch) == "{}" {
 		// nothing to patch
@@ -578,8 +578,8 @@ func (h *handler) createPatch(newObj, oldObj interface{}, metadata strategicpatc
 		return nil, err
 	}
 
-	h.logger.Debugf("old bytes:\n%s\n", string(oldBytes))
-	h.logger.Debugf("new bytes:\n%s\n", string(newBytes))
+	h.logger.Debugf("old bytes: %s", string(oldBytes))
+	h.logger.Debugf("new bytes: %s", string(newBytes))
 
 	patch, err := strategicpatch.CreateTwoWayMergePatchUsingLookupPatchMeta(oldBytes, newBytes, metadata)
 	if err != nil {
