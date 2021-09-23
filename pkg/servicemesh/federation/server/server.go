@@ -449,6 +449,10 @@ func (s *meshServer) handleWatch(response http.ResponseWriter, request *http.Req
 		var event *federationmodel.WatchEvent
 		select {
 		case event = <-watch:
+			if event == nil {
+				s.logger.Debugf("watch handler: watch closed")
+				return
+			}
 		case <-request.Context().Done():
 			s.logger.Debugf("watch handler: request context closed")
 			return
