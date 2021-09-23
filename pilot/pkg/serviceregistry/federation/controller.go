@@ -1051,9 +1051,9 @@ func (c *Controller) resync() uint64 {
 	c.logger.Debugf("performing full resync")
 	var err error
 	var svcList *federationmodel.ServiceListMessage
-	err = retry.Until(func() bool {
+	err = retry.UntilSuccess(func() error {
 		svcList, err = c.pollServices()
-		return err == nil
+		return err
 	}, retry.Delay(time.Second), retry.Timeout(2*time.Minute))
 	if err != nil {
 		c.logger.Warnf("resync failed: %s", err)
