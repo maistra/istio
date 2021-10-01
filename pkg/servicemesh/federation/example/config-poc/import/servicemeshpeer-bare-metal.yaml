@@ -1,0 +1,27 @@
+apiVersion: federation.maistra.io/v1
+kind: ServiceMeshPeer
+metadata:
+  name: mesh1
+  namespace: mesh2-system
+# create gateways (in other yaml), wait for the gateways to be appear
+# then read those addresses with `oc get svc -n istio-system -o wide`
+# to find out what the addresses and discovery ports are instead of
+# programming a dynamic load balancer to figure it out for you
+spec:
+  remote:
+    addresses:
+    - {{MESH1_ADDRESS}}
+    discoveryPort: {{MESH1_DISCOVERY_PORT}}
+    servicePort: {{MESH1_SERVICE_PORT}}
+  gateways:
+    ingress:
+      name: mesh1-ingress
+    egress:
+      name: mesh1-egress
+  security:
+    trustDomain: mesh1.local
+    clientID: mesh1.local/ns/mesh1-system/sa/mesh2-egress-service-account
+    # same as default, if certificateChain is omitted
+    certificateChain:
+      kind: ConfigMap
+      name: mesh1-ca-root-cert
