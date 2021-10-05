@@ -1,8 +1,6 @@
 # Service Mesh Federation Configuration Scripts
 
-## Uninstaller 
 
-No installation procedure is complete without an uninstaller, so we give you: `
 
 ## Proof of Concept / Test Installation 
 
@@ -20,14 +18,19 @@ This means provisioning the federation networks on NodePort services rather than
 
 The procedure for this installation is:
 
- 1   run `./install-libvirt-1.sh`: this sets up the service mesh control plane, service mesh member role and bookinfo test projects.
+ 1.   run `./install-libvirt-1.sh`: this sets up the service mesh control plane, service mesh member role and bookinfo test projects.
  2.  run `./install-libvirt-2.sh`: this installs the NodePort services
  3.  run `./install-libvirt-3.sh`: this sets up the federation plane
 
+### Uninstaller 
 
-### OSSM Federation for bare metal UPI provisioned clusters 
+No installation procedure is complete without an uninstaller, so we give you: `uninstall-libvirt.sh`
 
-There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.  Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for the 
+### OSSM Federation for bare metal UPI provisioned clusters:TBD 
+
+There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.  
+
+Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for whatever hosts the clusters are installed on, which could be done with some ssh scripting.   
 
 ### OSSM Federation on Openstack-provisioned IPI clusters
 
@@ -72,9 +75,9 @@ spec:
 ```
 
 
-## Production Installation 
+## Production Installation: TBD 
 
 Production environments will require that one be able to federate service meshes between any two (or three) clusters, regardless of whether they were UPI or IPI installs, or whether they were provisioned through any Cloud service, on-prem OpenStack, on z/VM or P or via libvirt. The network environment for each (external routers, DNS resolution, load balancers, proxies, etc) would need to be taken into account. 
 
-Having a different install script for each possible combination would be combinatorially prohibitive.  Therefore, for production installation, ansible 
+Having a different install script for each possible combination would be combinatorially prohibitive.  Therefore, for production installation, ansible would be a good choice for installation of OSSM federation. 
 
