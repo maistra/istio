@@ -7,7 +7,7 @@
 The prerequisites for all installations of Service Mesh federation are:
 
  1.  Install the Service Mesh, Kiali and Jaeger operators on the clusters; use the 'install to all namespaces' option
- 2.  Set environment variables MESH1-KUBECONFIG and MESH2-KUBECONFIG: the KUBECONFIG of the clusters you intend to install federated OSSM on; 
+ 2.  Set environment variables MESH1-KUBECONFIG and MESH2-KUBECONFIG: the
 
 ### for OSSM Federation for libvirt IPI provisioned OCP clusters 
 
