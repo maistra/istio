@@ -18,9 +18,9 @@ This means provisioning the federation networks on NodePort services rather than
 
 The procedure for this installation is:
 
- 1.   run `./install-libvirt-1.sh`: this sets up the service mesh control plane, service mesh member role and bookinfo test projects.
- 2.  run `./install-libvirt-2.sh`: this installs the NodePort services
- 3.  run `./install-libvirt-3.sh`: this sets up the federation plane
+ 1.  run `./install-libvirt-1.sh`: this sets up the service mesh control plane, service mesh member role and bookinfo test projects.
+ 2.  run `./install-libvirt-2.sh`: this installs the NodePort services and opens up the appropriate firewalls in the libvirt zone
+ 3.  run `./install-libvirt-3.sh`: this sets up the federation plane and deploys the two bookinfo projects that will be federated in the two clusters
 
 ### Uninstaller 
 
