@@ -64,7 +64,7 @@ else
     exit
   else
     MESH1_ADDRESS=$(host $MESH1_HOSTNAME | cut -d' ' -f 4)
-    MESH1_ADDRESS=192.168.128.51
+    #MESH1_ADDRESS=192.168.128.51
     log $MESH1_HOSTNAME has address $MESH1_ADDRESS
 
     if [ ${MESH1_ADDRESS} == "found" ]; then
@@ -109,7 +109,7 @@ else
     exit
   else
     MESH2_ADDRESS=$(host ${MESH2_HOSTNAME} | cut -d' ' -f 4)
-    MESH1_ADDRESS=192.168.129.51
+    #MESH1_ADDRESS=192.168.129.51
 
     if [ "$MESH1_ADDRESS" == "found" ]; then
       log "mesh2 mesh1-ingress service address unresolvable; check dns settings; exit"
