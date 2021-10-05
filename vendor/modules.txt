@@ -1266,7 +1266,7 @@ istio.io/api/operator/v1alpha1
 istio.io/api/security/v1alpha1
 istio.io/api/security/v1beta1
 istio.io/api/type/v1beta1
-# istio.io/client-go v1.9.5-0.20210607162355-6a6709ba5473
+# istio.io/client-go v1.9.8-0.20210913073319-ea90aa00229b
 ## explicit
 istio.io/client-go/pkg/apis/networking/v1alpha3
 istio.io/client-go/pkg/apis/networking/v1beta1
@@ -1283,7 +1283,7 @@ istio.io/client-go/pkg/clientset/versioned/typed/security/v1beta1/fake
 istio.io/client-go/pkg/listers/networking/v1alpha3
 istio.io/client-go/pkg/listers/networking/v1beta1
 istio.io/client-go/pkg/listers/security/v1beta1
-# istio.io/gogo-genproto v0.0.0-20210607161305-c0bb66452590
+# istio.io/gogo-genproto v0.0.0-20210913072519-c32f2e74f5c4
 ## explicit
 istio.io/gogo-genproto/googleapis/google/api
 istio.io/gogo-genproto/googleapis/google/rpc
