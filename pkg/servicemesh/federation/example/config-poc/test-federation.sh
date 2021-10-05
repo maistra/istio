@@ -18,6 +18,21 @@ set +e
 
 source common.sh
 
+log "check status of federation"
+
+log "oc1 -n mesh1-system get servicemeshpeer mesh2 -o json | jq .status:"
+
+oc1 -n mesh1-system get servicemeshpeer mesh2 -o json | jq .status
+
+log "oc2 -n mesh2-system get servicemeshpeer mesh1 -o json | jq .status:"
+oc2 -n mesh2-system get servicemeshpeer mesh1 -o json | jq .status
+
+log "Check if services from mesh1 are imported into mesh2:"
+
+
+log "oc2 -n mesh2-system get importedservicesets mesh1 -o json | jq .status:"
+oc2 -n mesh2-system get importedservicesets mesh1 -o json | jq .status
+
 log "deploy v2 ratings system into mesh1 and mesh2"
 
 oc1 logs -n mesh1-bookinfo deploy/ratings-v2 -f &

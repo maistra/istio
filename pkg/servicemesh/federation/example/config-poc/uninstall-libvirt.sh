@@ -120,7 +120,16 @@ oc2 delete project mesh2-system || true
 oc2 delete project mesh2-bookinfo || true
 
 log "UNINSTALLATION of ServiceMesh Federation COMPLETE"
-exit
+
+firewall-cmd --remove-port=${MESH1_SERVICE_PORT}/tcp --zone=libvirt
+firewall-cmd --remove-port=${MESH1_SERVICE_PORT}/udp --zone=libvirt
+firewall-cmd --remove-port=${MESH2_SERVICE_PORT}/tcp --zone=libvirt
+firewall-cmd --remove-port=${MESH2_SERVICE_PORT}/udp --zone=libvirt
+
+firewall-cmd --remove-port=${MESH1_DISCOVERY_PORT}/tcp --zone=libvirt
+firewall-cmd --remove-port=${MESH1_DISCOVERY_PORT}/udp --zone=libvirt
+firewall-cmd --remove-port=${MESH2_DISCOVERY_PORT}/tcp --zone=libvirt
+firewall-cmd --remove-port=${MESH2_DISCOVERY_PORT}/udp --zone=libvirt
 
 "
 Two service mesh control planes and two bookinfo applications are now installed.

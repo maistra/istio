@@ -41,4 +41,4 @@ oc1 wait --for condition=Ready -n mesh1-system smmr/default --timeout 300s
 log "Waiting for mesh2 installation to complete"
 oc2 wait --for condition=Ready -n mesh2-system smmr/default --timeout 300s
 
-echo "Ready to run script install-bare-metal-2.sh"
+echo "Ready to run script install-libvirt-2.sh"

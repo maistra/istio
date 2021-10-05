@@ -50,7 +50,6 @@ else
   MESH1_HOSTNAME=$(oc1 -n mesh1-system get route mesh2-ingress -o jsonpath="{.spec.host}")
   MESH2_HOSTNAME=$(oc2 -n mesh2-system get route mesh1-ingress -o jsonpath="{.spec.host}")
 
-
   echo MESH1_DISCOVERY_PORT=${MESH1_DISCOVERY_PORT}
   echo MESH1_SERVICE_PORT=${MESH1_SERVICE_PORT}
   
@@ -65,6 +64,7 @@ else
     exit
   else
     MESH1_ADDRESS=$(host $MESH1_HOSTNAME | cut -d' ' -f 4)
+    MESH1_ADDRESS=192.168.128.51
     log $MESH1_HOSTNAME has address $MESH1_ADDRESS
 
     if [ ${MESH1_ADDRESS} == "found" ]; then
@@ -73,7 +73,7 @@ else
     else
       log "checking if service port $MESH1_SERVICE_PORT is open on $MESH1_ADDRESS"
 
-      nc -z  ${MESH1_ADDRESS} ${MESH1_SERVICE_PORT}
+      nc -zw 1  ${MESH1_ADDRESS} ${MESH1_SERVICE_PORT}
       connect=$?
 
       echo "exit code of ncat $MESH1_ADDRESS $MESH1_SERVICE_PORT is $connect"
@@ -109,6 +109,7 @@ else
     exit
   else
     MESH2_ADDRESS=$(host ${MESH2_HOSTNAME} | cut -d' ' -f 4)
+    MESH1_ADDRESS=192.168.129.51
 
     if [ "$MESH1_ADDRESS" == "found" ]; then
       log "mesh2 mesh1-ingress service address unresolvable; check dns settings; exit"
