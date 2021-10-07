@@ -4,7 +4,7 @@
 
 ## Proof of Concept / Test Installation 
 
-### for OSSM Federation for libvirt IPI provisioned OCP clusters 
+### OSSM Federation for libvirt IPI provisioned OCP clusters 
 
 The prerequisites for all installations of Service Mesh federation are:
 
