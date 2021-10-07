@@ -50,6 +50,10 @@ else
   MESH1_HOSTNAME=$(oc1 -n mesh1-system get route mesh2-ingress -o jsonpath="{.spec.host}")
   MESH2_HOSTNAME=$(oc2 -n mesh2-system get route mesh1-ingress -o jsonpath="{.spec.host}")
 
+  # we're proxying the traffic by port on the hypervisor so send all traffic there
+  MESH1_ADDRESS=$(hostname -I | cut -d' ' -f 1)
+  MESH2_ADDRESS=$(hostname -I | cut -d' ' -f 1)
+
   echo MESH1_DISCOVERY_PORT=${MESH1_DISCOVERY_PORT}
   echo MESH1_SERVICE_PORT=${MESH1_SERVICE_PORT}
   
@@ -59,80 +63,79 @@ else
   echo MESH1_HOSTNAME=${MESH1_HOSTNAME}
   echo MESH2_HOSTNAME=${MESH2_HOSTNAME}
 
-  if [ -z "$MESH1_HOSTNAME" ]; then
-    echo "No route address found for service mesh2-ingress in mesh1; exit"
-    exit
-  else
-    MESH1_ADDRESS=$(host $MESH1_HOSTNAME | cut -d' ' -f 4)
-    #MESH1_ADDRESS=192.168.128.51
-    log $MESH1_HOSTNAME has address $MESH1_ADDRESS
+  log "temporarily opened firewall ports may be closed later with firewall-cmd --reload"
+  echo "opening firewall port for $MESH1_ADDRESS $MESH1_SERVICE_PORT"
 
-    if [ ${MESH1_ADDRESS} == "found" ]; then
-      echo "mesh1 mesh2-ingress service address unresolvable; check dns settings; exit"
-      exit
-    else
-      log "checking if service port $MESH1_SERVICE_PORT is open on $MESH1_ADDRESS"
+  firewall-cmd --add-port=${MESH1_SERVICE_PORT}/tcp --zone=libvirt
+  firewall-cmd --add-port=${MESH1_SERVICE_PORT}/udp --zone=libvirt
 
-      nc -zw 1  ${MESH1_ADDRESS} ${MESH1_SERVICE_PORT}
-      connect=$?
+  firewall-cmd --add-port=${MESH1_DISCOVERY_PORT}/tcp --zone=libvirt
+  firewall-cmd --add-port=${MESH1_DISCOVERY_PORT}/udp --zone=libvirt
 
-      echo "exit code of ncat $MESH1_ADDRESS $MESH1_SERVICE_PORT is $connect"
+  firewall-cmd --add-port=$MESH2_SERVICE_PORT/tcp --zone=libvirt
+  firewall-cmd --add-port=$MESH2_SERVICE_PORT/udp --zone=libvirt
 
-      if [ $connect -ne 0 ]; then 
-         log "temporarily opening firewall port for $MESH1_ADDRESS $MESH1_SERVICE_PORT"
+  firewall-cmd --add-port=${MESH2_DISCOVERY_PORT}/tcp --zone=libvirt
+  firewall-cmd --add-port=${MESH2_DISCOVERY_PORT}/udp --zone=libvirt
 
-         # this is particular to libvirt multi-cluster installations on a single host
-         # will need a more elaborate script for multiple clusters on different hosts
-         # we don't make it a permanent addition because this script is only for test
-
-         firewall-cmd --add-port=${MESH1_SERVICE_PORT}/tcp --zone=libvirt
-         firewall-cmd --add-port=${MESH1_SERVICE_PORT}/udp --zone=libvirt
-      fi
-
-      log "checking if discovery port $MESH1_DISCOVERY_PORT is open on $MESH1_ADDRESS"
-      nc -zw 1 ${MESH1_ADDRESS} ${MESH1_DISCOVERY_PORT}
-      connect=$?
-      if [ $connect -ne 0 ]; then
-         echo temporarily opening firewall port for $MESH1_ADDRESS $MESH1_DISCOVERY_PORT
-
-         # QUESTION: should we be opening the port for the whole zone or should it 
-         #           be particular to the virtual network that the cluster is on?
-
-         firewall-cmd --add-port=${MESH1_DISCOVERY_PORT}/tcp --zone=libvirt
-         firewall-cmd --add-port=${MESH1_DISCOVERY_PORT}/udp --zone=libvirt
-      fi
-    fi
-  fi
-
-  if [ -z $"MESH2_HOSTNAME" ]; then
-    log "No route address found for service mesh1-ingress in mesh2; exit"
-    exit
-  else
-    MESH2_ADDRESS=$(host ${MESH2_HOSTNAME} | cut -d' ' -f 4)
-    #MESH1_ADDRESS=192.168.129.51
-
-    if [ "$MESH1_ADDRESS" == "found" ]; then
-      log "mesh2 mesh1-ingress service address unresolvable; check dns settings; exit"
-      exit
-    else
-      ncat -z $MESH2_ADDRESS $MESH2_SERVICE_PORT
-      connect=$?
-      if [ $connect -ne 0 ]; then 
-         log "temporarily opening firewall port for $MESH2_ADDRESS $MESH2_SERVICE_PORT"
-         firewall-cmd --add-port=$MESH2_SERVICE_PORT/tcp --zone=libvirt
-         firewall-cmd --add-port=$MESH2_SERVICE_PORT/udp --zone=libvirt
-      fi
-      ncat -z $MESH2_ADDRESS $MESH2_DISCOVERY_PORT
-      connect=$?
-      if [ $connect -ne 0 ]; then
-         log "temporarily opening firewall port for $MESH2_ADDRESS $MESH2_DISCOVERY_PORT"
-
-         firewall-cmd --add-port=${MESH2_DISCOVERY_PORT}/tcp --zone=libvirt
-         firewall-cmd --add-port=${MESH2_DISCOVERY_PORT}/udp --zone=libvirt
-      fi
-    fi
-  fi
 fi
+
+log "Generating a proxy configuration for mesh1 & mesh2 to pass packets to each other on the specified ports"
+
+sed -e "s:{{MESH1_DISCOVERY_PORT}}:$MESH1_DISCOVERY_PORT:g" \
+    -e "s:{{MESH1_SERVICE_PORT}}:$MESH1_SERVICE_PORT:g"     \
+    -e "s:{{MESH2_DISCOVERY_PORT}}:$MESH2_DISCOVERY_PORT:g" \
+    -e "s:{{MESH2_SERVICE_PORT}}:$MESH2_SERVICE_PORT:g"     \
+    federation.cfg.template > federation.cfg
+
+echo "
+backend mesh1-service
+    mode tcp
+    balance source " >> federation.cfg
+for NodeName in $(oc1 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
+do
+  NodeIP=$(oc1 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  echo "    server      $NodeName ${NodeIP}:${MESH1_SERVICE_PORT} check" >> federation.cfg
+done
+
+echo "
+backend mesh1-discovery
+    mode tcp
+    balance source " >> federation.cfg
+
+for NodeName in $(oc1 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
+do
+  NodeIP=$(oc1 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  echo "    server      $NodeName ${NodeIP}:${MESH1_DISCOVERY_PORT} check" >> federation.cfg
+done
+
+echo "
+backend mesh2-service
+    mode tcp
+    balance source " >> federation.cfg
+
+for NodeName in $(oc2 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
+do
+  NodeIP=$(oc2 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  echo "    server      $NodeName ${NodeIP}:${MESH2_SERVICE_PORT} check" >> federation.cfg
+done
+
+echo "
+backend mesh2-discovery
+    mode tcp
+    balance source " >> federation.cfg
+
+for NodeName in $(oc2 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
+do
+  NodeIP=$(oc2 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  echo "    server      $NodeName ${NodeIP}:${MESH2_DISCOVERY_PORT} check" >> federation.cfg
+done
+
+log "add '-f federation.cfg' to /etc/systemctl/haproxy OPTION variable and restart haproxy..."
+
+cp federation.cfg /etc/haproxy
+systemctl daemon-reload
+systemctl restart haproxy
 
 log "Enabling federation for mesh1"
 

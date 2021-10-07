@@ -27,7 +27,25 @@ The procedure for this installation is:
 
 ### OSSM Federation for bare metal UPI provisioned clusters 
 
-There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.  Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for the 
+There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.  Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for packets to be routable from one cluster to the other.  
+
+### Bare Metal and libvirt load balancer configuration
+
+This part can be done either after step 2 of the installation above, or after step 3. 
+
+ 1. using the NodePorts mapped, generate the federation.cfg haproxy configuration file that will route packets from one cluster to another
+ 2. copy the federation.cfg file into /etc/systemctl/haproxy
+ 3. edit the OPTIONS field in /etc/systemctl/haproxy so it reads: 
+```
+# Add extra options to the haproxy daemon here. This can be useful for
+# specifying multiple configuration files with multiple -f options.
+# See haproxy(1) for a complete list of options.
+OPTIONS="-f /etc/haproxy/federation.cfg"
+```
+ 4. restart the haproxy service: 
+```
+systemctl restart haproxy
+```
 
 ### OSSM Federation on Openstack-provisioned IPI clusters
 

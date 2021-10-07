@@ -59,9 +59,7 @@ else
 
 fi
 
-
-
-#-----
+log "Deleting federation services and settings in reverse order"
 
 log "Deleting mongodb k8s Service for mesh2"
 oc2 delete -f import/mongodb-service.yaml
@@ -93,8 +91,6 @@ oc2 delete -f import/importedserviceset.yaml
 sed -e "s:{{MESH1_ADDRESS}}:$MESH1_ADDRESS:g" -e "s:{{MESH1_DISCOVERY_PORT}}:$MESH1_DISCOVERY_PORT:g" -e "s:{{MESH1_SERVICE_PORT}}:$MESH1_SERVICE_PORT:g" import/servicemeshpeer.yaml | oc2 delete -f -
 sed "s:{{MESH1_CERT}}:$MESH1_CERT:g" import/configmap.yaml | oc2 delete -f -
 
-#=====
-
 log "Uninstalling control plane for mesh2"
 oc2 delete -f import/smcp.yaml
 oc2 delete -f import/smcp-bare-metal.yaml
@@ -119,7 +115,8 @@ log "Deleting projects for mesh2"
 oc2 delete project mesh2-system || true
 oc2 delete project mesh2-bookinfo || true
 
-log "UNINSTALLATION of ServiceMesh Federation COMPLETE"
+
+log "Removing firewall ports for federation services"
 
 firewall-cmd --remove-port=${MESH1_SERVICE_PORT}/tcp --zone=libvirt
 firewall-cmd --remove-port=${MESH1_SERVICE_PORT}/udp --zone=libvirt
@@ -131,32 +128,4 @@ firewall-cmd --remove-port=${MESH1_DISCOVERY_PORT}/udp --zone=libvirt
 firewall-cmd --remove-port=${MESH2_DISCOVERY_PORT}/tcp --zone=libvirt
 firewall-cmd --remove-port=${MESH2_DISCOVERY_PORT}/udp --zone=libvirt
 
-"
-Two service mesh control planes and two bookinfo applications are now installed.
-The first cluster (mesh1) contains the namespace mesh1-system and mesh1-bookinfo.
-The second cluster (mesh2) contains mesh2-system and mesh2-bookinfo.
-Mesh1 exports services, mesh2 imports them.
-
-The meshes are configured to split ratings traffic in mesh2-bookinfo between
-mesh1 and mesh2. The ratings-v2 service in mesh2 is configured to use the
-mongodb service in mesh1.
-
-Run the following command in the mesh1 cluster to check the connection status:
-
-  oc -n mesh1-system get servicemeshpeer mesh2 -o json | jq .status
-
-Run the following command to check the connection status in mesh2:
-
-  oc -n mesh2-system get servicemeshpeer mesh1 -o json | jq .status
-
-Check if services from mesh1 are imported into mesh2:
-
-  oc -n mesh2-system get importedservicesets mesh1 -o json | jq .status
-
-To see federation in action, use the bookinfo app in mesh2. For example:
-
-  1. Run this command in the mesh1 cluster: oc logs -n mesh1-bookinfo deploy/ratings-v2 -f
-  2. Run this command in the mesh2 cluster: oc logs -n mesh2-bookinfo deploy/ratings-v2 -f
-  3. Open http://$(oc2 -n mesh2-system get route istio-ingressgateway -o json | jq -r .spec.host)/productpage
-  4. Refresh the page several times and observe requests hitting either the mesh1 or the mesh2 cluster.
-"
+log "UNINSTALLATION of ServiceMesh Federation COMPLETE"
