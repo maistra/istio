@@ -26,8 +26,7 @@ The procedure for this installation is:
 
 No installation procedure is complete without an uninstaller, so we give you: `uninstall-libvirt.sh`
 
-<<<<<<< HEAD
-There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.  Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for packets to be routable from one cluster to the other.  
+
 
 ### Bare Metal and libvirt load balancer configuration
 
@@ -46,13 +45,13 @@ OPTIONS="-f /etc/haproxy/federation.cfg"
 ```
 systemctl restart haproxy
 ```
-=======
+
 ### OSSM Federation for bare metal UPI provisioned clusters:TBD 
 
 There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.  
 
 Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for whatever hosts the clusters are installed on, which could be done with some ssh scripting.   
->>>>>>> 7296e1d2672826328d5bf408a356584843d4f706
+
 
 ### OSSM Federation on Openstack-provisioned IPI clusters
 
