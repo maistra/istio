@@ -4,37 +4,149 @@
 
 ## Proof of Concept / Test Installation 
 
+### for OSSM Federation for libvirt IPI provisioned OCP clusters 
+
 The prerequisites for all installations of Service Mesh federation are:
 
  1.  Install the Service Mesh, Kiali and Jaeger operators on the clusters; use the 'install to all namespaces' option
- 2.  Set environment variables MESH1-KUBECONFIG and MESH2-KUBECONFIG: the
-
-### for OSSM Federation for libvirt IPI provisioned OCP clusters 
+ 2.  Set environment variables MESH1-KUBECONFIG and MESH2-KUBECONFIG
+ 3.  edit the `OPTIONS` field in `/etc/systemctl/haproxy` so it reads: 
+```
+# Add extra options to the haproxy daemon here. This can be useful for
+# specifying multiple configuration files with multiple -f options.
+# See haproxy(1) for a complete list of options.
+OPTIONS="-f /etc/haproxy/federation.cfg"
+```
 
 Libvirt and bare-metal provisioned OCP clusters on their own have no LoadBalancer service type unless you install an L4 load balancer inside each cluster in order to provide this service type.  Libvirt-provisioned clusters are for test and development purposes only; therefore, we take the quick and dirty approach to provisioning multi-cluster service mesh federation. 
 
-This means provisioning the federation networks on NodePort services rather than the usual LoadBalancer services. We also assume that all the clusters are installed on the same host, allowing us to open up the service and discovery ports solely within the libvirt firewall zone.  
+This means provisioning the federation networks on NodePort services rather than the usual LoadBalancer services. We also assume that all the clusters are installed on the same host, allowing us to open up the service and discovery ports solely within the libvirt firewall zone, and proxy the connections between the two clusters using a locally configured haproxy.  
 
 
 The procedure for this installation is:
 
  1.  run `./install-libvirt-1.sh`: this sets up the service mesh control plane, service mesh member role and bookinfo test projects.
- 2.  run `./install-libvirt-2.sh`: this installs the NodePort services and opens up the appropriate firewalls in the libvirt zone
+ 2.  run `./install-libvirt-2.sh`:
+     a.   installs the NodePort services
+     b. opens up the appropriate firewalls in the libvirt zone
+     c. generates & installs the proxy configuration file `federation.cfg`
+     d. restarts haproxy with the additional proxy configuration
  3.  run `./install-libvirt-3.sh`: this sets up the federation plane and deploys the two bookinfo projects that will be federated in the two clusters
 
-### Uninstaller 
+#### Test Script
+
+run `./test-federation.sh`.  It should give you results something like:
+```
+./test-federation.sh
+
+##### Using the following kubeconfig files:
+mesh1: /opt/clusters-deploy/maistra-qez-49/auth/kubeconfig
+mesh2: /opt/clusters-deploy/kiali-qez-49/auth/kubeconfig
+
+##### check status of federation
+
+##### oc1 -n mesh1-system get servicemeshpeer mesh2 -o json | jq .status:
+{
+  "discoveryStatus": {
+    "active": [
+      {
+        "pod": "istiod-fed-export-59c5865775-bq9zl",
+        "remotes": [
+          {
+            "connected": true,
+            "lastConnected": "2021-10-07T04:15:52Z",
+            "lastDisconnect": "2021-10-07T04:15:50Z",
+            "lastEvent": "2021-10-06T23:11:40Z",
+            "lastFullSync": "2021-10-07T04:16:05Z",
+            "source": "10.120.2.70"
+          }
+        ],
+        "watch": {
+          "connected": true,
+          "lastConnected": "2021-10-07T04:16:48Z",
+          "lastDisconnect": "2021-10-07T04:16:48Z",
+          "lastDisconnectStatus": "200 OK",
+          "lastFullSync": "2021-10-07T04:16:48Z"
+        }
+      }
+    ]
+  }
+}
+
+##### oc2 -n mesh2-system get servicemeshpeer mesh1 -o json | jq .status:
+{
+  "discoveryStatus": {
+    "active": [
+      {
+        "pod": "istiod-fed-import-58cfcc95c5-zv7br",
+        "remotes": [
+          {
+            "connected": true,
+            "lastConnected": "2021-10-07T04:16:48Z",
+            "lastDisconnect": "2021-10-07T04:08:28Z",
+            "lastFullSync": "2021-10-07T04:16:48Z",
+            "source": "10.121.3.149"
+          }
+        ],
+        "watch": {
+          "connected": true,
+          "lastConnected": "2021-10-07T04:15:52Z",
+          "lastDisconnect": "2021-10-07T04:15:52Z",
+          "lastDisconnectStatus": "200 OK",
+          "lastFullSync": "2021-10-07T04:16:05Z"
+        }
+      }
+    ]
+  }
+}
+
+##### Check if services from mesh1 are imported into mesh2:
+
+##### oc2 -n mesh2-system get importedservicesets mesh1 -o json | jq .status:
+{
+  "importedServices": [
+    {
+      "exportedName": "mongodb.bookinfo.svc.mesh2-exports.local",
+      "localService": {
+        "hostname": "mongodb.mesh2-bookinfo.svc.mesh1-imports.local",
+        "name": "mongodb",
+        "namespace": "mesh2-bookinfo"
+      }
+    },
+    {
+      "exportedName": "ratings.bookinfo.svc.mesh2-exports.local",
+      "localService": {
+        "hostname": "ratings.mesh2-bookinfo.svc.mesh1-imports.local",
+        "name": "ratings",
+        "namespace": "mesh2-bookinfo"
+      }
+    }
+  ]
+}
+
+##### deploy v2 ratings system into mesh1 and mesh2
+
+##### manual steps to test:
+  1. Open http://istio-ingressgateway-mesh2-system.apps.kiali-qez-49.maistra.upshift.redhat.com/productpage
+  2. Refresh the page several times and observe requests hitting either the mesh1 or the mesh2 cluster.
+
+[root@bos-z15-l22 config-poc]# Using deprecated annotation `kubectl.kubernetes.io/default-logs-container` in pod/ratings-v2-66d7c9bb75-kzcvp. Please use `kubectl.kubernetes.io/default-container` instead
+Using deprecated annotation `kubectl.kubernetes.io/default-logs-container` in pod/ratings-v2-66d7c9bb75-k2st6. Please use `kubectl.kubernetes.io/default-container` instead
+Server listening on: http://0.0.0.0:9080
+Server listening on: http://0.0.0.0:9080
+```
+
+#### Uninstaller 
 
 No installation procedure is complete without an uninstaller, so we give you: `uninstall-libvirt.sh`
 
+#### Bare Metal and libvirt load balancer configuration
 
-
-### Bare Metal and libvirt load balancer configuration
-
-This part can be done either after step 2 of the installation above, or after step 3. 
+This part is currently incorporated in install-libvirt-2.sh except for step 3. You'll only need to edit `/etc/systemctl/haproxy` once, so that it invokes the new `federation.cfg` haproxy configuration file. 
 
  1. using the NodePorts mapped, generate the federation.cfg haproxy configuration file that will route packets from one cluster to another
  2. copy the federation.cfg file into /etc/systemctl/haproxy
- 3. edit the OPTIONS field in /etc/systemctl/haproxy so it reads: 
+ 3. edit the `OPTIONS` field in `/etc/systemctl/haproxy` so it reads: 
 ```
 # Add extra options to the haproxy daemon here. This can be useful for
 # specifying multiple configuration files with multiple -f options.
@@ -50,7 +162,7 @@ systemctl restart haproxy
 
 There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.  
 
-Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for whatever hosts the clusters are installed on, which could be done with some ssh scripting.   
+Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for whatever hosts the clusters are installed on, which could be done with some ssh scripting, and we will still need to do a many-to-many proxy/load balancer.   
 
 
 ### OSSM Federation on Openstack-provisioned IPI clusters
