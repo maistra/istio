@@ -51,8 +51,11 @@ else
   MESH2_HOSTNAME=$(oc2 -n mesh2-system get route mesh1-ingress -o jsonpath="{.spec.host}")
 
   # we're proxying the traffic by port on the hypervisor so send all traffic there
-  MESH1_ADDRESS=$(hostname -I | cut -d' ' -f 1)
-  MESH2_ADDRESS=$(hostname -I | cut -d' ' -f 1)
+  # MESH1_ADDRESS=$(hostname -I | cut -d' ' -f 1)
+  # MESH2_ADDRESS=$(hostname -I | cut -d' ' -f 1)
+
+  MESH1_ADDRESS=$PROXY_ADDRESS
+  MESH2_ADDRESS=$PROXY_ADDRESS
 
   echo MESH1_DISCOVERY_PORT=${MESH1_DISCOVERY_PORT}
   echo MESH1_SERVICE_PORT=${MESH1_SERVICE_PORT}
