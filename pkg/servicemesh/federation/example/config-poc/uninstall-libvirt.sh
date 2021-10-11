@@ -45,17 +45,17 @@ else
   MESH1_HOSTNAME=$(oc1 -n mesh1-system get route mesh2-ingress -o jsonpath="{.spec.host}")
   MESH2_HOSTNAME=$(oc2 -n mesh2-system get route mesh1-ingress -o jsonpath="{.spec.host}")
 
-  MESH1_ADDRESS=$(host $MESH1_HOSTNAME | cut -d' ' -f 4)
-  MESH2_ADDRESS=$(host $MESH2_HOSTNAME | cut -d' ' -f 4)
+  MESH1_ADDRESS="${PROXY_ADDRESS}"
+  MESH2_ADDRESS="${PROXY_ADDRESS}"
 
-  echo MESH1_DISCOVERY_PORT=${MESH1_DISCOVERY_PORT}
-  echo MESH1_SERVICE_PORT=${MESH1_SERVICE_PORT}
+  echo MESH1_DISCOVERY_PORT="${MESH1_DISCOVERY_PORT}"
+  echo MESH1_SERVICE_PORT="${MESH1_SERVICE_PORT}"
   
-  echo MESH2_DISCOVERY_PORT=${MESH2_DISCOVERY_PORT}
-  echo MESH2_SERVICE_PORT=${MESH2_SERVICE_PORT}
+  echo MESH2_DISCOVERY_PORT="${MESH2_DISCOVERY_PORT}"
+  echo MESH2_SERVICE_PORT="${MESH2_SERVICE_PORT}"
 
-  echo MESH1_HOSTNAME=${MESH1_HOSTNAME}
-  echo MESH2_HOSTNAME=${MESH2_HOSTNAME}
+  echo MESH1_HOSTNAME="${MESH1_HOSTNAME}"
+  echo MESH2_HOSTNAME="${MESH2_HOSTNAME}"
 
 fi
 
@@ -118,14 +118,14 @@ oc2 delete project mesh2-bookinfo || true
 
 log "Removing firewall ports for federation services"
 
-firewall-cmd --remove-port=${MESH1_SERVICE_PORT}/tcp --zone=libvirt
-firewall-cmd --remove-port=${MESH1_SERVICE_PORT}/udp --zone=libvirt
-firewall-cmd --remove-port=${MESH2_SERVICE_PORT}/tcp --zone=libvirt
-firewall-cmd --remove-port=${MESH2_SERVICE_PORT}/udp --zone=libvirt
+firewall-cmd --remove-port="${MESH1_SERVICE_PORT}"/tcp --zone=libvirt
+firewall-cmd --remove-port="${MESH1_SERVICE_PORT}"/udp --zone=libvirt
+firewall-cmd --remove-port="${MESH2_SERVICE_PORT}"/tcp --zone=libvirt
+firewall-cmd --remove-port="${MESH2_SERVICE_PORT}"/udp --zone=libvirt
 
-firewall-cmd --remove-port=${MESH1_DISCOVERY_PORT}/tcp --zone=libvirt
-firewall-cmd --remove-port=${MESH1_DISCOVERY_PORT}/udp --zone=libvirt
-firewall-cmd --remove-port=${MESH2_DISCOVERY_PORT}/tcp --zone=libvirt
-firewall-cmd --remove-port=${MESH2_DISCOVERY_PORT}/udp --zone=libvirt
+firewall-cmd --remove-port="${MESH1_DISCOVERY_PORT}"/tcp --zone=libvirt
+firewall-cmd --remove-port="${MESH1_DISCOVERY_PORT}"/udp --zone=libvirt
+firewall-cmd --remove-port="${MESH2_DISCOVERY_PORT}"/tcp --zone=libvirt
+firewall-cmd --remove-port="${MESH2_DISCOVERY_PORT}"/udp --zone=libvirt
 
 log "UNINSTALLATION of ServiceMesh Federation COMPLETE"

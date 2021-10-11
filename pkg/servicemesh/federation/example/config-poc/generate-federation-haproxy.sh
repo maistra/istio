@@ -39,7 +39,7 @@ backend mesh1-service
     balance source " >> federation.cfg
 for NodeName in $(oc1 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
 do
-  NodeIP=$(oc1 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  NodeIP=$(oc1 get node "${NodeName}" -o wide -o jsonpath="{.status.addresses[0].address}")
   echo "    server      $NodeName ${NodeIP}:${MESH1_SERVICE_PORT} check" >> federation.cfg
 done
 
@@ -50,7 +50,7 @@ backend mesh1-discovery
     balance source " >> federation.cfg
 for NodeName in $(oc1 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
 do
-  NodeIP=$(oc1 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  NodeIP=$(oc1 get node "${NodeName}" -o wide -o jsonpath="{.status.addresses[0].address}")
   echo "    server      $NodeName ${NodeIP}:${MESH1_DISCOVERY_PORT} check" >> federation.cfg
 done
 
@@ -60,7 +60,7 @@ backend mesh2-service
     balance source " >> federation.cfg
 for NodeName in $(oc2 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
 do
-  NodeIP=$(oc2 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  NodeIP=$(oc2 get node "${NodeName}" -o wide -o jsonpath="{.status.addresses[0].address}")
   echo "    server      $NodeName ${NodeIP}:${MESH2_SERVICE_PORT} check" >> federation.cfg
 done
 
@@ -71,6 +71,6 @@ backend mesh2-discovery
     balance source " >> federation.cfg
 for NodeName in $(oc2 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
 do
-  NodeIP=$(oc2 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  NodeIP=$(oc2 get node "${NodeName}" -o wide -o jsonpath="{.status.addresses[0].address}")
   echo "    server      $NodeName ${NodeIP}:${MESH2_DISCOVERY_PORT} check" >> federation.cfg
 done

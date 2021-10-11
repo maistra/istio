@@ -16,8 +16,8 @@
 
 
 
-cd ../../../../../samples/bookinfo/platform/kube/
-for i in `grep 'image:' *.yaml | cut -d':' -f 1 ` 
+cd ../../../../../samples/bookinfo/platform/kube/ || exit
+for i in $(grep 'image:' *.yaml | cut -d':' -f 1 `) 
 do 
-sed -i.86 '/image:/s/2.1.0/2.1-z/g' $i
+sed -i.86 '/image:/s/2.1.0/2.1-z/g' "${i}"
 done

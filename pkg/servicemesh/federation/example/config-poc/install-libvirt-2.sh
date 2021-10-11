@@ -57,29 +57,29 @@ else
   MESH1_ADDRESS=$PROXY_ADDRESS
   MESH2_ADDRESS=$PROXY_ADDRESS
 
-  echo MESH1_DISCOVERY_PORT=${MESH1_DISCOVERY_PORT}
-  echo MESH1_SERVICE_PORT=${MESH1_SERVICE_PORT}
+  echo MESH1_DISCOVERY_PORT="${MESH1_DISCOVERY_PORT}"
+  echo MESH1_SERVICE_PORT="${MESH1_SERVICE_PORT}"
   
-  echo MESH2_DISCOVERY_PORT=${MESH2_DISCOVERY_PORT}
-  echo MESH2_SERVICE_PORT=${MESH2_SERVICE_PORT}
+  echo MESH2_DISCOVERY_PORT="${MESH2_DISCOVERY_PORT}"
+  echo MESH2_SERVICE_PORT="${MESH2_SERVICE_PORT}"
 
-  echo MESH1_HOSTNAME=${MESH1_HOSTNAME}
-  echo MESH2_HOSTNAME=${MESH2_HOSTNAME}
+  echo MESH1_HOSTNAME="${MESH1_HOSTNAME}"
+  echo MESH2_HOSTNAME="${MESH2_HOSTNAME}"
 
   log "temporarily opened firewall ports may be closed later with firewall-cmd --reload"
   echo "opening firewall port for $MESH1_ADDRESS $MESH1_SERVICE_PORT"
 
-  firewall-cmd --add-port=${MESH1_SERVICE_PORT}/tcp --zone=libvirt
-  firewall-cmd --add-port=${MESH1_SERVICE_PORT}/udp --zone=libvirt
+  firewall-cmd --add-port="${MESH1_SERVICE_PORT}"/tcp --zone=libvirt
+  firewall-cmd --add-port="${MESH1_SERVICE_PORT}"/udp --zone=libvirt
 
-  firewall-cmd --add-port=${MESH1_DISCOVERY_PORT}/tcp --zone=libvirt
-  firewall-cmd --add-port=${MESH1_DISCOVERY_PORT}/udp --zone=libvirt
+  firewall-cmd --add-port="${MESH1_DISCOVERY_PORT}"/tcp --zone=libvirt
+  firewall-cmd --add-port="${MESH1_DISCOVERY_PORT}"/udp --zone=libvirt
 
-  firewall-cmd --add-port=$MESH2_SERVICE_PORT/tcp --zone=libvirt
-  firewall-cmd --add-port=$MESH2_SERVICE_PORT/udp --zone=libvirt
+  firewall-cmd --add-port="${MESH2_SERVICE_PORT}"/tcp --zone=libvirt
+  firewall-cmd --add-port="${MESH2_SERVICE_PORT}"/udp --zone=libvirt
 
-  firewall-cmd --add-port=${MESH2_DISCOVERY_PORT}/tcp --zone=libvirt
-  firewall-cmd --add-port=${MESH2_DISCOVERY_PORT}/udp --zone=libvirt
+  firewall-cmd --add-port="${MESH2_DISCOVERY_PORT}"/tcp --zone=libvirt
+  firewall-cmd --add-port="${MESH2_DISCOVERY_PORT}"/udp --zone=libvirt
 
 fi
 
@@ -97,7 +97,7 @@ backend mesh1-service
     balance source " >> federation.cfg
 for NodeName in $(oc1 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
 do
-  NodeIP=$(oc1 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  NodeIP=$(oc1 get node "${NodeName}" -o wide -o jsonpath="{.status.addresses[0].address}")
   echo "    server      $NodeName ${NodeIP}:${MESH1_SERVICE_PORT} check" >> federation.cfg
 done
 
@@ -108,7 +108,7 @@ backend mesh1-discovery
 
 for NodeName in $(oc1 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
 do
-  NodeIP=$(oc1 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  NodeIP=$(oc1 get node "${NodeName}" -o wide -o jsonpath="{.status.addresses[0].address}")
   echo "    server      $NodeName ${NodeIP}:${MESH1_DISCOVERY_PORT} check" >> federation.cfg
 done
 
@@ -119,7 +119,7 @@ backend mesh2-service
 
 for NodeName in $(oc2 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
 do
-  NodeIP=$(oc2 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  NodeIP=$(oc2 get node "${NodeName}" -o wide -o jsonpath="{.status.addresses[0].address}")
   echo "    server      $NodeName ${NodeIP}:${MESH2_SERVICE_PORT} check" >> federation.cfg
 done
 
@@ -130,7 +130,7 @@ backend mesh2-discovery
 
 for NodeName in $(oc2 get nodes -o wide -o jsonpath="{.items[*].status.addresses[1].address}")
 do
-  NodeIP=$(oc2 get node ${NodeName} -o wide -o jsonpath="{.status.addresses[0].address}")
+  NodeIP=$(oc2 get node "${NodeName}" -o wide -o jsonpath="{.status.addresses[0].address}")
   echo "    server      $NodeName ${NodeIP}:${MESH2_DISCOVERY_PORT} check" >> federation.cfg
 done
 
