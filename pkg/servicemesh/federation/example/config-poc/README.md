@@ -1,23 +1,29 @@
 # Service Mesh Federation Configuration Scripts
 
+## Proof of Concept / Test Installation
 
+### OSSM Multi-cluster Federation for z/VM UPI or libvirt IPI provisioned OCP clusters
 
-## Proof of Concept / Test Installation 
-
-### OSSM Multi-cluster Federation for z/VM UPI or libvirt IPI provisioned OCP clusters 
+#### Prerequisites
 
 The prerequisites for all installations of Multi-Cluster Service Mesh federation are:
 
  1.  Install the Service Mesh, Kiali and Jaeger operators on the clusters; use the 'install to all namespaces' option
  2.  Set environment variables MESH1-KUBECONFIG and MESH2-KUBECONFIG to be the kubeconfig files for the two clusters you're going to run federated service mesh installations on, e.g.:
+
 ```
 export MESH1-KUBECONFIG=./mesh1-kubeconfig
 export MESH2-KUBECONFIG=./mesh2-kubeconfig
-``` These files can be found, typically, stashed away in the `auth` directory of the cluster installation artifacts.
+``` 
 
-If you are running multi-cluster service mesh federation on bare-metal, libvirt or UPI OCP installations such as z/VM, you will (a) need to use NodePort rather than LoadBalancer service types to federate, and consequently (b) you will need to route the traffic through a proxy server such as haproxy.  In this case:
+These files can be found, typically, stashed away in the `auth` directory of the cluster installation artifacts.
+
+If you are running multi-cluster service mesh federation on bare-metal, libvirt or UPI OCP installations such as z/VM, you will (a) need to use NodePort rather than LoadBalancer service types to federate, and consequently (b) you will need to route the traffic through a proxy server such as haproxy.  
+
+In this case:
  1.  set the PROXY_HOST environment variable
- 2.  If you're using haproxy as your edit the `OPTIONS` field in `/etc/sysconfig/haproxy` file on the so it reads: 
+ 2.  If you're using haproxy as your edit the `OPTIONS` field in `/etc/sysconfig/haproxy` file on the so it reads:
+
 ```
 # Add extra options to the haproxy daemon here. This can be useful for
 # specifying multiple configuration files with multiple -f options.
@@ -25,7 +31,7 @@ If you are running multi-cluster service mesh federation on bare-metal, libvirt 
 OPTIONS="-f /etc/haproxy/federation.cfg"
 ```
 
-
+#### Procedure
 
 The procedure for this installation is:
 
@@ -45,16 +51,19 @@ The procedure for this installation is:
 #### Test Script
 
 run `./test-federation.sh`.  It should give you results something like:
+
 ```
 ./test-federation.sh
 
 ##### Using the following kubeconfig files:
+
 mesh1: /opt/clusters-deploy/maistra-qez-49/auth/kubeconfig
 mesh2: /opt/clusters-deploy/kiali-qez-49/auth/kubeconfig
 
 ##### check status of federation
 
 ##### oc1 -n mesh1-system get servicemeshpeer mesh2 -o json | jq .status:
+
 {
   "discoveryStatus": {
     "active": [
@@ -83,6 +92,7 @@ mesh2: /opt/clusters-deploy/kiali-qez-49/auth/kubeconfig
 }
 
 ##### oc2 -n mesh2-system get servicemeshpeer mesh1 -o json | jq .status:
+
 {
   "discoveryStatus": {
     "active": [
@@ -112,6 +122,7 @@ mesh2: /opt/clusters-deploy/kiali-qez-49/auth/kubeconfig
 ##### Check if services from mesh1 are imported into mesh2:
 
 ##### oc2 -n mesh2-system get importedservicesets mesh1 -o json | jq .status:
+
 {
   "importedServices": [
     {
@@ -136,6 +147,7 @@ mesh2: /opt/clusters-deploy/kiali-qez-49/auth/kubeconfig
 ##### deploy v2 ratings system into mesh1 and mesh2
 
 ##### manual steps to test:
+
   1. Open http://istio-ingressgateway-mesh2-system.apps.kiali-qez-49.maistra.upshift.redhat.com/productpage
   2. Refresh the page several times and observe requests hitting either the mesh1 or the mesh2 cluster.
 
@@ -145,38 +157,38 @@ Server listening on: http://0.0.0.0:9080
 Server listening on: http://0.0.0.0:9080
 ```
 
-#### Uninstaller 
+#### Uninstaller
 
 No installation procedure is complete without an uninstaller, so we give you: `uninstall-libvirt.sh`
 
 #### Bare Metal and libvirt load balancer configuration
 
-This part is currently incorporated in install-libvirt-2.sh except for step 3. You'll only need to edit `/etc/sysconfig/haproxy` once, so that it invokes the new `federation.cfg` haproxy configuration file. 
+This part is currently incorporated in install-libvirt-2.sh except for step 3. You'll only need to edit `/etc/sysconfig/haproxy` once, so that it invokes the new `federation.cfg` haproxy configuration file.
 
  1. using the NodePorts mapped, generate the federation.cfg haproxy configuration file that will route packets from one cluster to another
  2. copy the federation.cfg file into /etc/sysconfig/haproxy
- 3. edit the `OPTIONS` field in `/etc/sysconfig/haproxy` so it reads: 
+ 3. edit the `OPTIONS` field in `/etc/sysconfig/haproxy` so it reads:
 ```
 # Add extra options to the haproxy daemon here. This can be useful for
 # specifying multiple configuration files with multiple -f options.
 # See haproxy(1) for a complete list of options.
 OPTIONS="-f /etc/haproxy/federation.cfg"
 ```
- 4. restart the haproxy service: 
+ 4. restart the haproxy service:
 ```
 systemctl restart haproxy
 ```
 
-### OSSM Federation for bare metal UPI provisioned clusters:TBD 
+### OSSM Federation for bare metal UPI provisioned clusters:TBD
 
-There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.  
+There are two options for multi-cluster federation on bare metal and other UPI OCP installations.  One is to install a LoadBalancer service option into both clusters using e.g. "MetalLB" See https://youtu.be/8RQBt9y2xY4 for more information on this option.
 
-Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for whatever hosts the clusters are installed on, which could be done with some ssh scripting, and we will still need to do a many-to-many proxy/load balancer.   
+Another option is to use the NodePort service as we did in the libvirt-provisioned clusters. In this case, however, we're going to (generally) need to open up firewall ports on a variety of different hosts for whatever hosts the clusters are installed on, which could be done with some ssh scripting, and we will still need to do a many-to-many proxy/load balancer.
 
 
 ### OSSM Federation on Openstack-provisioned IPI clusters
 
-This section describes installation where dynamic L4 load balancer internal to the cluster in the course of IPI installation with OpenStack, which results in the LoadBalancer service type being available 
+This section describes installation where dynamic L4 load balancer internal to the cluster in the course of IPI installation with OpenStack, which results in the LoadBalancer service type being available
 
 Everything for a pair of clusters which were provisioned with openstack can be setup by running `./install-openstack.sh.`
 
@@ -184,7 +196,6 @@ Once the install is complete, this script installs bookinfo into the following
 namespaces:
   mesh1-bookinfo
   mesh2-bookinfo
-
 ```
 Redirect to the aliased service through the egress gateway:
 
