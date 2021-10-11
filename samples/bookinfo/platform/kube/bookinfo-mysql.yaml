@@ -61,7 +61,7 @@ spec:
     spec:
       containers:
       - name: mysqldb
-        image: quay.io/maistra/examples-bookinfo-mysqldb:2.1-z
+        image: quay.io/maistra/examples-bookinfo-mysqldb:2.1.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3306
