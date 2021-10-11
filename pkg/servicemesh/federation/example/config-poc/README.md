@@ -4,13 +4,20 @@
 
 ## Proof of Concept / Test Installation 
 
-### OSSM Federation for libvirt IPI provisioned OCP clusters 
+### OSSM Multi-cluster Federation for z/VM UPI or libvirt IPI provisioned OCP clusters 
 
-The prerequisites for all installations of Service Mesh federation are:
+The prerequisites for all installations of Multi-Cluster Service Mesh federation are:
 
  1.  Install the Service Mesh, Kiali and Jaeger operators on the clusters; use the 'install to all namespaces' option
- 2.  Set environment variables MESH1-KUBECONFIG and MESH2-KUBECONFIG
- 3.  edit the `OPTIONS` field in `/etc/systemctl/haproxy` so it reads: 
+ 2.  Set environment variables MESH1-KUBECONFIG and MESH2-KUBECONFIG to be the kubeconfig files for the two clusters you're going to run federated service mesh installations on, e.g.:
+```
+export MESH1-KUBECONFIG=./mesh1-kubeconfig
+export MESH2-KUBECONFIG=./mesh2-kubeconfig
+``` These files can be found, typically, stashed away in the `auth` directory of the cluster installation artifacts.
+
+If you are running multi-cluster service mesh federation on bare-metal, libvirt or UPI OCP installations such as z/VM, you will (a) need to use NodePort rather than LoadBalancer service types to federate, and consequently (b) you will need to route the traffic through a proxy server such as haproxy.  In this case:
+ 1.  set the PROXY_HOST environment variable
+ 2.  If you're using haproxy as your edit the `OPTIONS` field in `/etc/sysconfig/haproxy` file on the so it reads: 
 ```
 # Add extra options to the haproxy daemon here. This can be useful for
 # specifying multiple configuration files with multiple -f options.
@@ -18,9 +25,6 @@ The prerequisites for all installations of Service Mesh federation are:
 OPTIONS="-f /etc/haproxy/federation.cfg"
 ```
 
-Libvirt and bare-metal provisioned OCP clusters on their own have no LoadBalancer service type unless you install an L4 load balancer inside each cluster in order to provide this service type.  Libvirt-provisioned clusters are for test and development purposes only; therefore, we take the quick and dirty approach to provisioning multi-cluster service mesh federation. 
-
-This means provisioning the federation networks on NodePort services rather than the usual LoadBalancer services. We also assume that all the clusters are installed on the same host, allowing us to open up the service and discovery ports solely within the libvirt firewall zone, and proxy the connections between the two clusters using a locally configured haproxy.  
 
 
 The procedure for this installation is:
@@ -147,11 +151,11 @@ No installation procedure is complete without an uninstaller, so we give you: `u
 
 #### Bare Metal and libvirt load balancer configuration
 
-This part is currently incorporated in install-libvirt-2.sh except for step 3. You'll only need to edit `/etc/systemctl/haproxy` once, so that it invokes the new `federation.cfg` haproxy configuration file. 
+This part is currently incorporated in install-libvirt-2.sh except for step 3. You'll only need to edit `/etc/sysconfig/haproxy` once, so that it invokes the new `federation.cfg` haproxy configuration file. 
 
  1. using the NodePorts mapped, generate the federation.cfg haproxy configuration file that will route packets from one cluster to another
- 2. copy the federation.cfg file into /etc/systemctl/haproxy
- 3. edit the `OPTIONS` field in `/etc/systemctl/haproxy` so it reads: 
+ 2. copy the federation.cfg file into /etc/sysconfig/haproxy
+ 3. edit the `OPTIONS` field in `/etc/sysconfig/haproxy` so it reads: 
 ```
 # Add extra options to the haproxy daemon here. This can be useful for
 # specifying multiple configuration files with multiple -f options.
