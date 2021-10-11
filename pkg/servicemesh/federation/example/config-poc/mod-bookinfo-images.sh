@@ -17,6 +17,7 @@
 
 
 cd ../../../../../samples/bookinfo/platform/kube/ || exit
+# shellcheck disable=SC2013,2035  
 for i in $(grep 'image:' *.yaml | cut -d':' -f 1 ) 
 do 
 sed -i.86 '/image:/s/2.1.0/2.1-z/g' "${i}"
