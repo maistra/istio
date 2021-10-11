@@ -39,6 +39,6 @@ oc1 logs -n mesh1-bookinfo deploy/ratings-v2 -f &
 oc2 logs -n mesh2-bookinfo deploy/ratings-v2 -f &
 
 log "manual steps to test:
-  1. Open http://istio-ingressgateway-mesh2-system.apps.kiali-qez-49.maistra.upshift.redhat.com/productpage
+  1. Open http://$(oc2 -n mesh2-system get route istio-ingressgateway -o json | jq -r .spec.host)/productpage
   2. Refresh the page several times and observe requests hitting either the mesh1 or the mesh2 cluster.
 "
