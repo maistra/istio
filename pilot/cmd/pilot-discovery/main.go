@@ -62,6 +62,7 @@ var (
 			return nil
 		},
 		RunE: func(c *cobra.Command, args []string) error {
+			log.Info(version.Info.LongForm())
 			cmd.PrintFlags(c.Flags())
 
 			// Create the stop channel for all of the servers.
