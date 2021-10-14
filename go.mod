@@ -111,3 +111,6 @@ require (
 	sigs.k8s.io/mcs-api v0.1.0
 	sigs.k8s.io/yaml v1.2.0
 )
+
+// TODO: remove once https://github.com/istio/api/pull/2125 is merged
+replace istio.io/api => github.com/dgn/api v0.0.0-20211014100021-895ecd45cc6b
