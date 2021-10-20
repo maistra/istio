@@ -21,8 +21,9 @@ These files can be found, typically, stashed away in the `auth` directory of the
 If you are running multi-cluster service mesh federation on bare-metal, libvirt or UPI OCP installations such as z/VM, you will (a) need to use NodePort rather than LoadBalancer service types to federate, and consequently (b) you will need to route the traffic through a proxy server such as haproxy.  
 
 In this case:
- 1.  set the PROXY_HOST environment variable
- 2.  If you're using haproxy as your edit the `OPTIONS` field in `/etc/sysconfig/haproxy` file on the so it reads:
+ 1.  set the PROXY_HOST environment variable if running both clusters on same host 
+ 1a. set   MESH1_ADDRESS and MESH2_ADDRESS if each of the two clusters are on different hosts. 
+ 2.  If you're using haproxy as your load balancer edit the `OPTIONS` field in `/etc/sysconfig/haproxy` file on the so it reads:
 
 ```
 # Add extra options to the haproxy daemon here. This can be useful for
@@ -33,7 +34,7 @@ OPTIONS="-f /etc/haproxy/federation.cfg"
 
 #### Procedure
 
-The procedure for this installation is:
+The procedure for installing federation tests on two libvirt IPI installed clusters which are on the same host is:
 
  1.  run `./install-libvirt-1.sh`: this sets up the service mesh control plane, service mesh member role and bookinfo test projects.
  2.  run `./install-libvirt-2.sh` which:
@@ -47,6 +48,8 @@ The procedure for this installation is:
      d. restarts haproxy with the additional proxy configuration
      
  3.  run `./install-libvirt-3.sh`: this sets up the federation plane and deploys the two bookinfo projects that will be federated in the two clusters
+
+If running the two clusters on two different hosts, run the install-multihost scripts instead. 
 
 #### Test Script
 
