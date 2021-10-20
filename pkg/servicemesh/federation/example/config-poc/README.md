@@ -49,7 +49,10 @@ The procedure for installing federation tests on two libvirt IPI installed clust
      
  3.  run `./install-libvirt-3.sh`: this sets up the federation plane and deploys the two bookinfo projects that will be federated in the two clusters
 
-If running the two clusters on two different hosts, run the install-multihost scripts instead. 
+If running the two clusters on two different hosts:
+   - edit the `/etc/sysconfig/haproxy` file on both hosts
+   - exchange public keys so the host you're running the install scripts from can ssh into the other host without having to enter a password
+   - run the `install-multihost-{1,2,3}.sh` scripts in place of `install-libvirt-{1,2,3}.sh` above. 
 
 #### Test Script
 
