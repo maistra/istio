@@ -122,13 +122,13 @@ echo "
 backend mesh1-service
     mode tcp
     balance source " >> mesh2-federation.cfg
-echo "    server      mesh1-service-backend ${MESH1-ADDRESS}:${MESH1_SERVICE_PORT} check" >> mesh2-federation.cfg
+echo "    server      mesh1-service-backend ${MESH1_ADDRESS}:${MESH1_SERVICE_PORT} check" >> mesh2-federation.cfg
 
 echo "
 backend mesh1-discovery
     mode tcp
     balance source " >> mesh2-federation.cfg
-echo "    server      mesh1-discovery-backend ${MESH1-ADDRESS}:${MESH1_DISCOVERY_PORT} check" >> mesh2-federation.cfg
+echo "    server      mesh1-discovery-backend ${MESH1_ADDRESS}:${MESH1_DISCOVERY_PORT} check" >> mesh2-federation.cfg
 
 echo "
 backend mesh2-service

@@ -41,11 +41,9 @@ spec:
           ports:
           # required for sending service requests to mesh2
           - port: 15443
-            nodePort: 31669
             name: tls
           # required for sending discovery requests to mesh2
           - port: 8188
-            nodePort: 32568
             name: http-discovery
         runtime:
           deployment:
