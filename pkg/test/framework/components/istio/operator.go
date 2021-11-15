@@ -270,7 +270,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 	}
 
 	// For multicluster, create and push the CA certs to all clusters to establish a shared root of trust.
-	if env.IsMulticluster() {
+	if env.IsMulticluster() && cfg.ConfigureMultiCluster {
 		if err := deployCACerts(workDir, env, cfg); err != nil {
 			return nil, err
 		}
@@ -296,7 +296,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		return i, err
 	}
 
-	if ctx.Clusters().IsMulticluster() {
+	if ctx.Clusters().IsMulticluster() && cfg.ConfigureMultiCluster {
 		// For multicluster, configure direct access so each control plane can get endpoints from all
 		// API servers.
 		if err := i.configureDirectAPIServerAccess(ctx, cfg); err != nil {
@@ -306,7 +306,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 
 	// Deploy Istio to remote clusters
 	// Under external control plane mode, we only use config and external control plane(primary)clusters for now
-	if !i.isExternalControlPlane() {
+	if !i.isExternalControlPlane() && cfg.ConfigureMultiCluster {
 		// TODO allow remotes with an external control planes (not implemented yet)
 		errG = multierror.Group{}
 		for _, cluster := range ctx.Clusters().Kube().Remotes(ctx.Clusters().Configs()...) {
@@ -564,7 +564,7 @@ func installRemoteClusters(i *operatorComponent, cfg Config, cluster cluster.Clu
 	}
 
 	// in external control plane, we've already created the Service/Endpoint, no need to set this up.
-	if !i.isExternalControlPlane() {
+	if !i.isExternalControlPlane() && cfg.DeployEastWestGW {
 		remoteIstiodAddress, err := i.RemoteDiscoveryAddressFor(cluster)
 		if err != nil {
 			return err
@@ -583,7 +583,7 @@ func installRemoteClusters(i *operatorComponent, cfg Config, cluster cluster.Clu
 	}
 
 	// remote clusters only need this gateway for multi-network purposes
-	if i.ctx.Environment().IsMultinetwork() {
+	if i.ctx.Environment().IsMultinetwork() && cfg.DeployEastWestGW {
 		if err := i.deployEastWestGateway(cluster, spec.Revision); err != nil {
 			return err
 		}
@@ -612,6 +612,11 @@ func (i *operatorComponent) generateCommonInstallSettings(cfg Config, cluster cl
 		installSettings = append(installSettings,
 			"--set", "values.global.meshID="+meshID,
 			"--set", "values.global.network="+cluster.NetworkName())
+	}
+
+	if cfg.DifferentTrustDomains {
+		delete(cfg.Values, "global.trustDomain")
+		installSettings = append(installSettings, "--set", "values.global.trustDomain="+cluster.Name()+".local")
 	}
 
 	// Include all user-specified values.

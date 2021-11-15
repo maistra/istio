@@ -84,7 +84,6 @@ type ServiceMeshPeerGateways struct {
 	Ingress corev1.LocalObjectReference `json:"ingress,omitempty"`
 
 	// Gateway through which outbound federated service traffic will travel.
-	// This is not required if AllowDirectOutbound is set to true.
 	Egress corev1.LocalObjectReference `json:"egress,omitempty"`
 }
 

@@ -1753,7 +1753,7 @@ k8s.io/utils/exec
 k8s.io/utils/integer
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20210823191737-259bd5854df6
+# maistra.io/api v0.0.0-20211119171546-348bbce3ca27
 ## explicit
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core
@@ -1790,6 +1790,7 @@ maistra.io/api/core/v1
 maistra.io/api/core/v1alpha1
 maistra.io/api/core/v2
 maistra.io/api/federation/v1
+maistra.io/api/manifests
 maistra.io/api/security/v1
 # sigs.k8s.io/controller-runtime v0.7.0
 ## explicit
