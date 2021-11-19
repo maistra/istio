@@ -126,6 +126,9 @@ spec:
 				}).
 				BuildOrFail(t)
 
+			// Wait until echo server is ready
+			time.Sleep(5 * time.Second)
+
 			for _, tt := range []string{"grpc", "http", "tcp"} {
 				t.Run(tt, func(t *testing.T) {
 					retry.UntilSuccessOrFail(ctx, func() error {
