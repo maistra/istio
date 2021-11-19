@@ -84,7 +84,7 @@ test.integration.%.kube.presubmit:
 # Presubmit integration tests targeting Kubernetes environment. Really used for postsubmit on different k8s versions.
 .PHONY: test.integration.kube.presubmit
 test.integration.kube.presubmit: | $(JUNIT_REPORT) check-go-tag
-	PATH=${PATH}:${ISTIO_OUT} $(GO) test -p 1 ${T} -tags=integ $(shell go list -tags=integ ./tests/integration/... | grep -v /qualification | grep -v /examples) -timeout 30m \
+	PATH=${PATH}:${ISTIO_OUT} $(GO) test -p 1 ./tests/integration/security/file_mounted_certs/... -tags=integ -timeout 30m -run ^TestClientToServiceTls$ \
 	${_INTEGRATION_TEST_FLAGS} ${_INTEGRATION_TEST_SELECT_FLAGS} \
 	2>&1 | tee >($(JUNIT_REPORT) > $(JUNIT_OUT))
 
