@@ -141,7 +141,7 @@ spec:
 							return err
 						}
 						return resp.CheckOK()
-					}, retry.Delay(time.Millisecond*100))
+					}, retry.Timeout(5*time.Minute), retry.Delay(time.Millisecond*100))
 				})
 			}
 		})

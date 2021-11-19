@@ -149,7 +149,7 @@ func TestEgressGatewayTls(t *testing.T) {
 								}
 							}
 							return nil
-						}, retry.Delay(1*time.Second), retry.Timeout(2*time.Minute))
+						}, retry.Delay(1*time.Second), retry.Timeout(5*time.Minute))
 					})
 			}
 		})

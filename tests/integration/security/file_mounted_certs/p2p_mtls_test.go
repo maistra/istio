@@ -86,7 +86,7 @@ func TestClientToServiceTls(t *testing.T) {
 					}
 				}
 				return nil
-			}, retry.Delay(5*time.Second), retry.Timeout(1*time.Minute))
+			}, retry.Delay(5*time.Second), retry.Timeout(5*time.Minute))
 		})
 }
 

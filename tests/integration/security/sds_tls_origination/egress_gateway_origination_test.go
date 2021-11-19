@@ -128,7 +128,7 @@ func TestSimpleTlsOrigination(t *testing.T) {
 							}
 						}
 						return nil
-					}, retry.Delay(time.Second*1), retry.Timeout(time.Minute*2))
+					}, retry.Delay(time.Second*1), retry.Timeout(time.Minute*5))
 				})
 			}
 		})
@@ -278,7 +278,7 @@ func TestMutualTlsOrigination(t *testing.T) {
 								}
 							}
 							return nil
-						}, retry.Delay(time.Second*1), retry.Timeout(time.Minute*2))
+						}, retry.Delay(time.Second*1), retry.Timeout(time.Minute*5))
 					})
 			}
 		})
