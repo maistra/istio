@@ -812,6 +812,8 @@ func TestStatusManager(t *testing.T) {
 			for index, f := range tc.events {
 				t.Logf("processing event %d", index)
 				f(handler)
+				// give it a little time for the status update to propagate
+				time.Sleep(25 * time.Millisecond)
 				verifyPeerStatus(t, cs, tc.mesh, &tc.status[index].peer, tc.assertions[index])
 				verifyExportStatus(t, cs, tc.mesh, &tc.status[index].exports)
 				verifyImportStatus(t, cs, tc.mesh, &tc.status[index].imports)
