@@ -23,9 +23,11 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ImportedServiceSet is the Schema for configuring imported services.  The name of
-// the ImportedServiceSet resource must match the name of a ServiceMeshPeer resource
-// defining the remote mesh from which the services will be imported.
+// ImportedServiceSet is the Schema for configuring imported services. It must be created
+// in the same namespace as the control plane. The name of the ImportedServiceSet
+// resource must match the name of a ServiceMeshPeer resource defining the remote mesh
+// from which the services will be imported. This implies there will be at most one
+// ImportedServiceSet resource per peer and control plane.
 type ImportedServiceSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -77,7 +79,7 @@ type ImportedServiceRule struct {
 	// workloads associated with the service.  This setting overrides DomainSuffix.
 	// +optional
 	ImportAsLocal bool `json:"importAsLocal,omitempty"`
-	// Type of rule.  Only Name type is supported.
+	// Type of rule.  Only NameSelector type is supported.
 	// +required
 	Type ServiceImportExportSelectorType `json:"type"`
 	// NameSelector provides a simple name matcher for importing services in
