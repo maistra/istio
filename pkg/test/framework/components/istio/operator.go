@@ -330,7 +330,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 	}
 
 	// For multicluster, create and push the CA certs to all clusters to establish a shared root of trust.
-	if env.IsMulticluster() {
+	if env.IsMulticluster() && cfg.ConfigureMultiCluster {
 		if err := deployCACerts(workDir, env, cfg); err != nil {
 			return nil, err
 		}
@@ -385,7 +385,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 	}
 
 	// For multicluster, configure direct access so each control plane can get endpoints from all API servers.
-	if ctx.Clusters().IsMulticluster() {
+	if ctx.Clusters().IsMulticluster() && cfg.ConfigureMultiCluster {
 		if err := i.configureDirectAPIServerAccess(ctx, cfg); err != nil {
 			return nil, err
 		}
@@ -406,7 +406,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		}
 
 		// remote clusters only need east-west gateway for multi-network purposes
-		if ctx.Environment().IsMultinetwork() {
+		if ctx.Environment().IsMultinetwork() && cfg.DeployEastWestGW {
 			spec := istioctlConfigFiles.remoteOperatorSpec
 			if c.IsConfig() {
 				spec = istioctlConfigFiles.configOperatorSpec
@@ -660,6 +660,11 @@ func (i *operatorComponent) generateCommonInstallArgs(s *resource.Settings, cfg 
 		installArgs.Set = append(installArgs.Set,
 			"components.cni.namespace=kube-system",
 			"components.cni.enabled=true")
+	}
+
+	if cfg.DifferentTrustDomains {
+		delete(cfg.Values, "meshConfig.trustDomain")
+		installArgs.Set = append(installArgs.Set, "--set", "values.meshConfig.trustDomain="+c.Name()+".local")
 	}
 
 	// Include all user-specified values.
