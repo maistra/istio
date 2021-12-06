@@ -103,6 +103,7 @@ var (
 		DumpKubernetesManifests: false,
 		IstiodlessRemotes:       false,
 		EnableCNI:               false,
+		ConfigureMultiCluster:   true,
 	}
 )
 
@@ -190,6 +191,10 @@ type Config struct {
 
 	// EnableCNI indicates the test should have CNI enabled.
 	EnableCNI bool
+
+	ConfigureMultiCluster bool
+
+	DifferentTrustDomains bool
 }
 
 func (c *Config) OverridesYAML() string {
