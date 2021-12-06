@@ -342,7 +342,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 	}
 
 	// For multicluster, create and push the CA certs to all clusters to establish a shared root of trust.
-	if env.IsMulticluster() {
+	if env.IsMulticluster() && cfg.ConfigureMultiCluster {
 		if err := deployCACerts(workDir, env, cfg); err != nil {
 			return nil, err
 		}
@@ -369,7 +369,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		return i, err
 	}
 
-	if ctx.Clusters().IsMulticluster() && !i.isExternalControlPlane() {
+	if ctx.Clusters().IsMulticluster() && !i.isExternalControlPlane() && cfg.ConfigureMultiCluster {
 		// For multicluster, configure direct access so each control plane can get endpoints from all API servers.
 		// TODO: this should be done after installing the remote clusters, but needs to be done before for now,
 		// because in non-external control plane MC, remote clusters are not really istiodless and they install
@@ -394,7 +394,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		return nil, fmt.Errorf("%d errors occurred deploying remote clusters: %v", errs.Len(), errs.ErrorOrNil())
 	}
 
-	if ctx.Clusters().IsMulticluster() && i.isExternalControlPlane() {
+	if ctx.Clusters().IsMulticluster() && i.isExternalControlPlane() && cfg.ConfigureMultiCluster {
 		// For multicluster, configure direct access so each control plane can get endpoints from all API servers.
 		if err := i.configureDirectAPIServerAccess(ctx, cfg); err != nil {
 			return nil, err
@@ -420,7 +420,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		}
 
 		// remote clusters only need east-west gateway for multi-network purposes
-		if ctx.Environment().IsMultinetwork() {
+		if ctx.Environment().IsMultinetwork() && cfg.DeployEastWestGW {
 			spec := istioctlConfigFiles.remoteOperatorSpec
 			if c.IsConfig() {
 				spec = istioctlConfigFiles.configOperatorSpec
@@ -665,7 +665,7 @@ func installRemoteCommon(i *operatorComponent, cfg Config, c cluster.Cluster, de
 	}
 
 	// Configure the cluster and network arguments to pass through the injector webhook.
-	if i.isExternalControlPlane() {
+	if i.isExternalControlPlane() || !cfg.DeployEastWestGW {
 		installSettings = append(installSettings,
 			"--set", fmt.Sprintf("values.istiodRemote.injectionPath=/inject/net/%s/cluster/%s", c.NetworkName(), c.Name()))
 	} else {
@@ -744,6 +744,11 @@ func (i *operatorComponent) generateCommonInstallSettings(cfg Config, c cluster.
 		installSettings = append(installSettings,
 			"--set", "components.cni.namespace=kube-system",
 			"--set", "components.cni.enabled=true")
+	}
+
+	if cfg.DifferentTrustDomains {
+		delete(cfg.Values, "global.trustDomain")
+		installSettings = append(installSettings, "--set", "values.global.trustDomain="+c.Name()+".local")
 	}
 
 	// Include all user-specified values.
