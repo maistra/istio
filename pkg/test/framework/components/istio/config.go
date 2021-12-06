@@ -80,6 +80,7 @@ var (
 		RemoteClusterIOPFile:  IntegrationTestRemoteDefaultsIOP,
 		DeployEastWestGW:      true,
 		IstiodlessRemotes:     false,
+		ConfigureMultiCluster: true,
 	}
 )
 
@@ -158,6 +159,10 @@ type Config struct {
 	// IstiodlessRemotes makes remote clusters run without istiod, using webhooks/ca from the primary cluster.
 	// TODO we could set this per-cluster if istiod was smarter about patching remotes.
 	IstiodlessRemotes bool
+
+	ConfigureMultiCluster bool
+
+	DifferentTrustDomains bool
 }
 
 func (c *Config) OverridesYAML() string {
