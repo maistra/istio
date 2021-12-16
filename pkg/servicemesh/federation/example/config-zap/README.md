@@ -53,7 +53,7 @@ installations on. These files can be found, typically,
 stashed away in the `auth` directory of the cluster installation artifacts.
 e.g.:
 
-```
+```bash
 export MESH1_KUBECONFIG=/root/ipi/pipe-2/auth/kubeconfig
 export MESH2_KUBECONFIG=/root/second_cluster/kubeconfig
 ```
@@ -86,7 +86,8 @@ In this case:
 - set `MESH1_ADDRESS` and `MESH2_ADDRESS` two clusters are on different hosts.
 - Edit the `OPTIONS` field in `/etc/sysconfig/haproxy` file:
 
-```# Add extra options to the haproxy daemon here. This can be useful for
+```bash
+# Add extra options to the haproxy daemon here. This can be useful for
 # specifying multiple configuration files with multiple -f options.
 # See haproxy(1) for a complete list of options.
 OPTIONS="-f /etc/haproxy/federation.cfg"
@@ -109,13 +110,13 @@ OPTIONS="-f /etc/haproxy/federation.cfg"
 
 - Check the federation configuration is successfully copied to location /etc/haproxy/
 
-```
+```bash
    # cat /etc/haproxy/federation.cfg
 ```
 
 - Check the firewall is opened for discovery and service ports
 
-```
+```bash
 # grep -w '<discovery_port/service_port>/tcp' /etc/services
 e.g. # grep -w '32568/tcp' /etc/services
 Note: If firewall is not opened, manually copy front end and
@@ -125,7 +126,7 @@ and restart haproxy service
 
 - Check the two bookinfo projects, are up and running
 
-```
+```bash
 # oc get pods -n mesh1-bookinfo
 # oc get pods -n mesh2-bookinfo
 ```
@@ -136,7 +137,7 @@ This can apply to any of: IPI libvirt, PowerVM or z/VM, or bare metal installs
 
 - Exchange public keys using ssh-copy-id
 
-```
+```bash
 # ssh-copy-id -i ~/.ssh/id_rsa.pub root@<host_ip>
 ```
 
@@ -156,14 +157,14 @@ To check federation manually:
 
 - To check the status of federation
 
-```
+```bash
 # oc -n mesh1-system get servicemeshpeer mesh2 -o json | jq .status # on cluster1
 # oc -n mesh2-system get servicemeshpeer mesh1 -o json | jq .status # on cluster2
 ```
 
 - To check services imported from mesh1 into mesh2
 
-```
+```bash
 # oc -n mesh2-system get importedservicesets mesh1 -o json | jq .status # on cluster2
 ```
 
@@ -173,7 +174,7 @@ To check federation manually:
 - On mesh2 cluster: oc logs -n mesh2-bookinfo deploy/ratings-v2-mysql -f
 - Open
 
-```
+```bash
 http://$(oc -n mesh2-system get route istio-ingressgateway -o json | jq -r .spec.host)/productpage
 ```
 
