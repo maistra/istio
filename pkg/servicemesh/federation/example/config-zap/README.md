@@ -118,7 +118,7 @@ To check federation manually:
 2. On mesh2 cluster: oc logs -n mesh2-bookinfo deploy/ratings-v2-mysql -f
 3. Open http://$(oc -n mesh2-system get route istio-ingressgateway -o json | jq -r .spec.host)/productpage
 4. Refresh the page several times and observe requests hitting either the mesh1 or the mesh2 cluster.
-```
+
 
 ### Uninstallers
 
