@@ -185,7 +185,6 @@ http://$(oc -n mesh2-system get route istio-ingressgateway -o json | jq -r .spec
 
 The script `tools/uninstall-federation.sh` can be run to delete all
 of the federation test artifacts.
-
-
+30
 
 
