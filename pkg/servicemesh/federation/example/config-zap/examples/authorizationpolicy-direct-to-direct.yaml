@@ -1,0 +1,52 @@
+# AuthorizationPolicy resources that apply when ingress gateway is using
+# AUTO_PASSTHROUGH.  In these cases, the gateway does not authenticate, so
+# the policy cannot match against principals.  Note, if proxying on the import
+# side, the egress gateway's principal should be used instead of the workload's.
+
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: mongodb-authz
+  namespace: mesh1-bookinfo
+spec:
+  action: ALLOW
+  selector:
+    matchLabels:
+      app: mongodb
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/mesh2-bookinfo/sa/bookinfo-ratings-v2
+      to:
+        - operation:
+            ports:
+              - '27017'
+      when:
+        - key: connection.sni
+          values:
+            - '*.mongodb.mesh1-exports.svc.cluster.local'
+
+---
+
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ratings-authz
+  namespace: mesh1-bookinfo
+spec:
+  action: ALLOW
+  selector:
+    matchLabels:
+      app: ratings
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/mesh2-bookinfo/sa/bookinfo-reviews-v2
+      to:
+        - operation:
+            hosts:
+              - '*.ratings.mesh1-bookinfo.svc.local'
+            ports:
+              - '9080'
