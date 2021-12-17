@@ -21,6 +21,8 @@ package servicemesh
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/scopes"
@@ -28,7 +30,6 @@ import (
 	"istio.io/istio/pkg/test/util/retry"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"time"
 )
 
 func createServiceMeshMemberRoll(ctx framework.TestContext, c cluster.Cluster, namespace string) {
