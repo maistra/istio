@@ -1,4 +1,6 @@
+//go:build integ
 // +build integ
+
 // Copyright Red Hat, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +39,6 @@ func TestMain(m *testing.M) {
 	framework.
 		NewSuite(m).
 		RequireMinClusters(2).
-		Setup(servicemesh.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(GetIstioInstance(), setupConfig)).
 		Run()
 }
