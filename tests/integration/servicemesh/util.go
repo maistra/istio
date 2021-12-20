@@ -20,14 +20,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"path"
 	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	// import maistra CRD manifests
 	_ "maistra.io/api/manifests"
+	"sigs.k8s.io/yaml"
 
 	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/framework"
@@ -53,8 +57,24 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 		return fmt.Errorf("cannot read maistra CRD YAMLs: %s", err)
 	}
 	for _, cluster := range ctx.Clusters().Kube().Primaries() {
-		if err = cluster.ApplyYAMLFiles("", crds...); err != nil {
-			return err
+		for _, crd := range crds {
+			// we need to manually Create() the CRD because Apply() wants to write its content into an annotation which fails because of size limitations
+			rawYAML, err := ioutil.ReadFile(crd)
+			if err != nil {
+				return err
+			}
+			rawJSON, err := yaml.YAMLToJSON(rawYAML)
+			if err != nil {
+				return err
+			}
+			crd := apiextv1.CustomResourceDefinition{}
+			_, _, err = unstructured.UnstructuredJSONScheme.Decode(rawJSON, nil, &crd)
+			if err != nil {
+				return err
+			}
+			if _, err := cluster.Ext().ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), &crd, metav1.CreateOptions{}); err != nil {
+				return err
+			}
 		}
 	}
 	return err
@@ -68,7 +88,7 @@ func findCRDs() (list []string, err error) {
 	}
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".yaml") {
-			list = append(list, file.Name())
+			list = append(list, path.Join(manifestsDir, file.Name()))
 		}
 	}
 	return
