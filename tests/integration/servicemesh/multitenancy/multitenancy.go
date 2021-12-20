@@ -23,13 +23,14 @@ import (
 	"fmt"
 	"time"
 
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/scopes"
 	"istio.io/istio/pkg/test/shell"
 	"istio.io/istio/pkg/test/util/retry"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 func createServiceMeshMemberRoll(ctx framework.TestContext, c cluster.Cluster, namespace string) {
@@ -50,7 +51,7 @@ spec:
 	}
 }
 
-func simulateIstioOperator(ctx framework.TestContext, c cluster.Cluster) {
+func configureMemberRollNameInIstiod(ctx framework.TestContext, c cluster.Cluster) {
 	scopes.Framework.Info("Patching istio deployment...")
 	waitForIstiod(ctx, c)
 	patchIstiodArgs(ctx, c)
@@ -60,9 +61,7 @@ func simulateIstioOperator(ctx framework.TestContext, c cluster.Cluster) {
 
 func waitForIstiod(ctx framework.TestContext, c cluster.Cluster) {
 	if err := retry.UntilSuccess(func() error {
-		istiod, err := c.AppsV1().
-			Deployments("istio-system").
-			Get(context.TODO(), "istiod", v1.GetOptions{})
+		istiod, err := c.AppsV1().Deployments("istio-system").Get(context.TODO(), "istiod", v1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to get deployment istiod: %v", err)
 		}
@@ -81,8 +80,7 @@ func patchIstiodArgs(ctx framework.TestContext, c cluster.Cluster) {
 		"path": "/spec/template/spec/containers/0/args/0",
 		"value": "--memberRollName=default"
 	}]`
-	_, err := c.AppsV1().
-		Deployments("istio-system").
+	_, err := c.AppsV1().Deployments("istio-system").
 		Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), v1.PatchOptions{})
 	if err != nil {
 		ctx.Fatalf("Failed to patch istiod deployment: %v", err)

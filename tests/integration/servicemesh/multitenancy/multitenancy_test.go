@@ -25,20 +25,13 @@ import (
 	"istio.io/istio/tests/integration/servicemesh"
 )
 
-var (
-	i istio.Instance
-)
-
-// GetIstioInstance gets Istio instance.
-func GetIstioInstance() *istio.Instance {
-	return &i
-}
+var i istio.Instance
 
 func TestMain(m *testing.M) {
 	framework.
 		NewSuite(m).
 		RequireSingleCluster().
-		Setup(istio.Setup(GetIstioInstance(), nil)).
+		Setup(istio.Setup(&i, nil)).
 		Run()
 }
 
@@ -46,9 +39,9 @@ func TestMultiTenancy(t *testing.T) {
 	framework.NewTest(t).
 		Run(func(ctx framework.TestContext) {
 			cluster := ctx.Clusters().Default()
-			simulateIstioOperator(ctx, cluster)
 			bookinfoNamespace := servicemesh.CreateNamespace(ctx, cluster, "bookinfo")
 			sleepNamespace := servicemesh.CreateNamespace(ctx, cluster, "sleep")
+			configureMemberRollNameInIstiod(ctx, cluster)
 			createServiceMeshMemberRoll(ctx, cluster, bookinfoNamespace)
 			servicemesh.InstallBookinfo(ctx, cluster, bookinfoNamespace)
 			servicemesh.InstallSleep(ctx, cluster, sleepNamespace)
