@@ -1,4 +1,6 @@
+//go:build integ
 // +build integ
+
 // Copyright Red Hat, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,6 +48,10 @@ var (
 	bookinfoManifests = []string{
 		env.IstioSrc + "/samples/bookinfo/platform/kube/bookinfo.yaml",
 		env.IstioSrc + "/samples/bookinfo/networking/bookinfo-gateway.yaml",
+	}
+	httpbinManifests = []string{
+		env.IstioSrc + "/samples/httpbin/httpbin.yaml",
+		env.IstioSrc + "/samples/httpbin/httpbin-gateway.yaml",
 	}
 	sleepManifest = env.IstioSrc + "/samples/sleep/sleep.yaml"
 	rnd           = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -104,6 +110,20 @@ func InstallBookinfo(ctx framework.TestContext, c cluster.Cluster, namespace str
 		}
 		return nil
 	}, retry.Timeout(300*time.Second), retry.Delay(time.Second)); err != nil {
+		ctx.Fatal(err)
+	}
+}
+
+func InstallHttpbin(ctx framework.TestContext, c cluster.Cluster, namespace string) {
+	if err := c.ApplyYAMLFiles(namespace, httpbinManifests...); err != nil {
+		ctx.Fatal(err)
+	}
+	if err := retry.UntilSuccess(func() error {
+		if _, err := kubetest.CheckPodsAreReady(kubetest.NewPodMustFetch(c, namespace, "app=httpbin")); err != nil {
+			return fmt.Errorf("httpbin pod is not ready: %v", err)
+		}
+		return nil
+	}, retry.Timeout(600*time.Second), retry.Delay(time.Second)); err != nil {
 		ctx.Fatal(err)
 	}
 }

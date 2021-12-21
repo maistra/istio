@@ -39,12 +39,14 @@ func TestMultiTenancy(t *testing.T) {
 	framework.NewTest(t).
 		Run(func(ctx framework.TestContext) {
 			cluster := ctx.Clusters().Default()
-			bookinfoNamespace := servicemesh.CreateNamespace(ctx, cluster, "bookinfo")
-			sleepNamespace := servicemesh.CreateNamespace(ctx, cluster, "sleep")
+			httpbinNamespace := servicemesh.CreateNamespace(ctx, cluster, "httpbin")
+			otherNamespace := servicemesh.CreateNamespace(ctx, cluster, "other-namespace")
 			configureMemberRollNameInIstiod(ctx, cluster)
-			createServiceMeshMemberRoll(ctx, cluster, bookinfoNamespace)
-			servicemesh.InstallBookinfo(ctx, cluster, bookinfoNamespace)
-			servicemesh.InstallSleep(ctx, cluster, sleepNamespace)
-			verifyIstioProxyConfig(ctx, cluster, bookinfoNamespace)
+			applyServiceMeshMemberRoll(ctx, cluster, httpbinNamespace)
+			updateServiceMeshMemberRollStatus(ctx, cluster, httpbinNamespace)
+			servicemesh.InstallHttpbin(ctx, cluster, httpbinNamespace)
+			httpbinShouldContainItsRouteConfiguration(ctx, cluster, httpbinNamespace)
+			applyFakeVirtualService(ctx, cluster, otherNamespace, "8001")
+			httpbinShouldNotContainRouteConfiguration(ctx, cluster, httpbinNamespace, "8001")
 		})
 }
