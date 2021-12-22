@@ -78,7 +78,7 @@ func waitForIstiod(ctx framework.TestContext, c cluster.Cluster) {
 func patchIstiodArgs(ctx framework.TestContext, c cluster.Cluster) {
 	patch := `[{
 		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/0",
+		"path": "/spec/template/spec/containers/0/args/1",
 		"value": "--memberRollName=default"
 	}]`
 	_, err := c.AppsV1().Deployments("istio-system").
@@ -108,32 +108,26 @@ func updateServiceMeshMemberRollStatus(ctx framework.TestContext, c cluster.Clus
 	}
 }
 
-func httpbinShouldContainItsRouteConfiguration(ctx framework.TestContext, c cluster.Cluster, namespace string) {
-	podName := getPodName(ctx, c, namespace, "httpbin")
-
-	istioCtl := istioctl.NewOrFail(ctx, ctx, istioctl.Config{})
-	stdout, stderr, err := istioCtl.Invoke([]string{
-		"proxy-config", "routes", fmt.Sprintf("%s.%s", podName, namespace), "--name", "8000", "-o", "json",
-	})
-	if err != nil || stderr != "" {
-		ctx.Fatalf("Failed to execute istioctl proxy-config: %s: %v", stderr, err)
-	}
-
-	routes := make([]*route.RouteConfiguration, 0)
-	if err := json.Unmarshal([]byte(stdout), &routes); err != nil {
-		ctx.Fatalf("Failed to unmarshall routes: %v", err)
-	}
+func checkIfProxyHasConfiguredRoute(ctx framework.TestContext, c cluster.Cluster, appName, namespace, routePort string) {
+	podName := getPodName(ctx, c, namespace, appName)
+	routes := getRoutesFromProxy(ctx, podName, namespace, routePort)
 	if len(routes) != 1 {
-		ctx.Fatalf("Expected exactly 1 route, got %d", len(routes))
+		ctx.Fatalf("Expected to have exactly 1 route '%s', got %d", routePort, len(routes))
 	}
 }
 
-func httpbinShouldNotContainRouteConfiguration(ctx framework.TestContext, c cluster.Cluster, namespace, routePort string) {
-	podName := getPodName(ctx, c, namespace, "httpbin")
+func checkIfProxyHasNoConfiguredRoute(ctx framework.TestContext, c cluster.Cluster, appName, namespace, routePort string) {
+	podName := getPodName(ctx, c, namespace, appName)
+	routes := getRoutesFromProxy(ctx, podName, namespace, routePort)
+	if len(routes) != 0 {
+		ctx.Fatalf("Expected to have no routes '%s', got %d", routePort, len(routes))
+	}
+}
 
+func getRoutesFromProxy(ctx framework.TestContext, pod, namespace, routePort string) []*route.RouteConfiguration {
 	istioCtl := istioctl.NewOrFail(ctx, ctx, istioctl.Config{})
 	stdout, stderr, err := istioCtl.Invoke([]string{
-		"proxy-config", "routes", fmt.Sprintf("%s.%s", podName, namespace), "--name", routePort, "-o", "json",
+		"proxy-config", "routes", fmt.Sprintf("%s.%s", pod, namespace), "--name", routePort, "-o", "json",
 	})
 	if err != nil || stderr != "" {
 		ctx.Fatalf("Failed to execute istioctl proxy-config: %s: %v", stderr, err)
@@ -143,9 +137,8 @@ func httpbinShouldNotContainRouteConfiguration(ctx framework.TestContext, c clus
 	if err := json.Unmarshal([]byte(stdout), &routes); err != nil {
 		ctx.Fatalf("Failed to unmarshall routes: %v", err)
 	}
-	if len(routes) != 0 {
-		ctx.Fatalf("Expected no routes, got %d", len(routes))
-	}
+
+	return routes
 }
 
 func getPodName(ctx framework.TestContext, c cluster.Cluster, namespace, appName string) string {
@@ -159,13 +152,13 @@ func getPodName(ctx framework.TestContext, c cluster.Cluster, namespace, appName
 	return pods.Items[0].Name
 }
 
-func applyFakeVirtualService(ctx framework.TestContext, c cluster.Cluster, namespace string, routePort string) {
+func applyGatewayAndVirtualService(ctx framework.TestContext, c cluster.Cluster, namespace, gatewayName, virtualServiceName, routePort string) {
 	scopes.Framework.Info("Applying VirtualService...")
 	err := ctx.Config(c).ApplyYAML(namespace, fmt.Sprintf(`
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
-  name: fake-gateway
+  name: %s
 spec:
   selector:
     istio: ingressgateway
@@ -180,7 +173,7 @@ spec:
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
-  name: fake-virtual-service
+  name: %s
 spec:
   hosts:
   - "*"
@@ -192,7 +185,7 @@ spec:
         host: localhost
         port:
           number: %s
-`, routePort))
+`, gatewayName, virtualServiceName, routePort))
 	if err != nil {
 		ctx.Fatal("Failed to apply VirtualService: %v", err)
 	}
