@@ -22,16 +22,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	"istio.io/istio/pkg/test/framework/components/istioctl"
 	"time"
 
+	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	maistrav1 "maistra.io/api/client/versioned/typed/core/v1"
 
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
+	"istio.io/istio/pkg/test/framework/components/istioctl"
 	"istio.io/istio/pkg/test/scopes"
 	"istio.io/istio/pkg/test/shell"
 	"istio.io/istio/pkg/test/util/retry"
@@ -127,7 +127,6 @@ func httpbinShouldContainItsRouteConfiguration(ctx framework.TestContext, c clus
 	if err != nil || stderr != "" {
 		ctx.Fatalf("Failed to execute istioctl proxy-config: %s: %v", stderr, err)
 	}
-	fmt.Printf(stdout)
 
 	routes := make([]*route.RouteConfiguration, 0)
 	if err := json.Unmarshal([]byte(stdout), &routes); err != nil {
@@ -148,7 +147,6 @@ func httpbinShouldNotContainRouteConfiguration(ctx framework.TestContext, c clus
 	if err != nil || stderr != "" {
 		ctx.Fatalf("Failed to execute istioctl proxy-config: %s: %v", stderr, err)
 	}
-	fmt.Printf(stdout)
 
 	routes := make([]*route.RouteConfiguration, 0)
 	if err := json.Unmarshal([]byte(stdout), &routes); err != nil {
