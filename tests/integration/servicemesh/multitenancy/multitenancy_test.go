@@ -31,6 +31,7 @@ func TestMain(m *testing.M) {
 	framework.
 		NewSuite(m).
 		RequireSingleCluster().
+		Setup(servicemesh.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(&i, nil)).
 		Run()
 }
