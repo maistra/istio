@@ -178,14 +178,14 @@ spec:
   hosts:
   - "*"
   gateways:
-  - fake-gateway
+  - %s
   http:
   - route:
     - destination:
         host: localhost
         port:
           number: %s
-`, gatewayName, virtualServiceName, routePort))
+`, gatewayName, virtualServiceName, gatewayName, routePort))
 	if err != nil {
 		ctx.Fatal("Failed to apply VirtualService: %v", err)
 	}

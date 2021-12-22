@@ -45,9 +45,9 @@ func TestMultiTenancy(t *testing.T) {
 			configureMemberRollNameInIstiod(ctx, cluster)
 			applyServiceMeshMemberRoll(ctx, cluster, httpbinNamespace)
 			updateServiceMeshMemberRollStatus(ctx, cluster, httpbinNamespace)
+			applyGatewayAndVirtualService(ctx, cluster, otherNamespace, "dummy-gateway", "dummy-service", "8001")
 			servicemesh.InstallHttpbin(ctx, cluster, httpbinNamespace)
 			checkIfProxyHasConfiguredRoute(ctx, cluster, "httpbin", httpbinNamespace, "8000")
-			applyGatewayAndVirtualService(ctx, cluster, otherNamespace, "dummy-gateway", "dummy-service", "8001")
 			checkIfProxyHasNoConfiguredRoute(ctx, cluster, "httpbin", httpbinNamespace, "8001")
 		})
 }
