@@ -33,7 +33,6 @@ import (
 	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/framework/components/istioctl"
 	"istio.io/istio/pkg/test/scopes"
-	"istio.io/istio/pkg/test/shell"
 	"istio.io/istio/pkg/test/util/retry"
 )
 
@@ -58,7 +57,6 @@ func configureMemberRollNameInIstiod(ctx framework.TestContext, c cluster.Cluste
 	scopes.Framework.Info("Patching istio deployment...")
 	waitForIstiod(ctx, c)
 	patchIstiodArgs(ctx, c)
-	restartIstiod(ctx)
 	waitForIstiod(ctx, c)
 }
 
@@ -87,13 +85,6 @@ func patchIstiodArgs(ctx framework.TestContext, c cluster.Cluster) {
 		Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
 	if err != nil {
 		ctx.Fatalf("Failed to patch istiod deployment: %v", err)
-	}
-}
-
-func restartIstiod(ctx framework.TestContext) {
-	out, err := shell.Execute(true, "kubectl rollout restart deployment istiod -n istio-system")
-	if err != nil {
-		ctx.Fatalf("Failed to restart istiod: output: %s; error: %v", out, err)
 	}
 }
 
