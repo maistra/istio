@@ -19,6 +19,7 @@ package servicemesh
 
 import (
 	"testing"
+	"time"
 
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istio"
@@ -40,14 +41,20 @@ func TestMultiTenancy(t *testing.T) {
 	framework.NewTest(t).
 		Run(func(ctx framework.TestContext) {
 			cluster := ctx.Clusters().Default()
+			commonNamespace := servicemesh.CreateNamespace(ctx, cluster, "common")
 			httpbinNamespace := servicemesh.CreateNamespace(ctx, cluster, "httpbin")
-			otherNamespace := servicemesh.CreateNamespace(ctx, cluster, "other-namespace")
+			sleepNamespace := servicemesh.CreateNamespace(ctx, cluster, "sleep")
 			configureMemberRollNameInIstiod(ctx, cluster)
-			applyServiceMeshMemberRoll(ctx, cluster, httpbinNamespace)
-			updateServiceMeshMemberRollStatus(ctx, cluster, httpbinNamespace)
-			applyGatewayAndVirtualService(ctx, cluster, otherNamespace, "dummy-gateway", "dummy-service", "8001")
-			servicemesh.InstallHttpbin(ctx, cluster, httpbinNamespace)
-			checkIfProxyHasConfiguredRoute(ctx, cluster, "httpbin", httpbinNamespace, "8000")
-			checkIfProxyHasNoConfiguredRoute(ctx, cluster, "httpbin", httpbinNamespace, "8001")
+			createServiceMeshMemberRoll(ctx, cluster, commonNamespace, httpbinNamespace)
+			applyGateway(ctx, cluster, commonNamespace)
+			applyVirtualService(ctx, cluster, httpbinNamespace, commonNamespace, "httpbin")
+			applyVirtualService(ctx, cluster, sleepNamespace, commonNamespace, "sleep")
+			time.Sleep(5 * time.Second)
+			checkIfIngressHasConfiguredRouteWithVirtualHost(ctx, cluster, 1, "httpbin")
+			checkIfIngressHasConfiguredRouteWithoutVirtualHost(ctx, cluster, "sleep")
+			addNamespaceToServiceMeshMemberRoll(ctx, cluster, sleepNamespace)
+			time.Sleep(5 * time.Second)
+			checkIfIngressHasConfiguredRouteWithVirtualHost(ctx, cluster, 2, "httpbin")
+			checkIfIngressHasConfiguredRouteWithVirtualHost(ctx, cluster, 2, "sleep")
 		})
 }
