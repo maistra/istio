@@ -38,7 +38,7 @@ import (
 const gatewayRouteName = "http.80"
 
 func configureMemberRollNameInIstiod(ctx framework.TestContext, c cluster.Cluster) {
-	scopes.Framework.Info("Patching istio deployment...")
+	scopes.Framework.Info("Patching istiod deployment...")
 	waitForIstiod(ctx, c)
 	patchIstiodArgs(ctx, c)
 	waitForIstiod(ctx, c)
@@ -68,7 +68,7 @@ func patchIstiodArgs(ctx framework.TestContext, c cluster.Cluster) {
 	_, err := c.AppsV1().Deployments("istio-system").
 		Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
 	if err != nil {
-		ctx.Fatalf("Failed to patch istiod deployment: %v", err)
+		ctx.Fatalf("failed to patch istiod deployment: %v", err)
 	}
 }
 
@@ -88,49 +88,46 @@ spec:
 		ctx.Fatalf("Failed to apply SMMR default: %v", err)
 	}
 
-	updateServiceMeshMemberRollStatus(ctx, c, ns1)
-	updateServiceMeshMemberRollStatus(ctx, c, ns2)
+	updateServiceMeshMemberRollStatus(ctx, c, ns1, ns2)
 }
 
 func addNamespaceToServiceMeshMemberRoll(ctx framework.TestContext, c cluster.Cluster, namespace string) {
 	client, err := maistrav1.NewForConfig(c.RESTConfig())
 	if err != nil {
-		ctx.Fatalf("Failed to create client for maistra resources: %v", err)
+		ctx.Fatalf("failed to create client for maistra resources: %v", err)
 	}
 
 	smmr, err := client.ServiceMeshMemberRolls("istio-system").Get(context.TODO(), "default", metav1.GetOptions{})
 	if err != nil {
-		ctx.Fatalf("Failed to get SMMR default: %v", err)
+		ctx.Fatalf("failed to get SMMR default: %v", err)
 	}
-	scopes.Framework.Infof("SMMR %s, members: %v", smmr.Name, smmr.Spec.Members)
 
 	smmr.Spec.Members = append(smmr.Spec.Members, namespace)
-	scopes.Framework.Infof("Updating SMMR %s with members: %v", smmr.Name, smmr.Spec.Members)
+	scopes.Framework.Infof("Updating SMMR spec %s with members: %v", smmr.Name, smmr.Spec.Members)
 	_, err = client.ServiceMeshMemberRolls("istio-system").Update(context.TODO(), smmr, metav1.UpdateOptions{})
 	if err != nil {
-		ctx.Fatalf("Failed to update SMMR default: %v", err)
+		ctx.Fatalf("failed to update SMMR default: %v", err)
 	}
 
 	updateServiceMeshMemberRollStatus(ctx, c, namespace)
 }
 
-func updateServiceMeshMemberRollStatus(ctx framework.TestContext, c cluster.Cluster, memberNamespace string) {
+func updateServiceMeshMemberRollStatus(ctx framework.TestContext, c cluster.Cluster, memberNamespaces ...string) {
 	client, err := maistrav1.NewForConfig(c.RESTConfig())
 	if err != nil {
-		ctx.Fatalf("Failed to create client for maistra resources: %v", err)
+		ctx.Fatalf("failed to create client for maistra resources: %v", err)
 	}
 
 	smmr, err := client.ServiceMeshMemberRolls("istio-system").Get(context.TODO(), "default", metav1.GetOptions{})
 	if err != nil {
-		ctx.Fatalf("Failed to get SMMR default: %v", err)
+		ctx.Fatalf("failed to get SMMR default: %v", err)
 	}
-	scopes.Framework.Infof("SMMR %s, configured members: %v", smmr.Name, smmr.Status.ConfiguredMembers)
 
-	smmr.Status.ConfiguredMembers = append(smmr.Status.ConfiguredMembers, memberNamespace)
-	scopes.Framework.Infof("Updating SMMR %s with configured members: %v", smmr.Name, smmr.Status.ConfiguredMembers)
+	smmr.Status.ConfiguredMembers = append(smmr.Status.ConfiguredMembers, memberNamespaces...)
+	scopes.Framework.Infof("Updating SMMR status %s with configured members: %v", smmr.Name, smmr.Status.ConfiguredMembers)
 	_, err = client.ServiceMeshMemberRolls("istio-system").UpdateStatus(context.TODO(), smmr, metav1.UpdateOptions{})
 	if err != nil {
-		ctx.Fatalf("Failed to update SMMR default: %v", err)
+		ctx.Fatalf("failed to update SMMR default: %v", err)
 	}
 }
 
@@ -138,12 +135,12 @@ func checkIfIngressHasConfiguredRouteWithVirtualHost(ctx framework.TestContext, 
 	podName := getPodName(ctx, c, "istio-system", "istio-ingressgateway")
 	routes := getRoutesFromProxy(ctx, podName, "istio-system", gatewayRouteName)
 	if len(routes) != 1 {
-		ctx.Fatalf("Expected to have exactly 1 route '%s', got %d", gatewayRouteName, len(routes))
+		ctx.Fatalf("expected to find exactly 1 route '%s', got %d", gatewayRouteName, len(routes))
 	}
 
 	virtualHostsNum := len(routes[0].VirtualHosts)
 	if virtualHostsNum != expectedVirtualHostsNum {
-		ctx.Fatalf("Expected to contain exactly %d virtual host, got %d", expectedVirtualHostsNum, virtualHostsNum)
+		ctx.Fatalf("expected to contain exactly %d virtual host, got %d", expectedVirtualHostsNum, virtualHostsNum)
 	}
 
 	var foundVirtualHost *VirtualHost
@@ -155,7 +152,7 @@ func checkIfIngressHasConfiguredRouteWithVirtualHost(ctx framework.TestContext, 
 	}
 
 	if foundVirtualHost == nil {
-		ctx.Fatalf("Expected to find virtual host %s, but didn't found", fmt.Sprintf("%s.maistra.io:80", expectedVirtualHostName))
+		ctx.Fatalf("expected virtual host '%s' was not found", fmt.Sprintf("%s.maistra.io:80", expectedVirtualHostName))
 	}
 }
 
@@ -163,12 +160,12 @@ func checkIfIngressHasConfiguredRouteWithoutVirtualHost(ctx framework.TestContex
 	podName := getPodName(ctx, c, "istio-system", "istio-ingressgateway")
 	routes := getRoutesFromProxy(ctx, podName, "istio-system", gatewayRouteName)
 	if len(routes) != 1 {
-		ctx.Fatalf("Expected to have exactly 1 route '%s', got %d", gatewayRouteName, len(routes))
+		ctx.Fatalf("expected to find exactly 1 route '%s', got %d", gatewayRouteName, len(routes))
 	}
 
 	for _, virtualHost := range routes[0].VirtualHosts {
 		if virtualHost.Name == fmt.Sprintf("%s.maistra.io:80", unWantedVirtualHostName) {
-			ctx.Fatalf("Expected to not find virtual host '%s', but found", virtualHost.Name)
+			ctx.Fatalf("expected to not find virtual host '%s', but was found", virtualHost.Name)
 		}
 	}
 }
@@ -188,12 +185,12 @@ func getRoutesFromProxy(ctx framework.TestContext, pod, namespace, routeName str
 		"proxy-config", "routes", fmt.Sprintf("%s.%s", pod, namespace), "--name", routeName, "-o", "json",
 	})
 	if err != nil || stderr != "" {
-		ctx.Fatalf("Failed to execute istioctl proxy-config: %s: %v", stderr, err)
+		ctx.Fatalf("failed to execute command 'istioctl proxy-config': %s: %v", stderr, err)
 	}
 
 	routes := make([]*RouteConfig, 0)
 	if err := json.Unmarshal([]byte(stdout), &routes); err != nil {
-		ctx.Fatalf("Failed to unmarshall routes: %v", err)
+		ctx.Fatalf("failed to unmarshall routes: %v", err)
 	}
 
 	return routes
@@ -202,10 +199,10 @@ func getRoutesFromProxy(ctx framework.TestContext, pod, namespace, routeName str
 func getPodName(ctx framework.TestContext, c cluster.Cluster, namespace, appName string) string {
 	pods, err := c.PodsForSelector(context.TODO(), namespace, fmt.Sprintf("app=%s", appName))
 	if err != nil {
-		ctx.Fatalf("Failed to get %s pod from namespace %s: %v", appName, namespace, err)
+		ctx.Fatalf("failed to get %s pod from namespace %s: %v", appName, namespace, err)
 	}
 	if len(pods.Items) == 0 {
-		ctx.Fatalf("List of received %s pods from namespace %s is empty", appName, namespace)
+		ctx.Fatalf("list of received %s pods from namespace %s is empty", appName, namespace)
 	}
 	return pods.Items[0].Name
 }
@@ -230,7 +227,7 @@ spec:
     - "sleep.maistra.io"
 `)
 	if err != nil {
-		ctx.Fatal("Failed to apply Gateway: %v", err)
+		ctx.Fatal("failed to apply Gateway: %v", err)
 	}
 }
 
@@ -254,6 +251,6 @@ spec:
           number: 8080
 `, virtualServiceName, virtualServiceName, gatewayNs))
 	if err != nil {
-		ctx.Fatal("Failed to apply VirtualService %s: %v", virtualServiceName, err)
+		ctx.Fatal("failed to apply VirtualService %s: %v", virtualServiceName, err)
 	}
 }
