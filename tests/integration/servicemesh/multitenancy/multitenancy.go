@@ -131,7 +131,9 @@ func updateServiceMeshMemberRollStatus(ctx framework.TestContext, c cluster.Clus
 	}
 }
 
-func checkIfIngressHasConfiguredRouteWithVirtualHost(ctx framework.TestContext, c cluster.Cluster, expectedVirtualHostsNum int, expectedVirtualHostName string) {
+func checkIfIngressHasConfiguredRouteWithVirtualHost(
+	ctx framework.TestContext, c cluster.Cluster, expectedVirtualHostsNum int, expectedVirtualHostName string,
+) {
 	podName := getPodName(ctx, c, "istio-system", "istio-ingressgateway")
 	routes := getRoutesFromProxy(ctx, podName, "istio-system", gatewayRouteName)
 	if len(routes) != 1 {
