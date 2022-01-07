@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 		Run()
 }
 
-func TestMultiTenancy(t *testing.T) {
+func TestSMMR(t *testing.T) {
 	framework.NewTest(t).
 		Run(func(ctx framework.TestContext) {
 			cluster := ctx.Clusters().Default()
