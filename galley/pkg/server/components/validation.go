@@ -28,7 +28,7 @@ func NewValidation(kubeConfig string, params *validation.WebhookParameters, live
 	return process.ComponentFromFns(
 		// start
 		func() error {
-			webhookServerReady := make(chan struct{})
+			webhookServerReady := make(chan struct{}, 1)
 			stopCh := make(chan struct{})
 			if params.EnableValidation {
 				go validation.RunValidation(webhookServerReady, stopCh, params, kubeConfig, liveness, readiness)
