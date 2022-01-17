@@ -159,6 +159,12 @@ type Options struct {
 	// be available, e.g. NodePort gateways and determining locality information
 	// based on Nodes.
 	DisableNodeAccess bool
+
+	// EnableIngressClassName determines whether the controller will support
+	// processing Kubernetes Ingress resources that use the new (as of 1.18)
+	// `ingressClassName` in their spec, or if it will only check the deprecated
+	// `kubernetes.io/ingress.class` annotation.
+	EnableIngressClassName bool
 }
 
 // DetectEndpointMode determines whether to use Endpoints or EndpointSlice based on the
