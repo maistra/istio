@@ -21,6 +21,10 @@ import (
 	"strings"
 	"time"
 
+	"istio.io/istio/pkg/config/mesh"
+	kubelib "istio.io/istio/pkg/kube"
+	"istio.io/istio/pkg/queue"
+	"istio.io/pkg/log"
 	coreV1 "k8s.io/api/core/v1"
 	knetworking "k8s.io/api/networking/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,11 +34,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	ingresslister "k8s.io/client-go/listers/networking/v1"
-
-	"istio.io/istio/pkg/config/mesh"
-	kubelib "istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/queue"
-	"istio.io/pkg/log"
 )
 
 const (
@@ -61,9 +60,14 @@ func (s *StatusSyncer) Run(stopCh <-chan struct{}) {
 }
 
 // NewStatusSyncer creates a new instance
-func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client, noNodeAccess bool) *StatusSyncer {
+func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client, noNodeAccess, enableIngressClassName bool) *StatusSyncer {
 	// queue requires a time duration for a retry delay after a handler error
 	q := queue.NewQueue(5 * time.Second)
+
+	var ingressClassLister ingresslister.IngressClassLister
+	if enableIngressClassName {
+		ingressClassLister = client.KubeInformer().Networking().V1().IngressClasses().Lister()
+	}
 
 	s := &StatusSyncer{
 		meshHolder:         meshHolder,
@@ -71,7 +75,7 @@ func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client, noNodeAccess
 		ingressLister:      client.KubeInformer().Networking().V1().Ingresses().Lister(),
 		podLister:          client.KubeInformer().Core().V1().Pods().Lister(),
 		serviceLister:      client.KubeInformer().Core().V1().Services().Lister(),
-		ingressClassLister: client.KubeInformer().Networking().V1().IngressClasses().Lister(),
+		ingressClassLister: ingressClassLister,
 		queue:              q,
 	}
 
