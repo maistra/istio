@@ -98,6 +98,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20220413171646-5e7f5fdc6da6
 	k8s.io/kubectl v0.24.1
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
+	maistra.io/api v0.0.0-20220301154558-8f6a12a9464b
 	sigs.k8s.io/controller-runtime v0.12.1
 	sigs.k8s.io/gateway-api v0.4.1-0.20220519093007-c7fe7e445dfb
 	sigs.k8s.io/mcs-api v0.1.0
