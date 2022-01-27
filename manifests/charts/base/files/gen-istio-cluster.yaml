@@ -4410,6 +4410,17 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "watch", "list"]
+
+  # Maistra specific
+  - apiGroups: ["maistra.io"]
+    resources: ["servicemeshmemberrolls"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes", "routes/custom-host"]
+    verbs: ["get", "list", "watch", "create", "delete", "update"]
+  - apiGroups: ["maistra.io"]
+    resources: ["servicemeshextensions"]
+    verbs: ["get", "list", "watch"]
 ---
 # Source: base/templates/clusterrole.yaml
 apiVersion: rbac.authorization.k8s.io/v1
