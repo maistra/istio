@@ -1,4 +1,6 @@
+//go:build integ
 // +build integ
+
 // Copyright Red Hat, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,6 +28,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -73,7 +76,9 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 				return err
 			}
 			if _, err := cluster.Ext().ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), &crd, metav1.CreateOptions{}); err != nil {
-				return err
+				if !errors.IsAlreadyExists(err) {
+					return err
+				}
 			}
 		}
 	}
