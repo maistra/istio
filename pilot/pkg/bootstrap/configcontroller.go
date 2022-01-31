@@ -189,7 +189,7 @@ func (s *Server) initK8SConfigStore(args *PilotArgs) error {
 					NewLeaderElection(args.Namespace, args.PodName, leaderelection.GatewayDeploymentController, args.Revision, s.kubeClient).
 					AddRunFunction(func(leaderStop <-chan struct{}) {
 						// We can only run this if the Gateway CRD is created
-						if crdclient.WaitForCRD(gvk.KubernetesGateway, leaderStop) {
+						if configController.WaitForCRD(gvk.KubernetesGateway, leaderStop) {
 							controller := gateway.NewDeploymentController(s.kubeClient)
 							// Start informers again. This fixes the case where informers for namespace do not start,
 							// as we create them only after acquiring the leader lock
@@ -365,7 +365,7 @@ func (s *Server) initStatusController(args *PilotArgs, writeStatus bool) {
 	}
 }
 
-func (s *Server) makeKubeConfigController(args *PilotArgs) (model.ConfigStoreCache, error) {
+func (s *Server) makeKubeConfigController(args *PilotArgs) (*crdclient.Client, error) {
 	options := args.RegistryOptions.KubeOptions
 	return crdclient.New(s.kubeClient, args.Revision, options.DomainSuffix, options.EnableCRDScan)
 }
