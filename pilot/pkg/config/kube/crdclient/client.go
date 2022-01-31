@@ -99,11 +99,13 @@ type Client struct {
 	schemasByCRDName    map[string]collection.Schema
 	client              kube.Client
 	crdMetadataInformer cache.SharedIndexInformer
+
+	crdWatches map[config.GroupVersionKind]chan struct{}
 }
 
 var _ model.ConfigStoreCache = &Client{}
 
-func New(client kube.Client, revision, domainSuffix string, enableCRDScan bool) (model.ConfigStoreCache, error) {
+func New(client kube.Client, revision, domainSuffix string, enableCRDScan bool) (*Client, error) {
 	schemas := collections.Pilot
 	if features.EnableGatewayAPI {
 		schemas = collections.PilotGatewayAPI
@@ -111,15 +113,11 @@ func New(client kube.Client, revision, domainSuffix string, enableCRDScan bool) 
 	return NewForSchemas(context.Background(), client, revision, domainSuffix, schemas, enableCRDScan)
 }
 
-var crdWatches = map[config.GroupVersionKind]chan struct{}{
-	gvk.KubernetesGateway: make(chan struct{}),
-}
-
 // WaitForCRD waits until the request CRD exists, and returns true on success. A false return value
 // indicates the CRD does not exist but the wait failed or was canceled.
 // This is useful to conditionally enable controllers based on CRDs being created.
-func WaitForCRD(k config.GroupVersionKind, stop <-chan struct{}) bool {
-	ch, f := crdWatches[k]
+func (cl *Client) WaitForCRD(k config.GroupVersionKind, stop <-chan struct{}) bool {
+	ch, f := cl.crdWatches[k]
 	if !f {
 		log.Warnf("waiting for CRD that is not registered")
 		return false
@@ -133,14 +131,14 @@ func WaitForCRD(k config.GroupVersionKind, stop <-chan struct{}) bool {
 }
 
 func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuffix string,
-	schemas collection.Schemas, enableCRDScan bool) (model.ConfigStoreCache, error) {
+	schemas collection.Schemas, enableCRDScan bool) (*Client, error) {
 	schemasByCRDName := map[string]collection.Schema{}
 	for _, s := range schemas.All() {
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
 		name := fmt.Sprintf("%s.%s", s.Resource().Plural(), s.Resource().Group())
 		schemasByCRDName[name] = s
 	}
-	out := &Client{
+	var out = &Client{
 		domainSuffix:     domainSuffix,
 		schemas:          schemas,
 		schemasByCRDName: schemasByCRDName,
@@ -155,8 +153,10 @@ func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuff
 			GroupVersionResource()).Informer(),
 		beginSync:   atomic.NewBool(false),
 		initialSync: atomic.NewBool(false),
+		crdWatches: map[config.GroupVersionKind]chan struct{}{
+			gvk.KubernetesGateway: make(chan struct{}),
+		},
 	}
-
 	var known map[string]struct{}
 	if enableCRDScan {
 		var err error
@@ -521,7 +521,7 @@ func handleCRDAdd(cl *Client, name string, stop <-chan struct{}) {
 		return
 	}
 	cl.kinds[resourceGVK] = createCacheHandler(cl, s, i)
-	if w, f := crdWatches[resourceGVK]; f {
+	if w, f := cl.crdWatches[resourceGVK]; f {
 		scope.Infof("notifying watchers %v was created", resourceGVK)
 		close(w)
 	}
