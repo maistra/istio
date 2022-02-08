@@ -41,6 +41,10 @@ function trace() {
 }
 
 function setup_gcloud_credentials() {
+  if [[ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
+    return
+  fi
+
   if [[ $(command -v gcloud) ]]; then
     gcloud auth configure-docker -q
   elif [[ $(command -v docker-credential-gcr) ]]; then
