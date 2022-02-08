@@ -75,7 +75,7 @@ if [ "${DEBUG}" == "1" ]; then
     OPTIMIZATION_FLAGS=()
 fi
 
-time GOOS=${BUILD_GOOS} GOARCH=${BUILD_GOARCH} ${GOBINARY} build \
+time GOOS=${BUILD_GOOS} GOARCH=${BUILD_GOARCH} ${GOBINARY} build -mod=mod \
         ${V} "${GOBUILDFLAGS_ARRAY[@]}" ${GCFLAGS:+-gcflags "${GCFLAGS}"} \
         -o "${OUT}" \
         "${OPTIMIZATION_FLAGS[@]}" \
