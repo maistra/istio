@@ -1,22 +1,9 @@
-# BASE_DISTRIBUTION is used to switch between the old base distribution and distroless base images
-ARG BASE_DISTRIBUTION=debug
+FROM centos:8
 
-# Version is the base image version from the TLD Makefile
-ARG BASE_VERSION=latest
-
-# The following section is used as base image if BASE_DISTRIBUTION=debug
-FROM gcr.io/istio-release/base:${BASE_VERSION} as debug
-
-# The following section is used as base image if BASE_DISTRIBUTION=distroless
-# This image is a custom built debian11 distroless image with multiarchitecture support.
-# It is built on the base distroless image, with iptables binary and libraries added
-# The source can be found at https://github.com/istio/distroless/tree/iptables
-# This version is from commit 20b20ec36f4621830ff0bfdec519577074df47ca.
-FROM gcr.io/istio-release/iptables@sha256:bae9287d64be13179b7bc794ec3db26bd5c5fe3fb591c484992366314c9a7d3d as distroless
-
-# This will build the final image based on either debug or distroless from above
-# hadolint ignore=DL3006
-FROM ${BASE_DISTRIBUTION:-debug}
+# hadolint ignore=DL3039,DL3041
+RUN dnf -y upgrade --refresh && \
+    dnf -y install iptables iproute openssl && \
+    dnf -y clean all
 
 WORKDIR /
 
@@ -27,6 +14,9 @@ ARG SIDECAR=envoy
 # Copy Envoy bootstrap templates used by pilot-agent
 COPY envoy_bootstrap.json /var/lib/istio/envoy/envoy_bootstrap_tmpl.json
 COPY gcp_envoy_bootstrap.json /var/lib/istio/envoy/gcp_envoy_bootstrap_tmpl.json
+
+RUN useradd -m --uid 1337 istio-proxy
+RUN chown -R istio-proxy /var/lib/istio
 
 # Install Envoy.
 ARG TARGETARCH
