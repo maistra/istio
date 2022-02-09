@@ -694,6 +694,9 @@ func TestAppProbe(t *testing.T) {
 		},
 	}
 	testFn := func(t *testing.T, tc test) {
+		if tc.ipv6 {
+			t.Skip("Maistra does not yet support IPv6")
+		}
 		appProber, err := json.Marshal(tc.config)
 		if err != nil {
 			t.Fatalf("invalid app probers")
