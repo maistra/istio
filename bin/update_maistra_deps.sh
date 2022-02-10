@@ -16,7 +16,7 @@
 
 set -eux
 
-UPDATE_BRANCH=${UPDATE_BRANCH:-"maistra-2.1"}
+UPDATE_BRANCH=${UPDATE_BRANCH:-"maistra-2.2"}
 
 # Update go dependencies
 go get -d "maistra.io/api@${UPDATE_BRANCH}"
