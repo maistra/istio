@@ -58,6 +58,7 @@ import (
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/metadata"
 	metadatafake "k8s.io/client-go/metadata/fake"
+	"k8s.io/client-go/metadata/metadatainformer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	clienttesting "k8s.io/client-go/testing"
@@ -83,6 +84,7 @@ import (
 	clienttelemetry "istio.io/client-go/pkg/apis/telemetry/v1alpha1"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pkg/queue"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
@@ -130,7 +132,7 @@ type Client interface {
 	DynamicInformer() xnsinformers.DynamicSharedInformerFactory
 
 	// MetadataInformer returns an informer for metadata client
-	MetadataInformer() xnsinformers.MetadataSharedInformerFactory
+	MetadataInformer() metadatainformer.SharedInformerFactory
 
 	// IstioInformer returns an informer for the istio client
 	IstioInformer() istioinformer.SharedInformerFactory
@@ -336,7 +338,7 @@ type client struct {
 	dynamicInformer xnsinformers.DynamicSharedInformerFactory
 
 	metadata         metadata.Interface
-	metadataInformer xnsinformers.MetadataSharedInformerFactory
+	metadataInformer metadatainformer.SharedInformerFactory
 
 	istio         istioclient.Interface
 	istioInformer istioinformer.SharedInformerFactory
@@ -406,8 +408,7 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	if err != nil {
 		return nil, err
 	}
-	c.metadataInformer = xnsinformers.NewMetadataSharedInformerFactory(c.metadata, resyncInterval)
-	c.metadataInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
+	c.metadataInformer = metadatainformer.NewSharedInformerFactory(c.metadata, resyncInterval)
 
 	c.dynamic, err = dynamic.NewForConfig(c.config)
 	if err != nil {
@@ -426,15 +427,17 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 		istioinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
-	c.gatewayapi, err = gatewayapiclient.NewForConfig(c.config)
-	if err != nil {
-		return nil, err
+	if features.EnableGatewayAPI {
+		c.gatewayapi, err = gatewayapiclient.NewForConfig(c.config)
+		if err != nil {
+			return nil, err
+		}
+		c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactoryWithOptions(
+			c.gatewayapi,
+			resyncInterval,
+			gatewayapiinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
+		)
 	}
-	c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactoryWithOptions(
-		c.gatewayapi,
-		resyncInterval,
-		gatewayapiinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
-	)
 
 	c.mcsapis, err = mcsapisClient.NewForConfig(c.config)
 	if err != nil {
@@ -505,7 +508,7 @@ func (c *client) DynamicInformer() xnsinformers.DynamicSharedInformerFactory {
 	return c.dynamicInformer
 }
 
-func (c *client) MetadataInformer() xnsinformers.MetadataSharedInformerFactory {
+func (c *client) MetadataInformer() metadatainformer.SharedInformerFactory {
 	return c.metadataInformer
 }
 
@@ -530,8 +533,9 @@ func (c *client) SetNamespaces(namespaces ...string) {
 	c.kubeInformer.SetNamespaces(namespaces...)
 	c.istioInformer.SetNamespaces(namespaces...)
 	c.dynamicInformer.SetNamespaces(namespaces...)
-	c.metadataInformer.SetNamespaces(namespaces...)
-	c.gatewayapiInformer.SetNamespaces(namespaces...)
+	if features.EnableGatewayAPI {
+		c.gatewayapiInformer.SetNamespaces(namespaces...)
+	}
 }
 
 func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
@@ -541,10 +545,11 @@ func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
 	}
 
 	c.memberRoll.Register(c.kubeInformer, "kubernetes-informers")
-	c.memberRoll.Register(c.istioInformer, "istio-infomrers")
+	c.memberRoll.Register(c.istioInformer, "istio-informers")
 	c.memberRoll.Register(c.dynamicInformer, "dynamic-informers")
-	c.memberRoll.Register(c.metadataInformer, "metadata-informers")
-	c.memberRoll.Register(c.gatewayapiInformer, "service-apis-informers")
+	if features.EnableGatewayAPI {
+		c.memberRoll.Register(c.gatewayapiInformer, "service-apis-informers")
+	}
 
 	return nil
 }
@@ -563,7 +568,9 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 	c.dynamicInformer.Start(stop)
 	c.metadataInformer.Start(stop)
 	c.istioInformer.Start(stop)
-	c.gatewayapiInformer.Start(stop)
+	if features.EnableGatewayAPI {
+		c.gatewayapiInformer.Start(stop)
+	}
 	c.mcsapisInformers.Start(stop)
 	if c.fastSync {
 		// WaitForCacheSync will virtually never be synced on the first call, as its called immediately after Start()
@@ -573,7 +580,9 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		fastWaitForCacheSyncDynamic(stop, c.dynamicInformer)
 		fastWaitForCacheSyncDynamic(stop, c.metadataInformer)
 		fastWaitForCacheSync(stop, c.istioInformer)
-		fastWaitForCacheSync(stop, c.gatewayapiInformer)
+		if features.EnableGatewayAPI {
+			fastWaitForCacheSync(stop, c.gatewayapiInformer)
+		}
 		fastWaitForCacheSync(stop, c.mcsapisInformers)
 		_ = wait.PollImmediate(time.Microsecond*100, wait.ForeverTestTimeout, func() (bool, error) {
 			select {
@@ -591,7 +600,9 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
 		c.istioInformer.WaitForCacheSync(stop)
-		c.gatewayapiInformer.WaitForCacheSync(stop)
+		if features.EnableGatewayAPI {
+			c.gatewayapiInformer.WaitForCacheSync(stop)
+		}
 		c.mcsapisInformers.WaitForCacheSync(stop)
 	}
 }
