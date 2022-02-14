@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
+	"k8s.io/client-go/metadata/metadatainformer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
@@ -114,7 +115,7 @@ func (c MockClient) DynamicInformer() xnsinformers.DynamicSharedInformerFactory 
 	panic("not used in mock")
 }
 
-func (c MockClient) MetadataInformer() xnsinformers.MetadataSharedInformerFactory {
+func (c MockClient) MetadataInformer() metadatainformer.SharedInformerFactory {
 	panic("not used in mock")
 }
 
