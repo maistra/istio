@@ -6,4 +6,4 @@ vendor:
 
 gen: vendor
 
-STANDARD_BINARIES += ./mec/cmd/mec
+AGENT_BINARIES += ./mec/cmd/mec
