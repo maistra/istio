@@ -102,6 +102,7 @@ docker.pilot: BUILD_ARGS=--build-arg BASE_VERSION=${BASE_VERSION}
 docker.pilot: ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_DIR}/envoy_bootstrap.json
 docker.pilot: ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_DIR}/gcp_envoy_bootstrap.json
 docker.pilot: $(ISTIO_OUT_LINUX)/pilot-discovery
+docker.pilot: $(ISTIO_OUT_LINUX)/mec
 docker.pilot: pilot/docker/Dockerfile.pilot
 	$(DOCKER_RULE)
 
