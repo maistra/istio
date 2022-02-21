@@ -151,6 +151,12 @@ function setup_kind_cluster() {
 networking:
   ipFamily: ipv6
 EOF
+    else
+      grep 'serviceSubnet:' "${CONFIG}" || \
+      cat <<EOF >> "${CONFIG}"
+networking:
+  serviceSubnet: "10.224.0.0/12"
+EOF
     fi
   fi
 
