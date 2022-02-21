@@ -43,6 +43,8 @@ CLUSTER_TOPOLOGY_CONFIG_FILE="${ROOT}/prow/config/topology/multicluster.json"
 
 PARAMS=()
 
+SKIP_CLEANUP=true
+
 while (( "$#" )); do
   case "$1" in
     # Node images can be found at https://github.com/kubernetes-sigs/kind/releases
