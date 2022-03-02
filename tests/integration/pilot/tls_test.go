@@ -71,6 +71,27 @@ spec:
       caCertificates: /etc/certs/custom/root-cert.pem
 `)
 
+			ports := []echo.Port{
+				{
+					Name:         "grpc",
+					Protocol:     protocol.GRPC,
+					InstancePort: 8090,
+					TLS:          true,
+				},
+				{
+					Name:         "http",
+					Protocol:     protocol.HTTP,
+					InstancePort: 8091,
+					TLS:          true,
+				},
+				{
+					Name:         "tcp",
+					Protocol:     protocol.TCP,
+					InstancePort: 8092,
+					TLS:          true,
+				},
+			}
+
 			var client, server echo.Instance
 			echoboot.NewBuilderOrFail(t, ctx).
 				With(&client, echo.Config{
@@ -92,28 +113,9 @@ spec:
 				With(&server, echo.Config{
 					Service:   "server",
 					Namespace: ns,
-					Ports: []echo.Port{
-						{
-							Name:         "grpc",
-							Protocol:     protocol.GRPC,
-							InstancePort: 8090,
-							TLS:          true,
-						},
-						{
-							Name:         "http",
-							Protocol:     protocol.HTTP,
-							InstancePort: 8091,
-							TLS:          true,
-						},
-						{
-							Name:         "tcp",
-							Protocol:     protocol.TCP,
-							InstancePort: 8092,
-							TLS:          true,
-						},
-					},
-					Galley: g,
-					Pilot:  p,
+					Ports:     ports,
+					Galley:    g,
+					Pilot:     p,
 					// Set up TLS certs on the server. This will make the server listen with these credentials.
 					TLSSettings: &common.TLSSettings{
 						RootCert:   mustReadFile(t, "root-cert.pem"),
@@ -130,14 +132,14 @@ spec:
 				}).
 				BuildOrFail(t)
 
-			for _, tt := range []string{"grpc", "http", "tcp"} {
-				ctx.NewSubTest(tt).Run(func(ctx framework.TestContext) {
+			for _, tt := range ports {
+				ctx.NewSubTest(tt.Name).Run(func(ctx framework.TestContext) {
 					retry.UntilSuccessOrFail(ctx, func() error {
 						opts := echo.CallOptions{
-							Target:   server,
-							PortName: tt,
+							Target: server,
+							Port:   &tt,
 						}
-						if tt == "tcp" {
+						if tt.Name == "tcp" {
 							opts.Scheme = scheme.TCP
 						}
 						resp, err := client.Call(opts)
