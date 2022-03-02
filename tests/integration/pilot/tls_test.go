@@ -45,6 +45,8 @@ func mustReadFile(t *testing.T, f string) string {
 // TestDestinationRuleTLS tests that MUTUAL tls mode is respected in DestinationRule.
 // This sets up a client and server with appropriate cert config and ensures we can successfully send a message.
 func TestDestinationRuleTLS(t *testing.T) {
+	// https://issues.redhat.com/browse/OSSM-755
+	t.Skip("https://github.com/istio/istio/issues/0")
 	framework.
 		NewTest(t).
 		RequiresEnvironment(environment.Kube).
