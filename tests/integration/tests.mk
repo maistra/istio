@@ -79,7 +79,7 @@ test.integration.%.kube.presubmit: | $(JUNIT_REPORT)
 # Presubmit integration tests targeting Kubernetes environment.
 .PHONY: test.integration.kube.presubmit
 test.integration.kube.presubmit: | $(JUNIT_REPORT)
-	PATH=${PATH}:${ISTIO_OUT} $(GO) test -p 1 ${T} ${TEST_PACKAGES} -timeout 30m \
+	PATH=${PATH}:${ISTIO_OUT} $(GO) test -p 1 ${T} -run '^TestDestinationRuleTLS$$' ./tests/integration/pilot... -timeout 30m \
  	--istio.test.env kube \
 	${_INTEGRATION_TEST_FLAGS} ${_INTEGRATION_TEST_SELECT_FLAGS} \
 	2>&1 | tee >($(JUNIT_REPORT) > $(JUNIT_OUT))
