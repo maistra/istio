@@ -16,6 +16,7 @@ package status
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/model"
+	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/pkg/log"
 )
 
@@ -63,7 +65,7 @@ func TestStatusManager(t *testing.T) {
 		mesh       types.NamespacedName
 		events     []func(h Handler)
 		status     []federationStatus
-		assertions []func(t *testing.T, status *v1.ServiceMeshPeerStatus)
+		assertions []func(t *testing.T, status *v1.ServiceMeshPeerStatus) error
 	}{
 		{
 			name: "initial-status",
@@ -81,12 +83,13 @@ func TestStatusManager(t *testing.T) {
 					h.WatchTerminated("503")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus) error{
 				nil,
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					if status.DiscoveryStatus.Inactive[0].Watch.LastConnected.IsZero() {
-						t.Errorf("expected LastConnected to be updated")
+						return fmt.Errorf("expected LastConnected to be updated")
 					}
+					return nil
 				},
 			},
 			status: []federationStatus{
@@ -144,17 +147,19 @@ func TestStatusManager(t *testing.T) {
 					h.WatchTerminated("200")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus) error{
 				nil,
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					if status.DiscoveryStatus.Active[0].Watch.LastConnected.IsZero() {
-						t.Errorf("expected LastConnected to be updated")
+						return fmt.Errorf("expected LastConnected to be updated")
 					}
+					return nil
 				},
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					if status.DiscoveryStatus.Inactive[0].Watch.LastDisconnect.IsZero() {
-						t.Errorf("expected LastDisconnect to be updated")
+						return fmt.Errorf("expected LastDisconnect to be updated")
 					}
+					return nil
 				},
 			},
 			status: []federationStatus{
@@ -232,26 +237,29 @@ func TestStatusManager(t *testing.T) {
 					h.RemoteWatchTerminated("10.10.10.10")
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus) error{
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					if status.DiscoveryStatus.Inactive[0].Remotes[0].LastConnected.IsZero() {
-						t.Errorf("expected LastConnected to be updated")
+						return fmt.Errorf("expected LastConnected to be updated")
 					}
+					return nil
 				},
 				nil,
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					// full sync causes a push, so we can also verify that an event was seen
 					if status.DiscoveryStatus.Inactive[0].Remotes[0].LastEvent.IsZero() {
-						t.Errorf("expected LastEvent to be updated")
+						return fmt.Errorf("expected LastEvent to be updated")
 					}
 					if status.DiscoveryStatus.Inactive[0].Remotes[0].LastFullSync.IsZero() {
-						t.Errorf("expected LastFullSync to be updated")
+						return fmt.Errorf("expected LastFullSync to be updated")
 					}
+					return nil
 				},
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					if status.DiscoveryStatus.Inactive[0].Remotes[0].LastDisconnect.IsZero() {
-						t.Errorf("expected LastDisconnect to be updated")
+						return fmt.Errorf("expected LastDisconnect to be updated")
 					}
+					return nil
 				},
 			},
 			status: []federationStatus{
@@ -375,7 +383,7 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus) error{
 				nil, nil, nil,
 			},
 			status: []federationStatus{
@@ -472,7 +480,7 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus) error{
 				nil, nil, nil, nil,
 			},
 			status: []federationStatus{
@@ -550,12 +558,13 @@ func TestStatusManager(t *testing.T) {
 					h.Flush()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus) error{
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					if len(status.DiscoveryStatus.Inactive) == 0 ||
 						(len(status.DiscoveryStatus.Inactive) > 0 && status.DiscoveryStatus.Inactive[0].Watch.LastEvent.IsZero()) {
-						t.Errorf("expected LastEvent to be updated")
+						return fmt.Errorf("expected LastEvent to be updated")
 					}
+					return nil
 				},
 				nil, nil,
 			},
@@ -643,24 +652,26 @@ func TestStatusManager(t *testing.T) {
 					h.FullSyncComplete()
 				},
 			},
-			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus) error{
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					if !status.DiscoveryStatus.Inactive[0].Watch.LastEvent.IsZero() {
-						t.Errorf("did not expect LastEvent to be updated")
+						return fmt.Errorf("did not expect LastEvent to be updated")
 					}
 					if !status.DiscoveryStatus.Inactive[0].Watch.LastFullSync.IsZero() {
-						t.Errorf("did not expect LastFullSync to be updated")
+						return fmt.Errorf("did not expect LastFullSync to be updated")
 					}
+					return nil
 				},
 				nil, nil,
-				func(t *testing.T, status *v1.ServiceMeshPeerStatus) {
+				func(t *testing.T, status *v1.ServiceMeshPeerStatus) error {
 					// this should have been updated in one of the previous events
 					if status.DiscoveryStatus.Inactive[0].Watch.LastEvent.IsZero() {
-						t.Errorf("expected LastEvent to be updated")
+						return fmt.Errorf("expected LastEvent to be updated")
 					}
 					if status.DiscoveryStatus.Inactive[0].Watch.LastFullSync.IsZero() {
-						t.Errorf("expected LastFullSync to be updated")
+						return fmt.Errorf("expected LastFullSync to be updated")
 					}
+					return nil
 				},
 			},
 			status: []federationStatus{
@@ -785,8 +796,6 @@ func TestStatusManager(t *testing.T) {
 			for index, f := range tc.events {
 				t.Logf("processing event %d", index)
 				f(handler)
-				// give it a little time for the status update to propagate
-				time.Sleep(25 * time.Millisecond)
 				verifyPeerStatus(t, cs, tc.mesh, &tc.status[index].peer, tc.assertions[index])
 				verifyExportStatus(t, cs, tc.mesh, &tc.status[index].exports)
 				verifyImportStatus(t, cs, tc.mesh, &tc.status[index].imports)
@@ -796,55 +805,64 @@ func TestStatusManager(t *testing.T) {
 }
 
 func verifyPeerStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName, expected *v1.ServiceMeshPeerStatus,
-	assert func(*testing.T, *v1.ServiceMeshPeerStatus),
+	assert func(*testing.T, *v1.ServiceMeshPeerStatus) error,
 ) {
 	t.Helper()
-
-	actual, err := cs.FederationV1().ServiceMeshPeers(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
-	if err != nil {
-		t.Errorf("unexpected error retrieving ServiceMeshPeer %s/%s: %s", name.Namespace, name.Name, err)
-		return
-	}
-	if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
-		t.Errorf("comparison failed, -got +want:\n%s", diff)
-	}
-	if assert != nil {
-		assert(t, &actual.Status)
-	}
+	tryMultipleTimes(t, func() error {
+		actual, err := cs.FederationV1().ServiceMeshPeers(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("unexpected error retrieving ServiceMeshPeer %s/%s: %s", name.Namespace, name.Name, err)
+		}
+		if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
+			return fmt.Errorf("comparison failed, -got +want:\n%s", diff)
+		}
+		if assert != nil {
+			return assert(t, &actual.Status)
+		}
+		return nil
+	})
 }
 
 func verifyExportStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName,
 	expected *v1.ExportedServiceSetStatus,
 ) {
 	t.Helper()
-
-	actual, err := cs.FederationV1().ExportedServiceSets(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
-	if err != nil {
-		t.Errorf("unexpected error retrieving ExportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
-		return
-	}
-	if expected.ExportedServices == nil {
-		expected.ExportedServices = []v1.PeerServiceMapping{}
-	}
-	if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
-		t.Errorf("comparison failed, -got +want:\n%s", diff)
-	}
+	tryMultipleTimes(t, func() error {
+		actual, err := cs.FederationV1().ExportedServiceSets(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("unexpected error retrieving ExportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
+		}
+		if expected.ExportedServices == nil {
+			expected.ExportedServices = []v1.PeerServiceMapping{}
+		}
+		if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
+			return fmt.Errorf("comparison failed, -got +want:\n%s", diff)
+		}
+		return nil
+	})
 }
 
 func verifyImportStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName,
 	expected *v1.ImportedServiceSetStatus,
 ) {
 	t.Helper()
+	tryMultipleTimes(t, func() error {
+		actual, err := cs.FederationV1().ImportedServiceSets(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("unexpected error retrieving ImportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
+		}
+		if expected.ImportedServices == nil {
+			expected.ImportedServices = []v1.PeerServiceMapping{}
+		}
+		if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
+			return fmt.Errorf("comparison failed, -got +want:\n%s", diff)
+		}
+		return nil
+	})
+}
 
-	actual, err := cs.FederationV1().ImportedServiceSets(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
-	if err != nil {
-		t.Errorf("unexpected error retrieving ImportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
-		return
-	}
-	if expected.ImportedServices == nil {
-		expected.ImportedServices = []v1.PeerServiceMapping{}
-	}
-	if diff := cmp.Diff(&actual.Status, expected, ignoreTimestamps); diff != "" {
-		t.Errorf("comparison failed, -got +want:\n%s", diff)
+func tryMultipleTimes(t *testing.T, fn func() error) {
+	if err := retry.UntilSuccess(fn, retry.Timeout(10*time.Second), retry.Delay(10*time.Millisecond)); err != nil {
+		t.Error(err.Error())
 	}
 }
