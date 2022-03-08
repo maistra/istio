@@ -294,6 +294,44 @@ func TestPullImage(t *testing.T) {
 			imageRef:      model.StringToImageRef("docker.io/test/test:latest"),
 			expectedError: true,
 		},
+		{
+			name: "pass_imageStreamPresent",
+			imageStream: &imagev1.ImageStream{
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{
+							From: &v1.ObjectReference{
+								Name: "docker.io/test/service-mesh-wasm-go:latest",
+							},
+						},
+					},
+				},
+				Status: imagev1.ImageStreamStatus{
+					DockerImageRepository: "docker.io/test/service-mesh-wasm-go",
+					Tags: []imagev1.NamedTagEventList{
+						{
+							Conditions: []imagev1.TagEventCondition{
+								{
+									Status: v1.ConditionTrue,
+								},
+							},
+							Items: []imagev1.TagEvent{
+								{
+									Image: "sha256:41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3",
+								},
+							},
+						},
+					},
+				},
+			},
+			imageRef:      model.StringToImageRef("docker.io/test/service-mesh-wasm-go:latest"),
+			expectedError: false,
+			expectedImage: &ossmImage{
+				imageID:  "41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3",
+				sha256:   "sha256:41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3",
+				manifest: &fakestrategy.FakeManifest,
+			},
+		},
 	}
 	fakePodman := &fakePodman{}
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{
