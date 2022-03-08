@@ -16,8 +16,12 @@ package kube
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"os"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
@@ -126,4 +130,27 @@ func CreateDynamicInterfaceFromClusterConfig(clusterConfig *clientcmdapi.Config)
 		return nil, err
 	}
 	return dynamic.NewForConfig(restConfig)
+}
+
+// MaxRequestBodyBytes represents the max size of Kubernetes objects we read. Kubernetes allows a 2x
+// buffer on the max etcd size
+// (https://github.com/kubernetes/kubernetes/blob/0afa569499d480df4977568454a50790891860f5/staging/src/k8s.io/apiserver/pkg/server/config.go#L362).
+// We allow an additional 2x buffer, as it is still fairly cheap (6mb)
+const MaxRequestBodyBytes = int64(6 * 1024 * 1024)
+
+// HTTPConfigReader is reads an HTTP request, imposing size restrictions aligned with Kubernetes limits
+func HTTPConfigReader(req *http.Request) ([]byte, error) {
+	defer req.Body.Close()
+	lr := &io.LimitedReader{
+		R: req.Body,
+		N: MaxRequestBodyBytes + 1,
+	}
+	data, err := ioutil.ReadAll(lr)
+	if err != nil {
+		return nil, err
+	}
+	if lr.N <= 0 {
+		return nil, errors.NewRequestEntityTooLargeError(fmt.Sprintf("limit is %d", MaxRequestBodyBytes))
+	}
+	return data, nil
 }

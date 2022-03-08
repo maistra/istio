@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -44,6 +43,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
 	tls_features "istio.io/istio/pkg/features"
+	"istio.io/istio/pkg/kube"
 )
 
 var scope = log.RegisterScope("validationServer", "validation webhook server", 0)
@@ -310,8 +310,11 @@ type admitFunc func(*kubeApiAdmission.AdmissionRequest) *kubeApiAdmission.Admiss
 func serve(w http.ResponseWriter, r *http.Request, admit admitFunc) {
 	var body []byte
 	if r.Body != nil {
-		if data, err := ioutil.ReadAll(r.Body); err == nil {
+		if data, err := kube.HTTPConfigReader(r); err == nil {
 			body = data
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 	}
 	if len(body) == 0 {
