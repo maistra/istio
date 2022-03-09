@@ -283,66 +283,8 @@ func NewServer(args *PilotArgs, initFuncs ...func(*Server)) (*Server, error) {
 		return nil, err
 	}
 
-	// federation support must be initialized before config and service controllers
-	if features.EnableFederation {
-		if s.kubeClient == nil {
-			log.Errorf("could not initialize federation discovery server: kubeClient is nil")
-		} else {
-			peerCertVerifier, err := s.createPeerCertVerifier(args.ServerOptions.TLSOptions)
-			if err != nil {
-				return nil, err
-			}
-			if peerCertVerifier == nil {
-				panic("No peerCertVerifier")
-			}
-			tlsCfg := &tls.Config{
-				GetCertificate: s.getIstiodCertificate,
-				ClientAuth:     tls.VerifyClientCertIfGiven,
-				ClientCAs:      peerCertVerifier.GetGeneralCertPool(),
-				VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-					err := peerCertVerifier.VerifyPeerCert(rawCerts, verifiedChains)
-					if err != nil {
-						log.Infof("Could not verify certificate: %v", err)
-					}
-					return err
-				},
-				MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
-				MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
-				CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
-				CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
-			}
-
-			s.federation, err = federation.New(federation.Options{
-				KubeClient:          s.kubeClient,
-				ResyncPeriod:        args.RegistryOptions.KubeOptions.ResyncPeriod,
-				FederationNamespace: args.RegistryOptions.ClusterRegistriesNamespace,
-				LocalClusterID:      s.clusterID.String(),
-				LocalNetwork:        features.NetworkName,
-				BindAddress:         args.ServerOptions.FederationAddr,
-				Env:                 s.environment,
-				XDSUpdater:          s.XDSServer,
-				ServiceController:   s.ServiceController(),
-				IstiodNamespace:     args.Namespace,
-				IstiodPodName:       args.PodName,
-				TLSConfig:           tlsCfg,
-			})
-			s.XDSServer.Generators[v3.TrustBundleType] = &xds.TbdsGenerator{TrustBundleProvider: s.federation}
-
-			if err != nil {
-				return nil, fmt.Errorf("error initializing federation: %v", err)
-			}
-		}
-	}
-
 	if err := s.initControllers(args); err != nil {
 		return nil, err
-	}
-
-	if s.federation != nil {
-		s.addStartFunc(func(stop <-chan struct{}) error {
-			go s.federation.StartControllers(stop)
-			return nil
-		})
 	}
 
 	s.XDSServer.InitGenerators(e, args.Namespace)
@@ -971,7 +913,7 @@ func (s *Server) cachesSynced() bool {
 	if !s.configController.HasSynced() {
 		return false
 	}
-	if s.federation != nil && !s.federation.ControllersSynced() {
+	if s.federation != nil && !s.federation.HasSynced() {
 		return false
 	}
 	return true
@@ -1208,6 +1150,10 @@ func (s *Server) getIstiodCertificate(*tls.ClientHelloInfo) (*tls.Certificate, e
 // initControllers initializes the controllers.
 func (s *Server) initControllers(args *PilotArgs) error {
 	log.Info("initializing controllers")
+	// federation support must be initialized before config and service controllers
+	if err := s.initFederationControllers(args); err != nil {
+		return fmt.Errorf("error initializing federation controller: %v", err)
+	}
 	s.initMulticluster(args)
 	// Certificate controller is created before MCP controller in case MCP server pod
 	// waits to mount a certificate to be provisioned by the certificate controller.
@@ -1220,6 +1166,67 @@ func (s *Server) initControllers(args *PilotArgs) error {
 	if err := s.initServiceControllers(args); err != nil {
 		return fmt.Errorf("error initializing service controllers: %v", err)
 	}
+	return nil
+}
+
+func (s *Server) initFederationControllers(args *PilotArgs) error {
+	if !features.EnableFederation {
+		return nil
+	}
+
+	if s.kubeClient == nil {
+		log.Errorf("could not initialize federation discovery server: kubeClient is nil")
+		return nil
+	}
+
+	peerCertVerifier, err := s.createPeerCertVerifier(args.ServerOptions.TLSOptions)
+	if err != nil {
+		return err
+	}
+	if peerCertVerifier == nil {
+		panic("No peerCertVerifier")
+	}
+	tlsCfg := &tls.Config{
+		GetCertificate: s.getIstiodCertificate,
+		ClientAuth:     tls.VerifyClientCertIfGiven,
+		ClientCAs:      peerCertVerifier.GetGeneralCertPool(),
+		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			err := peerCertVerifier.VerifyPeerCert(rawCerts, verifiedChains)
+			if err != nil {
+				log.Infof("Could not verify certificate: %v", err)
+			}
+			return err
+		},
+		MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+		MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+		CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+		CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
+	}
+
+	s.federation, err = federation.New(federation.Options{
+		KubeClient:          s.kubeClient,
+		ResyncPeriod:        args.RegistryOptions.KubeOptions.ResyncPeriod,
+		FederationNamespace: args.RegistryOptions.ClusterRegistriesNamespace,
+		LocalClusterID:      s.clusterID.String(),
+		LocalNetwork:        features.NetworkName,
+		BindAddress:         args.ServerOptions.FederationAddr,
+		Env:                 s.environment,
+		XDSUpdater:          s.XDSServer,
+		ServiceController:   s.ServiceController(),
+		IstiodNamespace:     args.Namespace,
+		IstiodPodName:       args.PodName,
+		TLSConfig:           tlsCfg,
+	})
+	s.XDSServer.Generators[v3.TrustBundleType] = &xds.TbdsGenerator{TrustBundleProvider: s.federation}
+
+	if err != nil {
+		return fmt.Errorf("error initializing federation: %v", err)
+	}
+
+	s.addStartFunc(func(stop <-chan struct{}) error {
+		go s.federation.StartControllers(stop)
+		return nil
+	})
 	return nil
 }
 
