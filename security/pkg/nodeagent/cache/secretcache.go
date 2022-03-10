@@ -227,6 +227,7 @@ func (sc *SecretManagerClient) getCachedSecret(resourceName string) (secret *sec
 				ResourceName: resourceName,
 				RootCert:     rootCertBundle,
 			}
+			sc.addTrustBundles(ns)
 			cacheLog.WithLabels("ttl", time.Until(c.ExpireTime)).Info("returned workload trust anchor from cache")
 
 		} else {
@@ -333,6 +334,7 @@ func (sc *SecretManagerClient) GenerateSecret(resourceName string) (secret *secu
 
 	if resourceName == security.RootCertReqResourceName {
 		ns.RootCert = sc.mergeTrustAnchorBytes(ns.RootCert)
+		sc.addTrustBundles(ns)
 	} else {
 		// If periodic cert refresh resulted in discovery of a new root, trigger a ROOTCA request to refresh trust anchor
 		oldRoot := sc.cache.GetRoot()
@@ -525,6 +527,7 @@ func (sc *SecretManagerClient) generateFileSecret(resourceName string) (bool, *s
 		if sitem, err = sc.generateRootCertFromExistingFile(cf.CaCertificatePath, resourceName, true); err == nil {
 			// If retrieving workload trustBundle, then merge other configured trustAnchors in ProxyConfig
 			sitem.RootCert = sc.mergeTrustAnchorBytes(sitem.RootCert)
+			sc.addTrustBundles(sitem)
 			sc.addFileWatcher(cf.CaCertificatePath, resourceName)
 		}
 	// Default workload certificate.
@@ -643,11 +646,6 @@ func (sc *SecretManagerClient) generateNewSecret(resourceName string) (*security
 		rootCertPEM = []byte(certChainPEM[len(certChainPEM)-1])
 	}
 
-	trustBundles, trustBundleExpiry := sc.GetTrustBundles()
-	if trustBundles != nil && trustBundleExpiry.Before(expireTime) {
-		expireTime = trustBundleExpiry
-	}
-
 	return &security.SecretItem{
 		CertificateChain: certChain,
 		PrivateKey:       keyPEM,
@@ -655,7 +653,6 @@ func (sc *SecretManagerClient) generateNewSecret(resourceName string) (*security
 		CreatedTime:      time.Now(),
 		ExpireTime:       expireTime,
 		RootCert:         rootCertPEM,
-		TrustBundles:     trustBundles,
 	}, nil
 }
 
@@ -803,6 +800,14 @@ func (sc *SecretManagerClient) mergeConfigTrustBundle(rootCerts []string) []byte
 		anchorBytes = pkiutil.AppendCertByte(anchorBytes, []byte(cert))
 	}
 	return anchorBytes
+}
+
+func (sc *SecretManagerClient) addTrustBundles(secretItem *security.SecretItem) {
+	trustBundles, trustBundleExpiry := sc.GetTrustBundles()
+	secretItem.TrustBundles = trustBundles
+	if trustBundles != nil && trustBundleExpiry.Before(secretItem.ExpireTime) {
+		secretItem.ExpireTime = trustBundleExpiry
+	}
 }
 
 // returns true if trust bundles are the same
