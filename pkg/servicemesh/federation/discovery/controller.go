@@ -166,7 +166,7 @@ func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) e
 	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.TrustDomain != c.env.Mesh().GetTrustDomain() {
 		rootCert, err := c.getRootCertForMesh(instance)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not get root cert for mesh %s: %v", instance.Name, err.Error())
 		}
 		c.updateRootCert(instance.Spec.Security.TrustDomain, rootCert)
 	}
@@ -321,7 +321,7 @@ func (c *Controller) getRootCertForMesh(instance *v1.ServiceMeshPeer) (string, e
 	case "", "ConfigMap":
 		cm, err := c.rm.KubeClient().KubeInformer().Core().V1().ConfigMaps().Lister().ConfigMaps(instance.Namespace).Get(name)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error getting configmap %s in namespace %s: %v", name, instance.Namespace, err)
 		}
 		if cert, exists := cm.Data[entryKey]; exists {
 			return cert, nil

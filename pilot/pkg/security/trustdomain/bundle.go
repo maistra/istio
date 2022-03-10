@@ -72,7 +72,7 @@ func (t Bundle) ReplaceTrustDomainAliases(principals []string) []string {
 			principalsIncludingAliases = append(principalsIncludingAliases, t.replaceTrustDomains(principal, trustDomainFromPrincipal)...)
 		} else {
 			authzLog.Warnf("Trust domain %s from principal %s does not match the current trust "+
-				"domain or its aliases", trustDomainFromPrincipal, principal)
+				"domain or its aliases: %v", trustDomainFromPrincipal, principal, t.TrustDomains)
 			// If the trust domain from the existing doesn't match with the new trust domain aliases or "cluster.local",
 			// keep the policy as it is.
 			principalsIncludingAliases = append(principalsIncludingAliases, principal)
