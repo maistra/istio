@@ -175,7 +175,7 @@ func (f *Federation) StartControllers(stopCh <-chan struct{}) {
 	f.discoveryController.Start(stopCh)
 }
 
-func (f *Federation) ControllersSynced() bool {
+func (f *Federation) HasSynced() bool {
 	return f.importController.HasSynced() && f.exportController.HasSynced() && f.discoveryController.HasSynced()
 }
 
