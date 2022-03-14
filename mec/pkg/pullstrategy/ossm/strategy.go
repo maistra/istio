@@ -239,7 +239,7 @@ func (p *ossmPullStrategy) Login(registryURL, token string) (output string, err 
 }
 
 func getImageStreamName(image *model.ImageRef) string {
-	reponame := image.Repository
+	reponame := strings.Replace(image.Repository, "-", "", -1)
 	if len(reponame) > 8 {
 		reponame = reponame[:8]
 	}
