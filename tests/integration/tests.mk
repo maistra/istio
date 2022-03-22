@@ -88,9 +88,10 @@ test.integration.%.kube.presubmit:
 	@make test.integration.$*.kube
 
 # Presubmit integration tests targeting Kubernetes environment. Really used for postsubmit on different k8s versions.
+# FIXME: Re-enable QUIC in Maistra: https://issues.redhat.com/browse/OSSM-1282
 .PHONY: test.integration.kube.presubmit
 test.integration.kube.presubmit: | $(JUNIT_REPORT) check-go-tag
-	$(GO) test -p 1 -vet=off ${T} -tags=integ $(shell go list -tags=integ ./tests/integration/... | grep -v /qualification | grep -v /examples) -timeout 30m \
+	$(GO) test -p 1 -vet=off ${T} -tags=integ $(shell go list -tags=integ ./tests/integration/... | grep -v /qualification | grep -v /examples | grep -v /quic) -timeout 30m \
 	${_INTEGRATION_TEST_FLAGS} ${_INTEGRATION_TEST_SELECT_FLAGS} \
 	2>&1 | tee >($(JUNIT_REPORT) > $(JUNIT_OUT))
 
