@@ -148,6 +148,7 @@ func TestEnvoyFilters(t *testing.T) {
 	proxyVersionRegex := regexp.MustCompile(`1\.4.*`)
 	envoyFilters := []*EnvoyFilterWrapper{
 		{
+			Name:             "ef1",
 			workloadSelector: map[string]string{"app": "v1"},
 			Patches: map[networking.EnvoyFilter_ApplyTo][]*EnvoyFilterConfigPatchWrapper{
 				networking.EnvoyFilter_LISTENER: {
@@ -163,6 +164,7 @@ func TestEnvoyFilters(t *testing.T) {
 			},
 		},
 		{
+			Name:             "ef2",
 			workloadSelector: map[string]string{"app": "v1"},
 			Patches: map[networking.EnvoyFilter_ApplyTo][]*EnvoyFilterConfigPatchWrapper{
 				networking.EnvoyFilter_CLUSTER: {
@@ -187,6 +189,13 @@ func TestEnvoyFilters(t *testing.T) {
 			"istio-system": envoyFilters,
 			"test-ns":      envoyFilters,
 		},
+	}
+
+	if !push.HasEnvoyFilters("ef1", "test-ns") {
+		t.Errorf("Check presence of EnvoyFilter ef1 at test-ns got false, want true")
+	}
+	if push.HasEnvoyFilters("ef3", "test-ns") {
+		t.Errorf("Check presence of EnvoyFilter ef3 at test-ns got true, want false")
 	}
 
 	cases := []struct {
