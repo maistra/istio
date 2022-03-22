@@ -1961,6 +1961,16 @@ func (ps *PushContext) Extensions(proxy *Proxy) map[v1.FilterPhase][]*maistramod
 	return matchedExtensions
 }
 
+// HasEnvoyFilters checks if an EnvoyFilter exists with the given name at the given namespace.
+func (ps *PushContext) HasEnvoyFilters(name, namespace string) bool {
+	for _, efw := range ps.envoyFiltersByNamespace[namespace] {
+		if efw.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // pre computes gateways per namespace
 func (ps *PushContext) initGateways(env *Environment) error {
 	gatewayConfigs, err := env.List(gvk.Gateway, NamespaceAll)

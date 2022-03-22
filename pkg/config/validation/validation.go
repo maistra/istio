@@ -560,13 +560,26 @@ func validateTLSOptions(tls *networking.ServerTLSSettings) (v Validation) {
 	}
 
 	invalidCiphers := sets.NewSet()
+	validCiphers := sets.NewSet()
+	duplicateCiphers := sets.NewSet()
 	for _, cs := range tls.CipherSuites {
 		if !security.IsValidCipherSuite(cs) {
 			invalidCiphers.Insert(cs)
+		} else {
+			if !validCiphers.Contains(cs) {
+				validCiphers.Insert(cs)
+			} else {
+				duplicateCiphers.Insert(cs)
+			}
 		}
 	}
+
 	if len(invalidCiphers) > 0 {
-		return WrapWarning(fmt.Errorf("ignoring invalid cipher suites: %v", invalidCiphers.SortedList()))
+		v = appendWarningf(v, "ignoring invalid cipher suites: %v", invalidCiphers.SortedList())
+	}
+
+	if len(duplicateCiphers) > 0 {
+		v = appendWarningf(v, "ignoring duplicate cipher suites: %v", duplicateCiphers.SortedList())
 	}
 
 	if tls.Mode == networking.ServerTLSSettings_ISTIO_MUTUAL {
@@ -581,8 +594,22 @@ func validateTLSOptions(tls *networking.ServerTLSSettings) (v Validation) {
 		if tls.CaCertificates != "" {
 			v = appendValidation(v, fmt.Errorf("ISTIO_MUTUAL TLS cannot have associated CA bundle"))
 		}
-
+		if tls.CredentialName != "" {
+			if features.EnableLegacyIstioMutualCredentialName {
+				// Legacy mode enabled, just warn
+				v = appendWarningf(v, "ISTIO_MUTUAL TLS cannot have associated credentialName")
+			} else {
+				v = appendValidation(v, fmt.Errorf("ISTIO_MUTUAL TLS cannot have associated credentialName"))
+			}
+		}
 		return
+	}
+
+	if tls.Mode == networking.ServerTLSSettings_PASSTHROUGH || tls.Mode == networking.ServerTLSSettings_AUTO_PASSTHROUGH {
+		if tls.ServerCertificate != "" || tls.PrivateKey != "" || tls.CaCertificates != "" || tls.CredentialName != "" {
+			// Warn for backwards compatibility
+			v = appendWarningf(v, "%v mode does not use certificates, they will be ignored", tls.Mode)
+		}
 	}
 
 	if (tls.Mode == networking.ServerTLSSettings_SIMPLE || tls.Mode == networking.ServerTLSSettings_MUTUAL) && tls.CredentialName != "" {

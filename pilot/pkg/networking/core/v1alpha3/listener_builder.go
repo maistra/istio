@@ -512,7 +512,7 @@ func buildInboundCatchAllFilterChains(configgen *ConfigGeneratorImpl,
 	}
 
 	var filters []*listener.Filter
-	filters = append(filters, buildMetadataExchangeNetworkFilters(istionetworking.ListenerClassSidecarInbound)...)
+	filters = append(filters, buildMetadataExchangeNetworkFilters(push, istionetworking.ListenerClassSidecarInbound, node.IstioVersion)...)
 	filters = append(filters, buildMetricsNetworkFilters(push, node, istionetworking.ListenerClassSidecarInbound)...)
 	filters = append(filters, &listener.Filter{
 		Name: wellknown.TCPProxy,
@@ -646,7 +646,7 @@ func (configgen *ConfigGeneratorImpl) buildInboundFilterchains(in *plugin.InputP
 		case istionetworking.ListenerProtocolHTTP:
 			fcOpt.httpOpts = configgen.buildSidecarInboundHTTPListenerOptsForPortOrUDS(in.Node, in, clusterName)
 			fcOpt.filterChain.TCP = append(
-				buildMetadataExchangeNetworkFilters(istionetworking.ListenerClassSidecarInbound),
+				buildMetadataExchangeNetworkFilters(in.Push, istionetworking.ListenerClassSidecarInbound, in.Node.IstioVersion),
 				fcOpt.filterChain.TCP...)
 		case istionetworking.ListenerProtocolTCP:
 			fcOpt.networkFilters = buildInboundNetworkFilters(in.Push, in.Node, in.ServiceInstance, clusterName)
@@ -686,7 +686,7 @@ func buildOutboundCatchAllNetworkFiltersOnly(push *model.PushContext, node *mode
 		ClusterSpecifier: &tcp.TcpProxy_Cluster{Cluster: egressCluster},
 	}
 	filterStack := buildMetricsNetworkFilters(push, node, istionetworking.ListenerClassSidecarOutbound)
-	accessLogBuilder.setTCPAccessLog(push.Mesh, tcpProxy)
+	accessLogBuilder.setTCPAccessLog(push, node, tcpProxy)
 	filterStack = append(filterStack, &listener.Filter{
 		Name:       wellknown.TCPProxy,
 		ConfigType: &listener.Filter_TypedConfig{TypedConfig: util.MessageToAny(tcpProxy)},
