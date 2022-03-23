@@ -46,6 +46,8 @@ var ignoreTimestamps = cmp.FilterPath(func(p cmp.Path) bool {
 }, cmp.Ignore())
 
 func TestStatusManager(t *testing.T) {
+	// FIXME: https://issues.redhat.com/browse/OSSM-1252
+	t.Skip("https://github.com/istio/istio/issues/1")
 	const (
 		namespace = "test-namespace"
 		name      = "test"
@@ -886,6 +888,7 @@ func verifyImportStatus(t *testing.T, cs maistraclient.Interface, name types.Nam
 }
 
 func tryMultipleTimes(t *testing.T, fn func() error) {
+	t.Helper()
 	if err := retry.UntilSuccess(fn, retry.Timeout(10*time.Second), retry.Delay(10*time.Millisecond)); err != nil {
 		t.Error(err.Error())
 	}
