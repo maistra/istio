@@ -40,6 +40,7 @@ import (
 	"istio.io/istio/pilot/pkg/networking/plugin"
 	"istio.io/istio/pilot/pkg/networking/util"
 	authn_model "istio.io/istio/pilot/pkg/security/model"
+	"istio.io/istio/pilot/pkg/util/sets"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/gateway"
 	"istio.io/istio/pkg/config/host"
@@ -685,24 +686,45 @@ func buildGatewayListenerTLSContext(
 		ctx.RequireClientCertificate = proto.BoolTrue
 	}
 
-	switch {
-	// If SDS is enabled at gateway, and credential name is specified at gateway config, create
-	// SDS config for gateway to fetch key/cert at gateway agent.
-	case server.Tls.CredentialName != "":
-		authn_model.ApplyCredentialSDSToServerCommonTLSContext(ctx.CommonTlsContext, server.Tls)
-	case server.Tls.Mode == networking.ServerTLSSettings_ISTIO_MUTUAL:
-		authn_model.ApplyToCommonTLSContext(ctx.CommonTlsContext, proxy, server.Tls.SubjectAltNames, []string{}, ctx.RequireClientCertificate.Value)
-	default:
-		certProxy := &model.Proxy{}
-		certProxy.IstioVersion = proxy.IstioVersion
-		// If certificate files are specified in gateway configuration, use file based SDS.
-		certProxy.Metadata = &model.NodeMetadata{
-			TLSServerCertChain: server.Tls.ServerCertificate,
-			TLSServerKey:       server.Tls.PrivateKey,
-			TLSServerRootCert:  server.Tls.CaCertificates,
-		}
+	if features.EnableLegacyIstioMutualCredentialName {
+		switch {
+		// If SDS is enabled at gateway, and credential name is specified at gateway config, create
+		// SDS config for gateway to fetch key/cert at gateway agent.
+		case server.Tls.CredentialName != "":
+			authn_model.ApplyCredentialSDSToServerCommonTLSContext(ctx.CommonTlsContext, server.Tls)
+		case server.Tls.Mode == networking.ServerTLSSettings_ISTIO_MUTUAL:
+			authn_model.ApplyToCommonTLSContext(ctx.CommonTlsContext, proxy, server.Tls.SubjectAltNames, []string{}, ctx.RequireClientCertificate.Value)
+		default:
+			certProxy := &model.Proxy{}
+			certProxy.IstioVersion = proxy.IstioVersion
+			// If certificate files are specified in gateway configuration, use file based SDS.
+			certProxy.Metadata = &model.NodeMetadata{
+				TLSServerCertChain: server.Tls.ServerCertificate,
+				TLSServerKey:       server.Tls.PrivateKey,
+				TLSServerRootCert:  server.Tls.CaCertificates,
+			}
 
-		authn_model.ApplyToCommonTLSContext(ctx.CommonTlsContext, certProxy, server.Tls.SubjectAltNames, []string{}, ctx.RequireClientCertificate.Value)
+			authn_model.ApplyToCommonTLSContext(ctx.CommonTlsContext, certProxy, server.Tls.SubjectAltNames, []string{}, ctx.RequireClientCertificate.Value)
+		}
+	} else {
+		switch {
+		case server.Tls.Mode == networking.ServerTLSSettings_ISTIO_MUTUAL:
+			authn_model.ApplyToCommonTLSContext(ctx.CommonTlsContext, proxy, server.Tls.SubjectAltNames, []string{}, ctx.RequireClientCertificate.Value)
+			// If credential name is specified at gateway config, create SDS config for gateway to fetch key/cert from Istiod.
+		case server.Tls.CredentialName != "":
+			authn_model.ApplyCredentialSDSToServerCommonTLSContext(ctx.CommonTlsContext, server.Tls)
+		default:
+			certProxy := &model.Proxy{}
+			certProxy.IstioVersion = proxy.IstioVersion
+			// If certificate files are specified in gateway configuration, use file based SDS.
+			certProxy.Metadata = &model.NodeMetadata{
+				TLSServerCertChain: server.Tls.ServerCertificate,
+				TLSServerKey:       server.Tls.PrivateKey,
+				TLSServerRootCert:  server.Tls.CaCertificates,
+			}
+
+			authn_model.ApplyToCommonTLSContext(ctx.CommonTlsContext, certProxy, server.Tls.SubjectAltNames, []string{}, ctx.RequireClientCertificate.Value)
+		}
 	}
 
 	// Set TLS parameters if they are non-default
@@ -1055,9 +1077,15 @@ func buildGatewayVirtualHostDomains(hostname string, port int) []string {
 func filteredCipherSuites(server *networking.Server) []string {
 	suites := server.Tls.CipherSuites
 	ret := make([]string, 0, len(suites))
+	validCiphers := sets.NewSet()
 	for _, s := range suites {
 		if security.IsValidCipherSuite(s) {
-			ret = append(ret, s)
+			if !validCiphers.Contains(s) {
+				ret = append(ret, s)
+				validCiphers = validCiphers.Insert(s)
+			} else if log.DebugEnabled() {
+				log.Debugf("ignoring duplicated cipherSuite: %q for server %s", s, server.String())
+			}
 		} else if log.DebugEnabled() {
 			log.Debugf("ignoring unsupported cipherSuite: %q for server %s", s, server.String())
 		}

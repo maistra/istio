@@ -1376,7 +1376,7 @@ google.golang.org/grpc/xds/internal/xdsclient/bootstrap
 google.golang.org/grpc/xds/internal/xdsclient/load
 google.golang.org/grpc/xds/internal/xdsclient/v2
 google.golang.org/grpc/xds/internal/xdsclient/v3
-# google.golang.org/protobuf v1.27.1
+# google.golang.org/protobuf v1.27.2-0.20220217170731-3992ea83a23c
 ## explicit
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
@@ -1440,7 +1440,7 @@ helm.sh/helm/v3/pkg/chart
 helm.sh/helm/v3/pkg/chart/loader
 helm.sh/helm/v3/pkg/chartutil
 helm.sh/helm/v3/pkg/engine
-# istio.io/api v0.0.0-20211213163208-276abc55e8b6
+# istio.io/api v0.0.0-20220304035241-8c47cbbea144
 ## explicit
 istio.io/api/analysis/v1alpha1
 istio.io/api/annotation
@@ -1464,7 +1464,7 @@ istio.io/api/security/v1alpha1
 istio.io/api/security/v1beta1
 istio.io/api/telemetry/v1alpha1
 istio.io/api/type/v1beta1
-# istio.io/client-go v1.12.2-0.20211213163610-ffa18a1c9657
+# istio.io/client-go v1.12.4-0.20220304040955-30b642d5ba34
 ## explicit
 istio.io/client-go/pkg/apis/extensions/v1alpha1
 istio.io/client-go/pkg/apis/networking/v1alpha3
@@ -1489,11 +1489,11 @@ istio.io/client-go/pkg/listers/networking/v1alpha3
 istio.io/client-go/pkg/listers/networking/v1beta1
 istio.io/client-go/pkg/listers/security/v1beta1
 istio.io/client-go/pkg/listers/telemetry/v1alpha1
-# istio.io/gogo-genproto v0.0.0-20211206163843-5eda25c96270
+# istio.io/gogo-genproto v0.0.0-20220304035241-919a86433764
 ## explicit
 istio.io/gogo-genproto/googleapis/google/api
 istio.io/gogo-genproto/googleapis/google/rpc
-# istio.io/pkg v0.0.0-20211206163648-57f93bc2eff7
+# istio.io/pkg v0.0.0-20220304035241-7fbb2b738306
 ## explicit
 istio.io/pkg/appsignals
 istio.io/pkg/cache

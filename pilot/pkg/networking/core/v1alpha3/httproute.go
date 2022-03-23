@@ -22,6 +22,7 @@ import (
 
 	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	protobuf "google.golang.org/protobuf/proto"
 
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/features"
@@ -47,7 +48,8 @@ const (
 func (configgen *ConfigGeneratorImpl) BuildHTTPRoutes(
 	node *model.Proxy,
 	req *model.PushRequest,
-	routeNames []string) ([]*discovery.Resource, model.XdsLogDetails) {
+	routeNames []string,
+) ([]*discovery.Resource, model.XdsLogDetails) {
 	routeConfigurations := make([]*discovery.Resource, 0)
 
 	efw := req.Push.EnvoyFilters(node)
@@ -99,7 +101,8 @@ func (configgen *ConfigGeneratorImpl) BuildHTTPRoutes(
 // buildSidecarInboundHTTPRouteConfig builds the route config with a single wildcard virtual host on the inbound path
 // TODO: trace decorators, inbound timeouts
 func (configgen *ConfigGeneratorImpl) buildSidecarInboundHTTPRouteConfig(
-	node *model.Proxy, push *model.PushContext, instance *model.ServiceInstance, clusterName string) *route.RouteConfiguration {
+	node *model.Proxy, push *model.PushContext, instance *model.ServiceInstance, clusterName string,
+) *route.RouteConfiguration {
 	traceOperation := util.TraceOperation(string(instance.Service.Hostname), instance.ServicePort.Port)
 	defaultRoute := istio_route.BuildDefaultHTTPInboundRoute(clusterName, traceOperation)
 
@@ -174,7 +177,7 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 		if resource != nil {
 			return resource, true
 		}
-		if listenerPort > 0 {
+		if useSniffing && listenerPort > 0 {
 			// only cache for tcp ports and not for uds
 			vHostCache[listenerPort] = virtualHosts
 		}
@@ -190,7 +193,9 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 	util.SortVirtualHosts(virtualHosts)
 
 	if !useSniffing {
-		virtualHosts = append(virtualHosts, node.CatchAllVirtualHost)
+		// virtualhost envoyfilter can mutate this sharing config.
+		catchAll := protobuf.Clone(node.CatchAllVirtualHost).(*route.VirtualHost)
+		virtualHosts = append(virtualHosts, catchAll)
 	}
 
 	out := &route.RouteConfiguration{
@@ -214,11 +219,53 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 	return resource, false
 }
 
+// TODO: merge with IstioEgressListenerWrapper.selectVirtualServices
+// selectVirtualServices selects the virtual services by matching given services' host names.
+func selectVirtualServices(virtualServices []config.Config, servicesByName map[host.Name]*model.Service) []config.Config {
+	out := make([]config.Config, 0)
+	for _, c := range virtualServices {
+		rule := c.Spec.(*networking.VirtualService)
+		var match bool
+
+		// Selection algorithm:
+		// virtualservices have a list of hosts in the API spec
+		// if any host in the list matches one service hostname, select the virtual service
+		// and break out of the loop.
+		for _, h := range rule.Hosts {
+			// TODO: This is a bug. VirtualServices can have many hosts
+			// while the user might be importing only a single host
+			// We need to generate a new VirtualService with just the matched host
+			if servicesByName[host.Name(h)] != nil {
+				match = true
+				break
+			}
+
+			for svcHost := range servicesByName {
+				if host.Name(h).Matches(svcHost) {
+					match = true
+					break
+				}
+			}
+
+			if match {
+				break
+			}
+		}
+
+		if match {
+			out = append(out, c)
+		}
+	}
+
+	return out
+}
+
 func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext,
 	routeName string,
 	listenerPort int,
 	efKeys []string,
-	xdsCache model.XdsCache) ([]*route.VirtualHost, *discovery.Resource, *istio_route.Cache) {
+	xdsCache model.XdsCache,
+) ([]*route.VirtualHost, *discovery.Resource, *istio_route.Cache) {
 	var virtualServices []config.Config
 	var services []*model.Service
 
@@ -262,17 +309,12 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 				Resolution:     svc.Resolution,
 				Ports:          []*model.Port{svcPort},
 				Attributes: model.ServiceAttributes{
+					Namespace:       svc.Attributes.Namespace,
 					ServiceRegistry: svc.Attributes.ServiceRegistry,
 				},
 			}
 			hostsByNamespace[svc.Attributes.Namespace] = append(hostsByNamespace[svc.Attributes.Namespace], svc.Hostname)
 		}
-	}
-
-	// This is hack to keep consistent with previous behavior.
-	if listenerPort != 80 {
-		// only select virtualServices that matches a service
-		virtualServices = model.SelectVirtualServices(virtualServices, hostsByNamespace)
 	}
 
 	var routeCache *istio_route.Cache
@@ -302,11 +344,16 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 		}
 	}
 
+	// This is hack to keep consistent with previous behavior.
+	if listenerPort != 80 {
+		// only select virtualServices that matches a service
+		virtualServices = selectVirtualServices(virtualServices, servicesByName)
+	}
 	// Get list of virtual services bound to the mesh gateway
 	virtualHostWrappers := istio_route.BuildSidecarVirtualHostWrapper(routeCache, node, push, servicesByName, virtualServices, listenerPort)
 
 	resource, exist := xdsCache.Get(routeCache)
-	if exist {
+	if exist && !features.EnableUnsafeAssertions {
 		return nil, resource, routeCache
 	}
 
