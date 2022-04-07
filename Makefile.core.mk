@@ -113,7 +113,7 @@ endif
 
 # Envoy binary variables Keep the default URLs up-to-date with the latest push from istio/proxy.
 
-export ISTIO_ENVOY_BASE_URL ?= https://storage.googleapis.com/istio-build/proxy
+export ISTIO_ENVOY_BASE_URL ?= https://storage.googleapis.com/maistra-prow-testing/proxy
 
 # Use envoy as the sidecar by default
 export SIDECAR ?= envoy
