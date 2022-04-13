@@ -19,33 +19,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/leaderelection"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	"istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/pkg/log"
 )
-
-var (
-	peerStatusPatchMetadata   strategicpatch.LookupPatchMeta
-	exportStatusPatchMetadata strategicpatch.LookupPatchMeta
-	importStatusPatchMetadata strategicpatch.LookupPatchMeta
-)
-
-func init() {
-	var err error
-	if peerStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1.ServiceMeshPeer{}); err != nil {
-		panic("error creating strategicpatch.LookupPatchMeta for use with ServiceMeshPeer resources")
-	}
-	if exportStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1.ExportedServiceSet{}); err != nil {
-		panic("error creating strategicpatch.LookupPatchMeta for use with ExportedServiceSet resources")
-	}
-	if importStatusPatchMetadata, err = strategicpatch.NewPatchMetaFromStruct(&v1.ImportedServiceSet{}); err != nil {
-		panic("error creating strategicpatch.LookupPatchMeta for use with ImportedServiceSet resources")
-	}
-}
 
 type Manager interface {
 	PeerAdded(mesh types.NamespacedName) Handler
