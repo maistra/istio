@@ -35,5 +35,8 @@ COPY stats-filter.compiled.wasm /etc/istio/extensions/stats-filter.compiled.wasm
 COPY metadata-exchange-filter.wasm /etc/istio/extensions/metadata-exchange-filter.wasm
 COPY metadata-exchange-filter.compiled.wasm /etc/istio/extensions/metadata-exchange-filter.compiled.wasm
 
+# default to 1337:1337 in Kubernetes; in OpenShift, the SCC applies a different UID/GID
+USER 1337:1337
+
 # The pilot-agent will bootstrap Envoy.
 ENTRYPOINT ["/usr/local/bin/pilot-agent"]
