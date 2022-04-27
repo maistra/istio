@@ -6,6 +6,16 @@ metadata:
     app: istiod
     release: istio-control
 rules:
+  # sidecar injection controller
+  - apiGroups: [ "admissionregistration.k8s.io" ]
+    resources: [ "mutatingwebhookconfigurations" ]
+    verbs: [ "get", "list", "watch", "update", "patch" ]
+
+  # configuration validation webhook controller
+  - apiGroups: [ "admissionregistration.k8s.io" ]
+    resources: [ "validatingwebhookconfigurations" ]
+    verbs: [ "get", "list", "watch", "update" ]
+
   # Istiod and bootstrap.
   - apiGroups: ["certificates.k8s.io"]
     resources:
@@ -17,19 +27,18 @@ rules:
     resources:
       - "signers"
     resourceNames:
-    - "kubernetes.io/legacy-unknown"
+      - "kubernetes.io/legacy-unknown"
     verbs: ["approve"]
 
   # Used by Istiod to verify the JWT tokens
-  - apiGroups: ["authentication.k8s.io"]
-    resources: ["tokenreviews"]
-    verbs: ["create"]
+  - apiGroups: [ "authentication.k8s.io" ]
+    resources: [ "tokenreviews" ]
+    verbs: [ "create" ]
 
   # Used by Istiod to verify gateway SDS
   - apiGroups: ["authorization.k8s.io"]
     resources: ["subjectaccessreviews"]
     verbs: ["create"]
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
