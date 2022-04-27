@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -83,6 +84,15 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 		}
 	}
 	return err
+}
+
+func ApplyGatewayAPICRDs(ctx resource.Context) error {
+	for _, cluster := range ctx.Clusters() {
+		if err := cluster.ApplyYAMLFiles("", filepath.Join(env.IstioSrc, "tests/integration/servicemesh/testdata/gateway-api-crd.yaml")); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func findCRDs() (list []string, err error) {
