@@ -514,6 +514,11 @@ func handleCRDAdd(cl *Client, name string, stop <-chan struct{}) {
 	resourceGVK := s.Resource().GroupVersionKind()
 	gvr := s.Resource().GroupVersionResource()
 
+	if cl.client.GetMemberRoll() != nil && resourceGVK == gvk.GatewayClass {
+		scope.Infof("Skipping CRD %v as it is not compatible with maistra multi-tenancy", s.Resource().GroupVersionKind())
+		return
+	}
+
 	cl.kindsMu.Lock()
 	defer cl.kindsMu.Unlock()
 	if _, f := cl.kinds[resourceGVK]; f {
