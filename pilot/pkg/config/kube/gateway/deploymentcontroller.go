@@ -23,6 +23,7 @@ import (
 	"text/template"
 	"time"
 
+	maistrav1alpha2 "github.com/maistra/xns-informer/pkg/generated/gatewayapi/apis/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,8 +84,13 @@ type patcher func(gvr schema.GroupVersionResource, name string, namespace string
 // NewDeploymentController constructs a DeploymentController and registers required informers.
 // The controller will not start until Run() is called.
 func NewDeploymentController(client kube.Client) *DeploymentController {
+	var gwcInformer maistrav1alpha2.GatewayClassInformer
+	var gwcLister lister.GatewayClassLister
+	if client.GetMemberRoll() == nil {
+		gwcInformer = client.GatewayAPIInformer().Gateway().V1beta1().GatewayClasses()
+		gwcLister = gwcInformer.Lister()
+	}
 	gw := client.GatewayAPIInformer().Gateway().V1beta1().Gateways()
-	gwc := client.GatewayAPIInformer().Gateway().V1beta1().GatewayClasses()
 	dc := &DeploymentController{
 		client:    client,
 		templates: processTemplates(),
@@ -98,7 +104,7 @@ func NewDeploymentController(client kube.Client) *DeploymentController {
 			return err
 		},
 		gatewayLister:      gw.Lister(),
-		gatewayClassLister: gwc.Lister(),
+		gatewayClassLister: gwcLister,
 	}
 	dc.queue = controllers.NewQueue("gateway deployment",
 		controllers.WithReconciler(dc.Reconcile),
@@ -128,15 +134,17 @@ func NewDeploymentController(client kube.Client) *DeploymentController {
 
 	// Use the full informer; we are already watching all Gateways for the core Istiod logic
 	gw.Informer().AddEventHandler(controllers.ObjectHandler(dc.queue.AddObject))
-	gwc.Informer().AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
-		o.GetName()
-		gws, _ := dc.gatewayLister.List(klabels.Everything())
-		for _, g := range gws {
-			if string(g.Spec.GatewayClassName) == o.GetName() {
-				dc.queue.AddObject(g)
+	if gwcInformer != nil {
+		gwcInformer.Informer().AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
+			o.GetName()
+			gws, _ := dc.gatewayLister.List(klabels.Everything())
+			for _, g := range gws {
+				if string(g.Spec.GatewayClassName) == o.GetName() {
+					dc.queue.AddObject(g)
+				}
 			}
-		}
-	}))
+		}))
+	}
 
 	return dc
 }
@@ -161,7 +169,10 @@ func (d *DeploymentController) Reconcile(req types.NamespacedName) error {
 		return nil
 	}
 
-	gc, _ := d.gatewayClassLister.Get(string(gw.Spec.GatewayClassName))
+	var gc *gateway.GatewayClass
+	if d.gatewayClassLister != nil {
+		gc, _ = d.gatewayClassLister.Get(string(gw.Spec.GatewayClassName))
+	}
 	if gc != nil {
 		// We found the gateway class, but we do not implement it. Skip
 		if gc.Spec.ControllerName != ControllerName {

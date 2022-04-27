@@ -42,6 +42,10 @@ import (
 	"istio.io/istio/pkg/test/util/retry"
 )
 
+type InstallationOptions struct {
+	EnableGatewayAPI bool
+}
+
 func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 	crds, err := manifests.GetManifestsByName()
 	if err != nil {
@@ -72,25 +76,40 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 	return err
 }
 
-func Install(ctx resource.Context) error {
-	kubeClient := ctx.Clusters().Default().Kube()
-	istiod, err := waitForIstiod(kubeClient, 0)
-	if err != nil {
-		return err
-	}
-	if err := ctx.Clusters().Default().ApplyYAMLFiles("", filepath.Join(env.IstioSrc, "tests/integration/servicemesh/testdata/clusterrole.yaml")); err != nil {
-		return err
-	}
-	if err := applyRolesToMemberNamespaces(ctx.Clusters().Default(), "istio-system"); err != nil {
-		return err
-	}
-	if err := patchIstiodArgs(kubeClient, defaultMaistraSettings); err != nil {
-		return err
-	}
-	if _, err := waitForIstiod(kubeClient, istiod.Generation); err != nil {
-		return err
+func ApplyGatewayAPICRDs(ctx resource.Context) error {
+	for _, c := range ctx.Clusters() {
+		if err := c.ApplyYAMLFiles(
+			"", filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/gateway-api-crd.yaml"),
+		); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func Install(opts InstallationOptions) resource.SetupFn {
+	return func(ctx resource.Context) error {
+		kubeClient := ctx.Clusters().Default().Kube()
+		istiod, err := waitForIstiod(kubeClient, 0)
+		if err != nil {
+			return err
+		}
+		if err := ctx.Clusters().Default().ApplyYAMLFiles(
+			"", filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/clusterrole.yaml"),
+		); err != nil {
+			return err
+		}
+		if err := applyRolesToMemberNamespaces(ctx.Clusters().Default(), "istio-system"); err != nil {
+			return err
+		}
+		if err := patchIstiodArgs(kubeClient, generateMaistraArguments(opts)); err != nil {
+			return err
+		}
+		if _, err := waitForIstiod(kubeClient, istiod.Generation); err != nil {
+			return err
+		}
+		return nil
+	}
 }
 
 func EnableIOR(ctx resource.Context) error {
@@ -159,8 +178,8 @@ func applyRolesToMemberNamespaces(c cluster.Cluster, namespaces ...string) error
 	for _, ns := range namespaces {
 		if err := c.ApplyYAMLFiles(
 			ns,
-			filepath.Join(env.IstioSrc, "tests/integration/servicemesh/smmr/testdata/role.yaml"),
-			filepath.Join(env.IstioSrc, "tests/integration/servicemesh/smmr/testdata/rolebinding.yaml")); err != nil {
+			filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/role.yaml"),
+			filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/rolebinding.yaml")); err != nil {
 			return fmt.Errorf("failed to apply Roles and RoleBindings: %s", err)
 		}
 	}
@@ -200,7 +219,8 @@ func patchIstiodArgs(kubeClient kubernetes.Interface, patch string) error {
 	}, retry.Timeout(10*time.Second), retry.Delay(time.Second))
 }
 
-const defaultMaistraSettings = `[
+func generateMaistraArguments(opts InstallationOptions) string {
+	return fmt.Sprintf(`[
 	{
 		"op": "add",
 		"path": "/spec/template/spec/containers/0/args/1",
@@ -234,7 +254,7 @@ const defaultMaistraSettings = `[
 		"path": "/spec/template/spec/containers/0/env/2",
 		"value": {
 			"name": "PILOT_ENABLE_GATEWAY_API",
-			"value": "false"
+			"value": "%t"
 		}
 	},
 	{
@@ -242,7 +262,7 @@ const defaultMaistraSettings = `[
 		"path": "/spec/template/spec/containers/0/env/3",
 		"value": {
 			"name": "PILOT_ENABLE_GATEWAY_API_STATUS",
-			"value": "false"
+			"value": "%t"
 		}
 	},
 	{
@@ -250,7 +270,7 @@ const defaultMaistraSettings = `[
 		"path": "/spec/template/spec/containers/0/env/4",
 		"value": {
 			"name": "PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER",
-			"value": "false"
+			"value": "%t"
 		}
 	},
 	{
@@ -277,7 +297,8 @@ const defaultMaistraSettings = `[
 			"value": ""
 		}
 	}
-]`
+]`, opts.EnableGatewayAPI, opts.EnableGatewayAPI, opts.EnableGatewayAPI)
+}
 
 const enableIOR = `[
 	{
