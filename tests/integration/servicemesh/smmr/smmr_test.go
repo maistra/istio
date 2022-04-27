@@ -32,8 +32,8 @@ func TestMain(m *testing.M) {
 	framework.
 		NewSuite(m).
 		RequireSingleCluster().
-		Setup(servicemesh.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(&i, nil)).
+		Setup(EnableMultiTenancy).
 		Run()
 }
 
@@ -44,8 +44,7 @@ func TestSMMR(t *testing.T) {
 			gatewayNamespace := servicemesh.CreateNamespace(ctx, cluster, "gateway")
 			httpbinNamespace := servicemesh.CreateNamespace(ctx, cluster, "httpbin")
 			sleepNamespace := servicemesh.CreateNamespace(ctx, cluster, "sleep")
-			configureMemberRollNameInIstiod(ctx, cluster)
-			createServiceMeshMemberRoll(ctx, cluster, gatewayNamespace, httpbinNamespace)
+			CreateServiceMeshMemberRoll(ctx, cluster, gatewayNamespace, httpbinNamespace)
 			applyGateway(ctx, cluster, gatewayNamespace)
 			applyVirtualService(ctx, cluster, httpbinNamespace, gatewayNamespace, "httpbin")
 			applyVirtualService(ctx, cluster, sleepNamespace, gatewayNamespace, "sleep")

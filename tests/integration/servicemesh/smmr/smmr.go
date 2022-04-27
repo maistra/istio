@@ -22,73 +22,145 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"time"
 
+	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	maistrav1 "maistra.io/api/client/versioned/typed/core/v1"
 
+	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/framework/components/istioctl"
+	"istio.io/istio/pkg/test/framework/resource"
 	"istio.io/istio/pkg/test/scopes"
 	"istio.io/istio/pkg/test/util/retry"
+	"istio.io/istio/tests/integration/servicemesh"
 )
 
 const gatewayRouteName = "http.8080"
 
-func configureMemberRollNameInIstiod(ctx framework.TestContext, c cluster.Cluster) {
+func EnableMultiTenancy(ctx resource.Context) error {
+	if err := servicemesh.ApplyServiceMeshCRDs(ctx); err != nil {
+		return err
+	}
+	if err := servicemesh.ApplyGatewayAPICRDs(ctx); err != nil {
+		return err
+	}
 	scopes.Framework.Info("Patching istiod deployment...")
-	waitForIstiod(ctx, c)
-	patchIstiodArgs(ctx, c)
-	waitForIstiod(ctx, c)
+	for _, cluster := range ctx.Clusters() {
+		istiod, err := waitForIstiod(cluster, 0)
+		if err != nil {
+			return err
+		}
+		if err := configureNamespaces(cluster, "istio-system"); err != nil {
+			return err
+		}
+		scopes.Framework.Info("Patching ClusterRole and ClusterRoleBindings...")
+		if err := cluster.ApplyYAMLFiles("", filepath.Join(env.IstioSrc, "tests/integration/servicemesh/smmr/testdata/clusterrole.yaml")); err != nil {
+			scopes.Framework.Errorf("failed to patch: %v", err)
+		}
+		if err := patchIstiodArgs(cluster); err != nil {
+			return err
+		}
+		if _, err := waitForIstiod(cluster, istiod.Generation); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func waitForIstiod(ctx framework.TestContext, c cluster.Cluster) {
+func waitForIstiod(c cluster.Cluster, lastSeenGeneration int64) (*v1.Deployment, error) {
+	var istiod *v1.Deployment
 	if err := retry.UntilSuccess(func() error {
-		istiod, err := c.AppsV1().Deployments("istio-system").Get(context.TODO(), "istiod", metav1.GetOptions{})
+		var err error
+		istiod, err = c.AppsV1().Deployments("istio-system").Get(context.TODO(), "istiod", metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to get deployment istiod: %v", err)
 		}
 		if istiod.Status.ReadyReplicas != istiod.Status.Replicas {
 			return fmt.Errorf("istiod deployment is not ready - %d of %d pods are ready", istiod.Status.ReadyReplicas, istiod.Status.Replicas)
 		}
+		if lastSeenGeneration != 0 && istiod.Status.ObservedGeneration == lastSeenGeneration {
+			return fmt.Errorf("istiod deployment is not ready - Generation has not been updated")
+		}
 		return nil
 	}, retry.Timeout(300*time.Second), retry.Delay(time.Second)); err != nil {
-		ctx.Fatal(err)
+		return nil, err
 	}
+	return istiod, nil
 }
 
-func patchIstiodArgs(ctx framework.TestContext, c cluster.Cluster) {
-	patch := `[{
+func patchIstiodArgs(c cluster.Cluster) error {
+	patch := `[
+	{
 		"op": "add",
 		"path": "/spec/template/spec/containers/0/args/1",
 		"value": "--memberRollName=default"
-	}]`
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/args/2",
+		"value": "--enableCRDScan=false"
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/args/3",
+		"value": "--disableNodeAccess=true"
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/args/4",
+		"value": "--enableIngressClassName=false"
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/1",
+		"value": {
+			"name": "INJECTION_WEBHOOK_CONFIG_NAME",
+			"value": ""
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/2",
+		"value": {
+			"name": "VALIDATION_WEBHOOK_CONFIG_NAME",
+			"value": ""
+		}
+	}
+]`
+
 	_, err := c.AppsV1().Deployments("istio-system").
 		Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
 	if err != nil {
-		ctx.Fatalf("failed to patch istiod deployment: %v", err)
+		return fmt.Errorf("failed to patch istiod deployment: %v", err)
 	}
+	return nil
 }
 
-func createServiceMeshMemberRoll(ctx framework.TestContext, c cluster.Cluster, ns1, ns2 string) {
+func CreateServiceMeshMemberRoll(ctx framework.TestContext, c cluster.Cluster, namespaces ...string) {
 	scopes.Framework.Info("Applying ServiceMeshMemberRoll...")
-	err := ctx.Config(c).ApplyYAML("istio-system", fmt.Sprintf(`
+	memberRollYAML := `
 apiVersion: maistra.io/v1
 kind: ServiceMeshMemberRoll
 metadata:
   name: default
 spec:
   members:
-    - %s
-    - %s
-`, ns1, ns2))
+`
+	for _, ns := range namespaces {
+		memberRollYAML += fmt.Sprintf(`  - %s
+`, ns)
+	}
+	err := ctx.Config(c).ApplyYAML("istio-system", memberRollYAML)
 	if err != nil {
 		ctx.Fatalf("Failed to apply SMMR default: %v", err)
 	}
 
-	updateServiceMeshMemberRollStatus(ctx, c, ns1, ns2)
+	updateServiceMeshMemberRollStatus(ctx, c, append(namespaces, "istio-system")...)
 }
 
 func addNamespaceToServiceMeshMemberRoll(ctx framework.TestContext, c cluster.Cluster, namespace string) {
@@ -113,6 +185,10 @@ func addNamespaceToServiceMeshMemberRoll(ctx framework.TestContext, c cluster.Cl
 }
 
 func updateServiceMeshMemberRollStatus(ctx framework.TestContext, c cluster.Cluster, memberNamespaces ...string) {
+	if err := configureNamespaces(c, memberNamespaces...); err != nil {
+		ctx.Fatal(err)
+	}
+
 	client, err := maistrav1.NewForConfig(c.RESTConfig())
 	if err != nil {
 		ctx.Fatalf("failed to create client for maistra resources: %v", err)
@@ -129,6 +205,19 @@ func updateServiceMeshMemberRollStatus(ctx framework.TestContext, c cluster.Clus
 	if err != nil {
 		ctx.Fatalf("failed to update SMMR default: %v", err)
 	}
+}
+
+func configureNamespaces(c cluster.Cluster, namespaces ...string) error {
+	for _, ns := range namespaces {
+		scopes.Framework.Infof("Applying Roles and RoleBindings to namespace %s", ns)
+		if err := c.ApplyYAMLFiles(
+			ns,
+			filepath.Join(env.IstioSrc, "tests/integration/servicemesh/smmr/testdata/role.yaml"),
+			filepath.Join(env.IstioSrc, "tests/integration/servicemesh/smmr/testdata/rolebinding.yaml")); err != nil {
+			return fmt.Errorf("failed to apply Roles and RoleBindings: %v", err)
+		}
+	}
+	return nil
 }
 
 func checkIfIngressHasConfiguredRouteWithVirtualHost(

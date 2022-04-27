@@ -99,11 +99,16 @@ func NewController(client kube.Client, c model.ConfigStoreCache, options control
 			}
 		}, uint(features.StatusMaxWorkers))
 	}
-	nsInformer := client.KubeInformer().Core().V1().Namespaces().Informer()
+	var nsLister listerv1.NamespaceLister
+	var nsInformer cache.SharedIndexInformer
+	if client.GetMemberRoll() == nil {
+		nsInformer = client.KubeInformer().Core().V1().Namespaces().Informer()
+		nsLister = client.KubeInformer().Core().V1().Namespaces().Lister()
+	}
 	gatewayController := &Controller{
 		client:            client,
 		cache:             c,
-		namespaceLister:   client.KubeInformer().Core().V1().Namespaces().Lister(),
+		namespaceLister:   nsLister,
 		namespaceInformer: nsInformer,
 		domain:            options.DomainSuffix,
 		status:            statusQueue,
@@ -111,14 +116,16 @@ func NewController(client kube.Client, c model.ConfigStoreCache, options control
 		statusEnabled: atomic.NewBool(false),
 	}
 
-	nsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			gatewayController.namespaceEvent(nil, obj)
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			gatewayController.namespaceEvent(oldObj, newObj)
-		},
-	})
+	if nsInformer != nil {
+		nsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				gatewayController.namespaceEvent(nil, obj)
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				gatewayController.namespaceEvent(oldObj, newObj)
+			},
+		})
+	}
 
 	return gatewayController
 }
@@ -207,13 +214,28 @@ func (c *Controller) Recompute(context model.GatewayContext) error {
 		return nil
 	}
 
-	nsl, err := c.namespaceLister.List(klabels.Everything())
-	if err != nil {
-		return fmt.Errorf("failed to list type Namespaces: %v", err)
-	}
 	namespaces := map[string]*corev1.Namespace{}
-	for _, ns := range nsl {
-		namespaces[ns.Name] = ns
+	if c.namespaceLister != nil {
+		nsl, err := c.namespaceLister.List(klabels.Everything())
+		if err != nil {
+			return fmt.Errorf("failed to list type Namespaces: %v", err)
+		}
+		for _, ns := range nsl {
+			namespaces[ns.Name] = ns
+		}
+	} else {
+		// we don't support namespace selectors in multi-tenant Istio right now,
+		// so we remove them, inducing default behavior (namespace-local)
+		for _, obj := range gateway {
+			gw := obj.Spec.(*k8s.GatewaySpec)
+			for _, listener := range gw.Listeners {
+				if listener.AllowedRoutes != nil &&
+					listener.AllowedRoutes.Namespaces != nil &&
+					listener.AllowedRoutes.Namespaces.Selector != nil {
+					listener.AllowedRoutes.Namespaces.Selector = nil
+				}
+			}
+		}
 	}
 	input.Namespaces = namespaces
 	output := convertResources(input)
@@ -277,6 +299,9 @@ func (c *Controller) RegisterEventHandler(typ config.GroupVersionKind, handler m
 }
 
 func (c *Controller) Run(stop <-chan struct{}) {
+	if c.namespaceInformer == nil {
+		return
+	}
 	cache.WaitForCacheSync(stop, c.namespaceInformer.HasSynced)
 }
 
