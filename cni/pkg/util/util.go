@@ -19,21 +19,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/fsnotify/fsnotify"
 
 	"istio.io/istio/pkg/file"
 )
 
+type watchPrefix struct {
+	watcher *fsnotify.Watcher
+	prefix  string
+}
+
 // Creates a file watcher that watches for any changes to the directory
-func CreateFileWatcher(dirs ...string) (watcher *fsnotify.Watcher, fileModified chan bool, errChan chan error, err error) {
+// If `prefix` is non-empty, it will only notify of changes for files whose filename starts with `prefix`
+func CreateFileWatcher(prefix string, dirs []string) (watcher *fsnotify.Watcher, fileModified chan bool, errChan chan error, err error) {
 	watcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		return
 	}
 
 	fileModified, errChan = make(chan bool), make(chan error)
-	go watchFiles(watcher, fileModified, errChan)
+	wp := &watchPrefix{watcher: watcher, prefix: prefix}
+	go watchFiles(wp, fileModified, errChan)
 
 	for _, dir := range dirs {
 		if file.IsDirWriteable(dir) != nil {
@@ -50,17 +59,17 @@ func CreateFileWatcher(dirs ...string) (watcher *fsnotify.Watcher, fileModified 
 	return
 }
 
-func watchFiles(watcher *fsnotify.Watcher, fileModified chan bool, errChan chan error) {
+func watchFiles(wp *watchPrefix, fileModified chan bool, errChan chan error) {
 	for {
 		select {
-		case event, ok := <-watcher.Events:
+		case event, ok := <-wp.watcher.Events:
 			if !ok {
 				return
 			}
-			if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove) != 0 {
+			if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove) != 0 && strings.HasPrefix(filepath.Base(event.Name), wp.prefix) {
 				fileModified <- true
 			}
-		case err, ok := <-watcher.Errors:
+		case err, ok := <-wp.watcher.Errors:
 			if !ok {
 				return
 			}
