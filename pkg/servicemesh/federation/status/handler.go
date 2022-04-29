@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/client-go/util/retry"
 	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pkg/servicemesh/federation/model"
@@ -303,12 +304,14 @@ func (h *handler) ExportRemoved(service model.ServiceKey) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	h.logger.Debugf("h.exports: %+v", h.exports)
 	key := statusServiceKeyFor(service)
 	if _, ok := h.exports[key]; !ok {
 		h.logger.Debugf("ExportRemoved called when export mapping does not exist: %+v", key)
 		return
 	}
 	delete(h.exports, key)
+	h.logger.Debugf("h.exports: %+v", h.exports)
 	h.exportsDirty = true
 }
 
@@ -352,11 +355,13 @@ func (h *handler) ImportRemoved(exportedName string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	h.logger.Debugf("h.imports: %v", h.imports)
 	if _, ok := h.imports[exportedName]; !ok {
 		h.logger.Debugf("ImportRemoved called when import mapping does not exist: %s", exportedName)
 		return
 	}
 	delete(h.imports, exportedName)
+	h.logger.Debugf("h.imports: %v", h.imports)
 	h.importsDirty = true
 }
 
@@ -439,7 +444,7 @@ func (h *handler) Flush() error {
 		h.discoveryDirty = false
 	}
 
-	mf, err := h.manager.rm.PeerInformer().Lister().ServiceMeshPeers(h.mesh.Namespace).Get(h.mesh.Name)
+	peer, err := h.manager.rm.PeerInformer().Lister().ServiceMeshPeers(h.mesh.Namespace).Get(h.mesh.Name)
 	if err != nil {
 		if apierrors.IsGone(err) || apierrors.IsNotFound(err) {
 			h.logger.Debugf("could not locate ServiceMeshPeer %s for status update", h.mesh)
@@ -447,16 +452,15 @@ func (h *handler) Flush() error {
 		}
 		return err
 	}
-	oldStatus := mf.Status.DeepCopy()
-	newStatus := &v1.ServiceMeshPeerStatus{}
 
-	newStatus.DiscoveryStatus = oldStatus.DeepCopy().DiscoveryStatus
+	newStatus := v1.ServiceMeshPeerStatus{}
+	newStatus.DiscoveryStatus = peer.Status.DeepCopy().DiscoveryStatus
 	if h.discoveryStatus.Watch.Connected {
-		newStatus.DiscoveryStatus.Active = h.setDiscoveryStatus(newStatus.DiscoveryStatus.Active, h.discoveryStatus)
-		newStatus.DiscoveryStatus.Inactive = h.clearDiscoveryStatus(newStatus.DiscoveryStatus.Inactive)
+		newStatus.DiscoveryStatus.Active = h.putDiscoveryStatus(newStatus.DiscoveryStatus.Active, h.discoveryStatus)
+		newStatus.DiscoveryStatus.Inactive = h.removeDiscoveryStatus(newStatus.DiscoveryStatus.Inactive)
 	} else {
-		newStatus.DiscoveryStatus.Inactive = h.setDiscoveryStatus(newStatus.DiscoveryStatus.Inactive, h.discoveryStatus)
-		newStatus.DiscoveryStatus.Active = h.clearDiscoveryStatus(newStatus.DiscoveryStatus.Active)
+		newStatus.DiscoveryStatus.Inactive = h.putDiscoveryStatus(newStatus.DiscoveryStatus.Inactive, h.discoveryStatus)
+		newStatus.DiscoveryStatus.Active = h.removeDiscoveryStatus(newStatus.DiscoveryStatus.Active)
 	}
 
 	var allErrors []error
@@ -472,23 +476,21 @@ func (h *handler) Flush() error {
 		}
 	}
 
-	// XXX: the created patch does not merge properly and can cause duplicate entries in discovery status
-	patch, err := h.createPatch(&v1.ServiceMeshPeer{Status: *newStatus}, &v1.ServiceMeshPeer{Status: *oldStatus}, peerStatusPatchMetadata)
-	if err != nil {
-		return err
-	}
-
-	h.logger.Debugf("status patch: %s", string(patch))
-
-	if len(patch) == 0 || string(patch) == "{}" {
-		// nothing to patch
+	if reflect.DeepEqual(peer.Status, newStatus) { // TODO: peer.Status may be stale, causing us to skip the update when we shouldn't
 		h.logger.Debugf("no status updates for ServiceMeshPeer %s", h.mesh)
 		return nil
 	}
-	_, err = h.manager.rm.MaistraClientSet().FederationV1().ServiceMeshPeers(h.mesh.Namespace).Patch(context.TODO(), h.mesh.Name,
-		types.MergePatchType, patch, metav1.PatchOptions{}, "status")
-	if err != nil && !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
-		return utilerrors.NewAggregate(append(allErrors, err))
+
+	updatedPeer := peer.DeepCopy()
+	updatedPeer.Status = newStatus
+
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		_, err = h.manager.rm.MaistraClientSet().FederationV1().ServiceMeshPeers(h.mesh.Namespace).UpdateStatus(context.TODO(), updatedPeer, metav1.UpdateOptions{})
+		return err
+	}); err != nil {
+		if err != nil && !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
+			return utilerrors.NewAggregate(append(allErrors, err))
+		}
 	}
 	h.watchDirty = false
 	return utilerrors.NewAggregate(allErrors)
@@ -508,22 +510,23 @@ func (h *handler) patchExports() error {
 	if exportedServices == nil {
 		exportedServices = []v1.PeerServiceMapping{}
 	}
-	patch, err := h.createPatch(
-		&v1.ExportedServiceSet{Status: v1.ExportedServiceSetStatus{ExportedServices: exportedServices}},
-		&v1.ExportedServiceSet{Status: exportSet.DeepCopy().Status},
-		exportStatusPatchMetadata)
-	if err != nil {
-		return err
-	}
+	newStatus := v1.ExportedServiceSetStatus{ExportedServices: exportedServices}
 
-	if len(patch) == 0 || string(patch) == "{}" {
-		// nothing to patch
+	h.logger.Debugf("exportSet.Status=%+v", exportSet.Status)
+	h.logger.Debugf("newStatus=%+v", newStatus)
+	if reflect.DeepEqual(exportSet.Status, newStatus) { // TODO: exportSet.Status may be stale, causing us to skip the update when we shouldn't
 		h.logger.Debugf("no status updates for ExportedServiceSet %s", h.mesh)
 		return nil
 	}
 
-	if _, err := h.manager.rm.MaistraClientSet().FederationV1().ExportedServiceSets(h.mesh.Namespace).
-		Patch(context.TODO(), h.mesh.Name, types.MergePatchType, patch, metav1.PatchOptions{}, "status"); err != nil {
+	updatedExportSet := exportSet.DeepCopy()
+	updatedExportSet.Status = newStatus
+
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		_, err = h.manager.rm.MaistraClientSet().FederationV1().ExportedServiceSets(h.mesh.Namespace).
+			UpdateStatus(context.TODO(), updatedExportSet, metav1.UpdateOptions{})
+		return err
+	}); err != nil {
 		if !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
 			return err
 		}
@@ -545,22 +548,23 @@ func (h *handler) patchImports() error {
 	if importedServices == nil {
 		importedServices = []v1.PeerServiceMapping{}
 	}
-	patch, err := h.createPatch(
-		&v1.ImportedServiceSet{Status: v1.ImportedServiceSetStatus{ImportedServices: importedServices}},
-		&v1.ImportedServiceSet{Status: importSet.DeepCopy().Status},
-		importStatusPatchMetadata)
-	if err != nil {
-		return err
-	}
+	newStatus := v1.ImportedServiceSetStatus{ImportedServices: importedServices}
 
-	if len(patch) == 0 || string(patch) == "{}" {
-		// nothing to patch
+	h.logger.Debugf("importSet.Status=%+v", importSet.Status)
+	h.logger.Debugf("newStatus=%+v", newStatus)
+	if reflect.DeepEqual(importSet.Status, newStatus) { // TODO: importSet.Status may be stale, causing us to skip the update when we shouldn't
 		h.logger.Debugf("no status updates for ImportedServiceSet %s", h.mesh)
 		return nil
 	}
 
-	if _, err := h.manager.rm.MaistraClientSet().FederationV1().ImportedServiceSets(h.mesh.Namespace).
-		Patch(context.TODO(), h.mesh.Name, types.MergePatchType, patch, metav1.PatchOptions{}, "status"); err != nil {
+	updatedImportSet := importSet.DeepCopy()
+	updatedImportSet.Status = newStatus
+
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		_, err = h.manager.rm.MaistraClientSet().FederationV1().ImportedServiceSets(h.mesh.Namespace).
+			UpdateStatus(context.TODO(), updatedImportSet, metav1.UpdateOptions{})
+		return err
+	}); err != nil {
 		if !(apierrors.IsGone(err) || apierrors.IsNotFound(err)) {
 			return err
 		}
@@ -588,7 +592,7 @@ func (h *handler) createPatch(newObj, oldObj interface{}, metadata strategicpatc
 	return patch, nil
 }
 
-func (h *handler) setDiscoveryStatus(statuses []v1.PodPeerDiscoveryStatus, newStatus v1.PeerDiscoveryStatus) []v1.PodPeerDiscoveryStatus {
+func (h *handler) putDiscoveryStatus(statuses []v1.PodPeerDiscoveryStatus, newStatus v1.PeerDiscoveryStatus) []v1.PodPeerDiscoveryStatus {
 	count := len(statuses)
 	index := sort.Search(count, func(i int) bool { return statuses[i].Pod == h.manager.name.Name })
 	if index < count {
@@ -602,7 +606,7 @@ func (h *handler) setDiscoveryStatus(statuses []v1.PodPeerDiscoveryStatus, newSt
 	return statuses
 }
 
-func (h *handler) clearDiscoveryStatus(statuses []v1.PodPeerDiscoveryStatus) []v1.PodPeerDiscoveryStatus {
+func (h *handler) removeDiscoveryStatus(statuses []v1.PodPeerDiscoveryStatus) []v1.PodPeerDiscoveryStatus {
 	count := len(statuses)
 	index := sort.Search(count, func(i int) bool { return statuses[i].Pod == h.manager.name.Name })
 	if index < count {
