@@ -363,6 +363,11 @@ func TestEdit(t *testing.T) {
 			validateRoutes(t, c.hosts, list, "gw", c.tls)
 		})
 	}
+
+	// Try to edit a gateway with the same resourceVersion
+	// No effect. UPDATE Event is not generated. I'll remove it.
+	IORLog.SetOutputLevel(log.DebugLevel)
+	editGateway(t, store, "istio-system", "gw", []string{"one.org.br"}, map[string]string{"istio": "ingressgateway"}, true, "6")
 }
 
 // TestPerf makes sure we are not doing more API calls than necessary
