@@ -65,7 +65,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20200929181438-91d71ef2122c
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.32.1
 	github.com/prometheus/prometheus v2.5.0+incompatible
@@ -95,10 +95,10 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	helm.sh/helm/v3 v3.7.1
-	istio.io/api v0.0.0-20220304035241-8c47cbbea144
-	istio.io/client-go v1.12.4-0.20220304040955-30b642d5ba34
-	istio.io/gogo-genproto v0.0.0-20220304035241-919a86433764
-	istio.io/pkg v0.0.0-20220304035241-7fbb2b738306
+	istio.io/api v0.0.0-20220413220906-0d07ea5cbef8
+	istio.io/client-go v1.12.7-0.20220413221605-4b21f100d914
+	istio.io/gogo-genproto v0.0.0-20220413221206-c6177de3a4de
+	istio.io/pkg v0.0.0-20220413221105-d9bc5148f7a7
 	k8s.io/api v0.22.2
 	k8s.io/apiextensions-apiserver v0.22.2
 	k8s.io/apimachinery v0.22.2
