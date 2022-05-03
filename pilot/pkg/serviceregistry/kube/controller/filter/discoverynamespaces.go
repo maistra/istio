@@ -23,6 +23,7 @@ import (
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/log"
 )
 
@@ -215,4 +216,52 @@ func (d *discoveryNamespacesFilter) isSelected(labels labels.Set) bool {
 	}
 
 	return false
+}
+
+type maistraDiscoveryNamespacesFilter struct {
+	lock       sync.RWMutex
+	namespaces sets.String
+}
+
+func NewMaistraDiscoveryNamespacesFilter(mrc memberroll.MemberRollController) DiscoveryNamespacesFilter {
+	d := &maistraDiscoveryNamespacesFilter{}
+	mrc.Register(d, "MaistraDiscoveryNamespacesFilter")
+	return d
+}
+
+func (d *maistraDiscoveryNamespacesFilter) SetNamespaces(namespaces ...string) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.namespaces = sets.NewString(namespaces...)
+}
+
+func (d *maistraDiscoveryNamespacesFilter) Filter(obj interface{}) bool {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
+	return d.namespaces.Has(obj.(metav1.Object).GetNamespace())
+}
+
+func (d *maistraDiscoveryNamespacesFilter) SelectorsChanged(
+	discoverySelectors []*metav1.LabelSelector) (selectedNamespaces []string, deselectedNamespaces []string) {
+	panic("Not implemented")
+}
+
+func (d *maistraDiscoveryNamespacesFilter) NamespaceCreated(ns metav1.ObjectMeta) (membershipChanged bool) {
+	panic("Not implemented")
+}
+
+func (d *maistraDiscoveryNamespacesFilter) NamespaceUpdated(oldNs, newNs metav1.ObjectMeta) (membershipChanged bool, namespaceAdded bool) {
+	panic("Not implemented")
+}
+
+func (d *maistraDiscoveryNamespacesFilter) NamespaceDeleted(ns metav1.ObjectMeta) (membershipChanged bool) {
+	panic("Not implemented")
+}
+
+func (d *maistraDiscoveryNamespacesFilter) GetMembers() sets.String {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
+	members := sets.NewString()
+	members.Insert(d.namespaces.List()...)
+	return members
 }

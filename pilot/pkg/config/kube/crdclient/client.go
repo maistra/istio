@@ -149,16 +149,17 @@ func NewForSchemas(ctx context.Context, client kube.Client, revision, domainSuff
 		client:           client,
 		istioClient:      client.Istio(),
 		gatewayAPIClient: client.GatewayAPI(),
-		crdMetadataInformer: client.MetadataInformer().ForResource(collections.K8SApiextensionsK8SIoV1Customresourcedefinitions.Resource().
-			GroupVersionResource()).Informer(),
-		beginSync:   atomic.NewBool(false),
-		initialSync: atomic.NewBool(false),
+		beginSync:        atomic.NewBool(false),
+		initialSync:      atomic.NewBool(false),
 		crdWatches: map[config.GroupVersionKind]chan struct{}{
 			gvk.KubernetesGateway: make(chan struct{}),
 		},
 	}
 	var known map[string]struct{}
 	if enableCRDScan {
+		out.crdMetadataInformer = client.MetadataInformer().ForResource(collections.K8SApiextensionsK8SIoV1Customresourcedefinitions.Resource().
+			GroupVersionResource()).Informer()
+
 		var err error
 		known, err = knownCRDs(ctx, client.Ext())
 		if err != nil {
@@ -219,19 +220,21 @@ func (cl *Client) Run(stop <-chan struct{}) {
 	cl.initialSync.Store(true)
 	scope.Info("Pilot K8S CRD controller synced ", time.Since(t0))
 
-	cl.crdMetadataInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			crd, ok := obj.(*metav1.PartialObjectMetadata)
-			if !ok {
-				// Shouldn't happen
-				scope.Errorf("wrong type %T: %v", obj, obj)
-				return
-			}
-			handleCRDAdd(cl, crd.Name, stop)
-		},
-		UpdateFunc: nil,
-		DeleteFunc: nil,
-	})
+	if cl.crdMetadataInformer != nil {
+		cl.crdMetadataInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				crd, ok := obj.(*metav1.PartialObjectMetadata)
+				if !ok {
+					// Shouldn't happen
+					scope.Errorf("wrong type %T: %v", obj, obj)
+					return
+				}
+				handleCRDAdd(cl, crd.Name, stop)
+			},
+			UpdateFunc: nil,
+			DeleteFunc: nil,
+		})
+	}
 
 	cl.queue.Run(stop)
 	scope.Info("controller terminated")
