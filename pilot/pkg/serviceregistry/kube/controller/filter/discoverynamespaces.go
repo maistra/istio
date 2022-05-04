@@ -236,9 +236,8 @@ func (d *maistraDiscoveryNamespacesFilter) SetNamespaces(namespaces ...string) {
 }
 
 func (d *maistraDiscoveryNamespacesFilter) Filter(obj interface{}) bool {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
-	return d.namespaces.Has(obj.(metav1.Object).GetNamespace())
+	// xns-informers make sure we only receive objects in member namespaces
+	return true
 }
 
 func (d *maistraDiscoveryNamespacesFilter) SelectorsChanged(
