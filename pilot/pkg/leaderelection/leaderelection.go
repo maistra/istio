@@ -157,7 +157,7 @@ func (l *LeaderElection) AddRunFunction(f func(stop <-chan struct{})) *LeaderEle
 
 func NewLeaderElection(namespace, name, electionID, revision string, client kube.Client) *LeaderElection {
 	var watcher revisions.DefaultWatcher
-	if features.PrioritizedLeaderElection {
+	if features.PrioritizedLeaderElection && client.GetMemberRoll() == nil {
 		watcher = revisions.NewDefaultWatcher(client, revision)
 	}
 	if name == "" {
