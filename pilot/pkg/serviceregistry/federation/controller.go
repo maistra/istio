@@ -136,6 +136,8 @@ func mergeLocality(locality *v1.ImportedServiceLocality, defaults *v1.ImportedSe
 		if locality == nil {
 			return nil
 		}
+		// When defaults is nil and locality is not nil
+		merged = *locality
 	} else if locality != nil {
 		merged = *locality
 	}
