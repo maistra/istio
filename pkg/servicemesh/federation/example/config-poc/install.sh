@@ -45,58 +45,52 @@ log "Retrieving root certificates"
 MESH1_CERT=$(oc1 get configmap -n mesh1-system istio-ca-root-cert -o jsonpath='{.data.root-cert\.pem}' | sed ':a;N;$!ba;s/\n/\\\n    /g')
 MESH2_CERT=$(oc2 get configmap -n mesh2-system istio-ca-root-cert -o jsonpath='{.data.root-cert\.pem}' | sed ':a;N;$!ba;s/\n/\\\n    /g')
 
-MESH1_DISCOVERY_PORT="8188"
-MESH1_SERVICE_PORT="15443"
-MESH2_DISCOVERY_PORT="8188"
-MESH2_SERVICE_PORT="15443"
+MESH1_DISCOVERY_PORT="${MESH1_DISCOVERY_PORT:-8188}"
+MESH1_SERVICE_PORT="${MESH1_SERVICE_PORT:-15443}"
+MESH2_DISCOVERY_PORT="${MESH2_DISCOVERY_PORT:-8188}"
+MESH2_SERVICE_PORT="${MESH2_SERVICE_PORT:-15443}"
 
 log "Retrieving ingress addresses"
 if [ "${MESH1_KUBECONFIG}" == "${MESH2_KUBECONFIG}" ]; then
   echo "Single cluster detected; using cluster-local service for ingress"
   MESH1_ADDRESS=mesh2-ingress.mesh1-system.svc.cluster.local
   MESH2_ADDRESS=mesh1-ingress.mesh2-system.svc.cluster.local
-  echo MESH1_ADDRESS=${MESH1_ADDRESS}
-  echo MESH2_ADDRESS=${MESH2_ADDRESS}
 else
   echo "Two clusters detected; using load-balancer service for ingress"
-  MESH1_ADDRESS=$(oc1 -n mesh1-system get svc mesh2-ingress -o jsonpath="{.status.loadBalancer.ingress[].ip}")
-  if [ -z "$MESH1_ADDRESS" ]; then
-    echo "No loadBalancer.ingress.ip found in service mesh2-ingress; trying hostname"
-    MESH1_ADDRESS=$(oc1 -n mesh1-system get svc mesh2-ingress -o jsonpath="{.status.loadBalancer.ingress[].hostname}")
-    if [ -z "$MESH1_ADDRESS" ]; then
-      echo "LoadBalancer service mesh2-ingress has no externally reachable ip or hostname; falling back to node ports"
-      MESH1_ADDRESS=$(oc1 get nodes -o json | jq -r '.items[0].status.addresses[] | select (.type == "Hostname") | .address')
-      MESH1_DISCOVERY_PORT=$(oc1 -n mesh1-system get svc mesh2-ingress -o json | jq '.spec.ports[] | select (.name == "https-discovery") | .nodePort')
-      MESH1_SERVICE_PORT=$(oc1 -n mesh1-system get svc mesh2-ingress -o json | jq '.spec.ports[] | select (.name == "tls") | .nodePort')
-      if [ -z "$MESH1_ADDRESS" ]; then
-        echo "FATAL: Could not determine address for mesh2-ingress in mesh1"
-        exit 1
-      fi
-    fi
-  fi
-  echo MESH1_ADDRESS="${MESH1_ADDRESS}"
-  echo MESH1_DISCOVERY_PORT="${MESH1_DISCOVERY_PORT}"
-  echo MESH1_SERVICE_PORT="${MESH1_SERVICE_PORT}"
 
-  MESH2_ADDRESS=$(oc2 -n mesh2-system get svc mesh1-ingress -o jsonpath="{.status.loadBalancer.ingress[].ip}")
-  if [ -z "$MESH2_ADDRESS" ]; then
-    echo "No loadBalancer.ingress.ip found in service mesh1-ingress; trying hostname"
-    MESH2_ADDRESS=$(oc2 -n mesh2-system get svc mesh1-ingress -o jsonpath="{.status.loadBalancer.ingress[].hostname}")
-    if [ -z "$MESH2_ADDRESS" ]; then
-      echo "LoadBalancer service mesh1-ingress has no externally reachable ip or hostname; falling back to node ports"
-      MESH2_ADDRESS=$(oc2 get nodes -o json | jq -r '.items[0].status.addresses[] | select (.type == "Hostname") | .address')
-      MESH2_DISCOVERY_PORT=$(oc2 -n mesh2-system get svc mesh1-ingress -o json | jq '.spec.ports[] | select (.name == "https-discovery") | .nodePort')
-      MESH2_SERVICE_PORT=$(oc2 -n mesh2-system get svc mesh1-ingress -o json | jq '.spec.ports[] | select (.name == "tls") | .nodePort')
-      if [ -z "$MESH2_ADDRESS" ]; then
-        echo "FATAL: Could not determine address for mesh1-ingress in mesh2"
-        exit 1
+  while [ -z "$MESH1_ADDRESS" ]
+  do
+    MESH1_ADDRESS=$(oc1 -n mesh1-system get svc mesh2-ingress -o jsonpath="{.status.loadBalancer.ingress[].ip}")
+    if [ -z "$MESH1_ADDRESS" ]; then
+      MESH1_ADDRESS=$(oc1 -n mesh1-system get svc mesh2-ingress -o jsonpath="{.status.loadBalancer.ingress[].hostname}")
+      if [ -z "$MESH1_ADDRESS" ]; then
+        echo "Waiting for load balancer to be provisioned for Service mesh1-system/mesh2-ingress..."
+        sleep 30
       fi
     fi
-  fi
-  echo MESH2_ADDRESS="${MESH2_ADDRESS}"
-  echo MESH2_DISCOVERY_PORT="${MESH2_DISCOVERY_PORT}"
-  echo MESH2_SERVICE_PORT="${MESH2_SERVICE_PORT}"
+  done
+
+  while [ -z "$MESH2_ADDRESS" ]
+  do
+    MESH2_ADDRESS=$(oc2 -n mesh2-system get svc mesh1-ingress -o jsonpath="{.status.loadBalancer.ingress[].ip}")
+    if [ -z "$MESH2_ADDRESS" ]; then
+      MESH2_ADDRESS=$(oc2 -n mesh2-system get svc mesh1-ingress -o jsonpath="{.status.loadBalancer.ingress[].hostname}")
+      if [ -z "$MESH2_ADDRESS" ]; then
+        echo "Waiting for load balancer to be provisioned for Service mesh2-system/mesh1-ingress..."
+        sleep 30
+      fi
+    fi
+  done
 fi
+
+echo
+echo MESH1_ADDRESS="${MESH1_ADDRESS}"
+echo MESH1_DISCOVERY_PORT="${MESH1_DISCOVERY_PORT}"
+echo MESH1_SERVICE_PORT="${MESH1_SERVICE_PORT}"
+echo
+echo MESH2_ADDRESS="${MESH2_ADDRESS}"
+echo MESH2_DISCOVERY_PORT="${MESH2_DISCOVERY_PORT}"
+echo MESH2_SERVICE_PORT="${MESH2_SERVICE_PORT}"
 
 log "Enabling federation for mesh1"
 sed "s:{{MESH2_CERT}}:$MESH2_CERT:g" export/configmap.yaml | oc1 apply -f -
