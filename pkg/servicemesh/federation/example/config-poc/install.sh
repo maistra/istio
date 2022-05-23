@@ -130,7 +130,7 @@ The second cluster (mesh2) contains mesh2-system and mesh2-bookinfo.
 Mesh1 exports services, mesh2 imports them.
 
 The meshes are configured to split ratings traffic in mesh2-bookinfo between
-mesh1 and mesh2. The ratings-v2 service in mesh2 is configured to use the
+mesh1 and mesh2. The ratings service in mesh2 is configured to use the
 mongodb service in mesh1.
 
 Run the following command in the mesh1 cluster to check the connection status:
@@ -147,8 +147,8 @@ Check if services from mesh1 are imported into mesh2:
 
 To see federation in action, use the bookinfo app in mesh2. For example:
 
-  1. Run this command in the mesh1 cluster: oc logs -n mesh1-bookinfo deploy/ratings-v2 -f
-  2. Run this command in the mesh2 cluster: oc logs -n mesh2-bookinfo deploy/ratings-v2 -f
+  1. Run this command in the mesh1 cluster: oc logs -n mesh1-bookinfo svc/ratings -f
+  2. Run this command in the mesh2 cluster: oc logs -n mesh2-bookinfo svc/ratings -f
   3. Open http://$(oc2 -n mesh2-system get route istio-ingressgateway -o json | jq -r .spec.host)/productpage
   4. Refresh the page several times and observe requests hitting either the mesh1 or the mesh2 cluster.
 "
