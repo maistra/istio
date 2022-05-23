@@ -210,6 +210,10 @@ func (wh *Webhook) validate(request *kube.AdmissionRequest) *kube.AdmissionRespo
 		return toAdmissionResponse(fmt.Errorf("cannot decode configuration: %v", err))
 	}
 
+	if request.Kind.Kind == "ServiceMeshExtension" {
+		return &kube.AdmissionResponse{Allowed: true, Warnings: []string{"ServiceMeshExtension is deprecated. Please use WasmPlugin instead."}}
+	}
+
 	gvk := obj.GroupVersionKind()
 
 	// TODO(jasonwzm) remove this when multi-version is supported. v1beta1 shares the same
