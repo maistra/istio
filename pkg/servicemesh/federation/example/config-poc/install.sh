@@ -64,7 +64,7 @@ else
     if [ -z "$MESH1_ADDRESS" ]; then
       MESH1_ADDRESS=$(oc1 -n mesh1-system get svc mesh2-ingress -o jsonpath="{.status.loadBalancer.ingress[].hostname}")
       if [ -z "$MESH1_ADDRESS" ]; then
-        echo "Waiting for load balancer to be provisioned for Service mesh1-system/mesh2-ingress..."
+        echo "Waiting for load balancer IP/hostname of Service mesh1-system/mesh2-ingress..."
         sleep 30
       fi
     fi
@@ -76,7 +76,7 @@ else
     if [ -z "$MESH2_ADDRESS" ]; then
       MESH2_ADDRESS=$(oc2 -n mesh2-system get svc mesh1-ingress -o jsonpath="{.status.loadBalancer.ingress[].hostname}")
       if [ -z "$MESH2_ADDRESS" ]; then
-        echo "Waiting for load balancer to be provisioned for Service mesh2-system/mesh1-ingress..."
+        echo "Waiting for load balancer IP/hostname of Service mesh2-system/mesh1-ingress..."
         sleep 30
       fi
     fi
