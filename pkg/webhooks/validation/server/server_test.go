@@ -149,7 +149,7 @@ func makeServiceMeshExtensionConfig(t *testing.T, apiVersion string) []byte {
 		Kind:    "ServiceMeshExtension",
 	})
 
-	var name = fmt.Sprintf("SerivceMeshExtension-%s-config", apiVersion)
+	name := fmt.Sprintf("SerivceMeshExtension-%s-config", apiVersion)
 	un.SetName(name)
 	un.Object["spec"] = &config.MockConfig{
 		Key: "key",
@@ -254,7 +254,7 @@ func TestAdmitPilot(t *testing.T) {
 
 	smeV1 := makeServiceMeshExtensionConfig(t, "v1")
 	smeV1alpha1 := makeServiceMeshExtensionConfig(t, "v1alpha1")
-	var deprecatedWarning = "ServiceMeshExtension is deprecated. Please use WasmPlugin instead."
+	deprecatedWarning := "ServiceMeshExtension is deprecated. Please use WasmPlugin instead."
 
 	maistraCases := []struct {
 		name    string
