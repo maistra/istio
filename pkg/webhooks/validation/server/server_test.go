@@ -297,8 +297,13 @@ func TestAdmitPilot(t *testing.T) {
 	for i, c := range maistraCases {
 		t.Run(fmt.Sprintf("[MAISTRA][%d] %s", i, c.name), func(t *testing.T) {
 			got := wh.validate(c.in)
-			if !(got.Allowed == true && got.Warnings[0] == deprecatedWarning) {
-				t.Fatalf("should be allowed and get the warning \"%s\"", deprecatedWarning)
+
+			if got.Allowed != true {
+				t.Fatal("should be allowed.")
+			}
+
+			if got.Warnings[0] != deprecatedWarning {
+				t.Fatalf("should get the deprecation warning \"%s\".", deprecatedWarning)
 			}
 		})
 	}
