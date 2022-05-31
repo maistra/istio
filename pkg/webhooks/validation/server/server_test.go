@@ -257,43 +257,48 @@ func TestAdmitPilot(t *testing.T) {
 	deprecatedWarning := "ServiceMeshExtension is deprecated. Please use WasmPlugin instead."
 
 	maistraCases := []struct {
-		name    string
-		admit   admitFunc
-		in      *kube.AdmissionRequest
-		allowed bool
-		warning string
+		name string
+		in   *kube.AdmissionRequest
 	}{
 		{
-			name:  "v1 ServiceMeshExtension deprecation warning",
-			admit: wh.validate,
+			name: "Create v1 ServiceMeshExtension",
 			in: &kube.AdmissionRequest{
 				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
 				Object:    runtime.RawExtension{Raw: smeV1},
 				Operation: kube.Create,
 			},
-			allowed: true,
-			warning: deprecatedWarning,
 		},
 		{
-			name:  "v1 ServiceMeshExtension deprecation warning",
-			admit: wh.validate,
+			name: "Update v1 ServiceMeshExtension",
+			in: &kube.AdmissionRequest{
+				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
+				Object:    runtime.RawExtension{Raw: smeV1},
+				Operation: kube.Update,
+			},
+		},
+		{
+			name: "Create v1alpha1 ServiceMeshExtension",
 			in: &kube.AdmissionRequest{
 				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
 				Object:    runtime.RawExtension{Raw: smeV1alpha1},
 				Operation: kube.Create,
 			},
-			allowed: true,
-			warning: deprecatedWarning,
+		},
+		{
+			name: "Update v1alpha1 ServiceMeshExtension",
+			in: &kube.AdmissionRequest{
+				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
+				Object:    runtime.RawExtension{Raw: smeV1alpha1},
+				Operation: kube.Create,
+			},
 		},
 	}
 
 	for i, c := range maistraCases {
 		t.Run(fmt.Sprintf("[MAISTRA][%d] %s", i, c.name), func(t *testing.T) {
-			got := c.admit(c.in)
-			if got.Allowed != c.allowed {
-				t.Fatalf("got %v want %v", got.Allowed, c.allowed)
-			} else if got.Warnings[0] != c.warning {
-				t.Fatalf("did not get warning \"%s\"", c.warning)
+			got := wh.validate(c.in)
+			if !(got.Allowed == true && got.Warnings[0] == deprecatedWarning) {
+				t.Fatalf("should be allowed and get the warning \"%s\"", deprecatedWarning)
 			}
 		})
 	}
