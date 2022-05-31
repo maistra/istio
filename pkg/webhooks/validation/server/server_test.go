@@ -289,7 +289,7 @@ func TestAdmitPilot(t *testing.T) {
 			in: &kube.AdmissionRequest{
 				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
 				Object:    runtime.RawExtension{Raw: smeV1alpha1},
-				Operation: kube.Create,
+				Operation: kube.Update,
 			},
 		},
 	}
