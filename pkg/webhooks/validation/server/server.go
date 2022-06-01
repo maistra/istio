@@ -37,6 +37,8 @@ import (
 	"istio.io/pkg/log"
 )
 
+const smeDeprecationMessage = "ServiceMeshExtension is deprecated. It works now but will be removed in a future version. Please use WasmPlugin instead."
+
 var scope = log.RegisterScope("validationServer", "validation webhook server", 0)
 
 var (
@@ -211,7 +213,7 @@ func (wh *Webhook) validate(request *kube.AdmissionRequest) *kube.AdmissionRespo
 	}
 
 	if request.Kind.Kind == "ServiceMeshExtension" {
-		return &kube.AdmissionResponse{Allowed: true, Warnings: []string{"ServiceMeshExtension is deprecated. Please use WasmPlugin instead."}}
+		return &kube.AdmissionResponse{Allowed: true, Warnings: []string{smeDeprecationMessage}}
 	}
 
 	gvk := obj.GroupVersionKind()

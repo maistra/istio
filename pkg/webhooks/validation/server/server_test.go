@@ -254,7 +254,6 @@ func TestAdmitPilot(t *testing.T) {
 
 	smeV1 := makeServiceMeshExtensionConfig(t, "v1")
 	smeV1alpha1 := makeServiceMeshExtensionConfig(t, "v1alpha1")
-	deprecatedWarning := "ServiceMeshExtension is deprecated. Please use WasmPlugin instead."
 
 	maistraCases := []struct {
 		name string
@@ -302,8 +301,8 @@ func TestAdmitPilot(t *testing.T) {
 				t.Fatal("should be allowed.")
 			}
 
-			if got.Warnings[0] != deprecatedWarning {
-				t.Fatalf("should get the deprecation warning \"%s\".", deprecatedWarning)
+			if got.Warnings[0] != smeDeprecationMessage {
+				t.Fatalf("should get the deprecation warning \"%s\".", smeDeprecationMessage)
 			}
 		})
 	}
