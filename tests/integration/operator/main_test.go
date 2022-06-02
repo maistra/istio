@@ -27,6 +27,7 @@ func TestMain(m *testing.M) {
 	// nolint: staticcheck
 	framework.
 		NewSuite(m).
+		Skip("maistra does not use the upstream operator").
 		RequireSingleCluster().
 		Run()
 }
