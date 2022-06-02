@@ -139,6 +139,34 @@ func makePilotConfig(t *testing.T, i int, validConfig bool, includeBogusKey bool
 	return raw
 }
 
+func makeServiceMeshExtensionConfig(t *testing.T, apiVersion string) []byte {
+	t.Helper()
+
+	var un unstructured.Unstructured
+	un.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "maistra.io",
+		Version: apiVersion,
+		Kind:    "ServiceMeshExtension",
+	})
+
+	name := fmt.Sprintf("SerivceMeshExtension-%s-config", apiVersion)
+	un.SetName(name)
+	un.Object["spec"] = &config.MockConfig{
+		Key: "key",
+		Pairs: []*config.ConfigPair{{
+			Key:   "key",
+			Value: "value",
+		}},
+	}
+
+	raw, err := json.Marshal(&un)
+	if err != nil {
+		t.Fatalf("Marshal(%v) failed: %v", name, err)
+	}
+
+	return raw
+}
+
 func TestAdmitPilot(t *testing.T) {
 	valid := makePilotConfig(t, 0, true, false)
 	invalidConfig := makePilotConfig(t, 0, false, false)
@@ -220,6 +248,61 @@ func TestAdmitPilot(t *testing.T) {
 			got := wh.validate(c.in)
 			if got.Allowed != c.allowed {
 				t.Fatalf("got %v want %v", got.Allowed, c.allowed)
+			}
+		})
+	}
+
+	smeV1 := makeServiceMeshExtensionConfig(t, "v1")
+	smeV1alpha1 := makeServiceMeshExtensionConfig(t, "v1alpha1")
+
+	maistraCases := []struct {
+		name string
+		in   *kube.AdmissionRequest
+	}{
+		{
+			name: "Create v1 ServiceMeshExtension",
+			in: &kube.AdmissionRequest{
+				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
+				Object:    runtime.RawExtension{Raw: smeV1},
+				Operation: kube.Create,
+			},
+		},
+		{
+			name: "Update v1 ServiceMeshExtension",
+			in: &kube.AdmissionRequest{
+				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
+				Object:    runtime.RawExtension{Raw: smeV1},
+				Operation: kube.Update,
+			},
+		},
+		{
+			name: "Create v1alpha1 ServiceMeshExtension",
+			in: &kube.AdmissionRequest{
+				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
+				Object:    runtime.RawExtension{Raw: smeV1alpha1},
+				Operation: kube.Create,
+			},
+		},
+		{
+			name: "Update v1alpha1 ServiceMeshExtension",
+			in: &kube.AdmissionRequest{
+				Kind:      kubeApisMeta.GroupVersionKind{Kind: "ServiceMeshExtension"},
+				Object:    runtime.RawExtension{Raw: smeV1alpha1},
+				Operation: kube.Update,
+			},
+		},
+	}
+
+	for i, c := range maistraCases {
+		t.Run(fmt.Sprintf("[MAISTRA][%d] %s", i, c.name), func(t *testing.T) {
+			got := wh.validate(c.in)
+
+			if got.Allowed != true {
+				t.Fatal("should be allowed.")
+			}
+
+			if got.Warnings[0] != smeDeprecationMessage {
+				t.Fatalf("should get the deprecation warning \"%s\".", smeDeprecationMessage)
 			}
 		})
 	}
