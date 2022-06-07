@@ -50,6 +50,8 @@ const (
 	gatewayNamespaceLabel       = maistraPrefix + "gateway-namespace"
 	gatewayResourceVersionLabel = maistraPrefix + "gateway-resourceVersion"
 	ShouldManageRouteAnnotation = maistraPrefix + "manageRoute"
+
+	eventDuplicatedMessage = "event UPDATE arrived but resourceVersions are the same - ignoring"
 )
 
 type syncRoutes struct {
@@ -354,7 +356,7 @@ func (r *route) verifyResourceVersions(cfg config.Config) error {
 		}
 	}
 
-	return fmt.Errorf("event UPDATE arrived but resourceVersions are the same - ignoring")
+	return fmt.Errorf(eventDuplicatedMessage)
 }
 
 func (r *route) handleEvent(event model.Event, cfg config.Config) error {
