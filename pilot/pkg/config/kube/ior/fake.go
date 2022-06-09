@@ -25,9 +25,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/controller"
 )
 
@@ -44,11 +44,11 @@ type FakeRouterClient struct {
 }
 
 type fakeKubeClient struct {
-	client kubernetes.Interface
+	client kube.Client
 }
 
 // NewFakeKubeClient creates a new FakeKubeClient
-func NewFakeKubeClient(client kubernetes.Interface) KubeClient {
+func NewFakeKubeClient(client kube.Client) KubeClient {
 	return &fakeKubeClient{client: client}
 }
 
@@ -56,7 +56,7 @@ func (c *fakeKubeClient) IsRouteSupported() bool {
 	return true
 }
 
-func (c *fakeKubeClient) GetActualClient() kubernetes.Interface {
+func (c *fakeKubeClient) GetActualClient() kube.Client {
 	return c.client
 }
 

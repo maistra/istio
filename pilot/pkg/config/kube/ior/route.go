@@ -50,6 +50,8 @@ const (
 	gatewayNamespaceLabel       = maistraPrefix + "gateway-namespace"
 	gatewayResourceVersionLabel = maistraPrefix + "gateway-resourceVersion"
 	ShouldManageRouteAnnotation = maistraPrefix + "manageRoute"
+
+	eventDuplicatedMessage = "event UPDATE arrived but resourceVersions are the same - ignoring"
 )
 
 type syncRoutes struct {
@@ -339,6 +341,25 @@ func (r *route) handleDel(cfg config.Config) error {
 	return result.ErrorOrNil()
 }
 
+func (r *route) verifyResourceVersions(cfg config.Config) error {
+	r.gatewaysLock.Lock()
+	defer r.gatewaysLock.Unlock()
+
+	key := gatewaysMapKey(cfg.Namespace, cfg.Name)
+	syncRoute, ok := r.gatewaysMap[key]
+	if !ok {
+		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
+	}
+
+	for _, route := range syncRoute.routes {
+		if route.Labels[gatewayResourceVersionLabel] != cfg.ResourceVersion {
+			return nil
+		}
+	}
+
+	return fmt.Errorf(eventDuplicatedMessage)
+}
+
 func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 	// Block until initial sync has finished
 	<-r.initialSyncRun
@@ -357,6 +378,10 @@ func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 		return r.handleAdd(cfg)
 
 	case model.EventUpdate:
+		if err = r.verifyResourceVersions(cfg); err != nil {
+			return err
+		}
+
 		var result *multierror.Error
 		result = multierror.Append(result, r.handleDel(cfg))
 		result = multierror.Append(result, r.handleAdd(cfg))
