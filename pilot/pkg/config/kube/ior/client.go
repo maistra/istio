@@ -18,27 +18,27 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/client-go/kubernetes"
+	"istio.io/istio/pkg/kube"
 )
 
-// KubeClient is an extension of `kubernetes.Interface` with auxiliary functions for IOR
+// KubeClient is an extension of `kube.Client` with auxiliary functions for IOR
 type KubeClient interface {
 	IsRouteSupported() bool
-	GetActualClient() kubernetes.Interface
+	GetActualClient() kube.Client
 	GetHandleEventTimeout() time.Duration
 }
 
 type kubeClient struct {
-	client kubernetes.Interface
+	client kube.Client
 }
 
 // NewKubeClient creates the IOR version of KubeClient
-func NewKubeClient(client kubernetes.Interface) KubeClient {
+func NewKubeClient(client kube.Client) KubeClient {
 	return &kubeClient{client: client}
 }
 
 func (c *kubeClient) IsRouteSupported() bool {
-	_, s, _ := c.client.Discovery().ServerGroupsAndResources()
+	_, s, _ := c.client.Kube().Discovery().ServerGroupsAndResources()
 	// This may fail if any api service is down, but the result will still be populated, so we skip the error
 	for _, res := range s {
 		for _, api := range res.APIResources {
@@ -50,7 +50,7 @@ func (c *kubeClient) IsRouteSupported() bool {
 	return false
 }
 
-func (c *kubeClient) GetActualClient() kubernetes.Interface {
+func (c *kubeClient) GetActualClient() kube.Client {
 	return c.client
 }
 

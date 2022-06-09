@@ -63,7 +63,7 @@ func Register(
 
 	IORLog.Debugf("Registering IOR into Istio's Gateway broadcast")
 	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
-	store.RegisterEventHandler(kind, func(_, curr config.Config, event model.Event) {
+	store.RegisterEventHandler(kind, func(old, curr config.Config, event model.Event) {
 		aliveLock.Lock()
 		defer aliveLock.Unlock()
 		if !alive {
@@ -78,7 +78,9 @@ func Register(
 				return
 			}
 
-			IORLog.Debugf("Event %v arrived. Object: %v", event, curr)
+			IORLog.Debugf("Event %v arrived.", event)
+			IORLog.Debugf("Old object: %v", event, old)
+			IORLog.Debugf("New object: %v", event, curr)
 			if err := r.handleEvent(event, curr); err != nil {
 				IORLog.Errora(err)
 				if errorChannel != nil {

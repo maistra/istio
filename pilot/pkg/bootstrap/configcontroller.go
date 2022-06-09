@@ -164,7 +164,7 @@ func (s *Server) startIOR(args *PilotArgs) {
 		return
 	}
 
-	iorKubeClient := ior.NewKubeClient(s.kubeClient.Kube())
+	iorKubeClient := ior.NewKubeClient(s.kubeClient)
 
 	s.addStartFunc(func(stop <-chan struct{}) error {
 		go leaderelection.
