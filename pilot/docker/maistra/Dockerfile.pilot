@@ -1,0 +1,20 @@
+FROM quay.io/centos/centos:stream8 as centos
+
+ENV container="oci"
+ENV ISTIO_VERSION="${ISTIO_VERSION}"
+
+RUN dnf update -y && \
+  dnf install -y podman util-linux && \
+  dnf clean all
+
+ARG TARGETARCH
+COPY ${TARGETARCH:-amd64}/pilot-discovery /usr/local/bin/pilot-discovery
+COPY ${TARGETARCH:-amd64}/mec /usr/local/bin/mec
+
+# Copy templates for bootstrap generation.
+COPY envoy_bootstrap.json /var/lib/istio/envoy/envoy_bootstrap_tmpl.json
+COPY gcp_envoy_bootstrap.json /var/lib/istio/envoy/gcp_envoy_bootstrap_tmpl.json
+
+USER 1337:1337
+
+ENTRYPOINT ["/usr/local/bin/pilot-discovery"]
