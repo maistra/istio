@@ -151,6 +151,9 @@ func addFlags(c *cobra.Command) {
 	c.PersistentFlags().StringToStringVar(&serverArgs.RegistryOptions.KubeOptions.ClusterAliases, "clusterAliases", map[string]string{},
 		"Alias names for clusters")
 
+	c.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.MemberRollName, "memberRollName", "",
+		"The name of the MemberRoll resource")
+
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	c.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",
 		"Discovery service HTTP address")
