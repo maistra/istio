@@ -15,6 +15,7 @@
 package controller
 
 import (
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -47,6 +48,9 @@ type NamespaceController struct {
 	configMapInformer  cache.SharedInformer
 	namespaceLister    listerv1.NamespaceLister
 	configmapLister    listerv1.ConfigMapLister
+
+	usesMemberRollController bool
+	namespaces               xnsinformers.NamespaceSet
 }
 
 // NewNamespaceController returns a pointer to a newly constructed NamespaceController instance.
@@ -59,8 +63,6 @@ func NewNamespaceController(kubeClient kube.Client, caBundleWatcher *keycertbund
 
 	c.configMapInformer = kubeClient.KubeInformer().Core().V1().ConfigMaps().Informer()
 	c.configmapLister = kubeClient.KubeInformer().Core().V1().ConfigMaps().Lister()
-	c.namespacesInformer = kubeClient.KubeInformer().Core().V1().Namespaces().Informer()
-	c.namespaceLister = kubeClient.KubeInformer().Core().V1().Namespaces().Lister()
 
 	c.configMapInformer.AddEventHandler(controllers.FilteredObjectSpecHandler(c.queue.AddObject, func(o controllers.Object) bool {
 		if o.GetName() != CACertNamespaceConfigMap {
@@ -73,6 +75,26 @@ func NewNamespaceController(kubeClient kube.Client, caBundleWatcher *keycertbund
 		}
 		return true
 	}))
+
+	// If a MemberRoll controller is configured on the client, skip creating the
+	// namespace informer and just respond to changes in the MemberRoll.
+	if mrc := kubeClient.GetMemberRoll(); mrc != nil {
+		c.usesMemberRollController = true
+		c.namespaces = xnsinformers.NewNamespaceSet()
+		c.namespaces.AddHandler(xnsinformers.NamespaceSetHandlerFuncs{
+			AddFunc: func(ns string) {
+				if err := c.insertDataForNamespace(types.NamespacedName{Namespace: "", Name: ns}); err != nil {
+					log.Errorf("error inserting data for namespace: %v", err)
+				}
+			},
+		})
+
+		mrc.Register(c.namespaces, "namespace-controller")
+		return c
+	}
+
+	c.namespaceLister = kubeClient.KubeInformer().Core().V1().Namespaces().Lister()
+	c.namespacesInformer = kubeClient.KubeInformer().Core().V1().Namespaces().Informer()
 	c.namespacesInformer.AddEventHandler(controllers.FilteredObjectSpecHandler(c.queue.AddObject, func(o controllers.Object) bool {
 		return !inject.IgnoredNamespaces.Contains(o.GetName())
 	}))
@@ -82,7 +104,12 @@ func NewNamespaceController(kubeClient kube.Client, caBundleWatcher *keycertbund
 
 // Run starts the NamespaceController until a value is sent to stopCh.
 func (nc *NamespaceController) Run(stopCh <-chan struct{}) {
-	if !cache.WaitForCacheSync(stopCh, nc.namespacesInformer.HasSynced, nc.configMapInformer.HasSynced) {
+	syncFuncs := []cache.InformerSynced{nc.configMapInformer.HasSynced}
+	if nc.namespacesInformer != nil {
+		syncFuncs = append(syncFuncs, nc.namespacesInformer.HasSynced)
+	}
+
+	if !cache.WaitForCacheSync(stopCh, syncFuncs...) {
 		log.Error("Failed to sync namespace controller cache")
 		return
 	}
@@ -135,6 +162,13 @@ func (nc *NamespaceController) namespaceChange(ns *v1.Namespace) {
 func (nc *NamespaceController) syncNamespace(ns string) {
 	// skip special kubernetes system namespaces
 	if inject.IgnoredNamespaces.Contains(ns) {
+		return
+	}
+
+	// If a MemberRoll controller is in use, and the set of
+	// namespaces still includes the one for this ConfigMap,
+	// then recreate the ConfigMap, otherwise do nothing.
+	if nc.usesMemberRollController && !nc.namespaces.Contains(ns) {
 		return
 	}
 	nc.queue.Add(types.NamespacedName{Name: ns})
