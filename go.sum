@@ -1399,6 +1399,8 @@ github.com/mailru/easyjson v0.7.0/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
+github.com/maistra/xns-informer v0.0.0-20220607143500-5c99350964f8 h1:9TwMtVMpQVMwGqty8/glQTDVdx7CHJSD+jOeALMVLKo=
+github.com/maistra/xns-informer v0.0.0-20220607143500-5c99350964f8/go.mod h1:/mVVoQxdn1oIZWxHue7zjkbvrXt/AEKDvNvY9g0w+5s=
 github.com/maratori/testpackage v1.0.1/go.mod h1:ddKdw+XG0Phzhx8BFDTKgpWP4i7MpApTE5fXSKAqwDU=
 github.com/markbates/errx v1.1.0/go.mod h1:PLa46Oex9KNbVDZhKel8v1OT7hD5JZ2eI7AHhA0wswc=
 github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2/go.mod h1:Ld9puTsIW75CHf65OeIOkyKbteujpZVXDpWK6YGZbxE=

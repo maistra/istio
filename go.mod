@@ -48,6 +48,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.2.25
 	github.com/lucas-clemente/quic-go v0.27.1
+	github.com/maistra/xns-informer v0.0.0-20220607143500-5c99350964f8
 	github.com/mattn/go-isatty v0.0.14
 	github.com/miekg/dns v1.1.49
 	github.com/mitchellh/copystructure v1.2.0
