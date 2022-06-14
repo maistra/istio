@@ -111,6 +111,9 @@ type Options struct {
 
 	DomainSuffix string
 
+	// Name of the Maistra MemberRoll resource.
+	MemberRollName string
+
 	// ClusterID identifies the remote cluster in a multicluster env.
 	ClusterID cluster.ID
 
@@ -332,7 +335,8 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 	c.nsInformer = kubeClient.KubeInformer().Core().V1().Namespaces().Informer()
 	_ = c.nsInformer.SetTransform(kubelib.StripUnusedFields)
 	c.nsLister = kubeClient.KubeInformer().Core().V1().Namespaces().Lister()
-	if c.opts.SystemNamespace != "" {
+	// Don't start the namespace informer if Maistra's MemberRoll is in use.
+	if c.opts.SystemNamespace != "" && options.MemberRollName == "" {
 		nsInformer := informer.NewFilteredSharedIndexInformer(func(obj any) bool {
 			ns, ok := obj.(*v1.Namespace)
 			if !ok {
