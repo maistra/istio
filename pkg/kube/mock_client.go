@@ -46,6 +46,7 @@ import (
 	istioinformer "istio.io/client-go/pkg/informers/externalversions"
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/kube/kubetypes"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
 )
 
@@ -321,4 +322,16 @@ func (c MockClient) UtilFactory() util.Factory {
 		},
 	}
 	return tf
+}
+
+func (c MockClient) SetNamespaces(namespaces []string) {
+	panic("not used in mock")
+}
+
+func (c MockClient) AddMemberRollController(namespace, memberRollName string) error {
+	panic("not used in mock")
+}
+
+func (c MockClient) GetMemberRollController() memberroll.MemberRollController {
+	panic("not used in mock")
 }

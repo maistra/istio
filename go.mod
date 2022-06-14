@@ -51,13 +51,14 @@ require (
 	github.com/kr/pretty v0.3.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.2.25
+	github.com/maistra/xns-informer v0.0.0-20230704082311-af56b540dc35
 	github.com/mattn/go-isatty v0.0.18
 	github.com/miekg/dns v1.1.53
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/moby/buildkit v0.11.5
 	github.com/onsi/gomega v1.27.6
-	github.com/openshift/api v0.0.0-20200713203337-b2494ecb17dd
+	github.com/openshift/api v0.0.0-20200929171550-c99a4deebbe5
 	github.com/pires/go-proxyproto v0.7.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.14.0
@@ -89,7 +90,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.11.2
 	istio.io/api v0.0.0-20230524015941-fa6c5f7916bf
-	istio.io/client-go v1.18.0-rc.0
+	istio.io/client-go v1.18.0
 	istio.io/pkg v0.0.0-20230524020242-1015535057be
 	k8s.io/api v0.27.0
 	k8s.io/apiextensions-apiserver v0.27.0
@@ -101,6 +102,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20230327201221-f5883ff37f0c
 	k8s.io/kubectl v0.27.0
 	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
+	maistra.io/api v0.0.0-20230704084350-dfc96815fb16
 	sigs.k8s.io/controller-runtime v0.13.1-0.20230315234915-a26de2d610c3
 	sigs.k8s.io/gateway-api v0.6.2
 	sigs.k8s.io/mcs-api v0.1.0

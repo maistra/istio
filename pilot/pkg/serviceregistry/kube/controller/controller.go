@@ -114,6 +114,9 @@ type Options struct {
 
 	DomainSuffix string
 
+	// Name of the Maistra MemberRoll resource.
+	MemberRollName string
+
 	// ClusterID identifies the cluster which the controller communicate with.
 	ClusterID cluster.ID
 
@@ -297,7 +300,8 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 	}
 
 	c.namespaces = kclient.New[*v1.Namespace](kubeClient)
-	if c.opts.SystemNamespace != "" {
+	// Don't start the namespace informer if Maistra's MemberRoll is in use.
+	if c.opts.SystemNamespace != "" && options.MemberRollName == "" {
 		registerHandlers[*v1.Namespace](
 			c,
 			c.namespaces,
