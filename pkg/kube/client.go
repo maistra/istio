@@ -30,6 +30,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	xnsgatewayapiinformer "github.com/maistra/xns-informer/pkg/generated/gatewayapi"
+	xnsistioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
+	xnskubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/credentials"
@@ -93,6 +97,7 @@ import (
 	"istio.io/istio/pkg/kube/kubetypes"
 	"istio.io/istio/pkg/kube/mcs"
 	"istio.io/istio/pkg/lazy"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/sleep"
 	"istio.io/istio/pkg/test/util/yml"
 	"istio.io/pkg/log"
@@ -167,6 +172,15 @@ type Client interface {
 	// RegisterFilter registers that we have taken out a shared informer watch against type t, with the given filter.
 	// This allows detecting conflicting filters, as the informers are shared.
 	RegisterFilter(t reflect.Type, filter kubetypes.Filter) error
+
+	// SetNamespaces sets watched namespaces if no MemberRoll controller exists.
+	SetNamespaces(namespaces []string)
+
+	// AddMemberRollController creates a MemberRollController and adds it to the client.
+	AddMemberRollController(namespace, memberRollName string) error
+
+	// GetMemberRollController returns the member roll for the client, which may be nil.
+	GetMemberRollController() memberroll.MemberRollController
 }
 
 // CLIClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -253,7 +267,7 @@ func NewFakeClient(objects ...runtime.Object) CLIClient {
 		filters:                map[reflect.Type]kubetypes.Filter{},
 	}
 	c.kube = fake.NewSimpleClientset(objects...)
-	c.kubeInformer = informers.NewSharedInformerFactory(c.kube, resyncInterval)
+	c.kubeInformer = xnskubeinformer.NewSharedInformerFactory(c.kube, resyncInterval)
 	s := FakeIstioScheme
 
 	c.metadata = metadatafake.NewSimpleMetadataClient(s)
@@ -264,13 +278,13 @@ func NewFakeClient(objects ...runtime.Object) CLIClient {
 		{Group: "testdata.istio.io", Version: "v1alpha1", Resource: "Kind1s"}: "Kind1List",
 	}
 	c.dynamic = dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s, gvrToListKind)
-	c.dynamicInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
+	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
 	c.istio = istiofake.NewSimpleClientset()
-	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(c.istio, resyncInterval)
+	c.istioInformer = xnsistioinformer.NewSharedInformerFactoryWithOptions(c.istio, resyncInterval)
 
 	c.gatewayapi = gatewayapifake.NewSimpleClientset()
-	c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactory(c.gatewayapi, resyncInterval)
+	c.gatewayapiInformer = xnsgatewayapiinformer.NewSharedInformerFactory(c.gatewayapi, resyncInterval)
 
 	c.extSet = extfake.NewSimpleClientset()
 	c.extInformer = kubeExtInformers.NewSharedInformerFactory(c.extSet, resyncInterval)
@@ -339,21 +353,24 @@ type client struct {
 	extInformer kubeExtInformers.SharedInformerFactory
 
 	kube         kubernetes.Interface
-	kubeInformer informers.SharedInformerFactory
+	kubeInformer xnskubeinformer.SharedInformerFactory
 
 	dynamic         dynamic.Interface
-	dynamicInformer dynamicinformer.DynamicSharedInformerFactory
+	dynamicInformer xnsinformers.DynamicSharedInformerFactory
 
 	metadata         metadata.Interface
 	metadataInformer metadatainformer.SharedInformerFactory
 
 	istio         istioclient.Interface
-	istioInformer istioinformer.SharedInformerFactory
+	istioInformer xnsistioinformer.SharedInformerFactory
 
 	gatewayapi         gatewayapiclient.Interface
-	gatewayapiInformer gatewayapiinformer.SharedInformerFactory
+	gatewayapiInformer xnsgatewayapiinformer.SharedInformerFactory
 
 	started atomic.Bool
+
+	memberRoll memberroll.MemberRollController
+
 	// If enabled, will wait for cache syncs with extremely short delay. This should be used only for tests
 	fastSync               bool
 	informerWatchesPending *atomic.Int32
@@ -408,7 +425,10 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 	if err != nil {
 		return nil, err
 	}
-	c.kubeInformer = informers.NewSharedInformerFactoryWithOptions(c.kube, resyncInterval, informers.WithNamespace(features.InformerWatchNamespace))
+	c.kubeInformer = xnskubeinformer.NewSharedInformerFactoryWithOptions(
+		c.kube,
+		resyncInterval,
+	)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
 	if err != nil {
@@ -420,23 +440,27 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 	if err != nil {
 		return nil, err
 	}
-	c.dynamicInformer = dynamicinformer.NewFilteredDynamicSharedInformerFactory(c.dynamic, resyncInterval, features.InformerWatchNamespace, nil)
+	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(c.istio, resyncInterval, istioinformer.WithNamespace(features.InformerWatchNamespace))
-
-	c.gatewayapi, err = gatewayapiclient.NewForConfig(c.config)
-	if err != nil {
-		return nil, err
-	}
-	c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactoryWithOptions(
-		c.gatewayapi,
+	c.istioInformer = xnsistioinformer.NewSharedInformerFactoryWithOptions(
+		c.istio,
 		resyncInterval,
-		gatewayapiinformer.WithNamespace(features.InformerWatchNamespace),
 	)
+
+	if features.EnableGatewayAPI {
+		c.gatewayapi, err = gatewayapiclient.NewForConfig(c.config)
+		if err != nil {
+			return nil, err
+		}
+		c.gatewayapiInformer = xnsgatewayapiinformer.NewSharedInformerFactoryWithOptions(
+			c.gatewayapi,
+			resyncInterval,
+		)
+	}
 
 	c.extSet, err = kubeExtClient.NewForConfig(c.config)
 	if err != nil {
@@ -539,6 +563,40 @@ func (c *client) ExtInformer() kubeExtInformers.SharedInformerFactory {
 	return c.extInformer
 }
 
+func (c *client) SetNamespaces(namespaces []string) {
+	// This is a no-op if a MemberRoll controller exists.
+	if c.memberRoll != nil {
+		return
+	}
+
+	c.kubeInformer.SetNamespaces(namespaces)
+	c.istioInformer.SetNamespaces(namespaces)
+	c.dynamicInformer.SetNamespaces(namespaces)
+	if features.EnableGatewayAPI {
+		c.gatewayapiInformer.SetNamespaces(namespaces)
+	}
+}
+
+func (c *client) AddMemberRollController(namespace, memberRollName string) (err error) {
+	c.memberRoll, err = memberroll.NewMemberRollController(c.config, namespace, memberRollName, resyncInterval)
+	if err != nil {
+		return err
+	}
+
+	c.memberRoll.Register(c.kubeInformer, "kubernetes-informers")
+	c.memberRoll.Register(c.istioInformer, "istio-informers")
+	c.memberRoll.Register(c.dynamicInformer, "dynamic-informers")
+	if features.EnableGatewayAPI {
+		c.memberRoll.Register(c.gatewayapiInformer, "service-apis-informers")
+	}
+
+	return nil
+}
+
+func (c *client) GetMemberRollController() memberroll.MemberRollController {
+	return c.memberRoll
+}
+
 // RunAndWait starts all informers and waits for their caches to sync.
 // Warning: this must be called AFTER .Informer() is called, which will register the informer.
 func (c *client) RunAndWait(stop <-chan struct{}) {
@@ -552,7 +610,9 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		fastWaitForCacheSyncDynamic(stop, c.dynamicInformer)
 		fastWaitForCacheSyncDynamic(stop, c.metadataInformer)
 		fastWaitForCacheSync(stop, c.istioInformer)
-		fastWaitForCacheSync(stop, c.gatewayapiInformer)
+		if features.EnableGatewayAPI {
+			fastWaitForCacheSync(stop, c.gatewayapiInformer)
+		}
 		fastWaitForCacheSync(stop, c.extInformer)
 		_ = wait.PollUntilContextTimeout(context.Background(), time.Microsecond*100, wait.ForeverTestTimeout, true, func(ctx context.Context) (bool, error) {
 			select {
@@ -570,7 +630,9 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
 		c.istioInformer.WaitForCacheSync(stop)
-		c.gatewayapiInformer.WaitForCacheSync(stop)
+		if features.EnableGatewayAPI {
+			c.gatewayapiInformer.WaitForCacheSync(stop)
+		}
 		c.extInformer.WaitForCacheSync(stop)
 	}
 }
@@ -590,7 +652,12 @@ func (c *client) startInformer(stop <-chan struct{}) {
 	c.dynamicInformer.Start(stop)
 	c.metadataInformer.Start(stop)
 	c.istioInformer.Start(stop)
-	c.gatewayapiInformer.Start(stop)
+	if features.EnableGatewayAPI {
+		c.gatewayapiInformer.Start(stop)
+	}
+	if c.memberRoll != nil {
+		c.memberRoll.Start(stop)
+	}
 	c.extInformer.Start(stop)
 	c.started.Store(true)
 }

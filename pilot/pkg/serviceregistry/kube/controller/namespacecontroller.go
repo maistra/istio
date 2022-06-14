@@ -15,10 +15,12 @@
 package controller
 
 import (
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/keycertbundle"
@@ -55,6 +57,7 @@ type NamespaceController struct {
 
 	// if meshConfig.DiscoverySelectors specified, DiscoveryNamespacesFilter tracks the namespaces to be watched by this controller.
 	DiscoveryNamespacesFilter filter.DiscoveryNamespacesFilter
+	namespaceSet              xnsinformers.NamespaceSet
 }
 
 // NewNamespaceController returns a pointer to a newly constructed NamespaceController instance.
@@ -70,8 +73,6 @@ func NewNamespaceController(kubeClient kube.Client, caBundleWatcher *keycertbund
 		controllers.WithMaxAttempts(maxRetries))
 
 	c.configmaps = kclient.New[*v1.ConfigMap](kubeClient)
-	c.namespaces = kclient.New[*v1.Namespace](kubeClient)
-
 	c.configmaps.AddEventHandler(controllers.FilteredObjectSpecHandler(c.queue.AddObject, func(o controllers.Object) bool {
 		if o.GetName() != CACertNamespaceConfigMap {
 			// This is a change to a configmap we don't watch, ignore it
@@ -87,6 +88,24 @@ func NewNamespaceController(kubeClient kube.Client, caBundleWatcher *keycertbund
 		}
 		return true
 	}))
+
+	// If a MemberRoll controller is configured on the client, skip creating the
+	// namespace informer and just respond to changes in the MemberRoll.
+	if mrc := kubeClient.GetMemberRollController(); mrc != nil {
+		c.namespaceSet = xnsinformers.NewNamespaceSet()
+		c.namespaceSet.AddHandler(xnsinformers.NamespaceSetHandlerFuncs{
+			AddFunc: func(ns string) {
+				if err := c.insertDataForNamespace(types.NamespacedName{Namespace: "", Name: ns}); err != nil {
+					log.Errorf("error inserting data for namespace: %v", err)
+				}
+			},
+		})
+
+		mrc.Register(c.namespaceSet, "namespace-controller")
+		return c
+	}
+
+	c.namespaces = kclient.New[*v1.Namespace](kubeClient)
 	c.namespaces.AddEventHandler(controllers.FilteredObjectSpecHandler(c.queue.AddObject, func(o controllers.Object) bool {
 		if features.InformerWatchNamespace != "" && features.InformerWatchNamespace != o.GetName() {
 			// We are only watching one namespace, and its not this one
@@ -108,13 +127,20 @@ func NewNamespaceController(kubeClient kube.Client, caBundleWatcher *keycertbund
 
 // Run starts the NamespaceController until a value is sent to stopCh.
 func (nc *NamespaceController) Run(stopCh <-chan struct{}) {
-	if !kube.WaitForCacheSync(stopCh, nc.namespaces.HasSynced, nc.configmaps.HasSynced) {
+	syncFuncs := []cache.InformerSynced{nc.configmaps.HasSynced}
+	shutdownFuncs := []controllers.Shutdowner{nc.configmaps}
+	// nc.namespaces is not set when member roll exists
+	if nc.namespaces != nil {
+		syncFuncs = append(syncFuncs, nc.namespaces.HasSynced)
+		shutdownFuncs = append(shutdownFuncs, nc.namespaces)
+	}
+	if !kube.WaitForCacheSync(stopCh, syncFuncs...) {
 		log.Error("Failed to sync namespace controller cache")
 		return
 	}
 	go nc.startCaBundleWatcher(stopCh)
 	nc.queue.Run(stopCh)
-	controllers.ShutdownAll(nc.configmaps, nc.namespaces)
+	controllers.ShutdownAll(shutdownFuncs...)
 }
 
 // startCaBundleWatcher listens for updates to the CA bundle and update cm in each namespace
@@ -124,8 +150,14 @@ func (nc *NamespaceController) startCaBundleWatcher(stop <-chan struct{}) {
 	for {
 		select {
 		case <-watchCh:
-			for _, ns := range nc.namespaces.List("", labels.Everything()) {
-				nc.namespaceChange(ns)
+			if nc.namespaceSet != nil {
+				for _, ns := range nc.namespaceSet.List() {
+					nc.syncNamespaceByName(ns)
+				}
+			} else {
+				for _, ns := range nc.namespaces.List("", labels.Everything()) {
+					nc.namespaceChange(ns)
+				}
 			}
 		case <-stop:
 			return
@@ -168,4 +200,12 @@ func (nc *NamespaceController) syncNamespace(ns *v1.Namespace) {
 		return
 	}
 	nc.queue.Add(types.NamespacedName{Name: ns.Name})
+}
+
+func (nc *NamespaceController) syncNamespaceByName(ns string) {
+	// skip special kubernetes system namespaces
+	if inject.IgnoredNamespaces.Contains(ns) {
+		return
+	}
+	nc.queue.Add(types.NamespacedName{Name: ns})
 }
