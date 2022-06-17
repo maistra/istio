@@ -122,6 +122,8 @@ spec:
           requests:
             cpu: 100m
             memory: 128Mi
+        securityContext:
+          runAsUser: 1337
         volumeMounts:
         - mountPath: /var/run/secrets/workload-spiffe-uds
           name: workload-socket
