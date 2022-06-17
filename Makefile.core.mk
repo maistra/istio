@@ -275,6 +275,7 @@ refresh-goldens:
 		./pkg/kube/inject/... \
 		./pilot/pkg/security/authz/builder/... \
 		./cni/pkg/plugin/...
+	@REFRESH_GOLDEN=true go test ${GOBUILDFLAGS} ./istioctl/cmd/...
 
 update-golden: refresh-goldens
 
