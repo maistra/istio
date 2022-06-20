@@ -52,24 +52,36 @@ type StatusSyncer struct {
 // Run the syncer until stopCh is closed
 func (s *StatusSyncer) Run(stopCh <-chan struct{}) {
 	s.queue.Run(stopCh)
-	controllers.ShutdownAll(s.services, s.nodes, s.pods, s.ingressClasses, s.ingresses)
+	shutdownFuncs := []controllers.Shutdowner{s.services, s.pods, s.ingresses}
+	if s.ingressClasses != nil {
+		shutdownFuncs = append(shutdownFuncs, s.ingressClasses)
+	}
+	if s.nodes != nil {
+		shutdownFuncs = append(shutdownFuncs, s.nodes)
+	}
+	controllers.ShutdownAll(shutdownFuncs...)
 }
 
 // NewStatusSyncer creates a new instance
 func NewStatusSyncer(meshHolder mesh.Watcher, kc kubelib.Client, options kubecontroller.Options) *StatusSyncer {
 	c := &StatusSyncer{
-		meshConfig:     meshHolder,
-		ingresses:      kclient.NewFiltered[*knetworking.Ingress](kc, kclient.Filter{ObjectFilter: options.GetFilter()}),
-		ingressClasses: kclient.New[*knetworking.IngressClass](kc),
+		meshConfig: meshHolder,
+		ingresses:  kclient.NewFiltered[*knetworking.Ingress](kc, kclient.Filter{ObjectFilter: options.GetFilter()}),
 		pods: kclient.NewFiltered[*corev1.Pod](kc, kclient.Filter{
 			ObjectFilter:    options.GetFilter(),
 			ObjectTransform: kubelib.StripPodUnusedFields,
 		}),
 		services: kclient.NewFiltered[*corev1.Service](kc, kclient.Filter{ObjectFilter: options.GetFilter()}),
-		nodes: kclient.NewFiltered[*corev1.Node](kc, kclient.Filter{
-			ObjectTransform: kubelib.StripNodeUnusedFields,
-		}),
 	}
+	if options.EnableIngressClassName {
+		c.ingressClasses = kclient.New[*knetworking.IngressClass](kc)
+	}
+	if options.EnableNodeAccess {
+		c.nodes = kclient.NewFiltered[*corev1.Node](kc, kclient.Filter{
+			ObjectTransform: kubelib.StripNodeUnusedFields,
+		})
+	}
+
 	c.queue = controllers.NewQueue("ingress status",
 		controllers.WithReconciler(c.Reconcile),
 		controllers.WithMaxAttempts(5))
@@ -135,6 +147,11 @@ func (s *StatusSyncer) runningAddresses() []string {
 		}
 
 		addrs = append(addrs, svc.Spec.ExternalIPs...)
+		return addrs
+	}
+
+	// in multi-tenant mode we cannot get nodes
+	if s.nodes == nil {
 		return addrs
 	}
 

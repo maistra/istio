@@ -156,6 +156,12 @@ func addFlags(c *cobra.Command) {
 
 	c.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.MemberRollName, "memberRollName", "",
 		"The name of the MemberRoll resource")
+	c.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableCRDScan, "enableCRDScan", true,
+		"Whether to scan CRDs at startup")
+	c.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableNodeAccess, "enableNodeAccess", true,
+		"Whether to prevent istiod watching Node objects")
+	c.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableIngressClassName, "enableIngressClassName",
+		true, "Whether support processing Ingress resources that use the new ingressClassName field in their spec")
 
 	// using address, so it can be configured as localhost:.. (possibly UDS in future)
 	c.PersistentFlags().StringVar(&serverArgs.ServerOptions.HTTPAddr, "httpAddr", ":8080",

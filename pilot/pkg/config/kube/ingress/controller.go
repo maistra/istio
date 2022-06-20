@@ -25,6 +25,7 @@ import (
 	knetworking "k8s.io/api/networking/v1"
 	klabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
@@ -97,16 +98,16 @@ func NewController(client kube.Client, meshWatcher mesh.Holder,
 	options kubecontroller.Options,
 ) model.ConfigStoreController {
 	ingress := kclient.NewFiltered[*knetworking.Ingress](client, kclient.Filter{ObjectFilter: options.GetFilter()})
-	classes := kclient.New[*knetworking.IngressClass](client)
 	services := kclient.NewFiltered[*corev1.Service](client, kclient.Filter{ObjectFilter: options.GetFilter()})
-
 	c := &controller{
 		meshWatcher:  meshWatcher,
 		domainSuffix: options.DomainSuffix,
 		ingresses:    make(map[types.NamespacedName]*knetworking.Ingress),
 		ingress:      ingress,
-		classes:      classes,
 		services:     services,
+	}
+	if options.EnableIngressClassName {
+		c.classes = kclient.New[*knetworking.IngressClass](client)
 	}
 	c.queue = controllers.NewQueue("ingress",
 		controllers.WithReconciler(c.onEvent),
@@ -116,9 +117,15 @@ func NewController(client kube.Client, meshWatcher mesh.Holder,
 }
 
 func (c *controller) Run(stop <-chan struct{}) {
-	kube.WaitForCacheSync(stop, c.ingress.HasSynced, c.services.HasSynced, c.classes.HasSynced)
+	syncFuncs := []cache.InformerSynced{c.ingress.HasSynced, c.services.HasSynced}
+	shutdownFuncs := []controllers.Shutdowner{c.ingress, c.services}
+	if c.classes != nil {
+		syncFuncs = append(syncFuncs, c.classes.HasSynced)
+		shutdownFuncs = append(shutdownFuncs, c.classes)
+	}
+	kube.WaitForCacheSync(stop, syncFuncs...)
 	c.queue.Run(stop)
-	controllers.ShutdownAll(c.ingress, c.services, c.classes)
+	controllers.ShutdownAll(shutdownFuncs...)
 }
 
 func (c *controller) shouldProcessIngress(mesh *meshconfig.MeshConfig, i *knetworking.Ingress) bool {

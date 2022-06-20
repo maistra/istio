@@ -276,9 +276,10 @@ func (sa *IstiodAnalyzer) AddRunningKubeSourceWithRevision(c kubelib.Client, rev
 	// TODO: are either of these string constants intended to vary?
 	// This gets us only istio/ ones
 	store, err := crdclient.NewForSchemas(c, crdclient.Option{
-		Revision:     revision,
-		DomainSuffix: "cluster.local",
-		Identifier:   "analysis-controller",
+		Revision:      revision,
+		DomainSuffix:  "cluster.local",
+		Identifier:    "analysis-controller",
+		EnableCRDScan: true,
 	}, sa.kubeResources)
 	// RunAndWait must be called after NewForSchema so that the informers are all created and started.
 	if err != nil {

@@ -86,6 +86,7 @@ func NewFakeControllerWithOptions(t test.Failer, opts FakeControllerOptions) (*F
 		MeshServiceController:     meshServiceController,
 		ConfigCluster:             opts.ConfigCluster,
 		ConfigController:          opts.ConfigController,
+		EnableNodeAccess:          true,
 	}
 	c := NewController(opts.Client, options)
 	meshServiceController.AddRegistry(c)
