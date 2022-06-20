@@ -102,7 +102,7 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 				NewLeaderElection(args.Namespace, args.PodName, leaderelection.IngressController, args.Revision, s.kubeClient).
 				AddRunFunction(func(leaderStop <-chan struct{}) {
 					if ingressV1 {
-						ingressSyncer := ingressv1.NewStatusSyncer(s.environment.Watcher, s.kubeClient)
+						ingressSyncer := ingressv1.NewStatusSyncer(s.environment.Watcher, s.kubeClient, args.RegistryOptions.KubeOptions.DisableNodeAccess)
 						// Start informers again. This fixes the case where informers for namespace do not start,
 						// as we create them only after acquiring the leader lock
 						// Note: stop here should be the overall pilot stop, NOT the leader election stop. We are
@@ -112,7 +112,7 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 						log.Infof("Starting ingress controller")
 						ingressSyncer.Run(leaderStop)
 					} else {
-						ingressSyncer := ingress.NewStatusSyncer(s.environment.Watcher, s.kubeClient)
+						ingressSyncer := ingress.NewStatusSyncer(s.environment.Watcher, s.kubeClient, args.RegistryOptions.KubeOptions.DisableNodeAccess)
 						// Start informers again. This fixes the case where informers for namespace do not start,
 						// as we create them only after acquiring the leader lock
 						// Note: stop here should be the overall pilot stop, NOT the leader election stop. We are

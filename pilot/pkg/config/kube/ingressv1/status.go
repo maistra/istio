@@ -61,20 +61,24 @@ func (s *StatusSyncer) Run(stopCh <-chan struct{}) {
 }
 
 // NewStatusSyncer creates a new instance
-func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client) *StatusSyncer {
+func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client, noNodeAccess bool) *StatusSyncer {
 	// queue requires a time duration for a retry delay after a handler error
 	q := queue.NewQueue(5 * time.Second)
 
-	return &StatusSyncer{
+	s := &StatusSyncer{
 		meshHolder:         meshHolder,
 		client:             client.Kube(),
 		ingressLister:      client.KubeInformer().Networking().V1().Ingresses().Lister(),
 		podLister:          client.KubeInformer().Core().V1().Pods().Lister(),
 		serviceLister:      client.KubeInformer().Core().V1().Services().Lister(),
-		nodeLister:         client.KubeInformer().Core().V1().Nodes().Lister(),
 		ingressClassLister: client.KubeInformer().Networking().V1().IngressClasses().Lister(),
 		queue:              q,
 	}
+
+	if !noNodeAccess {
+		s.nodeLister = client.KubeInformer().Core().V1().Nodes().Lister()
+	}
+	return s
 }
 
 func (s *StatusSyncer) onEvent() error {
