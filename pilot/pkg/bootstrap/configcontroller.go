@@ -294,8 +294,9 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 		go leaderelection.
 			NewLeaderElection(args.Namespace, args.PodName, leaderelection.AnalyzeController, args.Revision, s.kubeClient).
 			AddRunFunction(func(stop <-chan struct{}) {
-				cont, err := incluster.NewController(stop, s.RWConfigStore,
-					s.kubeClient, args.Revision, args.Namespace, s.statusManager, args.RegistryOptions.KubeOptions.DomainSuffix)
+				opts := args.RegistryOptions.KubeOptions
+				cont, err := incluster.NewController(
+					stop, s.RWConfigStore, s.kubeClient, args.Revision, args.Namespace, s.statusManager, opts.DomainSuffix, opts.EnableCRDScan)
 				if err != nil {
 					return
 				}
@@ -343,9 +344,10 @@ func (s *Server) initStatusController(args *PilotArgs, writeStatus bool) {
 
 func (s *Server) makeKubeConfigController(args *PilotArgs) (*crdclient.Client, error) {
 	opts := crdclient.Option{
-		Revision:     args.Revision,
-		DomainSuffix: args.RegistryOptions.KubeOptions.DomainSuffix,
-		Identifier:   "crd-controller",
+		Revision:      args.Revision,
+		DomainSuffix:  args.RegistryOptions.KubeOptions.DomainSuffix,
+		Identifier:    "crd-controller",
+		EnableCRDScan: args.RegistryOptions.KubeOptions.EnableCRDScan,
 	}
 	if args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter != nil {
 		opts.NamespacesFilter = args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter.Filter
