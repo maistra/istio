@@ -104,6 +104,7 @@ type Option struct {
 	Revision         string
 	DomainSuffix     string
 	Identifier       string
+	EnableCRDScan	 bool
 	NamespacesFilter func(obj interface{}) bool
 }
 
@@ -178,9 +179,13 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 	}
 	_ = out.crdMetadataInformer.SetTransform(kube.StripUnusedFields)
 
-	known, err := knownCRDs(client.Ext())
-	if err != nil {
-		return nil, err
+	var known map[string]struct{}
+	if opts.EnableCRDScan {
+		var err error
+		known, err = knownCRDs(client.Ext())
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, s := range schemas.All() {
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
@@ -192,7 +197,9 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 		if !crd {
 			handleCRDAdd(out, name, nil)
 		} else {
-			if _, f := known[name]; f {
+			// If EnableCRDScan is false, then ignore whether the CRD is in the map
+			// and just try to add informers for all types.
+			if _, f := known[name]; f || !opts.EnableCRDScan {
 				handleCRDAdd(out, name, nil)
 			} else {
 				out.logger.Warnf("Skipping CRD %v as it is not present", s.Resource().GroupVersionKind())
