@@ -105,7 +105,7 @@ func fakeMeshHolder(ingressService string) mesh.Watcher {
 
 func makeStatusSyncer(t *testing.T, name string) *StatusSyncer {
 	client := kubelib.NewFakeClient(testObjects...)
-	sync := NewStatusSyncer(fakeMeshHolder(name), client, kubecontroller.Options{})
+	sync := NewStatusSyncer(fakeMeshHolder(name), client, kubecontroller.Options{EnableIngressClassName: true, EnableNodeAccess: true})
 	client.RunAndWait(test.NewStop(t))
 	go sync.Run(test.NewStop(t))
 	return sync

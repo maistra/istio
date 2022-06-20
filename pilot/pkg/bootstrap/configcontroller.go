@@ -138,6 +138,7 @@ func (s *Server) initK8SConfigStore(args *PilotArgs) error {
 	}
 	configController := s.makeKubeConfigController(args)
 	s.ConfigStores = append(s.ConfigStores, configController)
+
 	if features.EnableGatewayAPI {
 		if s.statusManager == nil && features.EnableGatewayAPIStatus {
 			s.initStatusManager(args)
@@ -292,8 +293,9 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 		go leaderelection.
 			NewLeaderElection(args.Namespace, args.PodName, leaderelection.AnalyzeController, args.Revision, s.kubeClient).
 			AddRunFunction(func(leaderStop <-chan struct{}) {
+				opts := args.RegistryOptions.KubeOptions
 				cont, err := incluster.NewController(leaderStop, s.RWConfigStore,
-					s.kubeClient, args.Revision, args.Namespace, s.statusManager, args.RegistryOptions.KubeOptions.DomainSuffix)
+					s.kubeClient, args.Revision, args.Namespace, s.statusManager, opts.DomainSuffix)
 				if err != nil {
 					return
 				}
