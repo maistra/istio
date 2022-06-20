@@ -102,7 +102,8 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 				NewLeaderElection(args.Namespace, args.PodName, leaderelection.IngressController, args.Revision, s.kubeClient).
 				AddRunFunction(func(leaderStop <-chan struct{}) {
 					if ingressV1 {
-						ingressSyncer := ingressv1.NewStatusSyncer(s.environment.Watcher, s.kubeClient)
+						ingressSyncer := ingressv1.NewStatusSyncer(s.environment.Watcher, s.kubeClient,
+							args.RegistryOptions.KubeOptions.EnableNodeAccess, args.RegistryOptions.KubeOptions.EnableIngressClassName)
 						// Start informers again. This fixes the case where informers for namespace do not start,
 						// as we create them only after acquiring the leader lock
 						// Note: stop here should be the overall pilot stop, NOT the leader election stop. We are
@@ -112,7 +113,8 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 						log.Infof("Starting ingress controller")
 						ingressSyncer.Run(leaderStop)
 					} else {
-						ingressSyncer := ingress.NewStatusSyncer(s.environment.Watcher, s.kubeClient)
+						ingressSyncer := ingress.NewStatusSyncer(s.environment.Watcher, s.kubeClient,
+							args.RegistryOptions.KubeOptions.EnableNodeAccess, args.RegistryOptions.KubeOptions.EnableIngressClassName)
 						// Start informers again. This fixes the case where informers for namespace do not start,
 						// as we create them only after acquiring the leader lock
 						// Note: stop here should be the overall pilot stop, NOT the leader election stop. We are
@@ -296,8 +298,9 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 		go leaderelection.
 			NewLeaderElection(args.Namespace, args.PodName, leaderelection.AnalyzeController, args.Revision, s.kubeClient).
 			AddRunFunction(func(stop <-chan struct{}) {
-				cont, err := incluster.NewController(stop, s.RWConfigStore,
-					s.kubeClient, args.Revision, args.Namespace, s.statusManager, args.RegistryOptions.KubeOptions.DomainSuffix)
+				opts := args.RegistryOptions.KubeOptions
+				cont, err := incluster.NewController(
+					stop, s.RWConfigStore, s.kubeClient, args.Revision, args.Namespace, s.statusManager, opts.DomainSuffix, opts.EnableCRDScan)
 				if err != nil {
 					return
 				}
@@ -348,6 +351,7 @@ func (s *Server) makeKubeConfigController(args *PilotArgs) (model.ConfigStoreCon
 		Revision:     args.Revision,
 		DomainSuffix: args.RegistryOptions.KubeOptions.DomainSuffix,
 		Identifier:   "crd-controller",
+		EnableCRDScan: args.RegistryOptions.KubeOptions.EnableCRDScan,
 	}
 	if args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter != nil {
 		opts.NamespacesFilter = args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter.Filter

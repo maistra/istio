@@ -147,6 +147,24 @@ type Options struct {
 
 	// If meshConfig.DiscoverySelectors are specified, the DiscoveryNamespacesFilter tracks the namespaces this controller watches.
 	DiscoveryNamespacesFilter filter.DiscoveryNamespacesFilter
+
+	// EnableCRDScan determines whether the controller will list all CRDs
+	// present in the cluster, and subsequently only create watches on those
+	// that are. If this is set to false, all CRDs defined in the schema must be
+	// present for istiod to function.
+	EnableCRDScan bool
+
+	// EnableNodeAccess determines whether the controller should attempt to
+	// watch and/or list Node objects. If this is set to false, some features
+	// will not be available, e.g. NodePort gateways and determining locality
+	// information based on Nodes.
+	EnableNodeAccess bool
+
+	// EnableIngressClassName determines whether the controller will support
+	// processing Kubernetes Ingress resources that use the new (as of 1.18)
+	// `ingressClassName` in their spec, or if it will only check the deprecated
+	// `kubernetes.io/ingress.class` annotation.
+	EnableIngressClassName bool
 }
 
 // DetectEndpointMode determines whether to use Endpoints or EndpointSlice based on the
@@ -370,12 +388,14 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		c.endpoints = newEndpointsController(c)
 	}
 
-	// This is for getting the node IPs of a selected set of nodes
-	c.nodeInformer = kubeClient.KubeInformer().Core().V1().Nodes().Informer()
-	_ = c.nodeInformer.SetTransform(kubelib.StripUnusedFields)
-	c.nodeLister = kubeClient.KubeInformer().Core().V1().Nodes().Lister()
-	nodeInformer := informer.NewFilteredSharedIndexInformer(nil, c.nodeInformer)
-	c.registerHandlers(nodeInformer, "Nodes", c.onNodeEvent, nil)
+	if options.EnableNodeAccess {
+		// This is for getting the node IPs of a selected set of nodes
+		c.nodeInformer = kubeClient.KubeInformer().Core().V1().Nodes().Informer()
+		_ = c.nodeInformer.SetTransform(kubelib.StripUnusedFields)
+		c.nodeLister = kubeClient.KubeInformer().Core().V1().Nodes().Lister()
+		nodeInformer := informer.NewFilteredSharedIndexInformer(nil, c.nodeInformer)
+		c.registerHandlers(nodeInformer, "Nodes", c.onNodeEvent, nil)
+	}
 
 	podInformer := informer.NewFilteredSharedIndexInformer(c.opts.DiscoveryNamespacesFilter.Filter, kubeClient.KubeInformer().Core().V1().Pods().Informer())
 	c.pods = newPodCache(c, podInformer, func(key string) {
@@ -750,7 +770,7 @@ func (c *Controller) informersSynced() bool {
 		!c.serviceInformer.HasSynced() ||
 		!c.endpoints.HasSynced() ||
 		!c.pods.informer.HasSynced() ||
-		!c.nodeInformer.HasSynced() ||
+		(c.nodeInformer != nil && !c.nodeInformer.HasSynced()) ||
 		!c.exports.HasSynced() ||
 		!c.imports.HasSynced() {
 		return false
@@ -796,6 +816,9 @@ func (c *Controller) syncDiscoveryNamespaces() error {
 }
 
 func (c *Controller) syncNodes() error {
+	if c.nodeInformer == nil {
+		return nil
+	}
 	var err *multierror.Error
 	nodes := c.nodeInformer.GetIndexer().List()
 	log.Debugf("initializing %d nodes", len(nodes))
@@ -897,6 +920,19 @@ func (c *Controller) getPodLocality(pod *v1.Pod) string {
 	// if pod has `istio-locality` label, skip below ops
 	if len(pod.Labels[model.LocalityLabel]) > 0 {
 		return model.GetLocalityLabelOrDefault(pod.Labels[model.LocalityLabel], "")
+	}
+
+	if c.nodeLister == nil {
+		// Maistra compatibility. Try Node labels copied to Pod.
+		region := getLabelValue(pod.ObjectMeta, NodeRegionLabel, NodeRegionLabelGA)
+		zone := getLabelValue(pod.ObjectMeta, NodeZoneLabel, NodeZoneLabelGA)
+		subzone := getLabelValue(pod.ObjectMeta, label.TopologySubzone.Name, "")
+
+		if region == "" && zone == "" && subzone == "" {
+			return ""
+		}
+
+		return region + "/" + zone + "/" + subzone // Format: "%s/%s/%s"
 	}
 
 	// NodeName is set by the scheduler after the pod is created

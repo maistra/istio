@@ -61,26 +61,30 @@ func (s *StatusSyncer) Run(stopCh <-chan struct{}) {
 }
 
 // NewStatusSyncer creates a new instance
-func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client) *StatusSyncer {
+func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client, noNodeAccess, enableIngressClassName bool) *StatusSyncer {
 	// as in controller, ingressClassListener can be nil since not supported in k8s version <1.18
 	var ingressClassLister listerv1beta1.IngressClassLister
-	if NetworkingIngressAvailable(client) {
+	if enableIngressClassName && NetworkingIngressAvailable(client) {
 		ingressClassLister = client.KubeInformer().Networking().V1beta1().IngressClasses().Lister()
 	}
 
 	// queue requires a time duration for a retry delay after a handler error
 	q := queue.NewQueue(5 * time.Second)
 
-	return &StatusSyncer{
+	s := &StatusSyncer{
 		meshHolder:         meshHolder,
 		client:             client.Kube(),
 		ingressLister:      client.KubeInformer().Networking().V1beta1().Ingresses().Lister(),
 		podLister:          client.KubeInformer().Core().V1().Pods().Lister(),
 		serviceLister:      client.KubeInformer().Core().V1().Services().Lister(),
-		nodeLister:         client.KubeInformer().Core().V1().Nodes().Lister(),
 		ingressClassLister: ingressClassLister,
 		queue:              q,
 	}
+
+	if !noNodeAccess {
+		s.nodeLister = client.KubeInformer().Core().V1().Nodes().Lister()
+	}
+	return s
 }
 
 func (s *StatusSyncer) onEvent() error {
@@ -199,7 +203,7 @@ func (s *StatusSyncer) runningAddresses(ingressNs string) ([]string, error) {
 
 	for _, pod := range igPods {
 		// only Running pods are valid
-		if pod.Status.Phase != coreV1.PodRunning {
+		if pod.Status.Phase != coreV1.PodRunning || s.nodeLister == nil {
 			continue
 		}
 
