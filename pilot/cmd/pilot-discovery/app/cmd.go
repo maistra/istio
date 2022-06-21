@@ -156,6 +156,8 @@ func addFlags(c *cobra.Command) {
 
 	c.PersistentFlags().StringVar(&serverArgs.RegistryOptions.KubeOptions.MemberRollName, "memberRollName", "",
 		"The name of the MemberRoll resource")
+	c.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.EnableCRDScan, "enableCRDScan", true,
+		"Whether to scan CRDs at startup")
 	c.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.DisableNodeAccess, "disableNodeAccess", false,
 		"Whether to prevent istiod watching Node objects")
 
