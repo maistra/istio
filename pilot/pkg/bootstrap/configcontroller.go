@@ -295,8 +295,9 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 		go leaderelection.
 			NewLeaderElection(args.Namespace, args.PodName, leaderelection.AnalyzeController, args.Revision, s.kubeClient).
 			AddRunFunction(func(stop <-chan struct{}) {
-				cont, err := incluster.NewController(stop, s.RWConfigStore,
-					s.kubeClient, args.Namespace, s.statusManager, args.RegistryOptions.KubeOptions.DomainSuffix)
+				opts := args.RegistryOptions.KubeOptions
+				cont, err := incluster.NewController(
+					stop, s.RWConfigStore, s.kubeClient, args.Namespace, s.statusManager, opts.DomainSuffix, opts.EnableCRDScan)
 				if err != nil {
 					return
 				}
@@ -343,7 +344,8 @@ func (s *Server) initStatusController(args *PilotArgs, writeStatus bool) {
 }
 
 func (s *Server) makeKubeConfigController(args *PilotArgs) (model.ConfigStoreController, error) {
-	return crdclient.New(s.kubeClient, args.Revision, args.RegistryOptions.KubeOptions.DomainSuffix)
+	opts := args.RegistryOptions.KubeOptions
+	return crdclient.New(s.kubeClient, args.Revision, opts.DomainSuffix, opts.EnableCRDScan)
 }
 
 func (s *Server) makeFileMonitor(fileDir string, domainSuffix string, configController model.ConfigStore) error {

@@ -45,7 +45,7 @@ func makeClient(t *testing.T, schemas collection.Schemas) (model.ConfigStoreCont
 		createCRD(t, fake, s.Resource())
 	}
 	stop := make(chan struct{})
-	config, err := New(fake, "", "")
+	config, err := New(fake, "", "", true)
 	if err != nil {
 		t.Fatal(err)
 	}
