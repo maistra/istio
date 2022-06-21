@@ -61,10 +61,10 @@ func (s *StatusSyncer) Run(stopCh <-chan struct{}) {
 }
 
 // NewStatusSyncer creates a new instance
-func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client, noNodeAccess bool) *StatusSyncer {
+func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client, noNodeAccess, enableIngressClassName bool) *StatusSyncer {
 	// as in controller, ingressClassListener can be nil since not supported in k8s version <1.18
 	var ingressClassLister listerv1beta1.IngressClassLister
-	if NetworkingIngressAvailable(client) {
+	if enableIngressClassName && NetworkingIngressAvailable(client) {
 		ingressClassLister = client.KubeInformer().Networking().V1beta1().IngressClasses().Lister()
 	}
 
