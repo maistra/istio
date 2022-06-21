@@ -115,7 +115,7 @@ func makeStatusSyncer(t *testing.T) *StatusSyncer {
 
 	client := kubelib.NewFakeClient()
 	setupFake(t, client)
-	sync := NewStatusSyncer(fakeMeshHolder("istio-ingress"), client, false)
+	sync := NewStatusSyncer(fakeMeshHolder("istio-ingress"), client, false, true)
 	stop := make(chan struct{})
 	client.RunAndWait(stop)
 	t.Cleanup(func() {
