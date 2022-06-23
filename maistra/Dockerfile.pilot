@@ -18,7 +18,7 @@ ENV container="oci"
 ENV ISTIO_VERSION="${ISTIO_VERSION}"
 
 RUN dnf update -y && \
-  dnf install -y podman util-linux && \
+  dnf install -y podman-docker util-linux && \
   dnf clean all
 
 ARG TARGETARCH
