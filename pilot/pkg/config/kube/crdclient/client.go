@@ -104,7 +104,7 @@ type Option struct {
 	Revision         string
 	DomainSuffix     string
 	Identifier       string
-	EnableCRDScan	 bool
+	EnableCRDScan    bool
 	NamespacesFilter func(obj interface{}) bool
 }
 
@@ -187,6 +187,7 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 			return nil, err
 		}
 	}
+
 	for _, s := range schemas.All() {
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
 		name := fmt.Sprintf("%s.%s", s.Resource().Plural(), s.Resource().Group())
@@ -248,19 +249,21 @@ func (cl *Client) Run(stop <-chan struct{}) {
 	cl.initialSync.Store(true)
 	cl.logger.Infof("Pilot K8S CRD controller synced in %v", time.Since(t0))
 
-	cl.crdMetadataInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj any) {
-			crd, ok := obj.(*metav1.PartialObjectMetadata)
-			if !ok {
-				// Shouldn't happen
-				cl.logger.Errorf("wrong type %T: %v", obj, obj)
-				return
-			}
-			handleCRDAdd(cl, crd.Name, stop)
-		},
-		UpdateFunc: nil,
-		DeleteFunc: nil,
-	})
+	if cl.crdMetadataInformer != nil {
+		cl.crdMetadataInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj any) {
+				crd, ok := obj.(*metav1.PartialObjectMetadata)
+				if !ok {
+					// Shouldn't happen
+					cl.logger.Errorf("wrong type %T: %v", obj, obj)
+					return
+				}
+				handleCRDAdd(cl, crd.Name, stop)
+			},
+			UpdateFunc: nil,
+			DeleteFunc: nil,
+		})
+	}
 
 	cl.queue.Run(stop)
 	cl.logger.Infof("controller terminated")
