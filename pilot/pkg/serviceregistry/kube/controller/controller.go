@@ -350,27 +350,32 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		}
 	}
 
-	c.nsInformer = kubeClient.KubeInformer().Core().V1().Namespaces().Informer()
-	_ = c.nsInformer.SetTransform(kubelib.StripUnusedFields)
-	c.nsLister = kubeClient.KubeInformer().Core().V1().Namespaces().Lister()
 	// Don't start the namespace informer if Maistra's MemberRoll is in use.
-	if c.opts.SystemNamespace != "" && options.MemberRollName == "" {
-		nsInformer := informer.NewFilteredSharedIndexInformer(func(obj any) bool {
-			ns, ok := obj.(*v1.Namespace)
-			if !ok {
-				log.Warnf("Namespace watch getting wrong type in event: %T", obj)
-				return false
-			}
-			return ns.Name == c.opts.SystemNamespace
-		}, c.nsInformer)
-		c.registerHandlers(nsInformer, "Namespaces", c.onSystemNamespaceEvent, nil)
-	}
+	if options.MemberRollName == "" {
+		c.nsInformer = kubeClient.KubeInformer().Core().V1().Namespaces().Informer()
+		_ = c.nsInformer.SetTransform(kubelib.StripUnusedFields)
+	c.nsLister = kubeClient.KubeInformer().Core().V1().Namespaces().Lister()
+		if c.opts.SystemNamespace != "" {
+			nsInformer := informer.NewFilteredSharedIndexInformer(func(obj any) bool {
+				ns, ok := obj.(*v1.Namespace)
+				if !ok {
+					log.Warnf("Namespace watch getting wrong type in event: %T", obj)
+					return false
+				}
+				return ns.Name == c.opts.SystemNamespace
+			}, c.nsInformer)
+			c.registerHandlers(nsInformer, "Namespaces", c.onSystemNamespaceEvent, nil)
+		}
 
-	if c.opts.DiscoveryNamespacesFilter == nil {
-		c.opts.DiscoveryNamespacesFilter = filter.NewDiscoveryNamespacesFilter(c.nsLister, options.MeshWatcher.Mesh().DiscoverySelectors)
-	}
+		if c.opts.DiscoveryNamespacesFilter == nil {
+			c.opts.DiscoveryNamespacesFilter = filter.NewDiscoveryNamespacesFilter(c.nsLister, options.MeshWatcher.Mesh().DiscoverySelectors)
+		}
 
-	c.initDiscoveryHandlers(kubeClient, options.EndpointMode, options.MeshWatcher, c.opts.DiscoveryNamespacesFilter)
+		c.initDiscoveryHandlers(kubeClient, options.EndpointMode, options.MeshWatcher, c.opts.DiscoveryNamespacesFilter)
+
+	} else if c.opts.DiscoveryNamespacesFilter == nil {
+		c.opts.DiscoveryNamespacesFilter = filter.NewMaistraDiscoveryNamespacesFilter(kubeClient.GetMemberRoll())
+	}
 
 	c.serviceInformer = informer.NewFilteredSharedIndexInformer(c.opts.DiscoveryNamespacesFilter.Filter,
 		kubeClient.KubeInformer().Core().V1().Services().Informer())
