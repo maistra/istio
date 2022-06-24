@@ -153,7 +153,6 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 		kinds:            map[config.GroupVersionKind]*cacheHandler{},
 		handlers:         map[config.GroupVersionKind][]model.EventHandler{},
 		client:           client,
-		crdWatcher:       crdwatcher.NewController(client),
 		logger:           scope.WithLabels("controller", opts.Identifier),
 		namespacesFilter: opts.NamespacesFilter,
 		crdWatches: map[config.GroupVersionKind]*waiter{
@@ -162,11 +161,12 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 		},
 	}
 
-	out.crdWatcher.AddCallBack(func(name string) {
-		handleCRDAdd(out, name)
-	})
 	var known map[string]struct{}
 	if opts.EnableCRDScan {
+		out.crdWatcher = crdwatcher.NewController(client)
+		out.crdWatcher.AddCallBack(func(name string) {
+			handleCRDAdd(out, name)
+		})
 		var err error
 		known, err = knownCRDs(client.Ext())
 		if err != nil {

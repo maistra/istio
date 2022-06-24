@@ -317,28 +317,30 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		configCluster:              options.ConfigCluster,
 	}
 
-	c.namespaces = kclient.New[*v1.Namespace](kubeClient)
 	// Don't start the namespace informer if Maistra's MemberRoll is in use.
-	if c.opts.SystemNamespace != "" && options.MemberRollName == "" {
-		registerHandlers[*v1.Namespace](
-			c,
-			c.namespaces,
-			"Namespaces",
-			func(old *v1.Namespace, cur *v1.Namespace, event model.Event) error {
-				if cur.Name == c.opts.SystemNamespace {
-					return c.onSystemNamespaceEvent(old, cur, event)
-				}
-				return nil
-			},
-			nil,
-		)
+	if options.MemberRollName == "" {
+		c.namespaces = kclient.New[*v1.Namespace](kubeClient)
+		if c.opts.SystemNamespace != "" {
+			registerHandlers[*v1.Namespace](
+				c,
+				c.namespaces,
+				"Namespaces",
+				func(old *v1.Namespace, cur *v1.Namespace, event model.Event) error {
+					if cur.Name == c.opts.SystemNamespace {
+						return c.onSystemNamespaceEvent(old, cur, event)
+					}
+					return nil
+				},
+				nil,
+			)
+		}
+		if c.opts.DiscoveryNamespacesFilter == nil {
+			c.opts.DiscoveryNamespacesFilter = namespace.NewDiscoveryNamespacesFilter(c.namespaces, options.MeshWatcher.Mesh().DiscoverySelectors)
+		}
+		c.initDiscoveryHandlers(options.MeshWatcher, c.opts.DiscoveryNamespacesFilter)
+	} else if c.opts.DiscoveryNamespacesFilter == nil {
+		c.opts.DiscoveryNamespacesFilter = namespace.NewMaistraDiscoveryNamespacesFilter(kubeClient.GetMemberRollController())
 	}
-
-	if c.opts.DiscoveryNamespacesFilter == nil {
-		c.opts.DiscoveryNamespacesFilter = namespace.NewDiscoveryNamespacesFilter(c.namespaces, options.MeshWatcher.Mesh().DiscoverySelectors)
-	}
-
-	c.initDiscoveryHandlers(options.MeshWatcher, c.opts.DiscoveryNamespacesFilter)
 
 	c.services = kclient.NewFiltered[*v1.Service](kubeClient, kclient.Filter{ObjectFilter: c.opts.DiscoveryNamespacesFilter.Filter})
 
@@ -659,7 +661,7 @@ func (c *Controller) HasSynced() bool {
 }
 
 func (c *Controller) informersSynced() bool {
-	if !c.namespaces.HasSynced() ||
+	if (c.namespaces != nil && !c.namespaces.HasSynced()) ||
 		!c.services.HasSynced() ||
 		!c.endpoints.HasSynced() ||
 		!c.pods.pods.HasSynced() ||
