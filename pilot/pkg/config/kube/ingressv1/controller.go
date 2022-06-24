@@ -110,8 +110,11 @@ func NewController(client kube.Client, meshWatcher mesh.Holder,
 	ingressInformer := client.KubeInformer().Networking().V1().Ingresses()
 	serviceInformer := client.KubeInformer().Core().V1().Services()
 
-	classes := client.KubeInformer().Networking().V1().IngressClasses()
-	classes.Informer()
+	var classes ingressinformer.IngressClassInformer
+	if options.EnableIngressClassName {
+		classes = client.KubeInformer().Networking().V1().IngressClasses()
+		classes.Informer()
+	}
 
 	c := &controller{
 		meshWatcher:     meshWatcher,

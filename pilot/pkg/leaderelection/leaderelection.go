@@ -187,7 +187,7 @@ func NewLeaderElection(namespace, name, electionID, revision string, client kube
 
 func NewLeaderElectionMulticluster(namespace, name, electionID, revision string, remote bool, client kube.Client) *LeaderElection {
 	var watcher revisions.DefaultWatcher
-	if features.PrioritizedLeaderElection {
+	if features.PrioritizedLeaderElection && client.GetMemberRoll() == nil {
 		watcher = revisions.NewDefaultWatcher(client, revision)
 	}
 	if name == "" {
