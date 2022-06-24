@@ -21,18 +21,13 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
-	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	klabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	appsinformersv1 "k8s.io/client-go/informers/apps/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	gateway "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	"sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1alpha2"
 	"sigs.k8s.io/yaml"
@@ -114,14 +109,8 @@ func NewDeploymentController(client kube.Client) *DeploymentController {
 		AddEventHandler(handler)
 
 	// For Deployments, this is the only controller watching. We can filter to just the deployments we care about
-	client.KubeInformer().InformerFor(&appsv1.Deployment{}, func(k kubernetes.Interface, resync time.Duration) cache.SharedIndexInformer {
-		return appsinformersv1.NewFilteredDeploymentInformer(
-			k, metav1.NamespaceAll, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-			func(options *metav1.ListOptions) {
-				options.LabelSelector = "gateway.istio.io/managed=istio.io-gateway-controller"
-			},
-		)
-	}).AddEventHandler(handler)
+	// TODO: filter deployments with label selector "gateway.istio.io/managed=istio.io-gateway-controller"
+	client.KubeInformer().Apps().V1().Deployments().Informer().AddEventHandler(handler)
 
 	// Use the full informer; we are already watching all Gateways for the core Istiod logic
 	gw.Informer().AddEventHandler(controllers.ObjectHandler(dc.queue.AddObject))

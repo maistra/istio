@@ -25,10 +25,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	informersv1 "k8s.io/client-go/informers/core/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	listersv1 "k8s.io/client-go/listers/core/v1"
@@ -80,24 +77,7 @@ type authorizationResponse struct {
 var _ credentials.Controller = &CredentialsController{}
 
 func NewCredentialsController(client kube.Client, clusterID cluster.ID) *CredentialsController {
-	informer := client.KubeInformer().InformerFor(&v1.Secret{}, func(k kubernetes.Interface, resync time.Duration) cache.SharedIndexInformer {
-		return informersv1.NewFilteredSecretInformer(
-			k, metav1.NamespaceAll, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-			func(options *metav1.ListOptions) {
-				// We only care about TLS certificates and docker config for Wasm image pulling.
-				// Unfortunately, it is not as simple as selecting type=kubernetes.io/tls and type=kubernetes.io/dockerconfigjson.
-				// Because of legacy reasons and supporting an extra ca.crt, we also support generic types.
-				// Its also likely users have started to use random types and expect them to continue working.
-				// This makes the assumption we will never care about Helm secrets or SA token secrets - two common
-				// large secrets in clusters.
-				// This is a best effort optimization only; the code would behave correctly if we watched all secrets.
-				options.FieldSelector = fields.AndSelectors(
-					fields.OneTermNotEqualSelector("type", "helm.sh/release.v1"),
-					fields.OneTermNotEqualSelector("type", string(v1.SecretTypeServiceAccountToken)),
-				).String()
-			},
-		)
-	})
+	informer := client.KubeInformer().Core().V1().Secrets().Informer()
 
 	return &CredentialsController{
 		secretInformer: informer,
