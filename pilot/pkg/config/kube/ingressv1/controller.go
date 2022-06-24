@@ -116,8 +116,11 @@ func NewController(client kube.Client, meshWatcher mesh.Holder,
 	_ = ingressInformer.Informer().SetTransform(kube.StripUnusedFields)
 	serviceInformer := client.KubeInformer().Core().V1().Services()
 
-	classes := client.KubeInformer().Networking().V1().IngressClasses()
-	_ = classes.Informer().SetTransform(kube.StripUnusedFields)
+	var classes ingressinformer.IngressClassInformer
+	if options.EnableIngressClassName {
+		classes = client.KubeInformer().Networking().V1().IngressClasses()
+		_ = classes.Informer().SetTransform(kube.StripUnusedFields)
+	}
 
 	c := &controller{
 		meshWatcher:     meshWatcher,
