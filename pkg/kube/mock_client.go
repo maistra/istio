@@ -335,3 +335,7 @@ func (c MockClient) AddMemberRollController(namespace, memberRollName string) er
 func (c MockClient) GetMemberRollController() memberroll.MemberRollController {
 	panic("not used in mock")
 }
+
+func (c MockClient) IsMultiTenant() bool {
+	panic("not used in mock")
+}

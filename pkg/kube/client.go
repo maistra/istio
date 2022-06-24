@@ -181,6 +181,9 @@ type Client interface {
 
 	// GetMemberRollController returns the member roll for the client, which may be nil.
 	GetMemberRollController() memberroll.MemberRollController
+
+	// IsMultiTenant returns true when istiod is configured for multi-tenant mode (runs with arg --memberRollName=default)
+	IsMultiTenant() bool
 }
 
 // CLIClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -595,6 +598,10 @@ func (c *client) AddMemberRollController(namespace, memberRollName string) (err 
 
 func (c *client) GetMemberRollController() memberroll.MemberRollController {
 	return c.memberRoll
+}
+
+func (c *client) IsMultiTenant() bool {
+	return c.memberRoll != nil
 }
 
 // RunAndWait starts all informers and waits for their caches to sync.
