@@ -44,45 +44,43 @@ func TestSMMR(t *testing.T) {
 			if err := maistra.CreateServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA); err != nil {
 				ctx.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
 			}
-			retry.UntilSuccessOrFail(ctx, func() error {
-				return verifyThatIngressHasVirtualHostForMember(ctx, "a", 1)
-			}, retry.Timeout(10*time.Second))
+			verifyThatIngressHasVirtualHostForMember(ctx, "a", 1)
 
 			if err := maistra.AddMemberToServiceMesh(ctx, namespaceB); err != nil {
 				ctx.Fatalf("failed to add member to ServiceMeshMemberRoll: %s", err)
 			}
-			retry.UntilSuccessOrFail(ctx, func() error {
-				if err := verifyThatIngressHasVirtualHostForMember(ctx, "a", 2); err != nil {
-					return err
-				}
-				return verifyThatIngressHasVirtualHostForMember(ctx, "b", 2)
-			}, retry.Timeout(10*time.Second))
+			verifyThatIngressHasVirtualHostForMember(ctx, "a", 2)
+			verifyThatIngressHasVirtualHostForMember(ctx, "b", 2)
 		})
 }
 
-const gatewayRouteName = "http.8080"
-
-func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expectedMemberName string, expectedVirtualHostsNum int) error {
+func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expectedMemberName string, expectedVirtualHostsNum int) {
+	expectedGatewayRouteName := "http.8080"
 	expectedVirtualHostName := fmt.Sprintf("%s.maistra.io:80", expectedMemberName)
 
-	podName := getPodName(ctx, "istio-system", "istio-ingressgateway")
-	routes := getRoutesFromProxy(ctx, podName, "istio-system", gatewayRouteName)
-	if len(routes) != 1 {
-		return fmt.Errorf("expected to find exactly 1 route '%s', got %d", gatewayRouteName, len(routes))
-	}
-
-	virtualHostsNum := len(routes[0].VirtualHosts)
-	if virtualHostsNum != expectedVirtualHostsNum {
-		// TODO: log virtual host names
-		return fmt.Errorf("expected to find exactly %d virtual hosts, got %d", expectedVirtualHostsNum, virtualHostsNum)
-	}
-
-	for _, virtualHost := range routes[0].VirtualHosts {
-		if virtualHost.Name == expectedVirtualHostName {
-			return nil
+	retry.UntilSuccessOrFail(ctx, func() error {
+		podName, err := getPodName(ctx, "istio-system", "istio-ingressgateway")
+		if err != nil {
+			return err
 		}
-	}
-	return fmt.Errorf("expected virtual host '%s' was not found", expectedVirtualHostName)
+		routes := getRoutesFromProxy(ctx, podName, "istio-system", expectedGatewayRouteName)
+		if len(routes) != 1 {
+			return fmt.Errorf("expected to find exactly 1 route '%s', got %d", expectedGatewayRouteName, len(routes))
+		}
+
+		virtualHostsNum := len(routes[0].VirtualHosts)
+		if virtualHostsNum != expectedVirtualHostsNum {
+			// TODO: log virtual host names
+			return fmt.Errorf("expected to find exactly %d virtual hosts, got %d", expectedVirtualHostsNum, virtualHostsNum)
+		}
+
+		for _, virtualHost := range routes[0].VirtualHosts {
+			if virtualHost.Name == expectedVirtualHostName {
+				return nil
+			}
+		}
+		return fmt.Errorf("expected virtual host '%s' was not found", expectedVirtualHostName)
+	}, retry.Timeout(10*time.Second))
 }
 
 type RouteConfig struct {
@@ -111,15 +109,15 @@ func getRoutesFromProxy(ctx framework.TestContext, pod, namespace, routeName str
 	return routes
 }
 
-func getPodName(ctx framework.TestContext, namespace, appName string) string {
+func getPodName(ctx framework.TestContext, namespace, appName string) (string, error) {
 	pods, err := ctx.Clusters().Default().PodsForSelector(context.TODO(), namespace, fmt.Sprintf("app=%s", appName))
 	if err != nil {
-		ctx.Fatalf("failed to get %s pod from namespace %s: %v", appName, namespace, err)
+		return "", fmt.Errorf("failed to get %s pod from namespace %s: %v", appName, namespace, err)
 	}
 	if len(pods.Items) == 0 {
-		ctx.Fatalf("list of received %s pods from namespace %s is empty", appName, namespace)
+		return "", fmt.Errorf("list of received %s pods from namespace %s is empty", appName, namespace)
 	}
-	return pods.Items[0].Name
+	return pods.Items[0].Name, nil
 }
 
 func applyGatewayOrFail(ctx framework.TestContext, ns string, hosts ...string) {
