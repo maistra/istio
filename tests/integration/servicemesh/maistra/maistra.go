@@ -1,6 +1,7 @@
 //go:build integ
 // +build integ
 
+//
 // Copyright Red Hat, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,37 +16,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package servicemesh
+package maistra
 
 import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
-	"path"
-	"strings"
-	"time"
-
-	v1 "k8s.io/api/core/v1"
+	"istio.io/istio/pkg/test/util/retry"
+	v1 "k8s.io/api/apps/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"path"
+	"strings"
+	"time"
 
 	// import maistra CRD manifests
 	_ "maistra.io/api/manifests"
 	"sigs.k8s.io/yaml"
 
 	"istio.io/istio/pkg/test/env"
-	"istio.io/istio/pkg/test/framework"
-	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/framework/resource"
 )
 
-var (
-	manifestsDir = env.IstioSrc + "/vendor/maistra.io/api/manifests"
-	rnd          = rand.New(rand.NewSource(time.Now().UnixNano()))
-)
+var manifestsDir = env.IstioSrc + "/vendor/maistra.io/api/manifests"
 
 func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 	crds, err := findCRDs()
@@ -92,22 +89,66 @@ func findCRDs() (list []string, err error) {
 	return
 }
 
-// TODO for some reason namespace.NewOrFail() doesn't work so I'm doing this manually
-func CreateNamespace(ctx framework.TestContext, cluster cluster.Cluster, prefix string) string {
-	ns, err := cluster.Kube().CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%d", prefix, rnd.Intn(99999)),
-			Labels: map[string]string{
-				"istio-injection": "enabled",
-			},
-		},
-	}, metav1.CreateOptions{})
+func Install(ctx resource.Context) error {
+	kubeClient := ctx.Clusters().Default().Kube()
+	istiod, err := waitForIstiod(kubeClient, 0)
 	if err != nil {
-		ctx.Fatal(err)
+		return err
 	}
-	name := ns.Name
-	ctx.Cleanup(func() {
-		cluster.Kube().CoreV1().Namespaces().Delete(context.TODO(), name, metav1.DeleteOptions{})
-	})
-	return name
+	if err := patchIstiodArgs(kubeClient); err != nil {
+		return err
+	}
+	if _, err := waitForIstiod(kubeClient, istiod.Generation); err != nil {
+		return err
+	}
+	return nil
+}
+
+func waitForIstiod(kubeClient kubernetes.Interface, lastSeenGeneration int64) (*v1.Deployment, error) {
+	var istiod *v1.Deployment
+	err := retry.UntilSuccess(func() error {
+		var err error
+		istiod, err = kubeClient.AppsV1().Deployments("istio-system").Get(context.TODO(), "istiod", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get istiod deployment: %v", err)
+		}
+		if istiod.Status.ReadyReplicas != istiod.Status.Replicas {
+			return fmt.Errorf("istiod deployment is not ready - %d of %d pods are ready", istiod.Status.ReadyReplicas, istiod.Status.Replicas)
+		}
+		if lastSeenGeneration != 0 && istiod.Status.ObservedGeneration == lastSeenGeneration {
+			return fmt.Errorf("istiod deployment is not ready - Generation has not been updated")
+		}
+		return nil
+	}, retry.Timeout(30*time.Second), retry.Delay(time.Second))
+
+	if err != nil {
+		return nil, err
+	}
+	return istiod, nil
+}
+
+func patchIstiodArgs(kubeClient kubernetes.Interface) error {
+	patch := `[
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/args/1",
+		"value": "--memberRollName=default"
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/1",
+		"value": {
+			"name": "PRIORITIZED_LEADER_ELECTION",
+			"value": "false"
+		}
+	}
+]`
+	return retry.UntilSuccess(func() error {
+		_, err := kubeClient.AppsV1().Deployments("istio-system").
+			Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to patch istiod deployment: %v", err)
+		}
+		return nil
+	}, retry.Timeout(10*time.Second), retry.Delay(time.Second))
 }

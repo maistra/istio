@@ -18,31 +18,21 @@
 package servicemesh
 
 import (
+	"istio.io/istio/pkg/test/framework/components/namespace"
 	"testing"
 	"time"
 
 	"istio.io/istio/pkg/test/framework"
-	"istio.io/istio/pkg/test/framework/components/istio"
 )
-
-var i istio.Instance
-
-func TestMain(m *testing.M) {
-	framework.
-		NewSuite(m).
-		Setup(ApplyServiceMeshCRDs).
-		Setup(istio.Setup(&i, nil)).
-		Run()
-}
 
 func TestSMMR(t *testing.T) {
 	framework.NewTest(t).
 		Run(func(ctx framework.TestContext) {
 			cluster := ctx.Clusters().Default()
-			gatewayNamespace := CreateNamespace(ctx, cluster, "gateway")
-			httpbinNamespace := CreateNamespace(ctx, cluster, "httpbin")
-			sleepNamespace := CreateNamespace(ctx, cluster, "sleep")
-			configureMemberRollNameInIstiod(ctx, cluster)
+			// TODO: Cleanup namespaces
+			gatewayNamespace := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "common", Inject: true}).Name()
+			httpbinNamespace := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "httpbin", Inject: true}).Name()
+			sleepNamespace := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "sleep", Inject: true}).Name()
 			createServiceMeshMemberRoll(ctx, cluster, gatewayNamespace, httpbinNamespace)
 			applyGateway(ctx, gatewayNamespace)
 			applyVirtualService(ctx, httpbinNamespace, gatewayNamespace, "httpbin")

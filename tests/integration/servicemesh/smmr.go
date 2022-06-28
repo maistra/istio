@@ -22,69 +22,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
-
+	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	maistrav1 "maistra.io/api/client/versioned/typed/core/v1"
+	"time"
 
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/framework/components/istioctl"
 	"istio.io/istio/pkg/test/scopes"
-	"istio.io/istio/pkg/test/util/retry"
 )
 
 const gatewayRouteName = "http.8080"
 
-func configureMemberRollNameInIstiod(ctx framework.TestContext, c cluster.Cluster) {
-	scopes.Framework.Info("Patching istiod deployment...")
-	waitForIstiod(ctx, c)
-	patchIstiodArgs(ctx, c)
-	waitForIstiod(ctx, c)
-}
-
-func waitForIstiod(ctx framework.TestContext, c cluster.Cluster) {
-	if err := retry.UntilSuccess(func() error {
-		istiod, err := c.Kube().AppsV1().Deployments("istio-system").Get(context.TODO(), "istiod", metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to get deployment istiod: %v", err)
-		}
-		if istiod.Status.ReadyReplicas != istiod.Status.Replicas {
-			return fmt.Errorf("istiod deployment is not ready - %d of %d pods are ready", istiod.Status.ReadyReplicas, istiod.Status.Replicas)
-		}
-		return nil
-	}, retry.Timeout(300*time.Second), retry.Delay(time.Second)); err != nil {
-		ctx.Fatal(err)
-	}
-}
-
-func patchIstiodArgs(ctx framework.TestContext, c cluster.Cluster) {
-	patch := `[
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/1",
-		"value": "--memberRollName=default"
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/1",
-		"value": {
-			"name": "PRIORITIZED_LEADER_ELECTION",
-			"value": "false"
-		}
-	}
-]`
-	_, err := c.Kube().AppsV1().Deployments("istio-system").
-		Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
-	if err != nil {
-		ctx.Fatalf("failed to patch istiod deployment: %v", err)
-	}
-}
-
 func createServiceMeshMemberRoll(ctx framework.TestContext, c cluster.Cluster, ns1, ns2 string) {
 	scopes.Framework.Info("Applying ServiceMeshMemberRoll...")
-	ctx.ConfigIstio().YAML("istio-system", fmt.Sprintf(`
+	if err := retry.UntilSuccess(func() error {
+		err := ctx.ConfigKube().YAML("istio-system", fmt.Sprintf(`
 apiVersion: maistra.io/v1
 kind: ServiceMeshMemberRoll
 metadata:
@@ -93,7 +47,14 @@ spec:
   members:
     - %s
     - %s
-`, ns1, ns2)).ApplyOrFail(ctx)
+`, ns1, ns2)).Apply()
+		if err != nil {
+			return fmt.Errorf("failed to apply SMMR resource: %s", err)
+		}
+		return nil
+	}, retry.Timeout(10*time.Second), retry.Delay(time.Second)); err != nil {
+		ctx.Fatalf("failed to create SMMR: %s", err)
+	}
 	updateServiceMeshMemberRollStatus(ctx, c, ns1, ns2)
 }
 
