@@ -69,7 +69,10 @@ func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expecte
 			if err != nil {
 				return err
 			}
-			routes := getRoutesFromProxy(ctx, podName, "istio-system", expectedGatewayRouteName)
+			routes, err := getRoutesFromProxy(ctx, podName, "istio-system", expectedGatewayRouteName)
+			if err != nil {
+				return fmt.Errorf("failed to get routes from proxy %s: %s", podName, err)
+			}
 			if len(routes) != 1 {
 				return fmt.Errorf("expected to find exactly 1 route '%s', got %d", expectedGatewayRouteName, len(routes))
 			}
@@ -100,21 +103,21 @@ type VirtualHost struct {
 	Name string `json:"name"`
 }
 
-func getRoutesFromProxy(ctx framework.TestContext, pod, namespace, routeName string) []*RouteConfig {
+func getRoutesFromProxy(ctx framework.TestContext, pod, namespace, routeName string) ([]*RouteConfig, error) {
 	istioCtl := istioctl.NewOrFail(ctx, ctx, istioctl.Config{})
 	stdout, stderr, err := istioCtl.Invoke([]string{
 		"proxy-config", "routes", fmt.Sprintf("%s.%s", pod, namespace), "--name", routeName, "-o", "json",
 	})
 	if err != nil || stderr != "" {
-		ctx.Fatalf("failed to execute command 'istioctl proxy-config': %s: %v", stderr, err)
+		return nil, fmt.Errorf("failed to execute command 'istioctl proxy-config': %s: %s", stderr, err)
 	}
 
 	routes := make([]*RouteConfig, 0)
 	if err := json.Unmarshal([]byte(stdout), &routes); err != nil {
-		ctx.Fatalf("failed to unmarshall routes: %v", err)
+		return nil, fmt.Errorf("failed to unmarshall routes: %s", err)
 	}
 
-	return routes
+	return routes, nil
 }
 
 func getPodName(ctx framework.TestContext, namespace, appName string) (string, error) {
