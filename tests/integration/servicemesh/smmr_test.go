@@ -76,7 +76,6 @@ func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expecte
 
 			virtualHostsNum := len(routes[0].VirtualHosts)
 			if virtualHostsNum != expectedVirtualHostsNum {
-				// TODO: log virtual host names
 				return fmt.Errorf("expected to find exactly %d virtual hosts, got %d", expectedVirtualHostsNum, virtualHostsNum)
 			}
 
