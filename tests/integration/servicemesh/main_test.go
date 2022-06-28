@@ -28,6 +28,7 @@ import (
 var i istio.Instance
 
 func TestMain(m *testing.M) {
+	// do not change order of setup functions
 	framework.
 		NewSuite(m).
 		Setup(maistra.ApplyServiceMeshCRDs).
