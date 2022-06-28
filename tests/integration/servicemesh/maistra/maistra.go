@@ -22,7 +22,17 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"path"
+	"strings"
+	"time"
+
+	maistrav1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
+	"istio.io/istio/pkg/test/env"
+	"istio.io/istio/pkg/test/framework"
+	"istio.io/istio/pkg/test/framework/components/cluster"
+	"istio.io/istio/pkg/test/framework/resource"
 	"istio.io/istio/pkg/test/util/retry"
+
 	v1 "k8s.io/api/apps/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -30,16 +40,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"path"
-	"strings"
-	"time"
 
 	// import maistra CRD manifests
 	_ "maistra.io/api/manifests"
 	"sigs.k8s.io/yaml"
-
-	"istio.io/istio/pkg/test/env"
-	"istio.io/istio/pkg/test/framework/resource"
 )
 
 var manifestsDir = env.IstioSrc + "/vendor/maistra.io/api/manifests"
@@ -141,6 +145,22 @@ func patchIstiodArgs(kubeClient kubernetes.Interface) error {
 			"name": "PRIORITIZED_LEADER_ELECTION",
 			"value": "false"
 		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/2",
+		"value": {
+			"name": "INJECTION_WEBHOOK_CONFIG_NAME",
+			"value": ""
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/3",
+		"value": {
+			"name": "VALIDATION_WEBHOOK_CONFIG_NAME",
+			"value": ""
+		}
 	}
 ]`
 	return retry.UntilSuccess(func() error {
@@ -151,4 +171,68 @@ func patchIstiodArgs(kubeClient kubernetes.Interface) error {
 		}
 		return nil
 	}, retry.Timeout(10*time.Second), retry.Delay(time.Second))
+}
+
+func CreateServiceMeshMemberRoll(ctx framework.TestContext, memberNamespaces ...string) error {
+	memberRollYAML := `
+apiVersion: maistra.io/v1
+kind: ServiceMeshMemberRoll
+metadata:
+  name: default
+spec:
+  members:
+`
+	for _, ns := range memberNamespaces {
+		memberRollYAML += fmt.Sprintf("  - %s\n", ns)
+	}
+	if err := retry.UntilSuccess(func() error {
+		if err := ctx.ConfigIstio().YAML("istio-system", memberRollYAML).Apply(); err != nil {
+			return fmt.Errorf("failed to apply SMMR resource: %s", err)
+		}
+		return nil
+	}, retry.Timeout(10*time.Second), retry.Delay(time.Second)); err != nil {
+		return err
+	}
+	return updateServiceMeshMemberRollStatus(ctx.Clusters().Default(), memberNamespaces...)
+}
+
+func AddMemberToServiceMesh(ctx framework.TestContext, memberNamespace string) error {
+	c := ctx.Clusters().Default()
+	client, err := maistrav1.NewForConfig(c.RESTConfig())
+	if err != nil {
+		return fmt.Errorf("failed to create client for maistra resources: %s", err)
+	}
+
+	return retry.UntilSuccess(func() error {
+		smmr, err := client.ServiceMeshMemberRolls("istio-system").Get(context.TODO(), "default", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get SMMR default: %s", err)
+		}
+		smmr.Spec.Members = append(smmr.Spec.Members, memberNamespace)
+		_, err = client.ServiceMeshMemberRolls("istio-system").Update(context.TODO(), smmr, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update SMMR default: %s", err)
+		}
+		return updateServiceMeshMemberRollStatus(c, memberNamespace)
+	})
+}
+
+func updateServiceMeshMemberRollStatus(c cluster.Cluster, memberNamespaces ...string) error {
+	client, err := maistrav1.NewForConfig(c.RESTConfig())
+	if err != nil {
+		return fmt.Errorf("failed to create client for maistra resources: %s", err)
+	}
+
+	return retry.UntilSuccess(func() error {
+		smmr, err := client.ServiceMeshMemberRolls("istio-system").Get(context.TODO(), "default", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get SMMR default: %s", err)
+		}
+		smmr.Status.ConfiguredMembers = append(smmr.Status.ConfiguredMembers, memberNamespaces...)
+		_, err = client.ServiceMeshMemberRolls("istio-system").UpdateStatus(context.TODO(), smmr, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update SMMR default: %s", err)
+		}
+		return nil
+	})
 }
