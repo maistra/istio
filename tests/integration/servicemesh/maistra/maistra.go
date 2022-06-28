@@ -124,7 +124,6 @@ func waitForIstiod(kubeClient kubernetes.Interface, lastSeenGeneration int64) (*
 		}
 		return nil
 	}, retry.Timeout(30*time.Second), retry.Delay(time.Second))
-
 	if err != nil {
 		return nil, err
 	}
