@@ -27,7 +27,6 @@ import (
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istioctl"
 	"istio.io/istio/pkg/test/framework/components/namespace"
-	"istio.io/istio/pkg/test/scopes"
 	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/istio/tests/integration/servicemesh/maistra"
 )
@@ -35,28 +34,28 @@ import (
 func TestSMMR(t *testing.T) {
 	framework.NewTest(t).
 		Run(func(ctx framework.TestContext) {
-			gatewayNamespace := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "common", Inject: true}).Name()
-			httpbinNamespace := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "httpbin", Inject: true}).Name()
-			sleepNamespace := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "sleep", Inject: true}).Name()
-			if err := maistra.CreateServiceMeshMemberRoll(ctx, gatewayNamespace, httpbinNamespace); err != nil {
+			namespaceGateway := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "gateway", Inject: true}).Name()
+			namespaceA := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "a", Inject: true}).Name()
+			namespaceB := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "b", Inject: true}).Name()
+			applyGatewayOrFail(ctx, namespaceGateway, "a", "b")
+			applyVirtualServiceOrFail(ctx, namespaceA, namespaceGateway, "a")
+			applyVirtualServiceOrFail(ctx, namespaceB, namespaceGateway, "b")
+
+			if err := maistra.CreateServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA); err != nil {
 				ctx.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
 			}
-
-			applyGateway(ctx, gatewayNamespace)
-			applyVirtualService(ctx, httpbinNamespace, gatewayNamespace, "httpbin")
-			applyVirtualService(ctx, sleepNamespace, gatewayNamespace, "sleep")
 			retry.UntilSuccessOrFail(ctx, func() error {
-				return verifyThatIngressHasVirtualHostForMember(ctx, "httpbin", 1)
+				return verifyThatIngressHasVirtualHostForMember(ctx, "a", 1)
 			}, retry.Timeout(10*time.Second))
 
-			if err := maistra.AddMemberToServiceMesh(ctx, sleepNamespace); err != nil {
+			if err := maistra.AddMemberToServiceMesh(ctx, namespaceB); err != nil {
 				ctx.Fatalf("failed to add member to ServiceMeshMemberRoll: %s", err)
 			}
 			retry.UntilSuccessOrFail(ctx, func() error {
-				if err := verifyThatIngressHasVirtualHostForMember(ctx, "httpbin", 2); err != nil {
+				if err := verifyThatIngressHasVirtualHostForMember(ctx, "a", 2); err != nil {
 					return err
 				}
-				return verifyThatIngressHasVirtualHostForMember(ctx, "sleep", 2)
+				return verifyThatIngressHasVirtualHostForMember(ctx, "b", 2)
 			}, retry.Timeout(10*time.Second))
 		})
 }
@@ -123,9 +122,8 @@ func getPodName(ctx framework.TestContext, namespace, appName string) string {
 	return pods.Items[0].Name
 }
 
-func applyGateway(ctx framework.TestContext, ns string) {
-	scopes.Framework.Info("Applying Gateway...")
-	ctx.ConfigIstio().YAML(ns, `
+func applyGatewayOrFail(ctx framework.TestContext, ns string, hosts ...string) {
+	gwYAML := `
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
@@ -139,14 +137,18 @@ spec:
       name: http
       protocol: HTTP
     hosts:
-    - "httpbin.maistra.io"
-    - "sleep.maistra.io"
-`).ApplyOrFail(ctx)
+`
+	for _, host := range hosts {
+		gwYAML += fmt.Sprintf("    - %s.maistra.io\n", host)
+	}
+	// retry because of flaky validation webhook
+	retry.UntilSuccessOrFail(ctx, func() error {
+		return ctx.ConfigIstio().YAML(ns, gwYAML).Apply()
+	}, retry.Timeout(3*time.Second))
 }
 
-func applyVirtualService(ctx framework.TestContext, ns, gatewayNs, virtualServiceName string) {
-	scopes.Framework.Info("Applying VirtualService...")
-	ctx.ConfigIstio().YAML(ns, fmt.Sprintf(`
+func applyVirtualServiceOrFail(ctx framework.TestContext, ns, gatewayNs, virtualServiceName string) {
+	vsYAML := fmt.Sprintf(`
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
@@ -162,5 +164,9 @@ spec:
         host: localhost
         port:
           number: 8080
-`, virtualServiceName, virtualServiceName, gatewayNs)).ApplyOrFail(ctx)
+`, virtualServiceName, virtualServiceName, gatewayNs)
+	// retry because of flaky validation webhook
+	retry.UntilSuccessOrFail(ctx, func() error {
+		return ctx.ConfigIstio().YAML(ns, vsYAML).Apply()
+	}, retry.Timeout(3*time.Second))
 }
