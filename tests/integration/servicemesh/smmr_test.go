@@ -63,29 +63,29 @@ func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expecte
 	expectedVirtualHostsNum := len(expectedMembers)
 
 	retry.UntilSuccessOrFail(ctx, func() error {
-	CheckExpectedMembers:
+		podName, err := getPodName(ctx, "istio-system", "istio-ingressgateway")
+		if err != nil {
+			return err
+		}
+		routes, err := getRoutesFromProxy(ctx, podName, "istio-system", expectedGatewayRouteName)
+		if err != nil {
+			return fmt.Errorf("failed to get routes from proxy %s: %s", podName, err)
+		}
+		if len(routes) != 1 {
+			return fmt.Errorf("expected to find exactly 1 route '%s', got %d", expectedGatewayRouteName, len(routes))
+		}
+
+		virtualHostsNum := len(routes[0].VirtualHosts)
+		if virtualHostsNum != expectedVirtualHostsNum {
+			return fmt.Errorf("expected to find exactly %d virtual hosts, got %d", expectedVirtualHostsNum, virtualHostsNum)
+		}
+
+	CheckExpectedMembersLoop:
 		for _, member := range expectedMembers {
-			podName, err := getPodName(ctx, "istio-system", "istio-ingressgateway")
-			if err != nil {
-				return err
-			}
-			routes, err := getRoutesFromProxy(ctx, podName, "istio-system", expectedGatewayRouteName)
-			if err != nil {
-				return fmt.Errorf("failed to get routes from proxy %s: %s", podName, err)
-			}
-			if len(routes) != 1 {
-				return fmt.Errorf("expected to find exactly 1 route '%s', got %d", expectedGatewayRouteName, len(routes))
-			}
-
-			virtualHostsNum := len(routes[0].VirtualHosts)
-			if virtualHostsNum != expectedVirtualHostsNum {
-				return fmt.Errorf("expected to find exactly %d virtual hosts, got %d", expectedVirtualHostsNum, virtualHostsNum)
-			}
-
 			expectedVirtualHostName := fmt.Sprintf("%s.maistra.io:80", member)
 			for _, virtualHost := range routes[0].VirtualHosts {
 				if virtualHost.Name == expectedVirtualHostName {
-					continue CheckExpectedMembers
+					continue CheckExpectedMembersLoop
 				}
 			}
 			return fmt.Errorf("expected virtual host '%s' was not found", expectedVirtualHostName)
