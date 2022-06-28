@@ -41,45 +41,54 @@ func TestSMMR(t *testing.T) {
 			applyVirtualServiceOrFail(ctx, namespaceA, namespaceGateway, "a")
 			applyVirtualServiceOrFail(ctx, namespaceB, namespaceGateway, "b")
 
-			if err := maistra.CreateServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA); err != nil {
+			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA); err != nil {
 				ctx.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
 			}
-			verifyThatIngressHasVirtualHostForMember(ctx, "a", 1)
+			verifyThatIngressHasVirtualHostForMember(ctx, "a")
 
-			if err := maistra.AddMemberToServiceMesh(ctx, namespaceB); err != nil {
+			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA, namespaceB); err != nil {
 				ctx.Fatalf("failed to add member to ServiceMeshMemberRoll: %s", err)
 			}
-			verifyThatIngressHasVirtualHostForMember(ctx, "a", 2)
-			verifyThatIngressHasVirtualHostForMember(ctx, "b", 2)
+			verifyThatIngressHasVirtualHostForMember(ctx, "a", "b")
+
+			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceB); err != nil {
+				ctx.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
+			}
+			verifyThatIngressHasVirtualHostForMember(ctx, "b")
 		})
 }
 
-func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expectedMemberName string, expectedVirtualHostsNum int) {
+func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expectedMembers ...string) {
 	expectedGatewayRouteName := "http.8080"
-	expectedVirtualHostName := fmt.Sprintf("%s.maistra.io:80", expectedMemberName)
+	expectedVirtualHostsNum := len(expectedMembers)
 
 	retry.UntilSuccessOrFail(ctx, func() error {
-		podName, err := getPodName(ctx, "istio-system", "istio-ingressgateway")
-		if err != nil {
-			return err
-		}
-		routes := getRoutesFromProxy(ctx, podName, "istio-system", expectedGatewayRouteName)
-		if len(routes) != 1 {
-			return fmt.Errorf("expected to find exactly 1 route '%s', got %d", expectedGatewayRouteName, len(routes))
-		}
-
-		virtualHostsNum := len(routes[0].VirtualHosts)
-		if virtualHostsNum != expectedVirtualHostsNum {
-			// TODO: log virtual host names
-			return fmt.Errorf("expected to find exactly %d virtual hosts, got %d", expectedVirtualHostsNum, virtualHostsNum)
-		}
-
-		for _, virtualHost := range routes[0].VirtualHosts {
-			if virtualHost.Name == expectedVirtualHostName {
-				return nil
+	CheckExpectedMembers:
+		for _, member := range expectedMembers {
+			podName, err := getPodName(ctx, "istio-system", "istio-ingressgateway")
+			if err != nil {
+				return err
 			}
+			routes := getRoutesFromProxy(ctx, podName, "istio-system", expectedGatewayRouteName)
+			if len(routes) != 1 {
+				return fmt.Errorf("expected to find exactly 1 route '%s', got %d", expectedGatewayRouteName, len(routes))
+			}
+
+			virtualHostsNum := len(routes[0].VirtualHosts)
+			if virtualHostsNum != expectedVirtualHostsNum {
+				// TODO: log virtual host names
+				return fmt.Errorf("expected to find exactly %d virtual hosts, got %d", expectedVirtualHostsNum, virtualHostsNum)
+			}
+
+			expectedVirtualHostName := fmt.Sprintf("%s.maistra.io:80", member)
+			for _, virtualHost := range routes[0].VirtualHosts {
+				if virtualHost.Name == expectedVirtualHostName {
+					continue CheckExpectedMembers
+				}
+			}
+			return fmt.Errorf("expected virtual host '%s' was not found", expectedVirtualHostName)
 		}
-		return fmt.Errorf("expected virtual host '%s' was not found", expectedVirtualHostName)
+		return nil
 	}, retry.Timeout(10*time.Second))
 }
 

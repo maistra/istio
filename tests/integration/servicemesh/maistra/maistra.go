@@ -29,7 +29,6 @@ import (
 	maistrav1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
 	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/framework"
-	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/framework/resource"
 	"istio.io/istio/pkg/test/util/retry"
 
@@ -172,7 +171,7 @@ func patchIstiodArgs(kubeClient kubernetes.Interface) error {
 	}, retry.Timeout(10*time.Second), retry.Delay(time.Second))
 }
 
-func CreateServiceMeshMemberRoll(ctx framework.TestContext, memberNamespaces ...string) error {
+func ApplyServiceMeshMemberRoll(ctx framework.TestContext, memberNamespaces ...string) error {
 	memberRollYAML := `
 apiVersion: maistra.io/v1
 kind: ServiceMeshMemberRoll
@@ -192,12 +191,12 @@ spec:
 	}, retry.Timeout(10*time.Second), retry.Delay(time.Second)); err != nil {
 		return err
 	}
-	return updateServiceMeshMemberRollStatus(ctx.Clusters().Default(), memberNamespaces...)
+
+	return updateServiceMeshMemberRollStatus(ctx, memberNamespaces...)
 }
 
-func AddMemberToServiceMesh(ctx framework.TestContext, memberNamespace string) error {
-	c := ctx.Clusters().Default()
-	client, err := maistrav1.NewForConfig(c.RESTConfig())
+func updateServiceMeshMemberRollStatus(ctx framework.TestContext, memberNamespaces ...string) error {
+	client, err := maistrav1.NewForConfig(ctx.Clusters().Default().RESTConfig())
 	if err != nil {
 		return fmt.Errorf("failed to create client for maistra resources: %s", err)
 	}
@@ -207,31 +206,11 @@ func AddMemberToServiceMesh(ctx framework.TestContext, memberNamespace string) e
 		if err != nil {
 			return fmt.Errorf("failed to get SMMR default: %s", err)
 		}
-		smmr.Spec.Members = append(smmr.Spec.Members, memberNamespace)
-		_, err = client.ServiceMeshMemberRolls("istio-system").Update(context.TODO(), smmr, metav1.UpdateOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to update SMMR default: %s", err)
-		}
-		return updateServiceMeshMemberRollStatus(c, memberNamespace)
-	})
-}
-
-func updateServiceMeshMemberRollStatus(c cluster.Cluster, memberNamespaces ...string) error {
-	client, err := maistrav1.NewForConfig(c.RESTConfig())
-	if err != nil {
-		return fmt.Errorf("failed to create client for maistra resources: %s", err)
-	}
-
-	return retry.UntilSuccess(func() error {
-		smmr, err := client.ServiceMeshMemberRolls("istio-system").Get(context.TODO(), "default", metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to get SMMR default: %s", err)
-		}
-		smmr.Status.ConfiguredMembers = append(smmr.Status.ConfiguredMembers, memberNamespaces...)
+		smmr.Status.ConfiguredMembers = memberNamespaces
 		_, err = client.ServiceMeshMemberRolls("istio-system").UpdateStatus(context.TODO(), smmr, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to update SMMR default: %s", err)
 		}
 		return nil
-	})
+	}, retry.Timeout(10*time.Second))
 }
