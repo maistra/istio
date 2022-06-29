@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 	// do not change order of setup functions
 	framework.
 		NewSuite(m).
-		RequireSingleCluster().
+		RequireMaxClusters(1).
 		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(&i, nil)).
 		Setup(maistra.Install).
