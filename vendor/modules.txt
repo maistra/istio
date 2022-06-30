@@ -2206,6 +2206,9 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
+# maistra.io/api v0.0.0-20220301154558-8f6a12a9464b
+## explicit; go 1.15
+maistra.io/api/manifests
 # sigs.k8s.io/controller-runtime v0.12.1
 ## explicit; go 1.17
 sigs.k8s.io/controller-runtime
