@@ -264,8 +264,10 @@ func (c *controller) SetWatchErrorHandler(handler func(r *cache.Reflector, err e
 	if err := c.filteredIngressInformer.SetWatchErrorHandler(handler); err != nil {
 		errs = multierror.Append(err, errs)
 	}
-	if err := c.classes.Informer().SetWatchErrorHandler(handler); err != nil {
-		errs = multierror.Append(err, errs)
+	if c.classes != nil {
+		if err := c.classes.Informer().SetWatchErrorHandler(handler); err != nil {
+			errs = multierror.Append(err, errs)
+		}
 	}
 	return errs
 }

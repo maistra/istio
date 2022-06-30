@@ -645,6 +645,9 @@ func (c *client) startInformer(stop <-chan struct{}) {
 	if features.EnableGatewayAPI {
 		c.gatewayapiInformer.Start(stop)
 	}
+	if c.memberRoll != nil {
+		c.memberRoll.Start(stop)
+	}
 	c.extInformer.Start(stop)
 	c.started.Store(true)
 }
