@@ -117,6 +117,14 @@ rules:
     resources: ["secrets"]
     verbs: ["get", "watch", "list"]
 
+  # Maistra specific
+  - apiGroups: ["maistra.io"]
+    resources: ["servicemeshmemberrolls"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes", "routes/custom-host"]
+    verbs: ["get", "list", "watch", "create", "delete", "update"]
+
   # Used for MCS serviceexport management
   - apiGroups: ["{{ $mcsAPIGroup }}"]
     resources: ["serviceexports"]
