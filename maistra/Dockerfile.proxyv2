@@ -5,8 +5,8 @@ ARG ISTIO_VERSION
 ARG proxy_version
 ARG SIDECAR=envoy
 
-LABEL com.redhat.component="openshift-istio-proxy-rhel8-container"
-LABEL name="openshift-service-mesh/istio-proxy-rhel8"
+LABEL com.redhat.component="openshift-istio-proxy-ubi8-container"
+LABEL name="openshift-service-mesh/istio-proxy-ubi8"
 LABEL version="${MAISTRA_VERSION}"
 LABEL istio_version="${ISTIO_VERSION}"
 LABEL summary="Maistra Proxy OpenShift container image"
