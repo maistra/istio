@@ -72,6 +72,7 @@ type route struct {
 	alive              bool
 	stop               <-chan struct{}
 	handleEventTimeout time.Duration
+	errorChannel       chan error
 
 	// memberroll functionality
 	mrc              controller.MemberRollController
@@ -156,6 +157,20 @@ func (r *route) initialSync(initialNamespaces []string) error {
 	IORLog.Debugf("initialSync() - Got %d Gateway(s)", len(configs))
 
 	for i, cfg := range configs {
+		if err := r.ensureNamespaceExists(cfg); err != nil {
+			result = multierror.Append(result, err)
+			continue
+		}
+		manageRoute, err := isManagedByIOR(cfg)
+		if err != nil {
+			result = multierror.Append(result, err)
+			continue
+		}
+		if !manageRoute {
+			IORLog.Debugf("initialSync() - Ignoring Gateway %s/%s as it is not managed by Istiod", cfg.Namespace, cfg.Name)
+			continue
+		}
+
 		IORLog.Debugf("initialSync() - Parsing Gateway [%d] %s/%s", i+1, cfg.Namespace, cfg.Name)
 		r.addNewSyncRoute(cfg)
 	}
@@ -422,6 +437,9 @@ func (r *route) SetNamespaces(namespaces ...string) {
 
 		if err := r.initialSync(namespaces); err != nil {
 			IORLog.Errora(err)
+			if r.errorChannel != nil {
+				r.errorChannel <- err
+			}
 		}
 		IORLog.Debug("Initial sync finished")
 		close(r.initialSyncRun)
