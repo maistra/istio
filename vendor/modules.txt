@@ -1024,9 +1024,14 @@ github.com/opencontainers/go-digest
 ## explicit; go 1.11
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/openshift/api v0.0.0-20200713203337-b2494ecb17dd
-## explicit; go 1.13
+# github.com/openshift/api v0.0.0-20200929171550-c99a4deebbe5
+## explicit; go 1.15
 github.com/openshift/api/apps/v1
+github.com/openshift/api/route/v1
+# github.com/openshift/client-go v0.0.0-20200929181438-91d71ef2122c
+## explicit; go 1.13
+github.com/openshift/client-go/route/clientset/versioned/scheme
+github.com/openshift/client-go/route/clientset/versioned/typed/route/v1
 # github.com/pelletier/go-toml v1.9.4
 ## explicit; go 1.12
 github.com/pelletier/go-toml

@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -106,7 +106,7 @@ func Install(ctx resource.Context) error {
 	if err := applyRolesToMemberNamespaces(ctx.Clusters().Default(), "istio-system"); err != nil {
 		return err
 	}
-	if err := patchIstiodArgs(kubeClient); err != nil {
+	if err := patchIstiodArgs(kubeClient, defaultMaistraSettings); err != nil {
 		return err
 	}
 	if _, err := waitForIstiod(kubeClient, istiod.Generation); err != nil {
@@ -115,107 +115,19 @@ func Install(ctx resource.Context) error {
 	return nil
 }
 
-func waitForIstiod(kubeClient kubernetes.Interface, lastSeenGeneration int64) (*v1.Deployment, error) {
-	var istiod *v1.Deployment
-	err := retry.UntilSuccess(func() error {
-		var err error
-		istiod, err = kubeClient.AppsV1().Deployments("istio-system").Get(context.TODO(), "istiod", metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to get istiod deployment: %v", err)
-		}
-		if istiod.Status.ReadyReplicas != istiod.Status.Replicas {
-			return fmt.Errorf("istiod deployment is not ready - %d of %d pods are ready", istiod.Status.ReadyReplicas, istiod.Status.Replicas)
-		}
-		if lastSeenGeneration != 0 && istiod.Status.ObservedGeneration == lastSeenGeneration {
-			return fmt.Errorf("istiod deployment is not ready - Generation has not been updated")
-		}
-		return nil
-	}, retry.Timeout(30*time.Second), retry.Delay(time.Second))
+func EnableIOR(ctx resource.Context) error {
+	kubeClient := ctx.Clusters().Default().Kube()
+	istiod, err := waitForIstiod(kubeClient, 0)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return istiod, nil
-}
-
-func patchIstiodArgs(kubeClient kubernetes.Interface) error {
-	patch := `[
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/1",
-		"value": "--memberRollName=default"
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/2",
-		"value": "--enableCRDScan=false"
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/3",
-		"value": "--disableNodeAccess=true"
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/4",
-		"value": "--enableIngressClassName=false"
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/1",
-		"value": {
-			"name": "PILOT_ENABLE_GATEWAY_API",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/2",
-		"value": {
-			"name": "PILOT_ENABLE_GATEWAY_API_STATUS",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/3",
-		"value": {
-			"name": "PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/4",
-		"value": {
-			"name": "PRIORITIZED_LEADER_ELECTION",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/5",
-		"value": {
-			"name": "INJECTION_WEBHOOK_CONFIG_NAME",
-			"value": ""
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/6",
-		"value": {
-			"name": "VALIDATION_WEBHOOK_CONFIG_NAME",
-			"value": ""
-		}
+	if err := patchIstiodArgs(kubeClient, enableIOR); err != nil {
+		return err
 	}
-]`
-	return retry.UntilSuccess(func() error {
-		_, err := kubeClient.AppsV1().Deployments("istio-system").
-			Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to patch istiod deployment: %v", err)
-		}
-		return nil
-	}, retry.Timeout(10*time.Second), retry.Delay(time.Second))
+	if _, err := waitForIstiod(kubeClient, istiod.Generation); err != nil {
+		return err
+	}
+	return nil
 }
 
 func ApplyServiceMeshMemberRoll(ctx framework.TestContext, memberNamespaces ...string) error {
@@ -276,3 +188,126 @@ func applyRolesToMemberNamespaces(c cluster.Cluster, namespaces ...string) error
 	}
 	return nil
 }
+
+func waitForIstiod(kubeClient kubernetes.Interface, lastSeenGeneration int64) (*appsv1.Deployment, error) {
+	var istiod *appsv1.Deployment
+	err := retry.UntilSuccess(func() error {
+		var err error
+		istiod, err = kubeClient.AppsV1().Deployments("istio-system").Get(context.TODO(), "istiod", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get istiod deployment: %v", err)
+		}
+		if istiod.Status.ReadyReplicas != istiod.Status.Replicas {
+			return fmt.Errorf("istiod deployment is not ready - %d of %d pods are ready", istiod.Status.ReadyReplicas, istiod.Status.Replicas)
+		}
+		if lastSeenGeneration != 0 && istiod.Status.ObservedGeneration == lastSeenGeneration {
+			return fmt.Errorf("istiod deployment is not ready - Generation has not been updated")
+		}
+		return nil
+	}, retry.Timeout(30*time.Second), retry.Delay(time.Second))
+	if err != nil {
+		return nil, err
+	}
+	return istiod, nil
+}
+
+func patchIstiodArgs(kubeClient kubernetes.Interface, patch string) error {
+	return retry.UntilSuccess(func() error {
+		_, err := kubeClient.AppsV1().Deployments("istio-system").
+			Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to patch istiod deployment: %v", err)
+		}
+		return nil
+	}, retry.Timeout(10*time.Second), retry.Delay(time.Second))
+}
+
+const defaultMaistraSettings = `[
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/args/1",
+		"value": "--memberRollName=default"
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/args/2",
+		"value": "--enableCRDScan=false"
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/args/3",
+		"value": "--disableNodeAccess=true"
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/args/4",
+		"value": "--enableIngressClassName=false"
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/1",
+		"value": {
+			"name": "ENABLE_IOR",
+			"value": "false"
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/2",
+		"value": {
+			"name": "PILOT_ENABLE_GATEWAY_API",
+			"value": "false"
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/3",
+		"value": {
+			"name": "PILOT_ENABLE_GATEWAY_API_STATUS",
+			"value": "false"
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/4",
+		"value": {
+			"name": "PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER",
+			"value": "false"
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/5",
+		"value": {
+			"name": "PRIORITIZED_LEADER_ELECTION",
+			"value": "false"
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/6",
+		"value": {
+			"name": "INJECTION_WEBHOOK_CONFIG_NAME",
+			"value": ""
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/7",
+		"value": {
+			"name": "VALIDATION_WEBHOOK_CONFIG_NAME",
+			"value": ""
+		}
+	}
+]`
+
+const enableIOR = `[
+	{
+		"op": "replace",
+		"path": "/spec/template/spec/containers/0/env/1",
+		"value": {
+			"name": "ENABLE_IOR",
+			"value": "true"
+		}
+	}
+]`

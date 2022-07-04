@@ -569,10 +569,10 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 	if features.EnableGatewayAPI {
 		c.gatewayapiInformer.Start(stop)
 	}
+	c.extInformer.Start(stop)
 	if c.memberRoll != nil {
 		c.memberRoll.Start(stop)
 	}
-	c.extInformer.Start(stop)
 	if c.fastSync {
 		// WaitForCacheSync will virtually never be synced on the first call, as its called immediately after Start()
 		// This triggers a 100ms delay per call, which is often called 2-3 times in a test, delaying tests.
