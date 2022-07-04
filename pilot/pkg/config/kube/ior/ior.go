@@ -45,6 +45,7 @@ func Register(
 	if err != nil {
 		return err
 	}
+	r.errorChannel = errorChannel
 
 	alive := true
 	var aliveLock sync.Mutex
@@ -82,8 +83,8 @@ func Register(
 			IORLog.Debugf("New object: %v", event, curr)
 			if err := r.handleEvent(event, curr); err != nil {
 				IORLog.Errora(err)
-				if errorChannel != nil {
-					errorChannel <- err
+				if r.errorChannel != nil {
+					r.errorChannel <- err
 				}
 			}
 		}()
