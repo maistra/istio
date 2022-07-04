@@ -21,15 +21,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	routeapiv1 "github.com/openshift/api/route/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"istio.io/istio/pilot/pkg/config/kube/ior"
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istioctl"
 	"istio.io/istio/pkg/test/framework/components/namespace"
 	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/istio/tests/integration/servicemesh/maistra"
 )
+
+const gatewayName = "common-gateway"
 
 func TestSMMR(t *testing.T) {
 	framework.NewTest(t).
@@ -41,20 +48,29 @@ func TestSMMR(t *testing.T) {
 			applyVirtualServiceOrFail(ctx, namespaceA, namespaceGateway, "a")
 			applyVirtualServiceOrFail(ctx, namespaceB, namespaceGateway, "b")
 
-			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA); err != nil {
-				ctx.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
-			}
-			verifyThatIngressHasVirtualHostForMember(ctx, "a")
+			ctx.NewSubTest("JoiningMesh").Run(func(t framework.TestContext) {
+				if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA); err != nil {
+					t.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
+				}
+				verifyThatIngressHasVirtualHostForMember(t, "a")
 
-			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA, namespaceB); err != nil {
-				ctx.Fatalf("failed to add member to ServiceMeshMemberRoll: %s", err)
-			}
-			verifyThatIngressHasVirtualHostForMember(ctx, "a", "b")
+				if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA, namespaceB); err != nil {
+					t.Fatalf("failed to add member to ServiceMeshMemberRoll: %s", err)
+				}
+				verifyThatIngressHasVirtualHostForMember(t, "a", "b")
 
-			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceB); err != nil {
-				ctx.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
-			}
-			verifyThatIngressHasVirtualHostForMember(ctx, "b")
+				if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceB); err != nil {
+					t.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
+				}
+				verifyThatIngressHasVirtualHostForMember(t, "b")
+			})
+
+			ctx.NewSubTest("RouteCreation").Run(func(t framework.TestContext) {
+				if err := maistra.EnableIOR(t); err != nil {
+					t.Fatalf("failed to enable IOR: %s", err)
+				}
+				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
+			})
 		})
 }
 
@@ -92,6 +108,35 @@ func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expecte
 		}
 		return nil
 	}, retry.Timeout(10*time.Second))
+}
+
+func verifyThatRouteExistsOrFail(ctx framework.TestContext, expectedGwNs, expectedGwName, expectedHost string) {
+	routerClient, err := ior.NewRouterClient()
+	if err != nil {
+		ctx.Fatalf("failed to create Router client: %s", err)
+	}
+	var routes *routeapiv1.RouteList
+	retry.UntilSuccessOrFail(ctx, func() error {
+		routes, err = routerClient.Routes("istio-system").List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get Routes: %s", err)
+		}
+		if len(routes.Items) == 0 {
+			return fmt.Errorf("no Routes found")
+		}
+		return nil
+	}, retry.Timeout(10*time.Second))
+
+	found := false
+	for _, route := range routes.Items {
+		if route.Spec.Host == expectedHost && strings.HasPrefix(route.Name, fmt.Sprintf("%s-%s-", expectedGwNs, expectedGwName)) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		ctx.Fatalf("failed to find Route for host %s", expectedHost)
+	}
 }
 
 type RouteConfig struct {
@@ -132,11 +177,11 @@ func getPodName(ctx framework.TestContext, namespace, appName string) (string, e
 }
 
 func applyGatewayOrFail(ctx framework.TestContext, ns string, hosts ...string) {
-	gwYAML := `
+	gwYAML := fmt.Sprintf(`
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
-  name: common-gateway
+  name: %s
 spec:
   selector:
     istio: ingressgateway
@@ -146,14 +191,14 @@ spec:
       name: http
       protocol: HTTP
     hosts:
-`
+`, gatewayName)
 	for _, host := range hosts {
 		gwYAML += fmt.Sprintf("    - %s.maistra.io\n", host)
 	}
 	// retry because of flaky validation webhook
 	retry.UntilSuccessOrFail(ctx, func() error {
 		return ctx.ConfigIstio().YAML(ns, gwYAML).Apply()
-	}, retry.Timeout(3*time.Second))
+	}, retry.Timeout(30*time.Second))
 }
 
 func applyVirtualServiceOrFail(ctx framework.TestContext, ns, gatewayNs, virtualServiceName string) {
@@ -166,16 +211,16 @@ spec:
   hosts:
   - "%s.maistra.io"
   gateways:
-  - %s/common-gateway
+  - %s/%s
   http:
   - route:
     - destination:
         host: localhost
         port:
           number: 8080
-`, virtualServiceName, virtualServiceName, gatewayNs)
+`, virtualServiceName, virtualServiceName, gatewayNs, gatewayName)
 	// retry because of flaky validation webhook
 	retry.UntilSuccessOrFail(ctx, func() error {
 		return ctx.ConfigIstio().YAML(ns, vsYAML).Apply()
-	}, retry.Timeout(3*time.Second))
+	}, retry.Timeout(30*time.Second))
 }

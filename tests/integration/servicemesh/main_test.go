@@ -23,6 +23,7 @@ import (
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/tests/integration/servicemesh/maistra"
+	"istio.io/istio/tests/integration/servicemesh/router"
 )
 
 func TestMain(m *testing.M) {
@@ -30,6 +31,7 @@ func TestMain(m *testing.M) {
 	// nolint: staticcheck
 	framework.
 		NewSuite(m).
+		Setup(router.InstallOpenShiftRouter).
 		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(nil, nil)).
 		Setup(maistra.Install).
