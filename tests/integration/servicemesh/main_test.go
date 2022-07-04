@@ -23,6 +23,7 @@ import (
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/tests/integration/servicemesh/maistra"
+	"istio.io/istio/tests/integration/servicemesh/router"
 )
 
 var i istio.Instance
@@ -32,6 +33,7 @@ func TestMain(m *testing.M) {
 	framework.
 		NewSuite(m).
 		RequireMaxClusters(1).
+		Setup(router.InstallOpenShiftRouter).
 		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(&i, nil)).
 		Setup(maistra.Install).
