@@ -197,51 +197,75 @@ func TestCreate(t *testing.T) {
 	}
 
 	IORLog.SetOutputLevel(log.DebugLevel)
-	stop := make(chan struct{})
-	defer func() { close(stop) }()
-	errorChannel := make(chan error)
-	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc, true)
-	mrc.setNamespaces("istio-system")
 
-	controlPlane := "istio-system"
-	createIngressGateway(t, k8sClient.GetActualClient(), controlPlane, map[string]string{"istio": "ingressgateway"})
+	var stop chan struct{}
+	var errorChannel chan error
+	var store model.ConfigStoreCache
+	var k8sClient KubeClient
+	var routerClient routev1.RouteV1Interface
+	var mrc *fakeMemberRollController
+	controlPlaneNs := "istio-system"
 
-	for i, c := range cases {
-		t.Run(c.testName, func(t *testing.T) {
-			gatewayName := fmt.Sprintf("gw%d", i)
-			createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls, c.annotations)
+	for _, testType := range []string{"initialSync", "events"} {
+		if testType == "events" {
+			stop = make(chan struct{})
+			defer func() { close(stop) }()
+			errorChannel = make(chan error)
+			mrc = newFakeMemberRollController()
+			store, k8sClient, routerClient = initClients(t, stop, errorChannel, mrc, true)
+			mrc.setNamespaces(controlPlaneNs)
 
-			list, _ := getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
-			if err := getError(errorChannel); err != nil {
-				if c.expectedError == "" {
-					t.Fatal(err)
-				}
+			createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
+		}
 
-				if !strings.Contains(err.Error(), c.expectedError) {
-					t.Fatalf("expected error message containing `%s', got: %s", c.expectedError, err.Error())
-				}
-
-				// Error is expected and matches the golden string, nothing to do
-			} else {
-				if c.expectedError != "" {
-					t.Fatalf("expected error message containing `%s', got success", c.expectedError)
-				}
-
-				// Only continue the validation if any route is expected to be created
-				if c.expectedRoutes > 0 {
-					validateRoutes(t, c.hosts, list, gatewayName, c.tls)
-
-					// Remove the gateway and expect all routes get removed
-					deleteGateway(t, store, c.ns, gatewayName)
-					_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
-					if err := getError(errorChannel); err != nil {
+		for i, c := range cases {
+			t.Run(testType+"-"+c.testName, func(t *testing.T) {
+				if testType == "initialSync" {
+					stop = make(chan struct{})
+					defer func() { close(stop) }()
+					errorChannel = make(chan error)
+					mrc = newFakeMemberRollController()
+					store, k8sClient, routerClient = initClients(t, stop, errorChannel, mrc, false)
+					createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
+					if err := Register(k8sClient, routerClient, store, controlPlaneNs, mrc, stop, errorChannel); err != nil {
 						t.Fatal(err)
 					}
 				}
-			}
+				gatewayName := fmt.Sprintf("gw%d", i)
+				createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls, c.annotations)
+				if testType == "initialSync" {
+					mrc.setNamespaces(controlPlaneNs)
+				}
+				list, _ := getRoutes(t, routerClient, controlPlaneNs, c.expectedRoutes, time.Second)
+				if err := getError(errorChannel); err != nil {
+					if c.expectedError == "" {
+						t.Fatal(err)
+					}
 
-		})
+					if !strings.Contains(err.Error(), c.expectedError) {
+						t.Fatalf("expected error message containing `%s', got: %s", c.expectedError, err.Error())
+					}
+
+					// Error is expected and matches the golden string, nothing to do
+				} else {
+					if c.expectedError != "" {
+						t.Fatalf("expected error message containing `%s', got success", c.expectedError)
+					}
+
+					// Only continue the validation if any route is expected to be created
+					if c.expectedRoutes > 0 {
+						validateRoutes(t, c.hosts, list, gatewayName, c.tls)
+
+						// Remove the gateway and expect all routes get removed
+						deleteGateway(t, store, c.ns, gatewayName)
+						_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
+						if err := getError(errorChannel); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			})
+		}
 	}
 }
 
