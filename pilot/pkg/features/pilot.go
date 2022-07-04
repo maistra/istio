@@ -633,6 +633,9 @@ var (
 	CanonicalServiceForMeshExternalServiceEntry = env.RegisterBoolVar("LABEL_CANONICAL_SERVICES_FOR_MESH_EXTERNAL_SERVICE_ENTRIES", false,
 		"If enabled, metadata representing canonical services for ServiceEntry resources with a location of mesh_external will be populated"+
 			"in the cluster metadata for those endpoints.").Get()
+
+	EnableIOR = env.RegisterBoolVar("ENABLE_IOR", false,
+		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
 )
 
 // EnableEndpointSliceController returns the value of the feature flag and whether it was actually specified.

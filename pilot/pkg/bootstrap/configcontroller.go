@@ -24,6 +24,7 @@ import (
 	"istio.io/istio/pilot/pkg/config/kube/gateway"
 	"istio.io/istio/pilot/pkg/config/kube/ingress"
 	ingressv1 "istio.io/istio/pilot/pkg/config/kube/ingressv1"
+	"istio.io/istio/pilot/pkg/config/kube/ior"
 	"istio.io/istio/pilot/pkg/config/memory"
 	configmonitor "istio.io/istio/pilot/pkg/config/monitor"
 	"istio.io/istio/pilot/pkg/controller/workloadentry"
@@ -140,6 +141,8 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 	// Create the config store.
 	s.environment.ConfigStore = model.MakeIstioStore(s.configController)
 
+	s.startIOR(args)
+
 	// Defer starting the controller until after the service is created.
 	s.addStartFunc(func(stop <-chan struct{}) error {
 		go s.configController.Run(stop)
@@ -147,6 +150,32 @@ func (s *Server) initConfigController(args *PilotArgs) error {
 	})
 
 	return nil
+}
+
+// startIOR tries to start IOR, if it's enabled. If it encounters any failure, it logs an error and continue
+func (s *Server) startIOR(args *PilotArgs) {
+	if !features.EnableIOR {
+		return
+	}
+
+	routerClient, err := ior.NewRouterClient()
+	if err != nil {
+		ior.IORLog.Errorf("error creating an openshift router client: %v", err)
+		return
+	}
+
+	iorKubeClient := ior.NewKubeClient(s.kubeClient)
+
+	s.addStartFunc(func(stop <-chan struct{}) error {
+		go leaderelection.
+			NewLeaderElection(args.Namespace, args.PodName, leaderelection.IORController, args.Revision, s.kubeClient).
+			AddRunFunction(func(stop <-chan struct{}) {
+				if err := ior.Register(iorKubeClient, routerClient, s.configController, args.Namespace, s.kubeClient.GetMemberRoll(), stop, nil); err != nil {
+					ior.IORLog.Error(err)
+				}
+			}).Run(stop)
+		return nil
+	})
 }
 
 func (s *Server) initK8SConfigStore(args *PilotArgs) error {
