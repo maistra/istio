@@ -1,0 +1,31 @@
+FROM quay.io/centos/centos:stream8 as centos
+
+ARG MAISTRA_VERSION
+ARG ISTIO_VERSION
+
+LABEL com.redhat.component="openshift-istio-cni-ubi8-container"
+LABEL name="openshift-service-mesh/istio-cni-ubi8"
+LABEL version="${MAISTRA_VERSION}"
+LABEL istio_version="${ISTIO_VERSION}"
+LABEL summary="Maistra CNI plugin installer OpenShift container image"
+LABEL description="Maistra CNI plugin installer OpenShift container image"
+LABEL io.k8s.display-name="Maistra CNI plugin installer"
+LABEL io.openshift.tags="istio"
+LABEL io.openshift.expose-services=""
+LABEL maintainer="Istio Feedback <istio-feedback@redhat.com>"
+
+ENV container="oci"
+ENV ISTIO_VERSION="${ISTIO_VERSION}"
+
+RUN dnf update -y && dnf clean all
+
+ARG TARGETARCH
+COPY ${TARGETARCH:-amd64}/istio-cni /opt/cni/bin/istio-cni
+COPY ${TARGETARCH:-amd64}/install-cni /usr/local/bin/install-cni
+
+# Copy over the Taint binary
+COPY ${TARGETARCH:-amd64}/istio-cni-taint /opt/local/bin/istio-cni-taint
+
+ENV PATH=$PATH:/opt/cni/bin
+WORKDIR /opt/cni/bin
+CMD ["/usr/local/bin/install-cni"]

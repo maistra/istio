@@ -1,0 +1,51 @@
+FROM quay.io/centos/centos:stream8
+
+ARG MAISTRA_VERSION
+ARG ISTIO_VERSION
+ARG proxy_version
+ARG SIDECAR=envoy
+
+LABEL com.redhat.component="openshift-istio-proxy-ubi8-container"
+LABEL name="openshift-service-mesh/istio-proxy-ubi8"
+LABEL version="${MAISTRA_VERSION}"
+LABEL istio_version="${ISTIO_VERSION}"
+LABEL summary="Maistra Proxy OpenShift container image"
+LABEL description="Maistra Proxy OpenShift container image"
+LABEL io.k8s.display-name="Maistra Proxy"
+LABEL io.openshift.tags="istio"
+LABEL io.openshift.expose-services=""
+LABEL maintainer="Istio Feedback <istio-feedback@redhat.com>"
+
+# hadolint ignore=DL3039,DL3041
+RUN dnf -y upgrade --refresh --nobest && \
+    dnf -y install iptables iproute openssl && \
+    dnf -y clean all
+
+WORKDIR /
+
+# Copy Envoy bootstrap templates used by pilot-agent
+COPY envoy_bootstrap.json /var/lib/istio/envoy/envoy_bootstrap_tmpl.json
+COPY gcp_envoy_bootstrap.json /var/lib/istio/envoy/gcp_envoy_bootstrap_tmpl.json
+
+RUN useradd -m --uid 1337 istio-proxy
+RUN chown -R istio-proxy /var/lib/istio
+
+# Install Envoy.
+ARG TARGETARCH
+COPY ${TARGETARCH:-amd64}/${SIDECAR} /usr/local/bin/${SIDECAR}
+
+# Environment variable indicating the exact proxy sha - for debugging or version-specific configs 
+ENV ISTIO_META_ISTIO_PROXY_SHA $proxy_version
+# Environment variable indicating the exact build, for debugging
+ENV ISTIO_META_ISTIO_VERSION ${ISTIO_VERSION}
+
+ARG TARGETARCH
+COPY ${TARGETARCH:-amd64}/pilot-agent /usr/local/bin/pilot-agent
+
+COPY stats-filter.wasm /etc/istio/extensions/stats-filter.wasm
+COPY stats-filter.compiled.wasm /etc/istio/extensions/stats-filter.compiled.wasm
+COPY metadata-exchange-filter.wasm /etc/istio/extensions/metadata-exchange-filter.wasm
+COPY metadata-exchange-filter.compiled.wasm /etc/istio/extensions/metadata-exchange-filter.compiled.wasm
+
+# The pilot-agent will bootstrap Envoy.
+ENTRYPOINT ["/usr/local/bin/pilot-agent"]
