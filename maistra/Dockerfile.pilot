@@ -1,0 +1,34 @@
+FROM quay.io/centos/centos:stream8 as centos
+
+ARG MAISTRA_VERSION
+ARG ISTIO_VERSION
+
+LABEL com.redhat.component="openshift-istio-pilot-ubi8-container"
+LABEL name="openshift-service-mesh/pilot-ubi8"
+LABEL version="${MAISTRA_VERSION}"
+LABEL istio_version="${ISTIO_VERSION}"
+LABEL summary="Maistra Pilot OpenShift container image"
+LABEL description="Maistra Pilot OpenShift container image"
+LABEL io.k8s.display-name="Maistra Pilot"
+LABEL io.openshift.tags="istio"
+LABEL io.openshift.expose-services="15003:tcp,15005:tcp,15007:tcp,15010:tcp,15011:tcp,8080:tcp,9093:tcp"
+LABEL maintainer="Istio Feedback <istio-feedback@redhat.com>"
+
+ENV container="oci"
+ENV ISTIO_VERSION="${ISTIO_VERSION}"
+
+RUN dnf update -y && \
+  dnf install -y podman-docker util-linux && \
+  dnf clean all
+
+ARG TARGETARCH
+COPY ${TARGETARCH:-amd64}/pilot-discovery /usr/local/bin/pilot-discovery
+COPY ${TARGETARCH:-amd64}/mec /usr/local/bin/mec
+
+# Copy templates for bootstrap generation.
+COPY envoy_bootstrap.json /var/lib/istio/envoy/envoy_bootstrap_tmpl.json
+COPY gcp_envoy_bootstrap.json /var/lib/istio/envoy/gcp_envoy_bootstrap_tmpl.json
+
+USER 1337:1337
+
+ENTRYPOINT ["/usr/local/bin/pilot-discovery"]
