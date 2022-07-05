@@ -120,7 +120,8 @@ func (c *Controller) Services() ([]*model.Service, error) {
 		// Race condition: multiple threads may call Services, and multiple services
 		// may modify one of the service's cluster ID
 		clusterAddressesMutex.Lock()
-		if r.Provider() != serviceregistry.Kubernetes {
+		// The second condition is required for merging Services and Service Accounts from federation controllers
+		if r.Provider() != serviceregistry.Kubernetes && r.Provider() != serviceregistry.Federation {
 			services = append(services, svcs...)
 		} else {
 			// This is K8S typically
@@ -156,7 +157,7 @@ func (c *Controller) GetService(hostname host.Name) (*model.Service, error) {
 		if service == nil {
 			continue
 		}
-		if r.Provider() != serviceregistry.Kubernetes {
+		if r.Provider() != serviceregistry.Kubernetes && r.Provider() != serviceregistry.Federation {
 			return service, nil
 		}
 		service.Mutex.RLock()
