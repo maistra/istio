@@ -139,9 +139,12 @@ func mergeLocality(locality *v1.ImportedServiceLocality, defaults *v1.ImportedSe
 	if defaults == nil {
 		defaults = &v1.ImportedServiceLocality{}
 		if locality == nil {
+			// If default and imported locality are all empty, return nil
+			// Otherwise, return imported locality.
 			return nil
 		}
-	} else if locality != nil {
+	}
+	if locality != nil {
 		merged = *locality
 	}
 	if merged.Subzone == "" && defaults.Subzone != "" {
@@ -926,9 +929,20 @@ func (c *Controller) deleteService(service *federationmodel.ServiceMessage, exis
 }
 
 func (c *Controller) addServiceToStore(service *model.Service, instances []*model.ServiceInstance) {
+	// Check existing services in the serviceStore, those can be created before importing services from a federation peer.
+	eventType := model.EventAdd
+	for i, s := range c.serviceStore {
+		if s.Hostname == service.Hostname {
+			c.serviceStore[i] = service
+			c.logger.Debugf("Update service %s to the registry", service.Hostname)
+			eventType = model.EventUpdate
+			break
+		}
+	}
+
 	c.serviceStore[service.Hostname] = service
 	c.instanceStore[service.Hostname] = instances
-	c.updateXDS(string(service.Hostname), service.Attributes.Namespace, instances, model.EventAdd)
+	c.updateXDS(string(service.Hostname), service.Attributes.Namespace, instances, eventType)
 }
 
 func (c *Controller) updateServiceInStore(service *model.Service, instances []*model.ServiceInstance) {

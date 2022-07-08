@@ -27,6 +27,7 @@ import (
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
+	"istio.io/istio/pilot/pkg/serviceregistry/federation"
 	"istio.io/istio/pilot/pkg/serviceregistry/mock"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
 	"istio.io/istio/pkg/cluster"
@@ -119,6 +120,49 @@ func buildMockControllerForMultiCluster() *Controller {
 		ClusterID:        "cluster-2",
 		ServiceDiscovery: discovery2,
 		Controller:       &mock.Controller{},
+	}
+
+	ctls := NewController(Options{})
+	ctls.AddRegistry(registry1)
+	ctls.AddRegistry(registry2)
+
+	return ctls
+}
+
+func buildMockControllerForFederation() *Controller {
+	discovery1 = mock.NewDiscovery(
+		map[host.Name]*model.Service{
+			mock.HelloService.Hostname: mock.MakeService(mock.ServiceArgs{
+				Hostname:        "hello.default.svc.cluster.local",
+				Address:         "10.1.1.0",
+				ServiceAccounts: []string{},
+				ClusterID:       "cluster-1",
+			}),
+		}, 2)
+
+	discovery2 = mock.NewDiscovery(
+		map[host.Name]*model.Service{
+			mock.HelloService.Hostname: mock.MakeService(mock.ServiceArgs{
+				Hostname:        "hello.default.svc.cluster.local",
+				Address:         "10.1.2.0",
+				ServiceAccounts: []string{},
+				ClusterID:       "cluster-2",
+			}),
+			mock.WorldService.Hostname: mock.WorldService.DeepCopy(),
+		}, 2)
+
+	registry1 := serviceregistry.Simple{
+		ProviderID:       provider.Kubernetes,
+		ClusterID:        "cluster-1",
+		ServiceDiscovery: discovery1,
+		Controller:       &mock.Controller{},
+	}
+
+	registry2 := serviceregistry.Simple{
+		ProviderID:       provider.Federation,
+		ClusterID:        "cluster-2",
+		ServiceDiscovery: discovery2,
+		Controller:       &federation.Controller{},
 	}
 
 	ctls := NewController(Options{})
@@ -381,6 +425,40 @@ func TestGetIstioServiceAccounts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			meshHolder.trustDomainAliases = tc.trustDomainAliases
 			accounts := aggregateCtl.GetIstioServiceAccounts(tc.svc, []int{})
+			if diff := cmp.Diff(accounts, tc.want); diff != "" {
+				t.Errorf("unexpected service account, diff %v", diff)
+			}
+		})
+	}
+}
+
+// Test the aggregate controller with federation providers
+func TestFederationGetIstioServiceAccounts(t *testing.T) {
+	federationCtl := buildMockControllerForFederation()
+	testCases := []struct {
+		name               string
+		svc                *model.Service
+		trustDomainAliases []string
+		want               []string
+	}{
+		{
+			name: "HelloEmpty",
+			svc:  mock.HelloService,
+			want: []string{},
+		},
+		{
+			name: "World",
+			svc:  mock.WorldService,
+			want: []string{
+				"spiffe://cluster.local/ns/default/sa/world1",
+				"spiffe://cluster.local/ns/default/sa/world2",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			meshHolder.trustDomainAliases = tc.trustDomainAliases
+			accounts := federationCtl.GetIstioServiceAccounts(tc.svc, []int{})
 			if diff := cmp.Diff(accounts, tc.want); diff != "" {
 				t.Errorf("unexpected service account, diff %v", diff)
 			}
