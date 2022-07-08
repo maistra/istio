@@ -232,7 +232,11 @@ func (s *DiscoveryServer) registryz(w http.ResponseWriter, req *http.Request) {
 	}
 	_, _ = fmt.Fprintln(w, "[")
 	for _, svc := range all {
-		b, err := json.MarshalIndent(svc, "", "  ")
+		b, err := func() ([]byte, error) {
+			svc.Mutex.RLock()
+			defer svc.Mutex.RUnlock()
+			return json.MarshalIndent(svc, "", "  ")
+		}()
 		if err != nil {
 			return
 		}
@@ -293,6 +297,8 @@ func (s *DiscoveryServer) endpointz(w http.ResponseWriter, req *http.Request) {
 			all := s.Env.ServiceDiscovery.InstancesByPort(ss, p.Port, nil)
 			_, _ = fmt.Fprintf(w, "\n{\"svc\": \"%s:%s\", \"ep\": [\n", ss.Hostname, p.Name)
 			for _, svc := range all {
+				// prevent crash during serialization
+				svc = svc.DeepCopy()
 				b, err := json.MarshalIndent(svc, "  ", "  ")
 				if err != nil {
 					return
