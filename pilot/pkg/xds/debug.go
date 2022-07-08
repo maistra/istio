@@ -295,7 +295,12 @@ func (s *DiscoveryServer) Syncz(w http.ResponseWriter, _ *http.Request) {
 // registryz providees debug support for registry - adding and listing model items.
 // Can be combined with the push debug interface to reproduce changes.
 func (s *DiscoveryServer) registryz(w http.ResponseWriter, req *http.Request) {
-	all := s.Env.ServiceDiscovery.Services()
+	orig := s.Env.ServiceDiscovery.Services()
+	all := make([]*model.Service, len(orig))
+	for index, svc := range orig {
+		// copy original service to prevent serialization issues if Service.ClusterVIPs changes during serialization
+		all[index] = svc.DeepCopy()
+	}
 	writeJSON(w, all)
 }
 
@@ -374,7 +379,11 @@ func (s *DiscoveryServer) endpointz(w http.ResponseWriter, req *http.Request) {
 	resp := make([]endpointzResponse, 0)
 	for _, ss := range svc {
 		for _, p := range ss.Ports {
-			all := s.Env.ServiceDiscovery.InstancesByPort(ss, p.Port, nil)
+			orig := s.Env.ServiceDiscovery.InstancesByPort(ss, p.Port, nil)
+			all := make([]*model.ServiceInstance, len(orig))
+			for index, si := range orig {
+				all[index] = si.DeepCopy()
+			}
 			resp = append(resp, endpointzResponse{
 				Service:   fmt.Sprintf("%s:%s", ss.Hostname, p.Name),
 				Endpoints: all,
