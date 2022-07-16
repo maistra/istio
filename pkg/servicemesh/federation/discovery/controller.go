@@ -84,15 +84,12 @@ func NewController(opt Options) (*Controller, error) {
 		return nil, err
 	}
 
-	cs, err := versioned.NewForConfig(opt.ResourceManager.KubeClient().RESTConfig())
-	if err != nil {
-		return nil, fmt.Errorf("error creating ClientSet for ServiceMesh: %v", err)
-	}
+	logger := common.Logger.WithLabels("component", controllerName)
+
 	controller := &Controller{
 		ConfigStoreController: opt.ConfigStore,
 		localClusterID:        opt.LocalClusterID,
 		localNetwork:          opt.LocalNetwork,
-		cs:                    cs,
 		env:                   opt.Env,
 		sc:                    opt.ServiceController,
 		stopChannels:          make(map[cluster.ID]chan struct{}),
@@ -103,7 +100,7 @@ func NewController(opt Options) (*Controller, error) {
 	}
 	internalController := kubecontroller.NewController(kubecontroller.Options{
 		Informer:     opt.ResourceManager.PeerInformer().Informer(),
-		Logger:       common.Logger.WithLabels("component", controllerName),
+		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
 	})
