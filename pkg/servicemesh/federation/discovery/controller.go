@@ -90,6 +90,7 @@ func NewController(opt Options) (*Controller, error) {
 		ConfigStoreController: opt.ConfigStore,
 		localClusterID:        opt.LocalClusterID,
 		localNetwork:          opt.LocalNetwork,
+		rm:                    opt.ResourceManager,
 		env:                   opt.Env,
 		sc:                    opt.ServiceController,
 		stopChannels:          make(map[cluster.ID]chan struct{}),
