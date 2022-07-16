@@ -106,8 +106,6 @@ type Controller struct {
 }
 
 func (c *Controller) AppendNetworkGatewayHandler(h func()) {
-	// TODO implement me
-	panic("implement me")
 }
 
 type existingImport struct {
