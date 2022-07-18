@@ -48,20 +48,21 @@ func TestStatusManager(t *testing.T) {
 		namespace = "test-namespace"
 		name      = "test"
 	)
+	type federationStatus struct {
+		peer    v1.ServiceMeshPeerStatus
+		exports v1.ExportedServiceSetStatus
+		imports v1.ImportedServiceSetStatus
+	}
 	istiodName := metav1.ObjectMeta{Name: "istiod-test", Namespace: namespace, UID: "12345"}
 	meshName := metav1.ObjectMeta{
 		Name:      name,
 		Namespace: namespace,
 	}
 	testCases := []struct {
-		name   string
-		mesh   types.NamespacedName
-		events []func(h Handler)
-		status []struct {
-			peer    v1.ServiceMeshPeerStatus
-			exports v1.ExportedServiceSetStatus
-			imports v1.ImportedServiceSetStatus
-		}
+		name       string
+		mesh       types.NamespacedName
+		events     []func(h Handler)
+		status     []federationStatus
 		assertions []func(t *testing.T, status *v1.ServiceMeshPeerStatus)
 	}{
 		{
@@ -88,11 +89,7 @@ func TestStatusManager(t *testing.T) {
 					}
 				},
 			},
-			status: []struct {
-				peer    v1.ServiceMeshPeerStatus
-				exports v1.ExportedServiceSetStatus
-				imports v1.ImportedServiceSetStatus
-			}{
+			status: []federationStatus{
 				{
 					peer: v1.ServiceMeshPeerStatus{
 						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
@@ -160,11 +157,7 @@ func TestStatusManager(t *testing.T) {
 					}
 				},
 			},
-			status: []struct {
-				peer    v1.ServiceMeshPeerStatus
-				exports v1.ExportedServiceSetStatus
-				imports v1.ImportedServiceSetStatus
-			}{
+			status: []federationStatus{
 				{
 					peer: v1.ServiceMeshPeerStatus{
 						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
@@ -261,11 +254,7 @@ func TestStatusManager(t *testing.T) {
 					}
 				},
 			},
-			status: []struct {
-				peer    v1.ServiceMeshPeerStatus
-				exports v1.ExportedServiceSetStatus
-				imports v1.ImportedServiceSetStatus
-			}{
+			status: []federationStatus{
 				{
 					peer: v1.ServiceMeshPeerStatus{
 						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
@@ -389,11 +378,7 @@ func TestStatusManager(t *testing.T) {
 			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
 				nil, nil, nil,
 			},
-			status: []struct {
-				peer    v1.ServiceMeshPeerStatus
-				exports v1.ExportedServiceSetStatus
-				imports v1.ImportedServiceSetStatus
-			}{
+			status: []federationStatus{
 				{
 					peer: v1.ServiceMeshPeerStatus{
 						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
@@ -490,11 +475,7 @@ func TestStatusManager(t *testing.T) {
 			assertions: []func(t *testing.T, status *v1.ServiceMeshPeerStatus){
 				nil, nil, nil, nil,
 			},
-			status: []struct {
-				peer    v1.ServiceMeshPeerStatus
-				exports v1.ExportedServiceSetStatus
-				imports v1.ImportedServiceSetStatus
-			}{
+			status: []federationStatus{
 				{
 					peer: v1.ServiceMeshPeerStatus{
 						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
@@ -578,11 +559,7 @@ func TestStatusManager(t *testing.T) {
 				},
 				nil, nil,
 			},
-			status: []struct {
-				peer    v1.ServiceMeshPeerStatus
-				exports v1.ExportedServiceSetStatus
-				imports v1.ImportedServiceSetStatus
-			}{
+			status: []federationStatus{
 				{
 					peer: v1.ServiceMeshPeerStatus{
 						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
@@ -686,11 +663,7 @@ func TestStatusManager(t *testing.T) {
 					}
 				},
 			},
-			status: []struct {
-				peer    v1.ServiceMeshPeerStatus
-				exports v1.ExportedServiceSetStatus
-				imports v1.ImportedServiceSetStatus
-			}{
+			status: []federationStatus{
 				{
 					peer: v1.ServiceMeshPeerStatus{
 						DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
