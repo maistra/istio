@@ -52,7 +52,6 @@
 package log
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -271,8 +270,6 @@ func updateScopes(options *Options) error {
 
 		if scope, ok := allScopes[s]; ok {
 			scope.SetLogCallers(true)
-		} else {
-			return fmt.Errorf("unknown scope '%s' specified", s)
 		}
 	}
 
@@ -307,8 +304,6 @@ func processLevels(allScopes map[string]*Scope, arg string, setter func(*Scope, 
 			logGrpc = true
 			setter(grpcScope, l)
 			return nil
-		} else {
-			return fmt.Errorf("unknown scope '%s' specified", s)
 		}
 	}
 
