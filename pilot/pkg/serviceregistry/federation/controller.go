@@ -59,6 +59,8 @@ var (
 
 // Controller aggregates data across different registries and monitors for changes
 type Controller struct {
+	model.NetworkGatewaysHandler
+
 	remote               v1.ServiceMeshPeerRemote
 	egressService        string
 	egressName           string
@@ -103,9 +105,6 @@ type Controller struct {
 
 	peerConfigGeneration   int64
 	importConfigGeneration int64
-}
-
-func (c *Controller) AppendNetworkGatewayHandler(h func()) {
 }
 
 type existingImport struct {
