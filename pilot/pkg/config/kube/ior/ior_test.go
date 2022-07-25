@@ -39,6 +39,8 @@ import (
 	"istio.io/pkg/log"
 )
 
+const prefixedLabel = maistraPrefix + "fake"
+
 func initClients(t *testing.T,
 	stop <-chan struct{},
 	errorChannel chan error,
@@ -284,7 +286,13 @@ func validateRoutes(t *testing.T, hosts []string, list *routeapiv1.RouteList, ga
 			t.Fatal("gateway annotations were not copied to route")
 		}
 		if _, found := route.Annotations[ShouldManageRouteAnnotation]; found {
-			t.Fatal(fmt.Sprintf("annotation %q should not be copied to the route", ShouldManageRouteAnnotation))
+			t.Fatalf("annotation %q should not be copied to the route", ShouldManageRouteAnnotation)
+		}
+		if route.Labels["foo"] != "bar" {
+			t.Fatal("gateway labels were not copied to route")
+		}
+		if _, found := route.Labels[prefixedLabel]; found {
+			t.Fatalf("label %q should not be copied to the route", prefixedLabel)
 		}
 
 		// Check hostname
@@ -666,6 +674,7 @@ func createGateway(t *testing.T, store model.ConfigStoreCache, ns string, name s
 			Namespace:        ns,
 			Name:             name,
 			Annotations:      annotations,
+			Labels:           map[string]string{"foo": "bar", prefixedLabel: "present"},
 			ResourceVersion:  "1",
 		},
 		Spec: &networking.Gateway{
@@ -696,6 +705,7 @@ func editGateway(t *testing.T, store model.ConfigStoreCache, ns string, name str
 			Namespace:        ns,
 			Name:             name,
 			Annotations:      map[string]string{"foo": "bar"},
+			Labels:           map[string]string{"foo": "bar", prefixedLabel: "present"},
 			ResourceVersion:  resource,
 		},
 		Spec: &networking.Gateway{
