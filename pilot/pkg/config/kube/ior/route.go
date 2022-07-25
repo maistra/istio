@@ -484,6 +484,7 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 		return nil, err
 	}
 
+	// Copy annotations
 	annotations := map[string]string{
 		originalHostAnnotation: originalHost,
 	}
@@ -493,16 +494,24 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 		}
 	}
 
+	// Copy labels
+	labels := map[string]string{
+		generatedByLabel:            generatedByValue,
+		gatewayNamespaceLabel:       metadata.Namespace,
+		gatewayNameLabel:            metadata.Name,
+		gatewayResourceVersionLabel: metadata.ResourceVersion,
+	}
+	for keyName, keyValue := range metadata.Labels {
+		if !strings.HasPrefix(keyName, maistraPrefix) {
+			labels[keyName] = keyValue
+		}
+	}
+
 	nr, err := r.routerClient.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getRouteName(metadata.Namespace, metadata.Name, actualHost),
-			Namespace: serviceNamespace,
-			Labels: map[string]string{
-				generatedByLabel:            generatedByValue,
-				gatewayNamespaceLabel:       metadata.Namespace,
-				gatewayNameLabel:            metadata.Name,
-				gatewayResourceVersionLabel: metadata.ResourceVersion,
-			},
+			Name:        getRouteName(metadata.Namespace, metadata.Name, actualHost),
+			Namespace:   serviceNamespace,
+			Labels:      labels,
 			Annotations: annotations,
 		},
 		Spec: v1.RouteSpec{
