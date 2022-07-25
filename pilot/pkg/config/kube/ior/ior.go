@@ -15,6 +15,7 @@
 package ior
 
 import (
+	"fmt"
 	"sync"
 
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
@@ -78,9 +79,13 @@ func Register(
 				return
 			}
 
-			IORLog.Debugf("Event %v arrived.", event)
-			IORLog.Debugf("Old object: %v", event, old)
-			IORLog.Debugf("New object: %v", event, curr)
+			debugMessage := fmt.Sprintf("Event %v arrived:", event)
+			if event == model.EventUpdate {
+				debugMessage += fmt.Sprintf("\tOld object: %v", old)
+			}
+			debugMessage += fmt.Sprintf("\tNew object: %v", curr)
+			IORLog.Debug(debugMessage)
+
 			if err := r.handleEvent(event, curr); err != nil {
 				IORLog.Errora(err)
 				if r.errorChannel != nil {
