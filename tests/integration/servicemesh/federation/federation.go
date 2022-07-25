@@ -20,17 +20,77 @@ package servicemesh
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/pkg/test/framework/resource"
+	kubetest "istio.io/istio/pkg/test/kube"
 	"istio.io/istio/pkg/test/util/retry"
 )
+
+var (
+	bookinfoManifests = []string{
+		env.IstioSrc + "/samples/bookinfo/platform/kube/bookinfo.yaml",
+		env.IstioSrc + "/samples/bookinfo/networking/bookinfo-gateway.yaml",
+	}
+	sleepManifest = env.IstioSrc + "/samples/sleep/sleep.yaml"
+	rnd           = rand.New(rand.NewSource(time.Now().UnixNano()))
+)
+
+func InstallBookinfo(ctx framework.TestContext, c cluster.Cluster, namespace string) {
+	if err := c.ApplyYAMLFiles(namespace, bookinfoManifests...); err != nil {
+		ctx.Fatal(err)
+	}
+	if err := retry.UntilSuccess(func() error {
+		if _, err := kubetest.CheckPodsAreReady(kubetest.NewPodFetch(c, namespace, "app=ratings")); err != nil {
+			return fmt.Errorf("ratings pod is not ready: %v", err)
+		}
+		return nil
+	}, retry.Timeout(300*time.Second), retry.Delay(time.Second)); err != nil {
+		ctx.Fatal(err)
+	}
+}
+
+func InstallSleep(ctx framework.TestContext, c cluster.Cluster, namespace string) {
+	if err := c.ApplyYAMLFiles(namespace, sleepManifest); err != nil {
+		ctx.Fatal(err)
+	}
+	if err := retry.UntilSuccess(func() error {
+		if _, err := kubetest.CheckPodsAreReady(kubetest.NewPodFetch(c, namespace, "app=sleep")); err != nil {
+			return fmt.Errorf("sleep pod is not ready: %v", err)
+		}
+		return nil
+	}, retry.Timeout(300*time.Second), retry.Delay(time.Second)); err != nil {
+		ctx.Fatal(err)
+	}
+}
+
+// TODO for some reason namespace.NewOrFail() doesn't work so I'm doing this manually
+func CreateNamespace(ctx framework.TestContext, cluster cluster.Cluster, prefix string) string {
+	ns, err := cluster.Kube().CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%d", prefix, rnd.Intn(99999)),
+			Labels: map[string]string{
+				"istio-injection": "enabled",
+			},
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		ctx.Fatal(err)
+	}
+	name := ns.Name
+	ctx.Cleanup(func() {
+		cluster.Kube().CoreV1().Namespaces().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	})
+	return name
+}
 
 func setupConfig(_ resource.Context, cfg *istio.Config) {
 	if cfg == nil {
