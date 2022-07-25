@@ -23,7 +23,7 @@ import (
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/pkg/test/framework/label"
-	"istio.io/istio/tests/integration/servicemesh"
+	"istio.io/istio/tests/integration/servicemesh/maistra"
 )
 
 var i istio.Instance
@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 	framework.
 		NewSuite(m).
 		RequireMinClusters(2).
-		Setup(servicemesh.ApplyServiceMeshCRDs).
+		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(GetIstioInstance(), setupConfig)).
 		Run()
 }
@@ -49,11 +49,11 @@ func TestFederation(t *testing.T) {
 			CreateServiceMeshPeersOrFail(ctx)
 			primary := ctx.Clusters().GetByName("primary")
 			secondary := ctx.Clusters().GetByName("cross-network-primary")
-			primaryNamespace := servicemesh.CreateNamespace(ctx, primary, "bookinfo")
-			secondaryNamespace := servicemesh.CreateNamespace(ctx, secondary, "bookinfo")
+			primaryNamespace := CreateNamespace(ctx, primary, "bookinfo")
+			secondaryNamespace := CreateNamespace(ctx, secondary, "bookinfo")
 			SetupExportsAndImportsOrFail(ctx, primaryNamespace)
-			servicemesh.InstallBookinfo(ctx, primary, primaryNamespace)
-			servicemesh.InstallSleep(ctx, secondary, secondaryNamespace)
+			InstallBookinfo(ctx, primary, primaryNamespace)
+			InstallSleep(ctx, secondary, secondaryNamespace)
 			checkConnectivity(ctx, secondary, secondaryNamespace)
 		})
 }
