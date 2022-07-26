@@ -370,9 +370,11 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 	for _, c := range ctx.Clusters().Kube().Remotes(ctx.Clusters().Configs()...) {
 		c := c
 		errG.Go(func() error {
-			// Configure API server access for the remote cluster's primary cluster control plane.
-			if err := i.configureDirectAPIServiceAccessBetweenClusters(ctx, cfg, c, c.Config()); err != nil {
-				return fmt.Errorf("failed providing primary cluster access for remote cluster %s: %v", c.Name(), err)
+			if cfg.ConfigureMultiCluster {
+				// Configure API server access for the remote cluster's primary cluster control plane.
+				if err := i.configureDirectAPIServiceAccessBetweenClusters(ctx, cfg, c, c.Config()); err != nil {
+					return fmt.Errorf("failed providing primary cluster access for remote cluster %s: %v", c.Name(), err)
+				}
 			}
 			if err := installRemoteCluster(s, i, cfg, c, istioctlConfigFiles.remoteIopFile); err != nil {
 				return fmt.Errorf("failed installing remote cluster %s: %v", c.Name(), err)
