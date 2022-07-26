@@ -16,6 +16,7 @@ package ior
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,6 +103,10 @@ var generatedHostNumber int
 func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.CreateOptions) (*v1.Route, error) {
 	fk.routesLock.Lock()
 	defer fk.routesLock.Unlock()
+
+	if strings.Contains(route.Spec.Host, "/") {
+		return nil, fmt.Errorf("invalid hostname")
+	}
 
 	if route.Spec.Host == "" {
 		generatedHostNumber++
