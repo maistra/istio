@@ -577,6 +577,12 @@ func getRouteName(namespace, name, actualHost string) string {
 // It also returns the route's WildcardPolicy based on the hostname
 func getActualHost(originalHost string, emitWarning bool) (string, v1.WildcardPolicyType) {
 	wildcard := v1.WildcardPolicyNone
+
+	if strings.Contains(originalHost, "/") {
+		originalHost = strings.SplitN(originalHost, "/", 2)[1]
+		IORLog.Debugf("Hostname contains a namespace part. Ignoring it and considering the %q portion.", originalHost)
+	}
+
 	actualHost := originalHost
 
 	if originalHost == "*" {
