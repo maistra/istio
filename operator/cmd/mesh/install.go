@@ -271,10 +271,10 @@ func InstallManifests(iop *v1alpha12.IstioOperator, force bool, dryRun bool, kub
 	}
 	status, err := reconciler.Reconcile()
 	if err != nil {
-		return iop, fmt.Errorf("errors occurred during operation: %v", err)
+		return iop, fmt.Errorf("errors occurred during operation: %s", err)
 	}
 	if status.Status != v1alpha1.InstallStatus_HEALTHY {
-		return iop, fmt.Errorf("errors occurred during operation")
+		return iop, fmt.Errorf("errors occurred during operation: unexpected install status: %s", status.Status.String())
 	}
 
 	opts.ProgressLog.SetState(progress.StateComplete)

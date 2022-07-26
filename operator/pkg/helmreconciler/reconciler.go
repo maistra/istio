@@ -144,11 +144,11 @@ func initDependencies() map[name.ComponentName]chan struct{} {
 // Reconcile reconciles the associated resources.
 func (h *HelmReconciler) Reconcile() (*v1alpha1.InstallStatus, error) {
 	if err := h.createNamespace(istioV1Alpha1.Namespace(h.iop.Spec), h.networkName()); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create namespace: %s", err)
 	}
 	manifestMap, err := h.RenderCharts()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to render charts: %s", err)
 	}
 
 	err = h.analyzeWebhooks(manifestMap[name.PilotComponentName])
@@ -156,7 +156,7 @@ func (h *HelmReconciler) Reconcile() (*v1alpha1.InstallStatus, error) {
 		if h.opts.Force {
 			scope.Error("invalid webhook configs; continuing because of --force")
 		} else {
-			return nil, err
+			return nil, fmt.Errorf("failed to analyze manifests: %s", err)
 		}
 	}
 	status := h.processRecursive(manifestMap)
@@ -166,8 +166,11 @@ func (h *HelmReconciler) Reconcile() (*v1alpha1.InstallStatus, error) {
 		h.opts.ProgressLog.SetState(progress.StatePruning)
 		pruneErr = h.Prune(manifestMap, false)
 		h.reportPrunedObjectKind()
+		if pruneErr != nil {
+			return status, fmt.Errorf("failed to prune manifests: %s", pruneErr)
+		}
 	}
-	return status, pruneErr
+	return status, nil
 }
 
 // processRecursive processes the given manifests in an order of dependencies defined in h. Dependencies are a tree,
