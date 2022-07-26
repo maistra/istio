@@ -98,6 +98,7 @@ func setupConfig(_ resource.Context, cfg *istio.Config) {
 	}
 	cfg.DeployEastWestGW = false
 	cfg.ConfigureMultiCluster = false
+	cfg.ConfigureRemoteCluster = false
 	cfg.DifferentTrustDomains = true
 	cfg.ControlPlaneValues = `
 components:

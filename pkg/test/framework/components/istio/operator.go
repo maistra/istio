@@ -336,12 +336,14 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		}
 	}
 
-	// First install remote-config clusters.
-	// We do this first because the external istiod needs to read the config cluster at startup.
 	s := ctx.Settings()
-	for _, c := range ctx.Clusters().Kube().Configs().Remotes() {
-		if err = installConfigCluster(s, i, cfg, c, istioctlConfigFiles.configIopFile); err != nil {
-			return i, err
+	if cfg.ConfigureRemoteCluster {
+		// First install remote-config clusters.
+		// We do this first because the external istiod needs to read the config cluster at startup.
+		for _, c := range ctx.Clusters().Kube().Configs().Remotes() {
+			if err = installConfigCluster(s, i, cfg, c, istioctlConfigFiles.configIopFile); err != nil {
+				return i, err
+			}
 		}
 	}
 
@@ -358,32 +360,32 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		return i, err
 	}
 
-	// Update config clusters now that external istiod is running.
-	for _, c := range ctx.Clusters().Kube().Configs().Remotes() {
-		if err = reinstallConfigCluster(s, i, cfg, c, istioctlConfigFiles.configIopFile); err != nil {
-			return i, err
+	if cfg.ConfigureRemoteCluster {
+		// Update config clusters now that external istiod is running.
+		for _, c := range ctx.Clusters().Kube().Configs().Remotes() {
+			if err = reinstallConfigCluster(s, i, cfg, c, istioctlConfigFiles.configIopFile); err != nil {
+				return i, err
+			}
 		}
-	}
 
-	// Install (non-config) remote clusters.
-	errG = multierror.Group{}
-	for _, c := range ctx.Clusters().Kube().Remotes(ctx.Clusters().Configs()...) {
-		c := c
-		errG.Go(func() error {
-			if cfg.ConfigureMultiCluster {
+		// Install (non-config) remote clusters.
+		errG = multierror.Group{}
+		for _, c := range ctx.Clusters().Kube().Remotes(ctx.Clusters().Configs()...) {
+			c := c
+			errG.Go(func() error {
 				// Configure API server access for the remote cluster's primary cluster control plane.
 				if err := i.configureDirectAPIServiceAccessBetweenClusters(ctx, cfg, c, c.Config()); err != nil {
 					return fmt.Errorf("failed providing primary cluster access for remote cluster %s: %v", c.Name(), err)
 				}
-			}
-			if err := installRemoteCluster(s, i, cfg, c, istioctlConfigFiles.remoteIopFile); err != nil {
-				return fmt.Errorf("failed installing remote cluster %s: %v", c.Name(), err)
-			}
-			return nil
-		})
-	}
-	if errs := errG.Wait(); errs != nil {
-		return nil, fmt.Errorf("%d errors occurred deploying remote clusters: %v", errs.Len(), errs.ErrorOrNil())
+				if err := installRemoteCluster(s, i, cfg, c, istioctlConfigFiles.remoteIopFile); err != nil {
+					return fmt.Errorf("failed installing remote cluster %s: %v", c.Name(), err)
+				}
+				return nil
+			})
+		}
+		if errs := errG.Wait(); errs != nil {
+			return nil, fmt.Errorf("%d errors occurred deploying remote clusters: %v", errs.Len(), errs.ErrorOrNil())
+		}
 	}
 
 	// For multicluster, configure direct access so each control plane can get endpoints from all API servers.
@@ -393,35 +395,38 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		}
 	}
 
-	// Configure gateways for remote clusters.
-	for _, c := range ctx.Clusters().Kube().Remotes() {
-		c := c
-		if i.isExternalControlPlane() || cfg.IstiodlessRemotes {
-			// Install ingress and egress gateways
-			// These need to be installed as a separate step for external control planes because config clusters are installed
-			// before the external control plane cluster. Since remote clusters use gateway injection, we can't install the gateways
-			// until after the control plane is running, so we install them here. This is not really necessary for pure (non-config)
-			// remote clusters, but it's cleaner to just install gateways as a separate step for all remote clusters.
-			if err = installRemoteClusterGateways(s, i, c); err != nil {
-				return i, err
-			}
-		}
-
-		// remote clusters only need east-west gateway for multi-network purposes
-		if ctx.Environment().IsMultinetwork() && cfg.DeployEastWestGW {
-			spec := istioctlConfigFiles.remoteOperatorSpec
-			if c.IsConfig() {
-				spec = istioctlConfigFiles.configOperatorSpec
-			}
-			if err := i.deployEastWestGateway(c, spec.Revision); err != nil {
-				return i, err
+	if cfg.ConfigureRemoteCluster {
+		// Configure gateways for remote clusters.
+		for _, c := range ctx.Clusters().Kube().Remotes() {
+			c := c
+			if i.isExternalControlPlane() || cfg.IstiodlessRemotes {
+				// Install ingress and egress gateways
+				// These need to be installed as a separate step for external control planes because config clusters are installed
+				// before the external control plane cluster. Since remote clusters use gateway injection, we can't install the gateways
+				// until after the control plane is running, so we install them here. This is not really necessary for pure (non-config)
+				// remote clusters, but it's cleaner to just install gateways as a separate step for all remote clusters.
+				if err = installRemoteClusterGateways(s, i, c); err != nil {
+					return i, err
+				}
 			}
 
-			// Wait for the eastwestgateway to have a public IP.
-			_ = i.CustomIngressFor(c, eastWestIngressServiceName, eastWestIngressIstioLabel).DiscoveryAddress()
+			// remote clusters only need east-west gateway for multi-network purposes
+			if ctx.Environment().IsMultinetwork() {
+				spec := istioctlConfigFiles.remoteOperatorSpec
+				if c.IsConfig() {
+					spec = istioctlConfigFiles.configOperatorSpec
+				}
+				if err := i.deployEastWestGateway(c, spec.Revision); err != nil {
+					return i, err
+				}
+
+				// Wait for the eastwestgateway to have a public IP.
+				_ = i.CustomIngressFor(c, eastWestIngressServiceName, eastWestIngressIstioLabel).DiscoveryAddress()
+			}
 		}
 	}
 
+	// TODO: Disable for federation deployment
 	if env.IsMultinetwork() {
 		// enable cross network traffic
 		for _, c := range ctx.Clusters().Kube().Configs() {

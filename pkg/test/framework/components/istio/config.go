@@ -88,6 +88,7 @@ var (
 		IstiodlessRemotes:       true,
 		EnableCNI:               false,
 		ConfigureMultiCluster:   true,
+		ConfigureRemoteCluster:  true,
 	}
 )
 
@@ -156,6 +157,8 @@ type Config struct {
 	EnableCNI bool
 
 	ConfigureMultiCluster bool
+
+	ConfigureRemoteCluster bool
 
 	DifferentTrustDomains bool
 }
