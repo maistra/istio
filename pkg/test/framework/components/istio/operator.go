@@ -565,7 +565,7 @@ func installRemoteCommon(s *resource.Settings, i *operatorComponent, cfg Config,
 		installArgs.Set = append(installArgs.Set, "values.global.multiCluster.clusterName="+c.Name())
 	}
 
-	if discovery {
+	if discovery && cfg.DeployEastWestGW {
 		// Configure the cluster and network arguments to pass through the injector webhook.
 		remoteIstiodAddress, err := i.RemoteDiscoveryAddressFor(c)
 		if err != nil {
