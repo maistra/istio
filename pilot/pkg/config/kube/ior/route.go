@@ -365,10 +365,8 @@ func (r *route) verifyResourceVersions(cfg config.Config) error {
 		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
 	}
 
-	for _, route := range syncRoute.routes {
-		if route.Labels[gatewayResourceVersionLabel] != cfg.ResourceVersion {
-			return nil
-		}
+	if syncRoute.metadata.ResourceVersion != cfg.ResourceVersion {
+		return nil
 	}
 
 	return fmt.Errorf(eventDuplicatedMessage)
