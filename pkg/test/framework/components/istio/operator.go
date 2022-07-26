@@ -664,7 +664,7 @@ func (i *operatorComponent) generateCommonInstallArgs(s *resource.Settings, cfg 
 
 	if cfg.DifferentTrustDomains {
 		delete(cfg.Values, "meshConfig.trustDomain")
-		installArgs.Set = append(installArgs.Set, "--set", "values.meshConfig.trustDomain="+c.Name()+".local")
+		installArgs.Set = append(installArgs.Set, fmt.Sprintf("values.meshConfig.trustDomain=%s.local", c.Name()))
 	}
 
 	// Include all user-specified values.
