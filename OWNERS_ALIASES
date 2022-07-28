@@ -1,0 +1,31 @@
+aliases:
+  maistra-approvers:
+  - aslakknutsen
+  - bartoszmajsak
+  - bmangoen 
+  - dcillera
+  - dgn
+  - jewertow
+  - jwendell
+  - luksa
+  - oschaaf
+  - rcernich
+  - tedjpoole
+  - twghu
+  - yannuil
+  - yxun
+  maistra-reviewers:
+  - aslakknutsen
+  - bartoszmajsak
+  - bmangoen 
+  - dcillera
+  - dgn
+  - jewertow
+  - jwendell
+  - luksa
+  - oschaaf
+  - rcernich
+  - tedjpoole
+  - twghu
+  - yannuil
+  - yxun
