@@ -266,8 +266,7 @@ func (sc *SecretManagerClient) SetTrustBundles(trustBundles map[string][]byte, e
 	}
 	sc.cache.mu.Unlock()
 	if trustBundlesUpdated {
-		// FIXME(jewertow)
-		// sc.CallUpdateCallback(security.RootCertReqResourceName)
+		sc.OnSecretUpdate(security.RootCertReqResourceName)
 	}
 }
 
