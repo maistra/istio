@@ -468,6 +468,10 @@ func (p *XdsProxy) handleUpstreamRequest(con *ProxyConnection) {
 				if initialRequest != nil {
 					con.sendRequest(initialRequest)
 				}
+				// fire off an initial TBDS request
+				con.requestsChan <- &discovery.DiscoveryRequest{
+					TypeUrl: v3.TrustBundleType,
+				}
 				p.connectedMutex.RUnlock()
 			}
 		}
