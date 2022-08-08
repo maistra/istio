@@ -49,23 +49,29 @@ func tbdsNeedsPush(req *model.PushRequest) bool {
 // Generate returns protobuf containing TrustBundle for given proxy
 func (e *TbdsGenerator) Generate(proxy *model.Proxy, push *model.PushContext, w *model.WatchedResource,
 	req *model.PushRequest) (model.Resources, model.XdsLogDetails, error) {
+	log.Infof("TbdsGenerator.Generate")
 	if !tbdsNeedsPush(req) {
+		log.Infof("Does not need to push trust bundle")
 		return nil, model.DefaultXdsLogDetails, nil
 	}
 	if e.TrustBundleProvider == nil {
+		log.Infof("Trust bundle provider is nil")
 		return nil, model.DefaultXdsLogDetails, nil
 	}
 	tb := &v1.TrustBundleResponse{}
 	trustBundles := e.TrustBundleProvider.GetTrustBundles()
 	if len(trustBundles) == 0 {
+		log.Infof("Trust bundles are empty")
 		return nil, model.DefaultXdsLogDetails, nil
 	}
 	for td, cert := range trustBundles {
+		log.Infof("Appending trust bundle: %s - %s", td, cert)
 		tb.TrustBundles = append(tb.TrustBundles, &v1.TrustBundle{
 			TrustDomain: td,
 			RootCert:    cert,
 		})
 	}
 	resources := model.Resources{&discovery.Resource{Resource: gogo.MessageToAny(tb)}}
+	log.Infof("Returning resource: %s", resources)
 	return resources, model.DefaultXdsLogDetails, nil
 }

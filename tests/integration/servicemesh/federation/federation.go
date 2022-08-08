@@ -213,4 +213,5 @@ func checkConnectivity(ctx framework.TestContext, source cluster.Cluster, namesp
 	if err != nil {
 		ctx.Fatal(err)
 	}
+	ctx.Fatal("dummy failure")
 }
