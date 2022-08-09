@@ -138,6 +138,10 @@ components:
         # required for handing discovery requests from mesh2
         - port: 8188
           name: https-discovery
+values:
+  pilot:
+    env:
+      PILOT_USE_ENDPOINT_SLICE: "false"
 `
 }
 
