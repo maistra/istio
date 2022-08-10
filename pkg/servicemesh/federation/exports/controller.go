@@ -21,7 +21,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/cache"
-	"maistra.io/api/client/versioned"
 	v1 "maistra.io/api/federation/v1"
 
 	kubecontroller "istio.io/istio/pkg/kube/controller"
@@ -43,7 +42,6 @@ type Options struct {
 
 type Controller struct {
 	*kubecontroller.Controller
-	cs            versioned.Interface
 	rm            common.ResourceManager
 	exportManager ServiceExportManager
 }

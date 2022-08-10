@@ -29,6 +29,7 @@ type ServiceListMessage struct {
 }
 
 type ServiceMessage struct {
+	//nolint:revive
 	ServiceKey      `json:",inline"`
 	ServicePorts    []*ServicePort `json:"servicePorts,omitempty"`
 	ServiceAccounts []string       `json:"serviceAccounts,omitempty"`

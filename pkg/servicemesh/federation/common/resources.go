@@ -43,6 +43,7 @@ func NewResourceManager(opts ControllerOptions, mrc memberroll.MemberRollControl
 
 	var informerFactory maistraxnsinformer.SharedInformerFactory
 	// Currently, we only watch istio system namespace for MeshFederation resources, which is why this block is disabled.
+	//nolint:revive
 	if mrc != nil && false {
 		informerFactory = maistraxnsinformer.NewSharedInformerFactoryWithOptions(opts.MaistraCS, opts.ResyncPeriod, maistraxnsinformer.WithNamespaces())
 		mrc.Register(informerFactory, "federation")
