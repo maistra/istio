@@ -53,13 +53,14 @@ func convertServiceExportsToNameMapper(serviceExports *v1.ExportedServiceSet, do
 				Logger.Errorf("skipping rule %d in ServiceExports %s/%s: null labelSelector", index, serviceExports.Namespace, serviceExports.Name)
 				continue
 			}
-			if matcher, err := newLabelMatcher(rule.LabelSelector, domainSuffix); err != nil {
+			var matcher NameMapper
+			var err error
+			if matcher, err = newLabelMatcher(rule.LabelSelector, domainSuffix); err != nil {
 				Logger.Errorf("skipping rule %d in ServiceExports %s/%s: error creating matcher: %s",
 					index, serviceExports.Namespace, serviceExports.Name, err)
 				continue
-			} else {
-				exportConfig = append(exportConfig, matcher)
 			}
+			exportConfig = append(exportConfig, matcher)
 		case v1.NameSelectorType:
 			if rule.NameSelector == nil {
 				Logger.Errorf("skipping rule %d in ServiceExports %s/%s: null nameSelector", index, serviceExports.Namespace, serviceExports.Name)

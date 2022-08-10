@@ -26,7 +26,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/cache"
 
-	"maistra.io/api/client/versioned"
 	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pilot/pkg/model"
@@ -61,7 +60,6 @@ type Controller struct {
 	model.ConfigStoreController
 	localNetwork      string
 	localClusterID    string
-	cs                versioned.Interface
 	rm                common.ResourceManager
 	env               *model.Environment
 	federationManager server.FederationManager

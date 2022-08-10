@@ -815,6 +815,7 @@ func compareTrustBundles(a map[string][]byte, b map[string][]byte) bool {
 		return false
 	}
 	for k, v := range a {
+		//nolint:gocritic
 		if string(b[k]) != string(v) {
 			return false
 		}
