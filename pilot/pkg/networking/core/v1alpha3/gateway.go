@@ -276,7 +276,8 @@ func getListenerName(bind string, port int, transport istionetworking.TransportP
 }
 
 func buildNameToServiceMapForHTTPRoutes(node *model.Proxy, push *model.PushContext,
-	virtualService config.Config) map[host.Name]*model.Service {
+	virtualService config.Config,
+) map[host.Name]*model.Service {
 	vs := virtualService.Spec.(*networking.VirtualService)
 	nameToServiceMap := map[host.Name]*model.Service{}
 
@@ -318,7 +319,8 @@ func buildNameToServiceMapForHTTPRoutes(node *model.Proxy, push *model.PushConte
 }
 
 func (configgen *ConfigGeneratorImpl) buildGatewayHTTPRouteConfig(node *model.Proxy, push *model.PushContext,
-	routeName string) *route.RouteConfiguration {
+	routeName string,
+) *route.RouteConfiguration {
 	if node.MergedGateway == nil {
 		log.Warnf("buildGatewayRoutes: no gateways for router %v", node.ID)
 		return &route.RouteConfiguration{
@@ -554,7 +556,8 @@ func routesEqual(a, b []*route.Route) bool {
 
 // builds a HTTP connection manager for servers of type HTTP or HTTPS (mode: simple/mutual)
 func (configgen *ConfigGeneratorImpl) createGatewayHTTPFilterChainOpts(node *model.Proxy, port *networking.Port, server *networking.Server,
-	routeName string, proxyConfig *meshconfig.ProxyConfig, transportProtocol istionetworking.TransportProtocol) *filterChainOpts {
+	routeName string, proxyConfig *meshconfig.ProxyConfig, transportProtocol istionetworking.TransportProtocol,
+) *filterChainOpts {
 	serverProto := protocol.Parse(port.Protocol)
 
 	if serverProto.IsHTTP() {
@@ -675,7 +678,8 @@ func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol, defaultTLSP
 
 func (configgen *ConfigGeneratorImpl) createGatewayTCPFilterChainOpts(
 	node *model.Proxy, push *model.PushContext, server *networking.Server,
-	gatewayName string) []*filterChainOpts {
+	gatewayName string,
+) []*filterChainOpts {
 	// We have a TCP/TLS server. This could be TLS termination (user specifies server.TLS with simple/mutual)
 	// or opaque TCP (server.TLS is nil). or it could be a TLS passthrough with SNI based routing.
 
@@ -761,7 +765,8 @@ func buildGatewayNetworkFiltersFromTCPRoutes(node *model.Proxy, push *model.Push
 // It first obtains all virtual services bound to the set of Gateways for this workload, filters them by this
 // server's port and hostnames, and produces network filters for each destination from the filtered services
 func buildGatewayNetworkFiltersFromTLSRoutes(node *model.Proxy, push *model.PushContext, server *networking.Server,
-	gatewayName string) []*filterChainOpts {
+	gatewayName string,
+) []*filterChainOpts {
 	port := &model.Port{
 		Name:     server.Port.Name,
 		Port:     int(server.Port.Number),

@@ -30,9 +30,6 @@ type HTTPFetcher struct {
 }
 
 // NewHTTPFetcher create a new HTTP remote wasm module fetcher.
-// requestTimeout is a timeout for each HTTP/HTTPS request.
-// requestMaxRetry is # of maximum retries of HTTP/HTTPS requests.
-// NewHTTPFetcher create a new HTTP remote wasm module fetcher.
 func NewHTTPFetcher() *HTTPFetcher {
 	return &HTTPFetcher{
 		defaultClient: &http.Client{

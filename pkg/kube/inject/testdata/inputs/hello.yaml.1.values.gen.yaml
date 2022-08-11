@@ -19,6 +19,7 @@
         "cpu": "10m"
       }
     },
+    "defaultTolerations": [],
     "enabled": false,
     "externalIstiod": false,
     "hub": "gcr.io/istio-testing",

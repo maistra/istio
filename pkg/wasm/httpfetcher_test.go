@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
-	"strings"
 	"testing"
 	"time"
 )
@@ -30,16 +28,14 @@ func TestWasmHTTPFetch(t *testing.T) {
 	cases := []struct {
 		name           string
 		handler        func(http.ResponseWriter, *http.Request, int)
-		timeout        time.Duration
 		wantNumRequest int
-		wantErrorRegex string
+		wantError      string
 	}{
 		{
 			name: "download ok",
 			handler: func(w http.ResponseWriter, r *http.Request, num int) {
 				fmt.Fprintln(w, "wasm")
 			},
-			timeout:        5 * time.Second,
 			wantNumRequest: 1,
 		},
 		{
@@ -51,7 +47,6 @@ func TestWasmHTTPFetch(t *testing.T) {
 					fmt.Fprintln(w, "wasm")
 				}
 			},
-			timeout:        5 * time.Second,
 			wantNumRequest: 4,
 		},
 		{
@@ -59,18 +54,8 @@ func TestWasmHTTPFetch(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request, num int) {
 				w.WriteHeader(500)
 			},
-			timeout:        5 * time.Second,
 			wantNumRequest: 5,
-			wantErrorRegex: "wasm module download failed after 5 attempts, last error: wasm module download request failed: status code 500",
-		},
-		{
-			name: "download is never tried by immediate context timeout",
-			handler: func(w http.ResponseWriter, r *http.Request, num int) {
-				w.WriteHeader(500)
-			},
-			timeout:        0, // Immediately timeout in the context level.
-			wantNumRequest: 0, // Should not retried because it is already timed out.
-			wantErrorRegex: "wasm module download failed after 1 attempts, last error: Get \"[^\"]+\": context deadline exceeded",
+			wantError:      "wasm module download failed, last error: wasm module download request failed: status code 500",
 		},
 	}
 
@@ -89,68 +74,11 @@ func TestWasmHTTPFetch(t *testing.T) {
 			if c.wantNumRequest != gotNumRequest {
 				t.Errorf("Wasm download request got %v, want %v", gotNumRequest, c.wantNumRequest)
 			}
-			if c.wantErrorRegex != "" {
+			if c.wantError != "" {
 				if err == nil {
-					t.Errorf("Wasm download got no error, want error regex `%v`", c.wantErrorRegex)
-				} else if matched, regexErr := regexp.MatchString(c.wantErrorRegex, err.Error()); regexErr != nil || !matched {
-					t.Errorf("Wasm download got error `%v`, want error regex `%v`", err, c.wantErrorRegex)
-				}
-			} else if string(b) != wantWasmModule {
-				t.Errorf("downloaded wasm module got %v, want wasm", string(b))
-			}
-		})
-	}
-}
-
-func TestWasmHTTPInsecureServer(t *testing.T) {
-	var ts *httptest.Server
-
-	cases := []struct {
-		name            string
-		handler         func(http.ResponseWriter, *http.Request, int)
-		insecure        bool
-		wantNumRequest  int
-		wantErrorSuffix string
-	}{
-		{
-			name: "download fail",
-			handler: func(w http.ResponseWriter, r *http.Request, num int) {
-				fmt.Fprintln(w, "wasm")
-			},
-			insecure:        false,
-			wantErrorSuffix: "x509: certificate signed by unknown authority",
-			wantNumRequest:  0,
-		},
-		{
-			name: "download ok",
-			handler: func(w http.ResponseWriter, r *http.Request, num int) {
-				fmt.Fprintln(w, "wasm")
-			},
-			insecure:       true,
-			wantNumRequest: 1,
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			gotNumRequest := 0
-			wantWasmModule := "wasm\n"
-			ts = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				c.handler(w, r, gotNumRequest)
-				gotNumRequest++
-			}))
-			defer ts.Close()
-			fetcher := NewHTTPFetcher()
-			fetcher.initialBackoff = time.Microsecond
-			b, err := fetcher.Fetch(ts.URL, 0)
-			if c.wantNumRequest != gotNumRequest {
-				t.Errorf("Wasm download request got %v, want %v", gotNumRequest, c.wantNumRequest)
-			}
-			if c.wantErrorSuffix != "" {
-				if err == nil {
-					t.Errorf("Wasm download got no error, want error suffix `%v`", c.wantErrorSuffix)
-				} else if !strings.HasSuffix(err.Error(), c.wantErrorSuffix) {
-					t.Errorf("Wasm download got error `%v`, want error suffix `%v`", err, c.wantErrorSuffix)
+					t.Errorf("Wasm download got no error, want error `%v`", c.wantError)
+				} else if c.wantError != err.Error() {
+					t.Errorf("Wasm download got error `%v`, want error `%v`", err, c.wantError)
 				}
 			} else if string(b) != wantWasmModule {
 				t.Errorf("downloaded wasm module got %v, want wasm", string(b))
