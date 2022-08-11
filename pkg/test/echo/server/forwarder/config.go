@@ -102,19 +102,6 @@ func (c *Config) fillDefaults() error {
 		c.proxyURL = http.ProxyURL(proxyURL)
 	}
 
-	// Configure reuseConnection and forceDNSLookup as appropriate.
-	switch c.scheme {
-	case scheme.DNS:
-		c.newConnectionPerRequest = true
-		c.forceDNSLookup = true
-	case scheme.TCP, scheme.TLS, scheme.WebSocket, scheme.HTTPS:
-		c.newConnectionPerRequest = true
-		c.forceDNSLookup = c.Request.ForceDNSLookup
-	default:
-		c.newConnectionPerRequest = c.Request.NewConnectionPerRequest
-		c.forceDNSLookup = c.newConnectionPerRequest && c.Request.ForceDNSLookup
-	}
-
 	return nil
 }
 

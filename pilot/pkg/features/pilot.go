@@ -79,6 +79,8 @@ var (
 	).Get()
 
 	// FilterGatewayClusterConfig controls if a subset of clusters(only those required) should be pushed to gateways
+	// TODO enable by default once https://github.com/istio/istio/issues/28315 is resolved
+	// Currently this may cause a bug when we go from N clusters -> 0 clusters -> N clusters
 	FilterGatewayClusterConfig = env.RegisterBoolVar("PILOT_FILTER_GATEWAY_CLUSTER_CONFIG", false,
 		"If enabled, Pilot will send only clusters that referenced in gateway virtual services attached to gateway").Get()
 
@@ -382,7 +384,7 @@ var (
 	ClusterName = env.RegisterStringVar("CLUSTER_ID", "Kubernetes",
 		"Defines the cluster and service registry that this Istiod instance is belongs to").Get()
 
-	ExternalIstiod = env.RegisterBoolVar("EXTERNAL_ISTIOD", true,
+	ExternalIstiod = env.RegisterBoolVar("EXTERNAL_ISTIOD", false,
 		"If this is set to true, one Istiod will control remote clusters including CA.").Get()
 
 	EnableCAServer = env.RegisterBoolVar("ENABLE_CA_SERVER", true,
@@ -441,8 +443,12 @@ var (
 	XDSCacheMaxSize = env.RegisterIntVar("PILOT_XDS_CACHE_SIZE", 60000,
 		"The maximum number of cache entries for the XDS cache.").Get()
 
+	// EnableLegacyFSGroupInjection has first-party-jwt as allowed because we only
+	// need the fsGroup configuration for the projected service account volume mount,
+	// which is only used by first-party-jwt. The installer will automatically
+	// configure this on Kubernetes 1.19+.
 	// Note: while this appears unused in the go code, this sets a default which is used in the injection template.
-	EnableLegacyFSGroupInjection = env.RegisterBoolVar("ENABLE_LEGACY_FSGROUP_INJECTION", false,
+	EnableLegacyFSGroupInjection = env.RegisterBoolVar("ENABLE_LEGACY_FSGROUP_INJECTION", JwtPolicy != jwt.PolicyFirstParty,
 		"If true, Istiod will set the pod fsGroup to 1337 on injection. This is required for Kubernetes 1.18 and older "+
 			`(see https://github.com/kubernetes/kubernetes/issues/57923 for details) unless JWT_POLICY is "first-party-jwt".`).Get()
 
@@ -487,6 +493,12 @@ var (
 
 	WorkloadEntryCrossCluster = env.RegisterBoolVar("PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY", true,
 		"If enabled, pilot will read WorkloadEntry from other clusters, selectable by Services in that cluster.").Get()
+
+	FlowControlTimeout = env.RegisterDurationVar(
+		"PILOT_FLOW_CONTROL_TIMEOUT",
+		15*time.Second,
+		"If set, the max amount of time to delay a push by. Depends on PILOT_ENABLE_FLOW_CONTROL.",
+	).Get()
 
 	EnableDestinationRuleInheritance = env.RegisterBoolVar(
 		"PILOT_ENABLE_DESTINATION_RULE_INHERITANCE",
@@ -540,7 +552,7 @@ var (
 		"If enabled, pilot will only send the delta configs as opposed to the state of the world on a "+
 			"Resource Request. This feature uses the delta xds api, but does not currently send the actual deltas.").Get()
 
-	PartialFullPushes = env.RegisterBoolVar("PILOT_PARTIAL_FULL_PUSHES", true,
+	PartialFullPushes = env.RegisterBoolVar("PILOT_PARTIAL_FULL_PUSHES", false,
 		"If enabled, pilot will send partial pushes in for child resources (RDS, EDS, etc) when possible. "+
 			"This occurs for EDS in many cases regardless of this setting.").Get()
 
@@ -615,9 +627,6 @@ var (
 
 	VerifySDSCertificate = env.RegisterBoolVar("VERIFY_SDS_CERTIFICATE", true,
 		"If enabled, certificates fetched from SDS server will be verified before sending back to proxy.").Get()
-
-	EnableHCMInternalNetworks = env.RegisterBoolVar("ENABLE_HCM_INTERNAL_NETWORKS", false,
-		"If enable, endpoints defined in mesh networks will be configured as internal addresses in Http Connection Manager").Get()
 
 	CanonicalServiceForMeshExternalServiceEntry = env.RegisterBoolVar("LABEL_CANONICAL_SERVICES_FOR_MESH_EXTERNAL_SERVICE_ENTRIES", false,
 		"If enabled, metadata representing canonical services for ServiceEntry resources with a location of mesh_external will be populated"+

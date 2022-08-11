@@ -19,10 +19,10 @@ ISTIO_GO := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 export ISTIO_GO
 SHELL := /bin/bash -o pipefail
 
-export VERSION ?= 1.15-dev
+export VERSION ?= 1.14-dev
 
 # Base version of Istio image to use
-BASE_VERSION ?= master-2022-05-28T19-01-18
+BASE_VERSION ?= 1.14-2022-05-18T19-02-48
 
 export GO111MODULE ?= on
 export GOPROXY ?= https://proxy.golang.org
@@ -326,16 +326,12 @@ refresh-goldens:
 	@REFRESH_GOLDEN=true go test ${GOBUILDFLAGS} ./pkg/kube/inject/...
 	@REFRESH_GOLDEN=true go test ${GOBUILDFLAGS} ./pilot/pkg/security/authz/builder/...
 	@REFRESH_GOLDEN=true go test ${GOBUILDFLAGS} ./cni/pkg/plugin/...
-	@REFRESH_GOLDEN=true go test ${GOBUILDFLAGS} ./istioctl/cmd/...
 
 update-golden: refresh-goldens
 
 # Keep dummy target since some build pipelines depend on this
 gen-charts:
 	@echo "This target is no longer required and will be removed in the future"
-
-gen-addons:
-	manifests/addons/gen.sh
 
 gen: \
 	mod-download-go \
@@ -346,8 +342,6 @@ gen: \
 	proto \
 	copy-templates \
 	gen-kustomize \
-	gen-addons \
-	maistra-gen \
 	update-golden ## Update all generated code.
 
 gen-check: gen check-clean-repo

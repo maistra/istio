@@ -100,6 +100,11 @@ type ConfigGenTest struct {
 
 func NewConfigGenTest(t test.Failer, opts TestOptions) *ConfigGenTest {
 	t.Helper()
+	stop := make(chan struct{})
+	t.Cleanup(func() {
+		close(stop)
+	})
+
 	configs := getConfigs(t, opts)
 	configStore := memory.MakeSkipValidation(collections.PilotGatewayAPI)
 
@@ -153,7 +158,7 @@ func NewConfigGenTest(t test.Failer, opts TestOptions) *ConfigGenTest {
 		store:                configController,
 		env:                  env,
 		initialConfigs:       configs,
-		stop:                 test.NewStop(t),
+		stop:                 stop,
 		ConfigGen:            NewConfigGenerator(&model.DisabledCache{}),
 		MemRegistry:          msd,
 		Registry:             serviceDiscovery,
@@ -201,7 +206,7 @@ func (f *ConfigGenTest) SetupProxy(p *model.Proxy) *model.Proxy {
 		p.Metadata = &model.NodeMetadata{}
 	}
 	if p.Metadata.IstioVersion == "" {
-		p.Metadata.IstioVersion = "1.15.0"
+		p.Metadata.IstioVersion = "1.14.0"
 	}
 	if p.IstioVersion == nil {
 		p.IstioVersion = model.ParseIstioVersion(p.Metadata.IstioVersion)

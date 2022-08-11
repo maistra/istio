@@ -39,6 +39,14 @@ func IsHTTPSServerWithTLSTermination(server *v1alpha3.Server) bool {
 	return false
 }
 
+// IsTLSServer returns true if this server is non HTTP, with some TLS settings for termination/passthrough
+func IsTLSServer(server *v1alpha3.Server) bool {
+	if server.Tls != nil && !protocol.Parse(server.Port.Protocol).IsHTTP() {
+		return true
+	}
+	return false
+}
+
 // IsHTTPServer returns true if this server is using HTTP or HTTPS with termination
 func IsHTTPServer(server *v1alpha3.Server) bool {
 	p := protocol.Parse(server.Port.Protocol)

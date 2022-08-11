@@ -30,7 +30,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
-	wrappers "google.golang.org/protobuf/types/known/wrapperspb"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	networking "istio.io/api/networking/v1alpha3"
@@ -930,6 +929,34 @@ func runTestBuildGatewayListenerTLSContext(t *testing.T, expectedTLSParam *auth.
 				RequireClientCertificate: proto.BoolFalse,
 			},
 		},
+		{
+			// tcp server is simple tls, no istio-peer-exchange in the alpns
+			name: "tcp server, tls SIMPLE",
+			server: &networking.Server{
+				Hosts: []string{"httpbin.example.com", "bookinfo.example.com"},
+				Port: &networking.Port{
+					Protocol: string(protocol.TLS),
+				},
+				Tls: &networking.ServerTLSSettings{
+					Mode:           networking.ServerTLSSettings_SIMPLE,
+					CredentialName: "ingress-sds-resource-name",
+				},
+			},
+			result: &auth.DownstreamTlsContext{
+				CommonTlsContext: &auth.CommonTlsContext{
+					AlpnProtocols: util.ALPNHttp,
+					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
+						{
+							Name:      "kubernetes://ingress-sds-resource-name",
+							SdsConfig: model.SDSAdsConfig,
+						},
+					},
+					//TODO(jewertow)
+					//TlsParams: expectedTLSParam,
+				},
+				RequireClientCertificate: proto.BoolFalse,
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1670,7 +1697,7 @@ func runTestCreateGatewayHTTPFilterChainOpts(t *testing.T, expectedTLSParam *aut
 				tc.server: {SNIHosts: pilot_model.GetSNIHostsForServer(tc.server)},
 			}}
 			ret := cgi.createGatewayHTTPFilterChainOpts(tc.node, tc.server.Port, tc.server,
-				tc.routeName, tc.proxyConfig, tc.transportProtocol, nil)
+				tc.routeName, tc.proxyConfig, tc.transportProtocol)
 			if diff := cmp.Diff(tc.result.tlsContext, ret.tlsContext, protocmp.Transform()); diff != "" {
 				t.Errorf("got diff in tls context: %v", diff)
 			}
@@ -2673,73 +2700,5 @@ func TestBuildNameToServiceMapForHttpRoutes(t *testing.T) {
 
 	if service, exist := nameToServiceMap[bazHostName]; !exist || service != nil {
 		t.Errorf("The value of hostname %s mapping must be exist and it should be nil.", bazHostName)
-	}
-}
-
-func TestGatewayHCMInternalAddressConfig(t *testing.T) {
-	cg := NewConfigGenTest(t, TestOptions{})
-	proxy := &pilot_model.Proxy{
-		Type:            pilot_model.Router,
-		ConfigNamespace: "test",
-	}
-	proxy = cg.SetupProxy(proxy)
-	test.SetBoolForTest(t, &features.EnableHCMInternalNetworks, true)
-	push := cg.PushContext()
-	cases := []struct {
-		name           string
-		networks       *meshconfig.MeshNetworks
-		expectedconfig *hcm.HttpConnectionManager_InternalAddressConfig
-	}{
-		{
-			name:           "nil networks",
-			expectedconfig: nil,
-		},
-		{
-			name:           "empty networks",
-			networks:       &meshconfig.MeshNetworks{},
-			expectedconfig: nil,
-		},
-		{
-			name: "networks populated",
-			networks: &meshconfig.MeshNetworks{
-				Networks: map[string]*meshconfig.Network{
-					"default": {
-						Endpoints: []*meshconfig.Network_NetworkEndpoints{
-							{
-								Ne: &meshconfig.Network_NetworkEndpoints_FromCidr{
-									FromCidr: "192.168/16",
-								},
-							},
-							{
-								Ne: &meshconfig.Network_NetworkEndpoints_FromCidr{
-									FromCidr: "172.16/12",
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedconfig: &hcm.HttpConnectionManager_InternalAddressConfig{
-				CidrRanges: []*core.CidrRange{
-					{
-						AddressPrefix: "192.168",
-						PrefixLen:     &wrappers.UInt32Value{Value: 16},
-					},
-					{
-						AddressPrefix: "172.16",
-						PrefixLen:     &wrappers.UInt32Value{Value: 12},
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			push.Networks = tt.networks
-			httpConnManager := buildGatewayConnectionManager(&meshconfig.ProxyConfig{}, proxy, false, push)
-			if !reflect.DeepEqual(tt.expectedconfig, httpConnManager.InternalAddressConfig) {
-				t.Errorf("unexpected internal address config, expected: %v, got :%v", tt.expectedconfig, httpConnManager.InternalAddressConfig)
-			}
-		})
 	}
 }

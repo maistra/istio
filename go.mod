@@ -23,7 +23,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.2.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/cli v20.10.16+incompatible
-	github.com/envoyproxy/go-control-plane v0.10.2-0.20220420171917-689c2bccf0ec
+	github.com/envoyproxy/go-control-plane v0.10.2-0.20220428052930-ec95b9f870a8
 	github.com/evanphx/json-patch/v5 v5.6.0
 	github.com/fatih/color v1.13.0
 	github.com/felixge/fgprof v0.9.2
@@ -85,15 +85,15 @@ require (
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	gopkg.in/yaml.v2 v2.4.0
-	gopkg.in/yaml.v3 v3.0.1
-	helm.sh/helm/v3 v3.9.0
-	istio.io/api v0.0.0-20220525153140-e3c48c9ac324
-	istio.io/client-go v1.12.0-alpha.5.0.20220523183928-68e393ac0b53
-	istio.io/pkg v0.0.0-20220519183359-907110f1545f
+	gopkg.in/yaml.v3 v3.0.0
+	helm.sh/helm/v3 v3.8.2
+	istio.io/api v0.0.0-20220523183528-706b04d34c0f
+	istio.io/client-go v1.14.0-beta.1
+	istio.io/pkg v0.0.0-20220512174235-57fb311eddf1
 	k8s.io/api v0.24.1
 	k8s.io/apiextensions-apiserver v0.24.0
 	k8s.io/apimachinery v0.24.1
-	k8s.io/apiserver v0.24.1
+	k8s.io/apiserver v0.24.0
 	k8s.io/cli-runtime v0.24.1
 	k8s.io/client-go v0.24.1
 	k8s.io/klog/v2 v2.60.1
@@ -161,6 +161,7 @@ require (
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/pprof v0.0.0-20220318212150-b2ab0324ddda // indirect
 	github.com/googleapis/gax-go/v2 v2.4.0 // indirect
+	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/grafana/regexp v0.0.0-20220304095617-2e8d9baf4ac2 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

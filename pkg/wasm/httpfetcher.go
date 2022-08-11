@@ -15,8 +15,6 @@
 package wasm
 
 import (
-	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,60 +25,43 @@ import (
 
 // HTTPFetcher fetches remote wasm module with HTTP get.
 type HTTPFetcher struct {
-	client          *http.Client
-	insecureClient  *http.Client
-	initialBackoff  time.Duration
-	requestMaxRetry int
+	defaultClient  *http.Client
+	initialBackoff time.Duration
 }
 
 // NewHTTPFetcher create a new HTTP remote wasm module fetcher.
 // requestTimeout is a timeout for each HTTP/HTTPS request.
 // requestMaxRetry is # of maximum retries of HTTP/HTTPS requests.
-func NewHTTPFetcher(requestTimeout time.Duration, requestMaxRetry int) *HTTPFetcher {
-	if requestTimeout == 0 {
-		requestTimeout = 5 * time.Second
-	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+// NewHTTPFetcher create a new HTTP remote wasm module fetcher.
+func NewHTTPFetcher() *HTTPFetcher {
 	return &HTTPFetcher{
-		client: &http.Client{
-			Timeout: requestTimeout,
+		defaultClient: &http.Client{
+			Timeout: 5 * time.Second,
 		},
-		insecureClient: &http.Client{
-			Timeout:   requestTimeout,
-			Transport: transport,
-		},
-		initialBackoff:  time.Millisecond * 500,
-		requestMaxRetry: requestMaxRetry,
+		initialBackoff: time.Millisecond * 500,
 	}
 }
 
 // Fetch downloads a wasm module with HTTP get.
-func (f *HTTPFetcher) Fetch(ctx context.Context, url string, allowInsecure bool) ([]byte, error) {
-	c := f.client
-	if allowInsecure {
-		c = f.insecureClient
+func (f *HTTPFetcher) Fetch(url string, timeout time.Duration) ([]byte, error) {
+	c := f.defaultClient
+	if timeout != 0 {
+		c = &http.Client{
+			Timeout: timeout,
+		}
 	}
 	attempts := 0
+
 	b := backoff.NewExponentialBackOff()
 	b.InitialInterval = f.initialBackoff
 	b.Reset()
 	var lastError error
-	for attempts < f.requestMaxRetry {
+	for attempts < 5 {
 		attempts++
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			wasmLog.Debugf("wasm module download request failed: %v", err)
-			return nil, err
-		}
-		resp, err := c.Do(req)
+		resp, err := c.Get(url)
 		if err != nil {
 			lastError = err
 			wasmLog.Debugf("wasm module download request failed: %v", err)
-			if ctx.Err() != nil {
-				// If there is context timeout, exit this loop.
-				return nil, fmt.Errorf("wasm module download failed after %v attempts, last error: %v", attempts, lastError)
-			}
 			time.Sleep(b.NextBackOff())
 			continue
 		}
@@ -100,7 +81,7 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, url string, allowInsecure bool)
 		resp.Body.Close()
 		break
 	}
-	return nil, fmt.Errorf("wasm module download failed after %v attempts, last error: %v", attempts, lastError)
+	return nil, fmt.Errorf("wasm module download failed, last error: %v", lastError)
 }
 
 func retryable(code int) bool {

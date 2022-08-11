@@ -1,10 +1,5 @@
 {
   "global": {
-    "arch": {
-      "amd64": 2,
-      "ppc64le": 2,
-      "s390x": 2
-    },
     "autoscalingv2API": true,
     "caAddress": "",
     "caName": "",
@@ -19,7 +14,6 @@
         "cpu": "10m"
       }
     },
-    "defaultTolerations": [],
     "enabled": false,
     "externalIstiod": false,
     "hub": "gcr.io/istio-testing",
@@ -102,12 +96,6 @@
       "servicePort": 0
     },
     "tag": "latest",
-    "tls": {
-      "cipherSuites": [],
-      "ecdhCurves": [],
-      "maxProtocolVersion": "",
-      "minProtocolVersion": ""
-    },
     "tracer": {
       "datadog": {
         "address": "$(HOST_IP):8126"

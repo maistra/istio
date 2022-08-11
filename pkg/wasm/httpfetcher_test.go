@@ -15,7 +15,6 @@
 package wasm
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -84,11 +83,9 @@ func TestWasmHTTPFetch(t *testing.T) {
 				gotNumRequest++
 			}))
 			defer ts.Close()
-			fetcher := NewHTTPFetcher(DefaultHTTPRequestTimeout, DefaultHTTPRequestMaxRetries)
+			fetcher := NewHTTPFetcher()
 			fetcher.initialBackoff = time.Microsecond
-			ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
-			defer cancel()
-			b, err := fetcher.Fetch(ctx, ts.URL, false)
+			b, err := fetcher.Fetch(ts.URL, 0)
 			if c.wantNumRequest != gotNumRequest {
 				t.Errorf("Wasm download request got %v, want %v", gotNumRequest, c.wantNumRequest)
 			}
@@ -143,11 +140,9 @@ func TestWasmHTTPInsecureServer(t *testing.T) {
 				gotNumRequest++
 			}))
 			defer ts.Close()
-			fetcher := NewHTTPFetcher(DefaultHTTPRequestTimeout, DefaultHTTPRequestMaxRetries)
+			fetcher := NewHTTPFetcher()
 			fetcher.initialBackoff = time.Microsecond
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			b, err := fetcher.Fetch(ctx, ts.URL, c.insecure)
+			b, err := fetcher.Fetch(ts.URL, 0)
 			if c.wantNumRequest != gotNumRequest {
 				t.Errorf("Wasm download request got %v, want %v", gotNumRequest, c.wantNumRequest)
 			}

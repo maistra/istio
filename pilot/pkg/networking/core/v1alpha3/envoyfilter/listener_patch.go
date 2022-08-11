@@ -38,8 +38,7 @@ func ApplyListenerPatches(
 	patchContext networking.EnvoyFilter_PatchContext,
 	efw *model.EnvoyFilterWrapper,
 	listeners []*xdslistener.Listener,
-	skipAdds bool,
-) (out []*xdslistener.Listener) {
+	skipAdds bool) (out []*xdslistener.Listener) {
 	defer runtime.HandleCrash(runtime.LogPanic, func(interface{}) {
 		IncrementEnvoyFilterErrorMetric(Listener)
 		log.Errorf("listeners patch caused panic, so the patches did not take effect")
@@ -58,8 +57,7 @@ func patchListeners(
 	patchContext networking.EnvoyFilter_PatchContext,
 	efw *model.EnvoyFilterWrapper,
 	listeners []*xdslistener.Listener,
-	skipAdds bool,
-) []*xdslistener.Listener {
+	skipAdds bool) []*xdslistener.Listener {
 	listenersRemoved := false
 
 	// do all the changes for a single envoy filter crd object. [including adds]
@@ -107,8 +105,7 @@ func patchListeners(
 
 func patchListener(patchContext networking.EnvoyFilter_PatchContext,
 	patches map[networking.EnvoyFilter_ApplyTo][]*model.EnvoyFilterConfigPatchWrapper,
-	listener *xdslistener.Listener, listenersRemoved *bool,
-) {
+	listener *xdslistener.Listener, listenersRemoved *bool) {
 	for _, lp := range patches[networking.EnvoyFilter_LISTENER] {
 		if !commonConditionMatch(patchContext, lp) ||
 			!listenerMatch(listener, lp) {
@@ -130,8 +127,7 @@ func patchListener(patchContext networking.EnvoyFilter_PatchContext,
 
 func patchFilterChains(patchContext networking.EnvoyFilter_PatchContext,
 	patches map[networking.EnvoyFilter_ApplyTo][]*model.EnvoyFilterConfigPatchWrapper,
-	listener *xdslistener.Listener,
-) {
+	listener *xdslistener.Listener) {
 	filterChainsRemoved := false
 	for i, fc := range listener.FilterChains {
 		if fc.Filters == nil {
@@ -171,8 +167,7 @@ func patchFilterChains(patchContext networking.EnvoyFilter_PatchContext,
 func patchFilterChain(patchContext networking.EnvoyFilter_PatchContext,
 	patches map[networking.EnvoyFilter_ApplyTo][]*model.EnvoyFilterConfigPatchWrapper,
 	listener *xdslistener.Listener,
-	fc *xdslistener.FilterChain, filterChainRemoved *bool,
-) {
+	fc *xdslistener.FilterChain, filterChainRemoved *bool) {
 	for _, lp := range patches[networking.EnvoyFilter_FILTER_CHAIN] {
 		if !commonConditionMatch(patchContext, lp) ||
 			!listenerMatch(listener, lp) ||
@@ -244,8 +239,7 @@ func mergeTransportSocketListener(fc *xdslistener.FilterChain, lp *model.EnvoyFi
 
 func patchNetworkFilters(patchContext networking.EnvoyFilter_PatchContext,
 	patches map[networking.EnvoyFilter_ApplyTo][]*model.EnvoyFilterConfigPatchWrapper,
-	listener *xdslistener.Listener, fc *xdslistener.FilterChain,
-) {
+	listener *xdslistener.Listener, fc *xdslistener.FilterChain) {
 	for _, lp := range patches[networking.EnvoyFilter_NETWORK_FILTER] {
 		if !commonConditionMatch(patchContext, lp) ||
 			!listenerMatch(listener, lp) ||
@@ -352,8 +346,7 @@ func patchNetworkFilters(patchContext networking.EnvoyFilter_PatchContext,
 func patchNetworkFilter(patchContext networking.EnvoyFilter_PatchContext,
 	patches map[networking.EnvoyFilter_ApplyTo][]*model.EnvoyFilterConfigPatchWrapper,
 	listener *xdslistener.Listener, fc *xdslistener.FilterChain,
-	filter *xdslistener.Filter,
-) bool {
+	filter *xdslistener.Filter) bool {
 	for _, lp := range patches[networking.EnvoyFilter_NETWORK_FILTER] {
 		if !commonConditionMatch(patchContext, lp) ||
 			!listenerMatch(listener, lp) ||
@@ -412,8 +405,7 @@ func patchNetworkFilter(patchContext networking.EnvoyFilter_PatchContext,
 
 func patchHTTPFilters(patchContext networking.EnvoyFilter_PatchContext,
 	patches map[networking.EnvoyFilter_ApplyTo][]*model.EnvoyFilterConfigPatchWrapper,
-	listener *xdslistener.Listener, fc *xdslistener.FilterChain, filter *xdslistener.Filter,
-) {
+	listener *xdslistener.Listener, fc *xdslistener.FilterChain, filter *xdslistener.Filter) {
 	httpconn := &hcm.HttpConnectionManager{}
 	if filter.GetTypedConfig() != nil {
 		if err := filter.GetTypedConfig().UnmarshalTo(httpconn); err != nil {
@@ -536,8 +528,7 @@ func patchHTTPFilters(patchContext networking.EnvoyFilter_PatchContext,
 func patchHTTPFilter(patchContext networking.EnvoyFilter_PatchContext,
 	patches map[networking.EnvoyFilter_ApplyTo][]*model.EnvoyFilterConfigPatchWrapper,
 	listener *xdslistener.Listener, fc *xdslistener.FilterChain, filter *xdslistener.Filter,
-	httpFilter *hcm.HttpFilter,
-) bool {
+	httpFilter *hcm.HttpFilter) bool {
 	for _, lp := range patches[networking.EnvoyFilter_HTTP_FILTER] {
 		applied := false
 		if !commonConditionMatch(patchContext, lp) ||
@@ -723,14 +714,12 @@ func httpFilterMatch(filter *hcm.HttpFilter, lp *model.EnvoyFilterConfigPatchWra
 }
 
 func patchContextMatch(patchContext networking.EnvoyFilter_PatchContext,
-	lp *model.EnvoyFilterConfigPatchWrapper,
-) bool {
+	lp *model.EnvoyFilterConfigPatchWrapper) bool {
 	return lp.Match.Context == patchContext || lp.Match.Context == networking.EnvoyFilter_ANY
 }
 
 func commonConditionMatch(patchContext networking.EnvoyFilter_PatchContext,
-	lp *model.EnvoyFilterConfigPatchWrapper,
-) bool {
+	lp *model.EnvoyFilterConfigPatchWrapper) bool {
 	return patchContextMatch(patchContext, lp)
 }
 

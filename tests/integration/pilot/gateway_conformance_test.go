@@ -66,9 +66,7 @@ func TestGatewayConformance(t *testing.T) {
 			if !supportsCRDv1(ctx) {
 				t.Skip("Not supported; requires CRDv1 support.")
 			}
-			if err := ctx.ConfigIstio().
-				File("", "testdata/gateway-api-crd.yaml").
-				Apply(apply.NoCleanup); err != nil {
+			if err := ctx.ConfigIstio().File("", "testdata/gateway-api-crd.yaml").Apply(apply.NoCleanup); err != nil {
 				ctx.Fatal(err)
 			}
 			// Wait until our GatewayClass is ready
@@ -88,9 +86,10 @@ func TestGatewayConformance(t *testing.T) {
 
 			opts := suite.Options{
 				Client:               c,
-				GatewayClassName:     "istio",
-				Debug:                scopes.Framework.DebugEnabled(),
 				CleanupBaseResources: gatewayConformanceInputs.Cleanup,
+				Debug:                scopes.Framework.DebugEnabled(),
+				GatewayClassName:     "istio",
+				RoundTripper:         nil,
 			}
 			if rev := ctx.Settings().Revisions.Default(); rev != "" {
 				opts.NamespaceLabels = map[string]string{
