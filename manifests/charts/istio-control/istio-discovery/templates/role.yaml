@@ -18,3 +18,8 @@ rules:
   resources: ["secrets"]
   # TODO lock this down to istio-ca-cert if not using the DNS cert mesh config
   verbs: ["create", "get", "watch", "list", "update", "delete"]
+
+# For MeshFederation support
+- apiGroups: ["federation.maistra.io"]
+  resources: ["servicemeshpeers", "servicemeshpeers/status", "exportedservicesets", "exportedservicesets/status", "importedservicesets", "importedservicesets/status"]
+  verbs: ["get", "list", "watch", "patch", "update"]

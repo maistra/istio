@@ -87,6 +87,8 @@ var (
 		DumpKubernetesManifests: false,
 		IstiodlessRemotes:       false,
 		EnableCNI:               false,
+		ConfigureMultiCluster:   true,
+		ConfigureRemoteCluster:  true,
 	}
 )
 
@@ -153,6 +155,12 @@ type Config struct {
 
 	// EnableCNI indicates the test should have CNI enabled.
 	EnableCNI bool
+
+	ConfigureMultiCluster bool
+
+	ConfigureRemoteCluster bool
+
+	DifferentTrustDomains bool
 }
 
 func (c *Config) OverridesYAML(s *resource.Settings) string {
@@ -306,6 +314,8 @@ func (c *Config) String() string {
 	result += fmt.Sprintf("IstiodlessRemotes:              %v\n", c.IstiodlessRemotes)
 	result += fmt.Sprintf("OperatorOptions:                %v\n", c.OperatorOptions)
 	result += fmt.Sprintf("EnableCNI:                      %v\n", c.EnableCNI)
+	result += fmt.Sprintf("ConfigureMultiCluster:          %v\n", c.ConfigureMultiCluster)
+	result += fmt.Sprintf("DifferentTrustDomains:          %v\n", c.DifferentTrustDomains)
 
 	return result
 }

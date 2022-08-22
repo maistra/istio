@@ -14,6 +14,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.1
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20220408101031-f1761e18c0c6
 	github.com/Masterminds/sprig/v3 v3.2.2
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/cheggaaa/pb/v3 v3.0.8
@@ -53,10 +54,12 @@ require (
 	github.com/miekg/dns v1.1.48
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/moby/buildkit v0.10.1
+	github.com/mitchellh/hashstructure/v2 v2.0.2
+	github.com/moby/buildkit v0.10.4
 	github.com/onsi/gomega v1.19.0
 	github.com/openshift/api v0.0.0-20200929171550-c99a4deebbe5
 	github.com/openshift/client-go v0.0.0-20200929181438-91d71ef2122c
+	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
@@ -85,7 +88,7 @@ require (
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	gopkg.in/yaml.v2 v2.4.0
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+	gopkg.in/yaml.v3 v3.0.0
 	helm.sh/helm/v3 v3.8.2
 	istio.io/api v0.0.0-20220728184806-7837c4e62d82
 	istio.io/client-go v1.14.3-0.20220728185607-9117649b5a7f
@@ -205,7 +208,6 @@ require (
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.0-beta.8 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/prometheus/prom2json v1.3.0 // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
