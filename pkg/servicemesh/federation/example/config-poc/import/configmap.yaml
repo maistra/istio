@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mesh1-ca-root-cert
+  namespace: mesh2-system
+data:
+  root-cert.pem: |-
+    {{MESH1_CERT}}

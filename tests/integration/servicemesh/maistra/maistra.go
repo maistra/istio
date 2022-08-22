@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	maistrav1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
 	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
@@ -41,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	maistrav1 "maistra.io/api/client/versioned/typed/core/v1"
 
 	// import maistra CRD manifests
 	_ "maistra.io/api/manifests"
