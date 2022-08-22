@@ -351,7 +351,7 @@ func BuildHTTPRoutesForVirtualService(
 					out = append(out, r)
 					// This is a catch all path. Routes are matched in order, so we will never go beyond this match
 					// As an optimization, we can just top sending any more routes here.
-					if isCatchAllMatch(match) {
+					if isCatchAllRoute(r) {
 						catchall = true
 						break
 					}
@@ -1323,25 +1323,16 @@ func isCatchAllMatch(m *networking.HTTPMatchRequest) bool {
 		m.SourceNamespace == ""
 }
 
-// CombineVHostRoutes semi concatenates Vhost's routes into a single route set.
-// Moves the catch all routes alone to the end, while retaining
-// the relative order of other routes in the concatenated route.
-// Assumes that the virtual Services that generated first and second are ordered by
-// time.
-func CombineVHostRoutes(routeSets ...[]*route.Route) []*route.Route {
-	l := 0
-	for _, rs := range routeSets {
-		l += len(rs)
-	}
-	allroutes := make([]*route.Route, 0, l)
+// SortVHostRoutes moves the catch all routes alone to the end, while retaining
+// the relative order of other routes in the slice.
+func SortVHostRoutes(routes []*route.Route) []*route.Route {
+	allroutes := make([]*route.Route, 0, len(routes))
 	catchAllRoutes := make([]*route.Route, 0)
-	for _, routes := range routeSets {
-		for _, r := range routes {
-			if isCatchAllRoute(r) {
-				catchAllRoutes = append(catchAllRoutes, r)
-			} else {
-				allroutes = append(allroutes, r)
-			}
+	for _, r := range routes {
+		if isCatchAllRoute(r) {
+			catchAllRoutes = append(catchAllRoutes, r)
+		} else {
+			allroutes = append(allroutes, r)
 		}
 	}
 	return append(allroutes, catchAllRoutes...)
@@ -1353,10 +1344,12 @@ func isCatchAllRoute(r *route.Route) bool {
 	switch ir := r.Match.PathSpecifier.(type) {
 	case *route.RouteMatch_Prefix:
 		catchall = ir.Prefix == "/"
+	case *route.RouteMatch_PathSeparatedPrefix:
+		catchall = ir.PathSeparatedPrefix == "/"
 	case *route.RouteMatch_SafeRegex:
 		catchall = ir.SafeRegex.GetRegex() == "*"
 	}
 	// A Match is catch all if and only if it has no header/query param match
 	// and URI has a prefix / or regex *.
-	return catchall && len(r.Match.Headers) == 0 && len(r.Match.QueryParameters) == 0
+	return catchall && len(r.Match.Headers) == 0 && len(r.Match.QueryParameters) == 0 && len(r.Match.DynamicMetadata) == 0
 }
