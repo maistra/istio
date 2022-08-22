@@ -167,8 +167,8 @@ func (c *Controller) Services() []*model.Service {
 	// Locking Registries list while walking it to prevent inconsistent results
 	for _, r := range c.GetRegistries() {
 		svcs := r.Services()
-		if r.Provider() != provider.Kubernetes {
-			index += len(svcs)
+		// The second condition is required for merging Services and Service Accounts from federation controllers
+		if r.Provider() != provider.Kubernetes && r.Provider() != provider.Federation {
 			services = append(services, svcs...)
 		} else {
 			for _, s := range svcs {
@@ -206,7 +206,7 @@ func (c *Controller) GetService(hostname host.Name) *model.Service {
 		if service == nil {
 			continue
 		}
-		if r.Provider() != provider.Kubernetes {
+		if r.Provider() != provider.Kubernetes && r.Provider() != provider.Federation {
 			return service
 		}
 		if out == nil {
@@ -222,7 +222,7 @@ func (c *Controller) GetService(hostname host.Name) *model.Service {
 func mergeService(dst, src *model.Service, srcRegistry serviceregistry.Instance) {
 	// Prefer the k8s HostVIPs where possible
 	clusterID := srcRegistry.Cluster()
-	if srcRegistry.Provider() == provider.Kubernetes || len(dst.ClusterVIPs.GetAddressesFor(clusterID)) == 0 {
+	if srcRegistry.Provider() == provider.Kubernetes || srcRegistry.Provider() == provider.Federation || len(dst.ClusterVIPs.GetAddressesFor(clusterID)) == 0 {
 		newAddresses := src.ClusterVIPs.GetAddressesFor(clusterID)
 		dst.ClusterVIPs.SetAddressesFor(clusterID, newAddresses)
 	}

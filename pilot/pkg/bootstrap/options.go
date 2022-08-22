@@ -57,6 +57,7 @@ type PilotArgs struct {
 	Namespace          string
 	Revision           string
 	MeshConfigFile     string
+	Network            string
 	NetworksConfigFile string
 	RegistryOptions    RegistryOptions
 	CtrlZOptions       *ctrlz.Options
@@ -94,6 +95,10 @@ type DiscoveryServerOptions struct {
 	// The listening address for secured gRPC. If the port in the address is empty or "0" (as in "127.0.0.1:" or "[::1]:0")
 	// a port number is automatically chosen.
 	SecureGRPCAddr string
+
+	// The listening address for federation service discovery. If the port in the address is empty or "0" (as in "127.0.0.1:" or "[::1]:0")
+	// a port number is automatically chosen.
+	FederationAddr string
 }
 
 type InjectionOptions struct {

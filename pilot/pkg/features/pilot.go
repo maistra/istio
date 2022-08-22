@@ -400,6 +400,9 @@ var (
 	ExternalIstiod = env.Register("EXTERNAL_ISTIOD", false,
 		"If this is set to true, one Istiod will control remote clusters including CA.").Get()
 
+	NetworkName = env.Register("NETWORK_NAME", "Kubernetes",
+		"Defines the network that this Istiod instance belongs to").Get()
+
 	EnableCAServer = env.Register("ENABLE_CA_SERVER", true,
 		"If this is set to false, will not create CA server in istiod.").Get()
 
@@ -698,6 +701,8 @@ var (
 
 	EnableIOR = env.RegisterBoolVar("ENABLE_IOR", false,
 		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
+
+	EnableFederation = env.RegisterBoolVar("PILOT_ENABLE_FEDERATION", false, "").Get()
 )
 
 // EnableEndpointSliceController returns the value of the feature flag and whether it was actually specified.

@@ -1,0 +1,8 @@
+apiVersion: maistra.io/v1
+kind: ServiceMeshMemberRoll
+metadata:
+  name: default
+  namespace: mesh2-system
+spec:
+  members:
+  - mesh2-bookinfo
