@@ -323,18 +323,20 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 	}
 
 	// For multicluster, create and push the CA certs to all clusters to establish a shared root of trust.
-	if env.IsMulticluster() {
+	if env.IsMulticluster() && cfg.ConfigureMultiCluster {
 		if err := deployCACerts(workDir, env, cfg); err != nil {
 			return nil, err
 		}
 	}
 
-	// First install remote-config clusters.
-	// We do this first because the external istiod needs to read the config cluster at startup.
 	s := ctx.Settings()
-	for _, c := range ctx.Clusters().Kube().Configs().Remotes() {
-		if err = installConfigCluster(s, i, cfg, c, istioctlConfigFiles.configIopFile); err != nil {
-			return i, err
+	if cfg.ConfigureRemoteCluster {
+		// First install remote-config clusters.
+		// We do this first because the external istiod needs to read the config cluster at startup.
+		for _, c := range ctx.Clusters().Kube().Configs().Remotes() {
+			if err = installConfigCluster(s, i, cfg, c, istioctlConfigFiles.configIopFile); err != nil {
+				return i, err
+			}
 		}
 	}
 
@@ -355,7 +357,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 	// This needs to be done before installing remote clusters to accommodate non-istiodless remote cluster
 	// that use the default profile, which installs gateways right away and will fail if the control plane
 	// isn't responding.
-	if ctx.Clusters().IsMulticluster() {
+	if ctx.Clusters().IsMulticluster() && cfg.ConfigureMultiCluster {
 		if err := i.configureDirectAPIServerAccess(ctx, cfg); err != nil {
 			return nil, err
 		}
@@ -395,7 +397,7 @@ func deploy(ctx resource.Context, env *kube.Environment, cfg Config) (Instance, 
 		}
 
 		// remote clusters only need east-west gateway for multi-network purposes
-		if ctx.Environment().IsMultinetwork() {
+		if ctx.Environment().IsMultinetwork() && cfg.DeployEastWestGW {
 			spec := istioctlConfigFiles.remoteOperatorSpec
 			if c.IsConfig() {
 				spec = istioctlConfigFiles.configOperatorSpec
@@ -620,7 +622,7 @@ func installRemoteCommon(s *resource.Settings, i *operatorComponent, cfg Config,
 	}
 
 	// Configure the cluster and network arguments to pass through the injector webhook.
-	if i.isExternalControlPlane() {
+	if i.isExternalControlPlane() || !cfg.DeployEastWestGW {
 		installArgs.Set = append(installArgs.Set,
 			fmt.Sprintf("values.istiodRemote.injectionPath=/inject/net/%s/cluster/%s", c.NetworkName(), c.Name()))
 	} else {
@@ -718,6 +720,11 @@ func (i *operatorComponent) generateCommonInstallArgs(s *resource.Settings, cfg 
 		installArgs.Set = append(installArgs.Set,
 			"components.cni.namespace=kube-system",
 			"components.cni.enabled=true")
+	}
+
+	if cfg.DifferentTrustDomains {
+		delete(cfg.Values, "meshConfig.trustDomain")
+		installArgs.Set = append(installArgs.Set, fmt.Sprintf("values.meshConfig.trustDomain=%s.local", c.Name()))
 	}
 
 	// Include all user-specified values.

@@ -115,6 +115,8 @@ spec:
             protocol: TCP
           - containerPort: 15017
             protocol: TCP
+          - containerPort: 8188
+            protocol: TCP
           readinessProbe:
             httpGet:
               path: /ready
@@ -152,6 +154,8 @@ spec:
             value: "{{ $val }}"
           {{- end }}
           {{- end }}
+          - name: PILOT_ENABLE_FEDERATION
+            value: "{{ .Values.pilot.enableFederation }}"
 {{- if .Values.pilot.traceSampling }}
           - name: PILOT_TRACE_SAMPLING
             value: "{{ .Values.pilot.traceSampling }}"
