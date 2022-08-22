@@ -109,6 +109,7 @@ type Options struct {
 	// MeshServiceController is a mesh-wide service Controller.
 	MeshServiceController *aggregate.Controller
 
+	ResyncPeriod time.Duration
 	DomainSuffix string
 
 	// Name of the Maistra MemberRoll resource.
