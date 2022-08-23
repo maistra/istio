@@ -95,7 +95,10 @@ func TestStackdriverMonitoring(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	// nolint: staticcheck
 	framework.NewSuite(m).
+		// We only run this on a single cluster because the fake GCP metadata does not yet support multi-cluster
+		RequireSingleCluster().
 		Label(label.CustomSetup).
 		Label(label.IPv4). // We get detected as on GCE, since our tests run there, but don't have connectivity
 		Setup(stackdrivertest.ConditionallySetupMetadataServer).
