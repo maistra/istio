@@ -1,0 +1,91 @@
+language: go
+
+go:
+    - "1.13.x"
+    - "1.14.x"
+    - "1.15.x"
+    - "1.16.x"
+    - master
+
+os:
+  - linux
+
+install:
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get -qq update     ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo modprobe nfnetlink_log ; fi
+    - go get golang.org/x/lint/golint
+    - go get -d -t ./...
+
+before_script:
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo ip6tables -I OUTPUT -p ipv6-icmp -j NFLOG --nflog-group 100 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -p icmp -j NFLOG --nflog-group 100       ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.32 -p icmp -j NFLOG --nflog-group 32 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.33 -p icmp -j NFLOG --nflog-group 33 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.34 -p icmp -j NFLOG --nflog-group 34 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.35 -p icmp -j NFLOG --nflog-group 35 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.36 -p icmp -j NFLOG --nflog-group 36 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.37 -p icmp -j NFLOG --nflog-group 37 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.38 -p icmp -j NFLOG --nflog-group 38 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.39 -p icmp -j NFLOG --nflog-group 39 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.40 -p icmp -j NFLOG --nflog-group 40 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.41 -p icmp -j NFLOG --nflog-group 41 ; fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo iptables -I OUTPUT -s 127.0.0.42 -p icmp -j NFLOG --nflog-group 42 ; fi
+
+script:
+    - go vet ./...
+    - golint -set_exit_status $(go list ./... | grep -v internal/unix)
+    - go test -v -race ./...
+    - go test -c -race -tags integration .
+    - |
+        ping6 -c 10 -i 2 2606:4700:4700::1111 &
+        export PING6_PID=$!
+    - |
+        ping -c 10 -i 2 1.1.1.1 &
+        export PING4_PID=$!
+    - |
+        ping -c 10 -i 2 127.0.0.32 &
+        export PING4_32=$!
+    - |
+        ping -c 10 -i 2 127.0.0.33 &
+        export PING4_33=$!
+    - |
+        ping -c 10 -i 2 127.0.0.34 &
+        export PING4_34=$!
+    - |
+        ping -c 10 -i 2 127.0.0.35 &
+        export PING4_35=$!
+    - |
+        ping -c 10 -i 2 127.0.0.36 &
+        export PING4_36=$!
+    - |
+        ping -c 10 -i 2 127.0.0.37 &
+        export PING4_37=$!
+    - |
+        ping -c 10 -i 2 127.0.0.38 &
+        export PING4_38=$!
+    - |
+        ping -c 10 -i 2 127.0.0.39 &
+        export PING4_39=$!
+    - |
+        ping -c 10 -i 2 127.0.0.40 &
+        export PING4_40=$!
+    - |
+        ping -c 10 -i 2 127.0.0.41 &
+        export PING4_41=$!
+    - |
+        ping -c 10 -i 2 127.0.0.42 &
+        export PING4_42=$!
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo ./go-nflog.test -test.v ; fi
+    - if [[ $(ps cax | grep $PING4_PID) ]]; then kill -9 $PING4_PID ; fi
+    - if [[ $(ps cax | grep $PING6_PID) ]]; then kill -9 $PING6_PID ; fi
+    - if [[ $(ps cax | grep $PING4_32) ]]; then kill -9 $PING4_32 ; fi
+    - if [[ $(ps cax | grep $PING4_33) ]]; then kill -9 $PING4_33 ; fi
+    - if [[ $(ps cax | grep $PING4_34) ]]; then kill -9 $PING4_34 ; fi
+    - if [[ $(ps cax | grep $PING4_35) ]]; then kill -9 $PING4_35 ; fi
+    - if [[ $(ps cax | grep $PING4_36) ]]; then kill -9 $PING4_36 ; fi
+    - if [[ $(ps cax | grep $PING4_37) ]]; then kill -9 $PING4_37 ; fi
+    - if [[ $(ps cax | grep $PING4_38) ]]; then kill -9 $PING4_38 ; fi
+    - if [[ $(ps cax | grep $PING4_39) ]]; then kill -9 $PING4_39 ; fi
+    - if [[ $(ps cax | grep $PING4_40) ]]; then kill -9 $PING4_40 ; fi
+    - if [[ $(ps cax | grep $PING4_41) ]]; then kill -9 $PING4_41 ; fi
+    - if [[ $(ps cax | grep $PING4_42) ]]; then kill -9 $PING4_42 ; fi
