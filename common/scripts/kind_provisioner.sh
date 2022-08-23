@@ -176,6 +176,15 @@ function setup_kind_cluster() {
 networking:
   ipFamily: ${IP_FAMILY}
 EOF
+    else
+      grep 'serviceSubnet:' "${CONFIG}" || \
+      cat <<EOF >> "${CONFIG}"
+networking:
+  # MAISTRA specific:
+  # our prow cluster uses serviceSubnet 10.96.0.0/12, so the kind cluster must use other subnet to correctly route traffic;
+  # in this case, address 10.224.0.0 is chosen randomly from available set of subnets.
+  serviceSubnet: "10.224.0.0/12"
+EOF
     fi
   fi
 
