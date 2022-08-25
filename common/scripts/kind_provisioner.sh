@@ -180,7 +180,7 @@ EOF
       grep 'serviceSubnet:' "${CONFIG}" || \
       cat <<EOF >> "${CONFIG}"
 networking:
-  serviceSubnet: "10.224.0.0/12"
+  serviceSubnet: "10.96.0.0/12"
 EOF
     fi
   fi
