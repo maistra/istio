@@ -7,44 +7,35 @@ BASE_DISTRIBUTION ?= ubi8
 # Maistra specific vars
 MAISTRA_IMAGES ?= maistra-image.pilot maistra-image.proxyv2 maistra-image.istio-cni
 
-# Building container image for specific Maistra component
-MAISTRA_IMAGE_RULE ?= time (mkdir -p $(DOCKER_BUILD_TOP)/$@ && TARGET_ARCH=$(TARGET_ARCH) ./tools/docker-copy.sh $^ $(DOCKER_BUILD_TOP)/$@ && cd $(DOCKER_BUILD_TOP)/$@ $(BUILD_PRE) && $(CONTAINER_CLI) build $(BUILD_ARGS) -t $(HUB)/$(subst maistra-image.,,$@)-$(BASE_DISTRIBUTION):$(TAG) -f Dockerfile$(suffix $@) . )
+# Pre-build and post-build tasks
+MAISTRA_PRE_BUILD_SCRIPT ?= ./maistra/scripts/pre-build.sh
+MAISTRA_POST_BUILD_SCRIPT ?= ./maistra/scripts/post-build.sh
+MAISTRA_PRE_BUILD ?= time ($(MAISTRA_PRE_BUILD_SCRIPT))
+MAISTRA_POST_BUILD ?= time (HUB=$(HUB) TAG=$(TAG) BASE_DISTRIBUTION=$(BASE_DISTRIBUTION) $(MAISTRA_POST_BUILD_SCRIPT) $(ISTIO_COMPONENT))
 
 .PHONY: maistra-image.pilot
-maistra-image.pilot: VERSION=${MAISTRA_VERSION}
-maistra-image.pilot: BUILD_PRE=&& chmod 644 envoy_bootstrap.json gcp_envoy_bootstrap.json
-maistra-image.pilot: BUILD_ARGS=--build-arg MAISTRA_VERSION=${MAISTRA_VERSION} --build-arg ISTIO_VERSION=${ISTIO_VERSION}
-maistra-image.pilot: ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_DIR}/envoy_bootstrap.json
-maistra-image.pilot: ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_DIR}/gcp_envoy_bootstrap.json
-maistra-image.pilot: $(ISTIO_OUT_LINUX)/pilot-discovery
-maistra-image.pilot: $(ISTIO_OUT_LINUX)/mec
-maistra-image.pilot: maistra/Dockerfile.pilot
-	$(MAISTRA_IMAGE_RULE)
+maistra-image.pilot: VERSION=$(MAISTRA_VERSION)
+maistra-image.pilot: ISTIO_COMPONENT=$(subst maistra-image.,,$@)
+maistra-image.pilot: 
+	$(MAISTRA_PRE_BUILD)
+	$(MAKE) docker.pilot
+	$(MAISTRA_POST_BUILD)
 
 .PHONY: maistra-image.proxyv2
-maistra-image.proxyv2: VERSION=${MAISTRA_VERSION}
-maistra-image.proxyv2: BUILD_PRE=&& chmod 644 envoy_bootstrap.json gcp_envoy_bootstrap.json
-maistra-image.proxyv2: BUILD_ARGS=--build-arg proxy_version=istio-proxy:${PROXY_REPO_SHA} --build-arg ISTIO_VERSION=${ISTIO_VERSION} --build-arg SIDECAR=${SIDECAR}
-maistra-image.proxyv2: ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_DIR}/envoy_bootstrap.json
-maistra-image.proxyv2: ${ISTIO_ENVOY_BOOTSTRAP_CONFIG_DIR}/gcp_envoy_bootstrap.json
-maistra-image.proxyv2: $(ISTIO_ENVOY_LINUX_RELEASE_DIR)/${SIDECAR}
-maistra-image.proxyv2: $(ISTIO_OUT_LINUX)/pilot-agent
-maistra-image.proxyv2: maistra/Dockerfile.proxyv2
-maistra-image.proxyv2: $(ISTIO_ENVOY_LINUX_RELEASE_DIR)/stats-filter.wasm
-maistra-image.proxyv2: $(ISTIO_ENVOY_LINUX_RELEASE_DIR)/stats-filter.compiled.wasm
-maistra-image.proxyv2: $(ISTIO_ENVOY_LINUX_RELEASE_DIR)/metadata-exchange-filter.wasm
-maistra-image.proxyv2: $(ISTIO_ENVOY_LINUX_RELEASE_DIR)/metadata-exchange-filter.compiled.wasm
-	$(MAISTRA_IMAGE_RULE)
+maistra-image.proxyv2: VERSION=$(MAISTRA_VERSION)
+maistra-image.proxyv2: ISTIO_COMPONENT=$(subst maistra-image.,,$@)
+maistra-image.proxyv2: 
+	$(MAISTRA_PRE_BUILD)
+	$(MAKE) docker.proxyv2
+	$(MAISTRA_POST_BUILD)
 
 .PHONY: maistra-image.istio-cni
-maistra-image.istio-cni: VERSION=${MAISTRA_VERSION}
-maistra-image.istio-cni: BUILD_ARGS=--build-arg MAISTRA_VERSION=${MAISTRA_VERSION} --build-arg ISTIO_VERSION=${ISTIO_VERSION}
-maistra-image.istio-cni: $(ISTIO_OUT_LINUX)/istio-cni
-maistra-image.istio-cni: $(ISTIO_OUT_LINUX)/istio-iptables
-maistra-image.istio-cni: $(ISTIO_OUT_LINUX)/install-cni
-maistra-image.istio-cni: $(ISTIO_OUT_LINUX)/istio-cni-taint
-maistra-image.istio-cni: maistra/Dockerfile.istio-cni
-	$(MAISTRA_IMAGE_RULE)
+maistra-image.istio-cni: VERSION=$(MAISTRA_VERSION)
+maistra-image.istio-cni: ISTIO_COMPONENT=$(subst maistra-image.,,$@)
+maistra-image.istio-cni: 
+	$(MAISTRA_PRE_BUILD)
+	$(MAKE) docker.install-cni
+	$(MAISTRA_POST_BUILD)
 
 # for each maistra-image.XXX target create a push.maistra-image.XXX target that pushes
 # the local container image to another hub
@@ -70,5 +61,3 @@ vendor:
 	@echo "done updating vendor"
 
 gen: vendor
-
-AGENT_BINARIES += ./mec/cmd/mec
