@@ -6,6 +6,7 @@ ARG proxy_version
 ARG istio_version
 ARG SIDECAR=envoy
 
+# hadolint ignore=DL3041
 RUN dnf -y upgrade --refresh --nobest && \
     dnf -y install iptables iproute openssl && \
     dnf -y clean all
