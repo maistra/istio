@@ -39,6 +39,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/controller"
+	"istio.io/istio/pkg/test/util/retry"
 )
 
 const (
@@ -149,11 +150,30 @@ func (r *route) initialSync(initialNamespaces []string) error {
 	// List the gateways and put them into the gatewaysMap
 	// The store must be synced otherwise we might get an empty list
 	// We enforce this before calling this function in UpdateNamespaces()
-	configs, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
-	if err != nil {
-		return fmt.Errorf("could not get list of Gateways: %s", err)
-	}
-	IORLog.Debugf("initialSync() - Got %d Gateway(s)", len(configs))
+	var configs []config.Config
+	attempt := 0
+	retry.Until(func() bool {
+		var err error
+		attempt += 1
+		configs, err = r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
+		if err != nil {
+			IORLog.Errorf("initialSync(attempt: %d) could not get list of Gateways: %s", attempt, err)
+			return false
+		}
+
+		// For obscure reasons, sometimes the store returns zero Gateways, even if it has already synced up.
+		// We workaround this by retrying again some times, giving up if it keeps returning zero for a given amount
+		// of time. Returning zero is legitimate, when there's no Gateway CR in the cluster, so we should not wait
+		// indefinetely.
+		if len(configs) == 0 {
+			IORLog.Debugf("initialSync(attempt: %d) got 0 Gateways, retrying...", attempt)
+			return false
+		}
+
+		return true
+	}, retry.Delay(time.Second), retry.Timeout(time.Second*10))
+
+	IORLog.Debugf("initialSync(final attempt: %d) - Got %d Gateway(s)", attempt, len(configs))
 
 	for i, cfg := range configs {
 		if err := r.ensureNamespaceExists(cfg); err != nil {
