@@ -149,9 +149,13 @@ func (r *route) initialSync(initialNamespaces []string) error {
 	// List the gateways and put them into the gatewaysMap
 	// The store must be synced otherwise we might get an empty list
 	// We enforce this before calling this function in UpdateNamespaces()
-	configs, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
-	if err != nil {
-		return fmt.Errorf("could not get list of Gateways: %s", err)
+	var configs []config.Config
+	for _, ns := range initialNamespaces {
+		config, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), ns)
+		if err != nil {
+			return fmt.Errorf("could not get list of Gateways: %s", err)
+		}
+		configs = append(configs, config...)
 	}
 	IORLog.Debugf("initialSync() - Got %d Gateway(s)", len(configs))
 
