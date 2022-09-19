@@ -740,36 +740,59 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	var err error
 	var proxyUID *int64
 	var proxyGID *int64
-	tproxyInterceptionMode := pod.Annotations != nil && pod.Annotations["sidecar.istio.io/interceptionMode"] == string(model.InterceptionTproxy)
-	if !tproxyInterceptionMode && !hasOnlyIstioProxyContainer(pod) {
-		proxyUID, err = getProxyUIDFromAnnotation(pod)
-		if err != nil {
-			log.Infof("Could not get proxyUID from annotation: %v", err)
+	if hasOnlyIstioProxyContainer(pod) {
+		// TODO: should we check the injection template being requested too?
+		// gateway injection
+		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
+			proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser)
+			// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
+			proxyGID = pod.Spec.SecurityContext.RunAsUser
 		}
-		if proxyUID == nil {
-			if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
-				proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser + 1)
-				// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
-				proxyGID = pod.Spec.SecurityContext.RunAsUser
+		for _, c := range pod.Spec.Containers {
+			if c.Name == ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
+				uid := *c.SecurityContext.RunAsUser
+				if proxyUID == nil || uid > *proxyUID {
+					proxyUID = &uid
+				}
+				if proxyGID == nil {
+					proxyGID = c.SecurityContext.RunAsUser
+				}
+				break
 			}
-			for _, c := range pod.Spec.Containers {
-				if c.Name != ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
-					uid := *c.SecurityContext.RunAsUser + 1
-					if proxyUID == nil || uid > *proxyUID {
-						proxyUID = &uid
-					}
-					if proxyGID == nil {
-						proxyGID = c.SecurityContext.RunAsUser
+		}
+	} else {
+		tproxyInterceptionMode := pod.Annotations != nil && pod.Annotations["sidecar.istio.io/interceptionMode"] == string(model.InterceptionTproxy)
+		if !tproxyInterceptionMode {
+			proxyUID, err = getProxyUIDFromAnnotation(pod)
+			if err != nil {
+				log.Infof("Could not get proxyUID from annotation: %v", err)
+			}
+			if proxyUID == nil {
+				if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
+					proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser + 1)
+					// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
+					proxyGID = pod.Spec.SecurityContext.RunAsUser
+				}
+				for _, c := range pod.Spec.Containers {
+					if c.Name != ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
+						uid := *c.SecurityContext.RunAsUser + 1
+						if proxyUID == nil || uid > *proxyUID {
+							proxyUID = &uid
+						}
+						if proxyGID == nil {
+							proxyGID = c.SecurityContext.RunAsUser
+						}
 					}
 				}
 			}
 		}
-		if proxyUID == nil {
-			proxyUID = pointer.Int64Ptr(DefaultSidecarProxyUID)
-		}
-		if proxyGID == nil {
-			proxyGID = pointer.Int64Ptr(DefaultSidecarProxyUID)
-		}
+	}
+	// make sure these are always set
+	if proxyUID == nil {
+		proxyUID = pointer.Int64Ptr(DefaultSidecarProxyUID)
+	}
+	if proxyGID == nil {
+		proxyGID = pointer.Int64Ptr(DefaultSidecarProxyUID)
 	}
 
 	deploy, typeMeta := kube.GetDeployMetaFromPod(&pod)
