@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"github.com/mitchellh/hashstructure/v2"
-	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	kubelabels "k8s.io/apimachinery/pkg/labels"
 	v1 "maistra.io/api/federation/v1"
 
@@ -38,9 +38,23 @@ func DefaultFederationCARootResourceName(instance *v1.ServiceMeshPeer) string {
 	return fmt.Sprintf("%s-ca-root-cert", instance.Name)
 }
 
-// EndpointsForService returns the Endpoints for the named service.
-func EndpointsForService(client kube.Client, name, namespace string) (*corev1.Endpoints, error) {
-	return client.KubeInformer().Core().V1().Endpoints().Lister().Endpoints(namespace).Get(name)
+// EndpointSlicesForService returns the Endpoints for the named service.
+func EndpointSlicesForService(client kube.Client, name, namespace string) ([]*discoveryv1.EndpointSlice, error) {
+	endpointSlices, err := client.KubeInformer().Discovery().V1().EndpointSlices().Lister().EndpointSlices(namespace).
+		List(kubelabels.Set{discoveryv1.LabelServiceName: name}.AsSelector())
+	if err != nil {
+		return nil, err
+	}
+	return endpointSlices, nil
+}
+
+func ContainsPort(ports []discoveryv1.EndpointPort, expectedPort int32) bool {
+	for _, p := range ports {
+		if *p.Port == expectedPort {
+			return true
+		}
+	}
+	return false
 }
 
 // ServiceAccountsForService returns a list of service account names used by all
