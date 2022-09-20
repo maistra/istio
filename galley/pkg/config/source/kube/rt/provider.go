@@ -16,7 +16,6 @@ package rt
 
 import (
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
@@ -55,7 +54,7 @@ func NewProvider(interfaces kube.Interfaces, namespaces string, resyncPeriod tim
 	p := &Provider{
 		resyncPeriod: resyncPeriod,
 		interfaces:   interfaces,
-		namespaces:   xnsinformers.NewNamespaceSet(strings.Split(namespaces, ",")...),
+		namespaces:   xnsinformers.NewNamespaceSet(),
 	}
 
 	p.initKnownAdapters()
