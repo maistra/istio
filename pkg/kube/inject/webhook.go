@@ -745,18 +745,12 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 		// gateway injection
 		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
 			proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser)
-			// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
-			proxyGID = pod.Spec.SecurityContext.RunAsUser
+			proxyGID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser)
 		}
 		for _, c := range pod.Spec.Containers {
 			if c.Name == ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
-				uid := *c.SecurityContext.RunAsUser
-				if proxyUID == nil || uid > *proxyUID {
-					proxyUID = &uid
-				}
-				if proxyGID == nil {
-					proxyGID = c.SecurityContext.RunAsUser
-				}
+				proxyUID = pointer.Int64Ptr(*c.SecurityContext.RunAsUser)
+				proxyGID = pointer.Int64Ptr(*c.SecurityContext.RunAsUser)
 				break
 			}
 		}
@@ -785,14 +779,13 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 					}
 				}
 			}
+			if proxyUID == nil {
+				proxyUID = pointer.Int64Ptr(DefaultSidecarProxyUID)
+			}
+			if proxyGID == nil {
+				proxyGID = pointer.Int64Ptr(DefaultSidecarProxyUID)
+			}
 		}
-	}
-	// make sure these are always set
-	if proxyUID == nil {
-		proxyUID = pointer.Int64Ptr(DefaultSidecarProxyUID)
-	}
-	if proxyGID == nil {
-		proxyGID = pointer.Int64Ptr(DefaultSidecarProxyUID)
 	}
 
 	deploy, typeMeta := kube.GetDeployMetaFromPod(&pod)
