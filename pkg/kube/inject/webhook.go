@@ -894,16 +894,26 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	var proxyUID *int64
 	var proxyGID *int64
 	if hasOnlyIstioProxyContainer(pod) {
-		// TODO: should we check the injection template being requested too?
-		// gateway injection
-		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
-			proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser)
-			proxyGID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser)
+		if pod.Spec.SecurityContext != nil {
+			if pod.Spec.SecurityContext.RunAsUser != nil {
+				proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser)
+				proxyGID = pointer.Int64Ptr(*proxyUID)
+			}
+			if pod.Spec.SecurityContext.RunAsGroup != nil {
+				proxyGID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsGroup)
+			}
 		}
 		for _, c := range pod.Spec.Containers {
-			if c.Name == ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
-				proxyUID = pointer.Int64Ptr(*c.SecurityContext.RunAsUser)
-				proxyGID = pointer.Int64Ptr(*c.SecurityContext.RunAsUser)
+			if c.Name == ProxyContainerName && c.SecurityContext != nil {
+				if c.SecurityContext.RunAsUser != nil {
+					proxyUID = pointer.Int64Ptr(*c.SecurityContext.RunAsUser)
+					if proxyGID == nil {
+						proxyGID = pointer.Int64Ptr(*proxyUID)
+					}
+				}
+				if c.SecurityContext.RunAsGroup != nil {
+					proxyGID = pointer.Int64Ptr(*c.SecurityContext.RunAsGroup)
+				}
 				break
 			}
 		}
