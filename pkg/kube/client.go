@@ -29,10 +29,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	gatewayapiinformer "github.com/maistra/xns-informer/pkg/generated/gatewayapi"
-	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
-	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
-	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
@@ -75,6 +71,11 @@ import (
 	mcsapisClient "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned"
 	mcsapisfake "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/fake"
 	mcsapisInformer "sigs.k8s.io/mcs-api/pkg/client/informers/externalversions"
+
+	gatewayapiinformer "github.com/maistra/xns-informer/pkg/generated/gatewayapi"
+	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
+	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 
 	"istio.io/api/label"
 	clientextensions "istio.io/client-go/pkg/apis/extensions/v1alpha1"
@@ -401,7 +402,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.kubeInformer = kubeinformer.NewSharedInformerFactoryWithOptions(
 		c.Interface,
 		resyncInterval,
-		kubeinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
@@ -415,7 +415,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 		return nil, err
 	}
 	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
-	c.dynamicInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
@@ -424,7 +423,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(
 		c.istio,
 		resyncInterval,
-		istioinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	if features.EnableGatewayAPI {
@@ -435,7 +433,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 		c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactoryWithOptions(
 			c.gatewayapi,
 			resyncInterval,
-			gatewayapiinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 		)
 	}
 

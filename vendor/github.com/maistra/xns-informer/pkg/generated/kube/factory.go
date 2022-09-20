@@ -101,7 +101,7 @@ func NewSharedInformerFactory(client kubernetes.Interface, defaultResync time.Du
 func NewSharedInformerFactoryWithOptions(client kubernetes.Interface, defaultResync time.Duration, options ...SharedInformerOption) SharedInformerFactory {
 	factory := &sharedInformerFactory{
 		client:           client,
-		namespaces:       informers.NewNamespaceSet(v1.NamespaceAll),
+		namespaces:       informers.NewNamespaceSet(),
 		defaultResync:    defaultResync,
 		informers:        make(map[reflect.Type]cache.SharedIndexInformer),
 		startedInformers: make(map[reflect.Type]bool),

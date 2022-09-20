@@ -4,9 +4,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/maistra/xns-informer/pkg/internal/sets"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+
+	"github.com/maistra/xns-informer/pkg/internal/sets"
 )
 
 // NamespaceSetHandler handles add and remove events for namespace sets.
@@ -39,6 +40,8 @@ func (h NamespaceSetHandlerFuncs) OnRemove(namespace string) {
 // with SetNamespaces, and handlers can be added with AddHandler that will
 // respond to addition or removal of individual namespaces.
 type NamespaceSet interface {
+	// Initialized returns true if SetNamespaces() has been called at least once
+	Initialized() bool
 	SetNamespaces(namespaces ...string)
 	AddHandler(handler NamespaceSetHandler)
 	Contains(namespace string) bool
@@ -46,17 +49,15 @@ type NamespaceSet interface {
 }
 
 type namespaceSet struct {
-	lock       sync.Mutex
-	namespaces sets.Set
-	handlers   []NamespaceSetHandler
+	initialized bool
+	lock        sync.Mutex
+	namespaces  sets.Set
+	handlers    []NamespaceSetHandler
 }
 
-// NewNamespaceSet returns a new NamespaceSet tracking the given namespaces.
-func NewNamespaceSet(namespaces ...string) NamespaceSet {
-	n := &namespaceSet{}
-	n.SetNamespaces(namespaces...)
-
-	return n
+// NewNamespaceSet returns a new NamespaceSet.
+func NewNamespaceSet() NamespaceSet {
+	return &namespaceSet{}
 }
 
 // Contains indicates whether the given namespace is in the set.
@@ -77,10 +78,22 @@ func (n *namespaceSet) List() []string {
 	return namespaces
 }
 
+// Initialized returns true after SetNamespaces is called at least once.
+func (n *namespaceSet) Initialized() bool {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	return n.initialized
+}
+
 // SetNamespaces replaces the set of namespaces.
 func (n *namespaceSet) SetNamespaces(namespaces ...string) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
+
+	if !n.initialized {
+		n.initialized = true
+	}
 
 	newNamespaceSet := sets.NewSet(namespaces...)
 

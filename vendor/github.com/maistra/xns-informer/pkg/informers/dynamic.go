@@ -29,7 +29,7 @@ type DynamicSharedInformerFactory interface {
 
 // NewDynamicSharedInformerFactory constructs a new instance of dynamicSharedInformerFactory for all namespaces.
 func NewDynamicSharedInformerFactory(client dynamic.Interface, defaultResync time.Duration) DynamicSharedInformerFactory {
-	namespaces := NewNamespaceSet(metav1.NamespaceAll)
+	namespaces := NewNamespaceSet()
 	return NewFilteredDynamicSharedInformerFactory(client, defaultResync, namespaces, nil)
 }
 

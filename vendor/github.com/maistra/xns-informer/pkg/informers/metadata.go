@@ -25,7 +25,7 @@ type MetadataSharedInformerFactory interface {
 
 // NewMetadataSharedInformerFactory constructs a new instance of metadataSharedInformerFactory for all namespaces.
 func NewMetadataSharedInformerFactory(client metadata.Interface, defaultResync time.Duration) MetadataSharedInformerFactory {
-	namespaces := NewNamespaceSet(metav1.NamespaceAll)
+	namespaces := NewNamespaceSet()
 	return NewFilteredMetadataSharedInformerFactory(client, defaultResync, namespaces, nil)
 }
 
