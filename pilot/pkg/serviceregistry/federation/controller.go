@@ -504,21 +504,15 @@ func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) 
 	var addrs []model.NetworkGateway
 	var sas []string
 	for _, subset := range endpoints.Subsets {
-		for index, address := range subset.Addresses {
-			if subset.Ports[index].Port == common.DefaultFederationPort {
-				ips, err := c.getIPAddrsForHostOrIP(address.IP)
-				if err != nil {
-					c.logger.Errorf("error converting to IP address from %s: %s", address.IP, err)
-					continue
-				}
-				for _, ip := range ips {
-					addrs = append(addrs, model.NetworkGateway{
-						Addr: ip,
-						Port: uint32(common.DefaultFederationPort),
-					})
-					sas = append(sas, serviceAccountByIP[ip])
-				}
-			}
+		if !common.ContainsPort(subset.Ports, common.DefaultFederationPort) {
+			continue
+		}
+		for _, address := range subset.Addresses {
+			addrs = append(addrs, model.NetworkGateway{
+				Addr: address.IP,
+				Port: uint32(common.DefaultFederationPort),
+			})
+			sas = append(sas, serviceAccountByIP[address.IP])
 		}
 	}
 	return addrs, sas
