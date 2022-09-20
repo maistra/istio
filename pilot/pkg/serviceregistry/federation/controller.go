@@ -445,7 +445,7 @@ func (c *Controller) gatewayForNetworkAddress() []model.NetworkGateway {
 		remotePort = common.DefaultFederationPort
 	}
 	for _, address := range c.remote.Addresses {
-		addrs, err := c.getIPAddrsForHostOrIP(address)
+		addrs, err := c.getIPOrResolveHost(address)
 		if err != nil {
 			c.logger.Errorf("error resolving IP addr for federation network %s: %v", address, err)
 		} else {
@@ -462,12 +462,12 @@ func (c *Controller) gatewayForNetworkAddress() []model.NetworkGateway {
 	return gateways
 }
 
-func (c *Controller) getIPAddrsForHostOrIP(host string) ([]string, error) {
-	gwIP := net.ParseIP(host)
+func (c *Controller) getIPOrResolveHost(ipOrHost string) ([]string, error) {
+	gwIP := net.ParseIP(ipOrHost)
 	if gwIP != nil {
 		return []string{gwIP.String()}, nil
 	}
-	return net.LookupHost(host)
+	return net.LookupHost(ipOrHost)
 }
 
 // store has to be Lock()ed
@@ -491,27 +491,31 @@ func (c *Controller) updateGateways(serviceList *federationmodel.ServiceListMess
 }
 
 func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) {
-	endpoints, err := common.EndpointsForService(c.kubeClient, c.egressName, c.namespace)
+	endpointSlices, err := common.EndpointSlicesForService(c.kubeClient, c.egressName, c.namespace)
 	if err != nil {
-		c.logger.Errorf("unabled to retrieve endpoints for federation egress gateway %s: %s", c.egressName, err)
+		c.logger.Errorf("failed to retrieve EndpointSlices for federation egress gateway %s: %s", c.egressName, err)
 		return nil, nil
 	}
 	serviceAccountByIP := map[string]string{}
 	if !c.useDirectCalls {
 		serviceAccountByIP, err = common.ServiceAccountsForService(c.kubeClient, c.egressName, c.namespace)
 		if err != nil {
-			c.logger.Warnf("unable to retrieve ServiceAccount information for imported services accessed through %s: %s",
+			c.logger.Warnf("failed to retrieve ServiceAccount information for imported services accessed through %s: %s",
 				c.egressName, err)
 		}
 	}
 	var addrs []model.NetworkGateway
 	var sas []string
-	for _, subset := range endpoints.Subsets {
-		for index, address := range subset.Addresses {
-			if subset.Ports[index].Port == common.DefaultFederationPort {
-				ips, err := c.getIPAddrsForHostOrIP(address.IP)
+	for _, slice := range endpointSlices {
+		if !common.ContainsPort(slice.Ports, common.DefaultFederationPort) {
+			continue
+		}
+		for _, endpoint := range slice.Endpoints {
+			for _, address := range endpoint.Addresses {
+				// an address might be IPv4, IPv6 or FQDN;
+				ips, err := c.getIPOrResolveHost(address)
 				if err != nil {
-					c.logger.Errorf("error converting to IP address from %s: %s", address.IP, err)
+					c.logger.Errorf("error converting to IP address from %s: %s", address, err)
 					continue
 				}
 				for _, ip := range ips {
