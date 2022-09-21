@@ -35,6 +35,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
+	"istio.io/istio/pilot/pkg/util/sets"
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/host"
@@ -502,7 +503,7 @@ func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) 
 		}
 	}
 	var addrs []model.NetworkGateway
-	var sas []string
+	uniqueSAs := sets.Set{}
 	for _, subset := range endpoints.Subsets {
 		if !common.ContainsPort(subset.Ports, common.DefaultFederationPort) {
 			continue
@@ -512,10 +513,12 @@ func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) 
 				Addr: address.IP,
 				Port: uint32(common.DefaultFederationPort),
 			})
-			sas = append(sas, serviceAccountByIP[address.IP])
+			if sa, exists := serviceAccountByIP[address.IP]; exists {
+				uniqueSAs.Insert(sa)
+			}
 		}
 	}
-	return addrs, sas
+	return addrs, uniqueSAs.UnsortedList()
 }
 
 func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMessage) {
