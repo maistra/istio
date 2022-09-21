@@ -22,7 +22,7 @@ import (
 // namespaces, it will not work for cluster-scoped resources.
 type DynamicSharedInformerFactory interface {
 	Start(stopCh <-chan struct{})
-	SetNamespaces(namespaces ...string)
+	SetNamespaces(namespaces []string)
 	ForResource(gvr schema.GroupVersionResource) informers.GenericInformer
 	WaitForCacheSync(stopCh <-chan struct{}) map[schema.GroupVersionResource]bool
 }
@@ -86,11 +86,11 @@ func (f *dynamicSharedInformerFactory) ForResource(gvr schema.GroupVersionResour
 }
 
 // SetNamespaces updates the set of namespaces for all current and future informers.
-func (f *dynamicSharedInformerFactory) SetNamespaces(namespaces ...string) {
+func (f *dynamicSharedInformerFactory) SetNamespaces(namespaces []string) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	f.namespaces.SetNamespaces(namespaces...)
+	f.namespaces.SetNamespaces(namespaces)
 }
 
 // Start initializes all requested informers.

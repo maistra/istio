@@ -62,7 +62,7 @@ func NewControllerFromConfigFile(kubeConfig string, namespaces []string, mrc mem
 		mrc.Register(namespaceSet, "extensions-controller")
 	} else {
 		// No MemberRoll configured, set namespaces based on args.
-		namespaceSet.SetNamespaces(namespaces...)
+		namespaceSet.SetNamespaces(namespaces)
 	}
 
 	newInformer := func(namespace string) cache.SharedIndexInformer {

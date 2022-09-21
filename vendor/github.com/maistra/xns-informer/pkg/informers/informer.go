@@ -265,6 +265,10 @@ func (i *multiNamespaceInformer) HasSynced() bool {
 	i.lock.Lock()
 	defer i.lock.Unlock()
 
+	if !i.namespaces.Initialized() {
+		return false
+	}
+
 	for _, informer := range i.informers {
 		if synced := informer.HasSynced(); !synced {
 			return false
