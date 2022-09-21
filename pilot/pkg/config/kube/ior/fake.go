@@ -200,17 +200,16 @@ func (fk *fakeMemberRollController) Register(listener controller.MemberRollListe
 	if listener == nil {
 		return
 	}
+
+	// ensure that listener has no namespaces until the smmrc initializes it with the actual list of namespaces in the member roll
+	listener.SetNamespaces(nil)
+
 	fk.listeners = append(fk.listeners, listener)
 }
 
 // Start implements controller.MemberRollController
 func (fk *fakeMemberRollController) Start(stopCh <-chan struct{}) {
 	panic("not implemented")
-}
-
-func (fk *fakeMemberRollController) addNamespaces(namespaces ...string) {
-	fk.namespaces = append(fk.namespaces, namespaces...)
-	fk.invokeListeners()
 }
 
 func (fk *fakeMemberRollController) setNamespaces(namespaces ...string) {
@@ -223,7 +222,7 @@ func (fk *fakeMemberRollController) invokeListeners() {
 	defer fk.lock.Unlock()
 
 	for _, l := range fk.listeners {
-		l.SetNamespaces(fk.namespaces...)
+		l.SetNamespaces(fk.namespaces)
 	}
 }
 

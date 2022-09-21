@@ -52,7 +52,7 @@ func initClients(t *testing.T,
 	k8sClient := kube.NewFakeClient()
 	iorKubeClient := NewFakeKubeClient(k8sClient)
 	routerClient := NewFakeRouterClient()
-	store, err := crdclient.New(k8sClient, "", "", false)
+	store, err := crdclient.New(k8sClient, crdclient.Option{})
 	if err != nil {
 		t.Fatal(err)
 	}

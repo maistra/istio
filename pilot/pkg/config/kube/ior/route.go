@@ -409,8 +409,12 @@ func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 }
 
 // Trigerred by SMMR controller when SMMR changes
-func (r *route) SetNamespaces(namespaces ...string) {
+func (r *route) SetNamespaces(namespaces []string) {
 	if !r.alive {
+		return
+	}
+
+	if namespaces == nil {
 		return
 	}
 
@@ -435,7 +439,7 @@ func (r *route) SetNamespaces(namespaces ...string) {
 		IORLog.Debug("Gateway store cache synced. Performing our initial sync now")
 
 		if err := r.initialSync(namespaces); err != nil {
-			IORLog.Errora(err)
+			IORLog.Error(err)
 			if r.errorChannel != nil {
 				r.errorChannel <- err
 			}
