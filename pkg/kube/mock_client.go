@@ -140,10 +140,6 @@ func (c MockClient) MetadataClient() metadata.Interface {
 	panic("not used in mock")
 }
 
-func (c MockClient) SetNamespaces(namespaces ...string) {
-	panic("not used in mock")
-}
-
 func (c MockClient) AddMemberRoll(namespace, memberRollName string) error {
 	panic("not used in mock")
 }
