@@ -200,6 +200,10 @@ func (fk *fakeMemberRollController) Register(listener controller.MemberRollListe
 	if listener == nil {
 		return
 	}
+
+	// ensure that listener has no namespaces until the smmrc initializes it with the actual list of namespaces in the member roll
+	listener.SetNamespaces(nil)
+
 	fk.listeners = append(fk.listeners, listener)
 }
 
@@ -223,7 +227,7 @@ func (fk *fakeMemberRollController) invokeListeners() {
 	defer fk.lock.Unlock()
 
 	for _, l := range fk.listeners {
-		l.SetNamespaces(fk.namespaces...)
+		l.SetNamespaces(fk.namespaces)
 	}
 }
 

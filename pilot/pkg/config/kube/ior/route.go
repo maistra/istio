@@ -408,8 +408,12 @@ func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 }
 
 // Trigerred by SMMR controller when SMMR changes
-func (r *route) SetNamespaces(namespaces ...string) {
+func (r *route) SetNamespaces(namespaces []string) {
 	if !r.alive {
+		return
+	}
+
+	if namespaces == nil {
 		return
 	}
 

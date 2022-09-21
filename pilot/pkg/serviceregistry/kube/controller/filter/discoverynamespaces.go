@@ -265,7 +265,7 @@ func NewMaistraDiscoveryNamespacesFilter(mrc memberroll.MemberRollController) Di
 	return d
 }
 
-func (d *maistraDiscoveryNamespacesFilter) SetNamespaces(namespaces ...string) {
+func (d *maistraDiscoveryNamespacesFilter) SetNamespaces(namespaces []string) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 	d.namespaces = sets.NewString(namespaces...)

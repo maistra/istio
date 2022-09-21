@@ -1294,8 +1294,8 @@ github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e/go.mod h1:C1wdFJiN
 github.com/mailru/easyjson v0.7.0/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7ldAVICs=
 github.com/mailru/easyjson v0.7.6 h1:8yTIVnZgCoiM1TgqoeTl+LfU5Jg6/xL3QhGQnimLYnA=
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/maistra/xns-informer v0.0.0-20220823123640-04d03c2c082f h1:OuwGDOMAvaxoUlMsyXUm/tkEIAwm7duDFi5GYWO0BTI=
-github.com/maistra/xns-informer v0.0.0-20220823123640-04d03c2c082f/go.mod h1:rJlPmKeg9FPYXtU5b3Lgy5lPuvgFs4HCGFQYnZ157+s=
+github.com/maistra/xns-informer v0.0.0-20220922145340-1208df5000ae h1:Uzl+NDjxf2M+AluaGqju+zWpO0ZA82nZsPVQDrJvlTs=
+github.com/maistra/xns-informer v0.0.0-20220922145340-1208df5000ae/go.mod h1:rJlPmKeg9FPYXtU5b3Lgy5lPuvgFs4HCGFQYnZ157+s=
 github.com/maratori/testpackage v1.0.1/go.mod h1:ddKdw+XG0Phzhx8BFDTKgpWP4i7MpApTE5fXSKAqwDU=
 github.com/markbates/errx v1.1.0/go.mod h1:PLa46Oex9KNbVDZhKel8v1OT7hD5JZ2eI7AHhA0wswc=
 github.com/markbates/oncer v1.0.0/go.mod h1:Z59JA581E9GP6w96jai+TGqafHPW+cPfRxz2aSZ0mcI=
@@ -3079,8 +3079,8 @@ k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b/go.mod h1:jPW/WVKK9YHAvNhRxK0md/
 k8s.io/utils v0.0.0-20211116205334-6203023598ed/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 h1:HNSDgDCrr/6Ly3WEGKZftiE7IY19Vz2GdbOCyI4qqhc=
 k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
-maistra.io/api v0.0.0-20220922103840-f15f953c25a2 h1:W27w4KoRp53MDCLCh0RJZzYgJA78elXXqQcjh4x15Yk=
-maistra.io/api v0.0.0-20220922103840-f15f953c25a2/go.mod h1:CPwrZgKxUNvbco4XKp0kfTwKVEz+OzKAzbiL3oiiVdA=
+maistra.io/api v0.0.0-20220922161140-df825ecdc2bb h1:5be8HPEcnUfCoWebDGJj+/TBWLjeKmS5OoXA3haOWtY=
+maistra.io/api v0.0.0-20220922161140-df825ecdc2bb/go.mod h1:XaPeO7WcLBMAB+otZm7CuRbMTPjOr53VKeap95Rterk=
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=
 modernc.org/golex v1.0.0/go.mod h1:b/QX9oBD/LhixY6NDh+IdGv17hgB+51fET1i2kPSmvk=
 modernc.org/mathutil v1.0.0/go.mod h1:wU0vUrJsVWBZ4P6e7xtFJEhFSNsfRLJ8H458uRjg03k=
