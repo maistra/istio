@@ -415,7 +415,6 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 	c.kubeInformer = kubeinformer.NewSharedInformerFactoryWithOptions(
 		c.kube,
 		resyncInterval,
-		kubeinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
@@ -429,7 +428,6 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 		return nil, err
 	}
 	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
-	c.dynamicInformer.SetNamespaces([]string{}) // Maistra needs to start with an empty namespace set.
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
@@ -438,7 +436,6 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(
 		c.istio,
 		resyncInterval,
-		istioinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	if features.EnableGatewayAPI {
@@ -449,7 +446,6 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 		c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactoryWithOptions(
 			c.gatewayapi,
 			resyncInterval,
-			gatewayapiinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 		)
 	}
 
@@ -592,9 +588,6 @@ func (c *client) GetMemberRoll() memberroll.MemberRollController {
 // RunAndWait starts all informers and waits for their caches to sync.
 // Warning: this must be called AFTER .Informer() is called, which will register the informer.
 func (c *client) RunAndWait(stop <-chan struct{}) {
-	// make sure to watch all namespaces if we're not using a MemberRollController
-	c.SetNamespaces([]string{metav1.NamespaceAll})
-
 	if c.mirrorQueue != nil && !c.mirrorQueueStarted.Load() {
 		c.mirrorQueueStarted.Store(true)
 		go c.mirrorQueue.Run(stop)
