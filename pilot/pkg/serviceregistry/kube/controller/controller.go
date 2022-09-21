@@ -354,7 +354,7 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 	if options.MemberRollName == "" {
 		c.nsInformer = kubeClient.KubeInformer().Core().V1().Namespaces().Informer()
 		_ = c.nsInformer.SetTransform(kubelib.StripUnusedFields)
-	c.nsLister = kubeClient.KubeInformer().Core().V1().Namespaces().Lister()
+		c.nsLister = kubeClient.KubeInformer().Core().V1().Namespaces().Lister()
 		if c.opts.SystemNamespace != "" {
 			nsInformer := informer.NewFilteredSharedIndexInformer(func(obj any) bool {
 				ns, ok := obj.(*v1.Namespace)

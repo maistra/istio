@@ -97,6 +97,9 @@ func (smmrc *serviceMeshMemberRollController) Start(stopCh <-chan struct{}) {
 }
 
 func (smmrc *serviceMeshMemberRollController) Register(listener MemberRollListener, name string) {
+	// ensure listener has no namespaces until the smmrc initializes it with the actual list of namespaces in the member roll
+	listener.SetNamespaces(nil)
+
 	smmrc.informer.AddEventHandler(smmrc.newServiceMeshMemberRollListener(listener, name))
 }
 

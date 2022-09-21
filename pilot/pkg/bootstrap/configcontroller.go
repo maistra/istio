@@ -348,9 +348,9 @@ func (s *Server) initStatusController(args *PilotArgs, writeStatus bool) {
 
 func (s *Server) makeKubeConfigController(args *PilotArgs) (model.ConfigStoreController, error) {
 	opts := crdclient.Option{
-		Revision:     args.Revision,
-		DomainSuffix: args.RegistryOptions.KubeOptions.DomainSuffix,
-		Identifier:   "crd-controller",
+		Revision:      args.Revision,
+		DomainSuffix:  args.RegistryOptions.KubeOptions.DomainSuffix,
+		Identifier:    "crd-controller",
 		EnableCRDScan: args.RegistryOptions.KubeOptions.EnableCRDScan,
 	}
 	if args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter != nil {
