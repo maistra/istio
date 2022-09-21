@@ -566,8 +566,8 @@ github.com/mailru/easyjson v0.0.0-20190614124828-94de47d64c63/go.mod h1:C1wdFJiN
 github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e/go.mod h1:C1wdFJiN94OJF2b5HbByQZoLdCWB1Yqtg26g4irojpc=
 github.com/mailru/easyjson v0.7.0 h1:aizVhC/NAAcKWb+5QsU1iNOZb4Yws5UO2I+aIprQITM=
 github.com/mailru/easyjson v0.7.0/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7ldAVICs=
-github.com/maistra/xns-informer v0.0.0-20210707160032-977ec17e2e0e h1:QqNPrmCUhk8JGyx/Crex7eNWWEFrc07M5v/CQKIwQN0=
-github.com/maistra/xns-informer v0.0.0-20210707160032-977ec17e2e0e/go.mod h1:Bwe3VRiuXlSXu8MktDkmbrFcmSDysxuoOra542o0Ljk=
+github.com/maistra/xns-informer v0.0.0-20221007121715-3ae7b6592ef4 h1:bmRcAmXcPdYK622r/XRyl9hxqhLpEcfJf7pws8SHWCw=
+github.com/maistra/xns-informer v0.0.0-20221007121715-3ae7b6592ef4/go.mod h1:Bwe3VRiuXlSXu8MktDkmbrFcmSDysxuoOra542o0Ljk=
 github.com/mattn/go-colorable v0.0.9/go.mod h1:9vuHe8Xs5qXnSaW/c/ABM9alt+Vo+STaOChaDxuIBZU=
 github.com/mattn/go-colorable v0.1.2/go.mod h1:U0ppj6V5qS13XJ6of8GYAs25YV2eR4EVcfRqFIhoBtE=
 github.com/mattn/go-colorable v0.1.8 h1:c1ghPdyEDarC70ftn0y+A/Ee++9zz8ljHG1b13eJ0s8=
@@ -1434,8 +1434,8 @@ k8s.io/utils v0.0.0-20200729134348-d5654de09c73/go.mod h1:jPW/WVKK9YHAvNhRxK0md/
 k8s.io/utils v0.0.0-20200912215256-4140de9c8800/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20201110183641-67b214c5f920 h1:CbnUZsM497iRC5QMVkHwyl8s2tB3g7yaSHkYPkpgelw=
 k8s.io/utils v0.0.0-20201110183641-67b214c5f920/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
-maistra.io/api v0.0.0-20211119171546-348bbce3ca27 h1:/a3VKvmPXWB327XFCqIM6cRmdC09xLm4Ks/9YztfjDw=
-maistra.io/api v0.0.0-20211119171546-348bbce3ca27/go.mod h1:lr+bFp/3PnYhRC/0IrDhCy7GfnQPhiOTW/CQ8qgTV9U=
+maistra.io/api v0.0.0-20221007124415-b84e26fa5e00 h1:AAGTlOQ+rgFDPJe4BukZ2aH7SxhR6eJ/ABttn5UFsco=
+maistra.io/api v0.0.0-20221007124415-b84e26fa5e00/go.mod h1:YqIqK8WocTdceE5n0AJXSufkzWZ98sTIr9T5VKpiWEs=
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
 rsc.io/sampler v1.3.0/go.mod h1:T1hPZKmBbMNahiBKFy5HrXp6adAjACjK9JXDnKaTXpA=

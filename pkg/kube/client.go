@@ -333,7 +333,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.kubeInformer = kubeinformer.NewSharedInformerFactoryWithOptions(
 		c.Interface,
 		resyncInterval,
-		kubeinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
@@ -341,14 +340,12 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 		return nil, err
 	}
 	c.metadataInformer = xnsinformers.NewMetadataSharedInformerFactory(c.metadata, resyncInterval)
-	c.metadataInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.dynamic, err = dynamic.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
 	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
-	c.dynamicInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
@@ -357,7 +354,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(
 		c.istio,
 		resyncInterval,
-		istioinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	c.serviceapis, err = serviceapisclient.NewForConfig(c.config)
@@ -367,7 +363,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.serviceapisInformers = serviceapisinformer.NewSharedInformerFactoryWithOptions(
 		c.serviceapis,
 		resyncInterval,
-		serviceapisinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	ext, err := kubeExtClient.NewForConfig(c.config)
@@ -446,11 +441,11 @@ func (c *client) SetNamespaces(namespaces ...string) {
 		return
 	}
 
-	c.kubeInformer.SetNamespaces(namespaces...)
-	c.istioInformer.SetNamespaces(namespaces...)
-	c.dynamicInformer.SetNamespaces(namespaces...)
-	c.metadataInformer.SetNamespaces(namespaces...)
-	c.serviceapisInformers.SetNamespaces(namespaces...)
+	c.kubeInformer.SetNamespaces(namespaces)
+	c.istioInformer.SetNamespaces(namespaces)
+	c.dynamicInformer.SetNamespaces(namespaces)
+	c.metadataInformer.SetNamespaces(namespaces)
+	c.serviceapisInformers.SetNamespaces(namespaces)
 }
 
 func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
