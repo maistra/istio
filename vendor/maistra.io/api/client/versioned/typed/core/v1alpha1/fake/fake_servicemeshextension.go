@@ -115,7 +115,7 @@ func (c *FakeServiceMeshExtensions) UpdateStatus(ctx context.Context, serviceMes
 // Delete takes name of the serviceMeshExtension and deletes it. Returns an error if one occurs.
 func (c *FakeServiceMeshExtensions) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(servicemeshextensionsResource, c.ns, name), &v1alpha1.ServiceMeshExtension{})
+		Invokes(testing.NewDeleteActionWithOptions(servicemeshextensionsResource, c.ns, name, opts), &v1alpha1.ServiceMeshExtension{})
 
 	return err
 }

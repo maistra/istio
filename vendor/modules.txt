@@ -2180,7 +2180,7 @@ k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20220301154558-8f6a12a9464b
+# maistra.io/api v0.0.0-20220922103840-f15f953c25a2
 ## explicit; go 1.15
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core

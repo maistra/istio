@@ -115,7 +115,7 @@ func (c *FakeExportedServiceSets) UpdateStatus(ctx context.Context, exportedServ
 // Delete takes name of the exportedServiceSet and deletes it. Returns an error if one occurs.
 func (c *FakeExportedServiceSets) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(exportedservicesetsResource, c.ns, name), &federationv1.ExportedServiceSet{})
+		Invokes(testing.NewDeleteActionWithOptions(exportedservicesetsResource, c.ns, name, opts), &federationv1.ExportedServiceSet{})
 
 	return err
 }
