@@ -115,7 +115,7 @@ func (c *FakeServiceMeshMembers) UpdateStatus(ctx context.Context, serviceMeshMe
 // Delete takes name of the serviceMeshMember and deletes it. Returns an error if one occurs.
 func (c *FakeServiceMeshMembers) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(servicemeshmembersResource, c.ns, name), &corev1.ServiceMeshMember{})
+		Invokes(testing.NewDeleteActionWithOptions(servicemeshmembersResource, c.ns, name, opts), &corev1.ServiceMeshMember{})
 
 	return err
 }

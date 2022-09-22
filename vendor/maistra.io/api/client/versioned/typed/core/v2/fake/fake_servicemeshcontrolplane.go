@@ -115,7 +115,7 @@ func (c *FakeServiceMeshControlPlanes) UpdateStatus(ctx context.Context, service
 // Delete takes name of the serviceMeshControlPlane and deletes it. Returns an error if one occurs.
 func (c *FakeServiceMeshControlPlanes) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(servicemeshcontrolplanesResource, c.ns, name), &v2.ServiceMeshControlPlane{})
+		Invokes(testing.NewDeleteActionWithOptions(servicemeshcontrolplanesResource, c.ns, name, opts), &v2.ServiceMeshControlPlane{})
 
 	return err
 }

@@ -115,7 +115,7 @@ func (c *FakeServiceMeshPeers) UpdateStatus(ctx context.Context, serviceMeshPeer
 // Delete takes name of the serviceMeshPeer and deletes it. Returns an error if one occurs.
 func (c *FakeServiceMeshPeers) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(servicemeshpeersResource, c.ns, name), &federationv1.ServiceMeshPeer{})
+		Invokes(testing.NewDeleteActionWithOptions(servicemeshpeersResource, c.ns, name, opts), &federationv1.ServiceMeshPeer{})
 
 	return err
 }

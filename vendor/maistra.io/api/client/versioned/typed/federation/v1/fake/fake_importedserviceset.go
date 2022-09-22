@@ -115,7 +115,7 @@ func (c *FakeImportedServiceSets) UpdateStatus(ctx context.Context, importedServ
 // Delete takes name of the importedServiceSet and deletes it. Returns an error if one occurs.
 func (c *FakeImportedServiceSets) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(importedservicesetsResource, c.ns, name), &federationv1.ImportedServiceSet{})
+		Invokes(testing.NewDeleteActionWithOptions(importedservicesetsResource, c.ns, name, opts), &federationv1.ImportedServiceSet{})
 
 	return err
 }
