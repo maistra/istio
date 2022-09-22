@@ -43,8 +43,6 @@ const (
 )
 
 func TestClientToServiceTls(t *testing.T) {
-	// FIXME: https://issues.redhat.com/browse/OSSM-755
-	t.Skip("https://github.com/istio/istio/issues/0")
 	framework.NewTest(t).
 		Features("security.peer.file-mounted-certs").
 		Run(func(t framework.TestContext) {
