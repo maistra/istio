@@ -197,6 +197,9 @@ func addFlags(c *cobra.Command) {
 	c.PersistentFlags().IntVar(&serverArgs.RegistryOptions.KubeOptions.KubernetesAPIBurst, "kubernetesApiBurst", 160,
 		"Maximum burst for throttle when communicating with the kubernetes API")
 
+	c.PersistentFlags().BoolVar(&serverArgs.RegistryOptions.KubeOptions.LogKubernetesAPIRequests, "logKubernetesApiRequests", false,
+		"Log requests sent to the kubernetes API")
+
 	// Attach the Istio logging options to the command.
 	loggingOptions.AttachCobraFlags(c)
 
