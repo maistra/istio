@@ -531,7 +531,7 @@ func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) 
 			}
 		}
 	}
-	return addrs, uniqueSAs.UnsortedList()
+	return addrs, uniqueSAs.SortedList()
 }
 
 func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMessage) {
