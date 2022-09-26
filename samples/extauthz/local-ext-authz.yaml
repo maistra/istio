@@ -69,7 +69,8 @@ spec:
         imagePullPolicy: IfNotPresent
         name: httpbin
         ports:
-        - containerPort: 80
+        - containerPort: 8001
+        command: ["gunicorn", "-b", "0.0.0.0:8001", "httpbin:app", "-k", "gevent"]
       - image: gcr.io/istio-testing/ext-authz:latest
         imagePullPolicy: IfNotPresent
         name: ext-authz
@@ -88,7 +89,7 @@ spec:
   ports:
   - name: http
     port: 8000
-    targetPort: 80
+    targetPort: 8001
   selector:
     app: httpbin
 ---

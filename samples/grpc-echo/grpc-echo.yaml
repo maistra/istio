@@ -98,8 +98,8 @@ spec:
             successThreshold: 1
             timeoutSeconds: 1
           securityContext:
-            runAsGroup: 1338
-            runAsUser: 1338
+            runAsGroup: 1000690001
+            runAsUser: 1000690001
           startupProbe:
             failureThreshold: 10
             periodSeconds: 10
@@ -186,8 +186,8 @@ spec:
             successThreshold: 1
             timeoutSeconds: 1
           securityContext:
-            runAsGroup: 1338
-            runAsUser: 1338
+            runAsGroup: 1000690001
+            runAsUser: 1000690001
           startupProbe:
             failureThreshold: 10
             periodSeconds: 10
