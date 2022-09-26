@@ -26,6 +26,15 @@ import (
 	"istio.io/istio/pkg/spiffe"
 )
 
+func ContainsPort(ports []corev1.EndpointPort, expectedPort int32) bool {
+	for _, p := range ports {
+		if p.Port == expectedPort {
+			return true
+		}
+	}
+	return false
+}
+
 // DiscoveryServiceHostname returns the hostname used to represent a remote's
 // discovery service in the local mesh.
 func DiscoveryServiceHostname(instance *v1.ServiceMeshPeer) string {
