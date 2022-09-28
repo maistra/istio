@@ -544,10 +544,7 @@ func TestDuplicateUpdateEvents(t *testing.T) {
 	mrc := newFakeMemberRollController()
 	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc, false)
 
-	r, err := newRoute(k8sClient, routerClient, store, "istio-system", mrc, stop)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r := newRoute(k8sClient, routerClient, store, "istio-system", mrc, stop)
 
 	mrc.setNamespaces("istio-system")
 	createIngressGateway(t, k8sClient.GetActualClient(), "istio-system", map[string]string{"istio": "ingressgateway"})
@@ -569,7 +566,7 @@ func TestDuplicateUpdateEvents(t *testing.T) {
 	}
 
 	// Create the first router, should work just fine
-	err = r.handleEvent(model.EventAdd, cfg)
+	err := r.handleEvent(model.EventAdd, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
