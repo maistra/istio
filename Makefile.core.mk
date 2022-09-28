@@ -474,3 +474,8 @@ include tools/packaging/packaging.mk
 include tests/integration/tests.mk
 
 include common/Makefile.common.mk
+
+#-----------------------------------------------------------------------------
+# Maistra
+#-----------------------------------------------------------------------------
+include maistra/maistra.mk
