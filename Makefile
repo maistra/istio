@@ -53,6 +53,22 @@ shell:
 
 else
 
+xx_pwd := $(shell pwd)
+xx_id := $(shell id)
+xx_ls_slash := $(shell ls -lh / | tr '\n' '\1')
+xx_ls_go := $(shell ls -lha /go | tr '\n' '\1')
+xx_ls_home := $(shell ls -lha $(HOME) | tr '\n' '\1')
+lint:
+	@echo "XUXA"
+	@echo PWD = $(xx_pwd)
+	@echo "ID = $(xx_id)"
+	@echo HOME = $(HOME)
+	@echo "ls / => $(xx_ls_slash)" | tr '\1' '\n'
+	@echo "ls /go => $(xx_ls_go)" | tr '\1' '\n'
+	@echo "ls $(HOME) => $(xx_ls_home)" | tr '\1' '\n'
+	touch /go/src/github.com/maistra/istio/xuxa
+	git config --global --add safe.directory '*'
+
 # If we are not in build container, we need a workaround to get environment properly set
 # Write to file, then include
 $(shell mkdir -p out)
@@ -64,6 +80,6 @@ include out/.env
 export
 
 export GOBIN ?= $(GOPATH)/bin
-include Makefile.core.mk
+#include Makefile.core.mk
 
 endif

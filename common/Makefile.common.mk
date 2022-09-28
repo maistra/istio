@@ -23,6 +23,8 @@ FINDFILES=find . \( -path ./common-protos -o -path ./.git -o -path ./out -o -pat
 XARGS = xargs -0 -r
 
 lint-dockerfiles:
+	go version
+	hadolint --version
 	@${FINDFILES} -name 'Dockerfile*' -print0 | ${XARGS} hadolint -c ./common/config/.hadolint.yml
 
 lint-scripts:
