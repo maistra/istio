@@ -43,10 +43,7 @@ func Register(
 ) error {
 	IORLog.Info("Registering IOR component")
 
-	r, err := newRoute(k8sClient, routerClient, store, pilotNamespace, mrc, stop)
-	if err != nil {
-		return err
-	}
+	r := newRoute(k8sClient, routerClient, store, pilotNamespace, mrc, stop)
 	r.errorChannel = errorChannel
 
 	alive := true

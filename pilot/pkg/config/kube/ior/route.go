@@ -104,9 +104,10 @@ func newRoute(
 	pilotNamespace string,
 	mrc controller.MemberRollController,
 	stop <-chan struct{},
-) (*route, error) {
-	if !kubeClient.IsRouteSupported() {
-		return nil, fmt.Errorf("routes are not supported in this cluster")
+) *route {
+	for !kubeClient.IsRouteSupported() {
+		IORLog.Infof("routes are not supported in this cluster; waiting for Route resource to become available...")
+		time.Sleep(10 * time.Second)
 	}
 
 	r := &route{}
@@ -133,7 +134,7 @@ func newRoute(
 		}(stop)
 	}
 
-	return r, nil
+	return r
 }
 
 // initialSync runs on initialization only.
