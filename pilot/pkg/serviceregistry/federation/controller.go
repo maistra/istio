@@ -48,6 +48,7 @@ import (
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 	"istio.io/istio/pkg/servicemesh/federation/status"
 	"istio.io/istio/pkg/test/util/retry"
+	"istio.io/istio/pkg/util/sets"
 	"istio.io/pkg/log"
 )
 
@@ -505,7 +506,7 @@ func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) 
 		}
 	}
 	var addrs []model.NetworkGateway
-	var sas []string
+	uniqueSAs := sets.Set{}
 	for _, slice := range endpointSlices {
 		if !common.ContainsPort(slice.Ports, common.DefaultFederationPort) {
 			continue
@@ -523,12 +524,14 @@ func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) 
 						Addr: ip,
 						Port: uint32(common.DefaultFederationPort),
 					})
-					sas = append(sas, serviceAccountByIP[ip])
+					if sa, exists := serviceAccountByIP[ip]; exists {
+						uniqueSAs.Insert(sa)
+					}
 				}
 			}
 		}
 	}
-	return addrs, sas
+	return addrs, uniqueSAs.SortedList()
 }
 
 func (c *Controller) convertServices(serviceList *federationmodel.ServiceListMessage) {
