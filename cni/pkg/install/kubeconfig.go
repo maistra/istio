@@ -120,6 +120,11 @@ func createKubeconfigFile(cfg *config.InstallConfig, saToken string) (kubeconfig
 		return "", err
 	}
 
+	// When using Multus, the net.d dir might not exist yet, so we must create it
+	if err := os.MkdirAll(cfg.MountedCNINetDir, os.FileMode(0o755)); err != nil {
+		return "", err
+	}
+
 	kubeconfigFilepath = filepath.Join(cfg.MountedCNINetDir, cfg.KubeconfigFilename)
 	installLog.Infof("write kubeconfig file %s with: \n%+v", kubeconfigFilepath, kcbbToPrint.String())
 	if err = file.AtomicWrite(kubeconfigFilepath, kcbb.Bytes(), os.FileMode(cfg.KubeconfigMode)); err != nil {

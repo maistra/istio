@@ -47,6 +47,7 @@ func TestCreateKubeconfigFile(t *testing.T) {
 		saToken            string
 		kubeCAFilepath     string
 		skipTLSVerify      bool
+		cniNetDir          string
 	}{
 		{
 			name:            "k8s service host not set",
@@ -75,20 +76,34 @@ func TestCreateKubeconfigFile(t *testing.T) {
 			saToken:            saToken,
 			kubeCAFilepath:     kubeCAFilepath,
 		},
+		{
+			name:               "nonexistent net.d dir",
+			kubeconfigFilename: "istio-cni-kubeconfig",
+			kubeconfigMode:     constants.DefaultKubeconfigMode,
+			k8sServiceHost:     k8sServiceHost,
+			k8sServicePort:     k8sServicePort,
+			saToken:            saToken,
+			skipTLSVerify:      true,
+			cniNetDir:          filepath.Join(t.TempDir(), "nonexistent-dir"),
+		},
 	}
 
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			// Create temp directory for files
-			tempDir, err := os.MkdirTemp("", fmt.Sprintf("test-case-%d-", i))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() {
-				if err := os.RemoveAll(tempDir); err != nil {
+			tempDir := c.cniNetDir
+			if tempDir == "" {
+				var err error
+				tempDir, err = os.MkdirTemp("", fmt.Sprintf("test-case-%d-", i))
+				if err != nil {
 					t.Fatal(err)
 				}
-			}()
+				defer func() {
+					if err := os.RemoveAll(tempDir); err != nil {
+						t.Fatal(err)
+					}
+				}()
+			}
 
 			cfg := &config.InstallConfig{
 				MountedCNINetDir:   tempDir,
