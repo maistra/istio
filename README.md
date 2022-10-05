@@ -2,6 +2,8 @@
 
 ## Issues for this repository are disabled
 
+foo
+
 Issues for this repository are tracked in Red Hat Jira. Please head to <https://issues.redhat.com/browse/OSSM> in order to browse or open an issue.
 
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1395/badge)](https://bestpractices.coreinfrastructure.org/projects/1395)
