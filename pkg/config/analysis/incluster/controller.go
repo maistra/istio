@@ -50,10 +50,28 @@ func NewController(stop <-chan struct{}, rwConfigStore model.ConfigStoreControll
 	ia := local.NewIstiodAnalyzer(analyzers.AllCombined(),
 		"", resource.Namespace(namespace), func(name collection.Name) {}, true)
 	ia.AddSource(rwConfigStore)
-	// Filter out configs watched by rwConfigStore so we don't watch multiple times
+	// Filter out configs watched by rwConfigStore, so we don't watch multiple times
+	schemas := collections.All.
+		Remove(rwConfigStore.Schemas().All()...)
+
+	// remove cluster-scoped resources if working in multi-tenant mode (with member roll controller)
+	if kubeClient.GetMemberRoll() != nil {
+		schemas = schemas.
+			Remove(collections.K8SCoreV1Nodes).
+			Remove(collections.K8SCoreV1Namespaces).
+			Remove(collections.K8SAdmissionregistrationK8SIoV1Mutatingwebhookconfigurations).
+			Remove(collections.K8SApiextensionsK8SIoV1Customresourcedefinitions)
+	}
+
 	store, err := crdclient.NewForSchemas(kubeClient,
-		crdclient.Option{Revision: revision, DomainSuffix: domainSuffix, Identifier: "analysis-controller", EnableCRDScan: enableCRDScan},
-		collections.All.Remove(rwConfigStore.Schemas().All()...))
+		crdclient.Option{
+			Revision:      revision,
+			DomainSuffix:  domainSuffix,
+			Identifier:    "analysis-controller",
+			EnableCRDScan: enableCRDScan,
+		},
+		schemas,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load common types for analysis, releasing lease: %v", err)
 	}
