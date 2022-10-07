@@ -41,11 +41,12 @@ import (
 
 const prefixedLabel = maistraPrefix + "fake"
 
-func initClients(t *testing.T,
+func initClients(
+	t *testing.T,
 	stop <-chan struct{},
 	errorChannel chan error,
 	mrc memberroll.MemberRollController,
-	register bool) (model.ConfigStoreCache, KubeClient, routev1.RouteV1Interface) {
+) (model.ConfigStoreCache, KubeClient, routev1.RouteV1Interface, *route) {
 	t.Helper()
 
 	k8sClient := kube.NewFakeClient()
@@ -66,13 +67,12 @@ func initClients(t *testing.T,
 		return nil
 	}, retry.Timeout(time.Second))
 
-	if register {
-		if err := Register(iorKubeClient, routerClient, store, "istio-system", mrc, stop, errorChannel); err != nil {
-			t.Fatal(err)
-		}
+	r, err := newRoute(iorKubeClient, routerClient, store, "istio-system", mrc, stop, errorChannel)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	return store, iorKubeClient, routerClient
+	return store, iorKubeClient, routerClient, r
 }
 
 func TestCreate(t *testing.T) {
@@ -246,6 +246,7 @@ func TestCreate(t *testing.T) {
 	var k8sClient KubeClient
 	var routerClient routev1.RouteV1Interface
 	var mrc *fakeMemberRollController
+	var r *route
 	controlPlaneNs := "istio-system"
 
 	for _, testType := range []string{"initialSync", "events"} {
@@ -254,7 +255,8 @@ func TestCreate(t *testing.T) {
 			defer func() { close(stop) }()
 			errorChannel = make(chan error)
 			mrc = newFakeMemberRollController()
-			store, k8sClient, routerClient = initClients(t, stop, errorChannel, mrc, true)
+			store, k8sClient, routerClient, r = initClients(t, stop, errorChannel, mrc)
+			r.Run(stop)
 			mrc.setNamespaces(controlPlaneNs)
 
 			createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
@@ -267,11 +269,9 @@ func TestCreate(t *testing.T) {
 					defer func() { close(stop) }()
 					errorChannel = make(chan error)
 					mrc = newFakeMemberRollController()
-					store, k8sClient, routerClient = initClients(t, stop, errorChannel, mrc, false)
+					store, k8sClient, routerClient, r = initClients(t, stop, errorChannel, mrc)
 					createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
-					if err := Register(k8sClient, routerClient, store, controlPlaneNs, mrc, stop, errorChannel); err != nil {
-						t.Fatal(err)
-					}
+					r.Run(stop)
 				}
 				gatewayName := fmt.Sprintf("gw%d", i)
 				createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls, c.annotations)
@@ -416,7 +416,8 @@ func TestEdit(t *testing.T) {
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
 	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc, true)
+	store, k8sClient, routerClient, r := initClients(t, stop, errorChannel, mrc)
+	r.Run(stop)
 
 	controlPlane := "istio-system"
 	createIngressGateway(t, k8sClient.GetActualClient(), controlPlane, map[string]string{"istio": "ingressgateway"})
@@ -450,7 +451,8 @@ func TestPerf(t *testing.T) {
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
 	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc, true)
+	store, k8sClient, routerClient, r := initClients(t, stop, errorChannel, mrc)
+	r.Run(stop)
 
 	// Create a bunch of namespaces and gateways, and make sure they don't take too long to be created
 	createIngressGateway(t, k8sClient.GetActualClient(), "istio-system", map[string]string{"istio": "ingressgateway"})
@@ -514,7 +516,8 @@ func TestConcurrency(t *testing.T) {
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
 	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc, true)
+	store, k8sClient, routerClient, r := initClients(t, stop, errorChannel, mrc)
+	r.Run(stop)
 
 	// Create a bunch of namespaces and gateways
 	createIngressGateway(t, k8sClient.GetActualClient(), "istio-system", map[string]string{"istio": "ingressgateway"})
@@ -541,9 +544,10 @@ func TestDuplicateUpdateEvents(t *testing.T) {
 	defer func() { close(stop) }()
 	errorChannel := make(chan error)
 	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient := initClients(t, stop, errorChannel, mrc, false)
+	store, k8sClient, routerClient, route := initClients(t, stop, errorChannel, mrc)
+	route.Run(stop)
 
-	r, err := newRoute(k8sClient, routerClient, store, "istio-system", mrc, stop)
+	r, err := newRoute(k8sClient, routerClient, store, "istio-system", mrc, stop, errorChannel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -696,7 +700,8 @@ func createService(t *testing.T, client kube.Client, ns string, labels map[strin
 }
 
 func createGateway(t *testing.T, store model.ConfigStoreCache, ns string, name string, hosts []string, gwSelector map[string]string,
-	tls bool, annotations map[string]string) {
+	tls bool, annotations map[string]string,
+) {
 	t.Helper()
 
 	var tlsConfig *networking.ServerTLSSettings
