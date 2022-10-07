@@ -4,9 +4,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/maistra/xns-informer/pkg/internal/sets"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+
+	"github.com/maistra/xns-informer/pkg/internal/sets"
 )
 
 // NamespaceSetHandler handles add and remove events for namespace sets.
@@ -39,7 +40,9 @@ func (h NamespaceSetHandlerFuncs) OnRemove(namespace string) {
 // with SetNamespaces, and handlers can be added with AddHandler that will
 // respond to addition or removal of individual namespaces.
 type NamespaceSet interface {
-	SetNamespaces(namespaces ...string)
+	// Initialized returns true if SetNamespaces() has been called at least once
+	Initialized() bool
+	SetNamespaces(namespaces []string)
 	AddHandler(handler NamespaceSetHandler)
 	Contains(namespace string) bool
 	List() []string
@@ -54,8 +57,14 @@ type namespaceSet struct {
 // NewNamespaceSet returns a new NamespaceSet tracking the given namespaces.
 func NewNamespaceSet(namespaces ...string) NamespaceSet {
 	n := &namespaceSet{}
-	n.SetNamespaces(namespaces...)
+	n.SetNamespaces(namespaces)
 
+	return n
+}
+
+// NewUninitializedNamespaceSet returns a new uninitialized NamespaceSet
+func NewUninitializedNamespaceSet() NamespaceSet {
+	n := &namespaceSet{}
 	return n
 }
 
@@ -77,12 +86,25 @@ func (n *namespaceSet) List() []string {
 	return namespaces
 }
 
-// SetNamespaces replaces the set of namespaces.
-func (n *namespaceSet) SetNamespaces(namespaces ...string) {
+// Initialized returns true after SetNamespaces is called at least once.
+func (n *namespaceSet) Initialized() bool {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	newNamespaceSet := sets.NewSet(namespaces...)
+	return n.namespaces != nil
+}
+
+// SetNamespaces replaces the set of namespaces.
+func (n *namespaceSet) SetNamespaces(namespaces []string) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	var newNamespaceSet sets.Set
+	if namespaces == nil {
+		newNamespaceSet = nil
+	} else {
+		newNamespaceSet = sets.NewSet(namespaces...)
+	}
 
 	// If the set of namespaces, includes metav1.NamespaceAll, then it
 	// only makes sense to track that.

@@ -59,7 +59,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.0.6
-	github.com/maistra/xns-informer v0.0.0-20210707160032-977ec17e2e0e
+	github.com/maistra/xns-informer v0.0.0-20221007121715-3ae7b6592ef4
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mholt/archiver/v3 v3.5.0
 	github.com/miekg/dns v1.1.35
@@ -118,7 +118,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20210312000640-9f480bcdc475
 	k8s.io/kubectl v0.20.1
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
-	maistra.io/api v0.0.0-20211119171546-348bbce3ca27
+	maistra.io/api v0.0.0-20221007124415-b84e26fa5e00
 	sigs.k8s.io/controller-runtime v0.7.0
 	sigs.k8s.io/service-apis v0.1.0
 	sigs.k8s.io/yaml v1.2.0
