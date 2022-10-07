@@ -401,7 +401,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.kubeInformer = kubeinformer.NewSharedInformerFactoryWithOptions(
 		c.Interface,
 		resyncInterval,
-		kubeinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	c.metadata, err = metadata.NewForConfig(c.config)
@@ -415,7 +414,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 		return nil, err
 	}
 	c.dynamicInformer = xnsinformers.NewDynamicSharedInformerFactory(c.dynamic, resyncInterval)
-	c.dynamicInformer.SetNamespaces() // Maistra needs to start with an empty namespace set.
 
 	c.istio, err = istioclient.NewForConfig(c.config)
 	if err != nil {
@@ -424,7 +422,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(
 		c.istio,
 		resyncInterval,
-		istioinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 	)
 
 	if features.EnableGatewayAPI {
@@ -435,7 +432,6 @@ func newClientInternal(clientFactory util.Factory, revision string) (*client, er
 		c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactoryWithOptions(
 			c.gatewayapi,
 			resyncInterval,
-			gatewayapiinformer.WithNamespaces(), // Maistra needs to start with an empty namespace set.
 		)
 	}
 
@@ -530,11 +526,11 @@ func (c *client) SetNamespaces(namespaces ...string) {
 		return
 	}
 
-	c.kubeInformer.SetNamespaces(namespaces...)
-	c.istioInformer.SetNamespaces(namespaces...)
-	c.dynamicInformer.SetNamespaces(namespaces...)
+	c.kubeInformer.SetNamespaces(namespaces)
+	c.istioInformer.SetNamespaces(namespaces)
+	c.dynamicInformer.SetNamespaces(namespaces)
 	if features.EnableGatewayAPI {
-		c.gatewayapiInformer.SetNamespaces(namespaces...)
+		c.gatewayapiInformer.SetNamespaces(namespaces)
 	}
 }
 
