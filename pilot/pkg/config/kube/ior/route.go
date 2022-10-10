@@ -277,7 +277,7 @@ func (r *route) ensureNamespaceExists(cfg config.Config) error {
 		default:
 			IORLog.Debugf("Namespace %s not found in SMMR, trying again", cfg.Namespace)
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(r.handleEventTimeout / 100)
 	}
 }
 
