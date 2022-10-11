@@ -2,6 +2,8 @@
 MAISTRA_VERSION ?= 2.2.0
 ISTIO_VERSION ?= 1.12.7
 
+CONTAINER_CLI ?= docker
+
 BASE_DISTRIBUTION ?= ubi8
 
 # Maistra specific vars
