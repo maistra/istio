@@ -444,6 +444,7 @@ func TestEdit(t *testing.T) {
 
 // TestPerf makes sure we are not doing more API calls than necessary
 func TestPerf(t *testing.T) {
+	t.SkipNow()
 	IORLog.SetOutputLevel(log.DebugLevel)
 	countCallsReset()
 
