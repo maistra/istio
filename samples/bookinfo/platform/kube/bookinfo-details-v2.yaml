@@ -30,19 +30,19 @@ spec:
       version: v2
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
       labels:
         app: details
         version: v2
     spec:
       containers:
       - name: details
-        image: docker.io/istio/examples-bookinfo-details-v2:1.17.0
+        image: quay.io/maistra/examples-bookinfo-details-v2:2.3.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9080
         env:
         - name: DO_NOT_ENCRYPT
           value: "true"
-        securityContext:
-          runAsUser: 1000
 ---
