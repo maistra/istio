@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/model"
@@ -68,17 +67,14 @@ type route struct {
 	store              model.ConfigStoreController
 	gatewaysMap        map[string]*syncRoutes
 	gatewaysLock       sync.Mutex
-	initialSyncRun     chan struct{}
-	alive              bool
 	stop               <-chan struct{}
 	handleEventTimeout time.Duration
 	errorChannel       chan error
 
 	// memberroll functionality
-	mrc              controller.MemberRollController
-	namespaceLock    sync.Mutex
-	namespaces       []string
-	gotInitialUpdate bool
+	mrc           controller.MemberRollController
+	namespaces    []string
+	namespaceLock sync.Mutex
 }
 
 // NewRouterClient returns an OpenShift client for Routers
@@ -119,121 +115,14 @@ func newRoute(
 	r.mrc = mrc
 	r.namespaces = []string{pilotNamespace}
 	r.stop = stop
-	r.initialSyncRun = make(chan struct{})
 	r.handleEventTimeout = kubeClient.GetHandleEventTimeout()
 	r.errorChannel = errorChannel
 
-	if r.mrc != nil {
-		IORLog.Debugf("Registering IOR into SMMR broadcast")
-		r.alive = true
-		r.mrc.Register(r, "ior")
-
-		go func(stop <-chan struct{}) {
-			<-stop
-			r.alive = false
-			IORLog.Debugf("Unregistering IOR from SMMR broadcast")
-		}(stop)
-	}
+	r.gatewaysLock.Lock()
+	r.gatewayMap = make(map[string]*syncRoutes)
+	r.gatewaysLock.Unlock()
 
 	return r, nil
-}
-
-// initialSync runs on initialization only.
-//
-// It lists all Istio Gateways (source of truth) and OpenShift Routes, compares them and makes the necessary adjustments
-// (creation and/or removal of routes) so that gateways and routes be in sync.
-func (r *route) initialSync(initialNamespaces []string) error {
-	var result *multierror.Error
-	r.gatewaysMap = make(map[string]*syncRoutes)
-
-	r.gatewaysLock.Lock()
-	defer r.gatewaysLock.Unlock()
-
-	// List the gateways and put them into the gatewaysMap
-	// The store must be synced otherwise we might get an empty list
-	// We enforce this before calling this function in UpdateNamespaces()
-	configs, err := r.store.List(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), model.NamespaceAll)
-	if err != nil {
-		return fmt.Errorf("could not get list of Gateways: %s", err)
-	}
-	IORLog.Debugf("initialSync() - Got %d Gateway(s)", len(configs))
-
-	for i, cfg := range configs {
-		if err := r.ensureNamespaceExists(cfg); err != nil {
-			result = multierror.Append(result, err)
-			continue
-		}
-		manageRoute, err := isManagedByIOR(cfg)
-		if err != nil {
-			result = multierror.Append(result, err)
-			continue
-		}
-		if !manageRoute {
-			IORLog.Debugf("initialSync() - Ignoring Gateway %s/%s as it is not managed by Istiod", cfg.Namespace, cfg.Name)
-			continue
-		}
-
-		IORLog.Debugf("initialSync() - Parsing Gateway [%d] %s/%s", i+1, cfg.Namespace, cfg.Name)
-		r.addNewSyncRoute(cfg)
-	}
-
-	// List the routes and put them into a map. Map key is the route object name
-	routes := map[string]v1.Route{}
-	for _, ns := range initialNamespaces {
-		IORLog.Debugf("initialSync() - Listing routes in ns %s", ns)
-		routeList, err := r.routerClient.Routes(ns).List(context.TODO(), metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("%s=%s", generatedByLabel, generatedByValue),
-		})
-		if err != nil {
-			return fmt.Errorf("could not get list of Routes in namespace %s: %s", ns, err)
-		}
-		for _, route := range routeList.Items {
-			routes[route.Name] = route
-		}
-	}
-	IORLog.Debugf("initialSync() - Got %d route(s) across all %d namespace(s)", len(routes), len(initialNamespaces))
-
-	// Now that we have maps and routes mapped we can compare them (Gateways are the source of truth)
-	for _, syncRoute := range r.gatewaysMap {
-		for _, server := range syncRoute.gateway.Servers {
-			for _, host := range server.Hosts {
-				actualHost, _ := getActualHost(host, false)
-				routeName := getRouteName(syncRoute.metadata.Namespace, syncRoute.metadata.Name, actualHost)
-				route, ok := routes[routeName]
-				if ok {
-					// A route for this host was found, remove its entry in this map so that in the end only orphan routes are left
-					delete(routes, routeName)
-
-					// Route matches, no need to create one. Put it in the gatewaysMap and move to the next one
-					if syncRoute.metadata.ResourceVersion == route.Labels[gatewayResourceVersionLabel] {
-						syncRoute.routes = append(syncRoute.routes, &route)
-						continue
-					}
-
-					// Route does not match, remove it.
-					result = multierror.Append(result, r.deleteRoute(&route))
-				}
-
-				// Route is not found or was removed above because it didn't match. We need to create one now.
-				route2, err := r.createRoute(syncRoute.metadata, syncRoute.gateway, host, server.Tls)
-				if err != nil {
-					result = multierror.Append(result, err)
-				} else {
-					// Put it in the gatewaysMap and move to the next one
-					syncRoute.routes = append(syncRoute.routes, route2)
-				}
-			}
-		}
-	}
-
-	// At this point there are routes for every hostname in every Gateway.
-	// The `routes` map should only contain "orphan" routes, i.e., routes that do not belong to any Gateway
-	//
-	for _, route := range routes {
-		result = multierror.Append(result, r.deleteRoute(&route))
-	}
-
-	return result.ErrorOrNil()
 }
 
 func gatewaysMapKey(namespace, name string) string {
@@ -249,7 +138,7 @@ func (r *route) addNewSyncRoute(cfg config.Config) *syncRoutes {
 		gateway:  gw,
 	}
 
-	r.gatewaysMap[gatewaysMapKey(cfg.Namespace, cfg.Name)] = syncRoute
+	r.gatewayMap[gatewaysMapKey(cfg.Namespace, cfg.Name)] = syncRoute
 	return syncRoute
 }
 
@@ -293,7 +182,7 @@ func (r *route) handleAdd(cfg config.Config) error {
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
 
-	if _, ok := r.gatewaysMap[gatewaysMapKey(cfg.Namespace, cfg.Name)]; ok {
+	if _, ok := r.gatewayMap[gatewaysMapKey(cfg.Namespace, cfg.Name)]; ok {
 		IORLog.Infof("gateway %s/%s already exists, not creating route(s) for it", cfg.Namespace, cfg.Name)
 		return nil
 	}
@@ -343,7 +232,7 @@ func (r *route) handleDel(cfg config.Config) error {
 	defer r.gatewaysLock.Unlock()
 
 	key := gatewaysMapKey(cfg.Namespace, cfg.Name)
-	syncRoute, ok := r.gatewaysMap[key]
+	syncRoute, ok := r.gatewayMap[key]
 	if !ok {
 		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
 	}
@@ -353,7 +242,7 @@ func (r *route) handleDel(cfg config.Config) error {
 		result = multierror.Append(result, r.deleteRoute(route))
 	}
 
-	delete(r.gatewaysMap, key)
+	delete(r.gatewayMap, key)
 
 	return result.ErrorOrNil()
 }
@@ -363,7 +252,7 @@ func (r *route) verifyResourceVersions(cfg config.Config) error {
 	defer r.gatewaysLock.Unlock()
 
 	key := gatewaysMapKey(cfg.Namespace, cfg.Name)
-	syncRoute, ok := r.gatewaysMap[key]
+	syncRoute, ok := r.gatewayMap[key]
 	if !ok {
 		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
 	}
@@ -376,9 +265,6 @@ func (r *route) verifyResourceVersions(cfg config.Config) error {
 }
 
 func (r *route) handleEvent(event model.Event, cfg config.Config) error {
-	// Block until initial sync has finished
-	<-r.initialSyncRun
-
 	manageRoute, err := isManagedByIOR(cfg)
 	if err != nil {
 		return err
@@ -411,43 +297,10 @@ func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 
 // Trigerred by SMMR controller when SMMR changes
 func (r *route) SetNamespaces(namespaces []string) {
-	if !r.alive {
-		return
-	}
-
-	if namespaces == nil {
-		return
-	}
-
 	IORLog.Debugf("UpdateNamespaces(%v)", namespaces)
 	r.namespaceLock.Lock()
 	r.namespaces = namespaces
 	r.namespaceLock.Unlock()
-
-	if r.gotInitialUpdate {
-		return
-	}
-	r.gotInitialUpdate = true
-
-	// In the first update we perform an initial sync
-	go func() {
-		// But only after gateway store cache is synced
-		IORLog.Debug("Waiting for the Gateway store cache to sync before performing our initial sync")
-		if !cache.WaitForNamedCacheSync("Gateways", r.stop, r.store.HasSynced) {
-			IORLog.Infof("Failed to sync Gateway store cache. Not performing initial sync.")
-			return
-		}
-		IORLog.Debug("Gateway store cache synced. Performing our initial sync now")
-
-		if err := r.initialSync(namespaces); err != nil {
-			IORLog.Error(err)
-			if r.errorChannel != nil {
-				r.errorChannel <- err
-			}
-		}
-		IORLog.Debug("Initial sync finished")
-		close(r.initialSyncRun)
-	}()
 }
 
 func getHost(route v1.Route) string {
@@ -654,16 +507,18 @@ func (r *route) processEvent(old, curr config.Config, event model.Event) {
 
 func (r *route) Run(stop <-chan struct{}) {
 	alive := true
-	go func(s <-chan struct{}) {
-		// Stop responding to events when we are no longer a leader.
-		// The worker may be in the middle of handling an event. It will finish what it is doing then stop.
-		<-s
-		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
+
+	go func(stop <-chan struct{}) {
+		<-stop
 		alive = false
+		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
 	}(stop)
 
-	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
+	IORLog.Debugf("Registering IOR into SMMR broadcast")
+	r.mrc.Register(r, "ior")
 
+	IORLog.Debugf("Registering IOR into Gateway broadcast")
+	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
 	r.store.RegisterEventHandler(kind, func(old, curr config.Config, evt model.Event) {
 		if alive {
 			r.processEvent(old, curr, evt)
