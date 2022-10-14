@@ -15,8 +15,11 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -26,6 +29,7 @@ import (
 	rawtype "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/config/kube/ior"
 	"istio.io/istio/pkg/config"
+	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/servicemesh/federation/common"
@@ -47,8 +51,25 @@ var (
 	armageddonTime = time.Unix(1<<62-1, 0)
 )
 
+// hashResourceName applies a sha256 on the host and truncate it to the first n bytes
+func hashResourceName(resourceName string, n int) string {
+	hash := sha256.Sum256([]byte(resourceName))
+	return hex.EncodeToString(hash[:n])
+}
+
+func shortenName(name string) string {
+	return strings.Replace(name, "-", "", -1)
+}
+
 func createResourceName(mesh string, source federationmodel.ServiceKey) string {
-	return fmt.Sprintf("federation-exports-%s-%s-%s", mesh, source.Name, source.Namespace)
+	resourceName := fmt.Sprintf("federation-exports-%s-%s-%s", mesh, source.Name, source.Namespace)
+	if !labels.IsDNS1123Label(resourceName) {
+		resourceName = fmt.Sprintf("federation-exports-%s-%s-%s", shortenName(mesh), shortenName(source.Name), shortenName(source.Namespace))
+		if !labels.IsDNS1123Label(resourceName) {
+			resourceName = fmt.Sprintf("%s-%s", resourceName[:52], hashResourceName(resourceName, 5))
+		}
+	}
+	return resourceName
 }
 
 func (s *meshServer) deleteExportResources(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) error {
