@@ -520,20 +520,23 @@ func TestConcurrency(t *testing.T) {
 	store, k8sClient, routerClient, r := initClients(t, stop, errorChannel, mrc)
 	r.Run(stop)
 
+	qty := 10
+	runs := 10
+
 	// Create a bunch of namespaces and gateways
 	createIngressGateway(t, k8sClient.GetActualClient(), "istio-system", map[string]string{"istio": "ingressgateway"})
-	qty := 50
-	createGateways(t, store, 1, qty)
-	mrc.setNamespaces(generateNamespaces(qty)...)
 
 	// At the same time, while IOR is processing those initial `qty` gateways, create `qty` more
-	go func() {
-		mrc.setNamespaces(generateNamespaces(qty * 2)...)
-		createGateways(t, store, qty+1, qty*2)
-	}()
+	for i := 0; i < runs; i++ {
+		go func(j int) {
+			createGateways(t, store, (qty*j)+1, (qty*j)+qty)
+		}(i)
+	}
+
+	mrc.setNamespaces(generateNamespaces(qty * runs)...)
 
 	// And expect all `qty * 2` gateways to be created
-	_, _ = getRoutes(t, routerClient, "istio-system", (qty * 2), time.Minute)
+	_, _ = getRoutes(t, routerClient, "istio-system", (qty * runs), time.Minute)
 	if err := getError(errorChannel); err != nil {
 		t.Fatal(err)
 	}
