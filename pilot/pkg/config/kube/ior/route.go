@@ -26,6 +26,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	v1 "github.com/openshift/api/route/v1"
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -56,7 +57,7 @@ const (
 type syncRoutes struct {
 	metadata config.Meta
 	gateway  *networking.Gateway
-	routes   []*v1.Route
+	routes   map[string]*v1.Route
 }
 
 // route manages the integration between Istio Gateways and OpenShift Routes
@@ -136,6 +137,7 @@ func (r *route) addNewSyncRoute(cfg config.Config) *syncRoutes {
 	syncRoute := &syncRoutes{
 		metadata: cfg.Meta,
 		gateway:  gw,
+		routes:   make(map[string]*v1.Route),
 	}
 
 	r.gatewayMap[gatewayMapKey(cfg.Namespace, cfg.Name)] = syncRoute
@@ -200,9 +202,66 @@ func (r *route) onGatewayAdded(cfg config.Config) error {
 			if err != nil {
 				result = multierror.Append(result, err)
 			} else {
-				syncRoute.routes = append(syncRoute.routes, route)
+				syncRoute.routes[getRouteName(cfg.Meta.Namespace, cfg.Meta.Name, host)] = route
 			}
 		}
+	}
+
+	return result.ErrorOrNil()
+}
+
+func (r *route) onGatewayUpdated(cfg config.Config) error {
+	var result *multierror.Error
+
+	if err := r.ensureNamespaceExists(cfg); err != nil {
+		return err
+	}
+
+	r.gatewaysLock.Lock()
+	defer r.gatewaysLock.Unlock()
+
+	curr, gotGateway := r.gatewayMap[gatewayMapKey(cfg.Namespace, cfg.Name)]
+
+	if !gotGateway {
+		return fmt.Errorf("gateway %s/%s does not exists, IOR failed to update", cfg.Namespace, cfg.Name)
+	}
+
+	new := r.addNewSyncRoute(cfg)
+
+	serviceNamespace, serviceName, err := r.findService(new.gateway)
+	if err != nil {
+		return errors.Wrapf(err, "gateway %s/%s does not specify a valid service target.", cfg.Namespace, cfg.Name)
+	}
+
+	cr := curr.routes
+
+	for _, server := range new.gateway.Servers {
+		for _, host := range server.Hosts {
+			var route *v1.Route
+			var gotRoute bool
+			var err error
+
+			name := getRouteName(cfg.Meta.Namespace, cfg.Meta.Name, host)
+
+			_, gotRoute = cr[name]
+
+			if gotRoute {
+				route, err = r.updateRoute(cfg.Meta, host, server.Tls, serviceNamespace, serviceName)
+			} else {
+				route, err = r.createRoute(cfg.Meta, host, server.Tls, serviceNamespace, serviceName)
+			}
+
+			if err != nil {
+				result = multierror.Append(result, err)
+			} else {
+				new.routes[name] = route
+				delete(cr, name)
+			}
+		}
+	}
+
+	for _, route := range cr {
+		r.deleteRoute(route)
 	}
 
 	return result.ErrorOrNil()
@@ -252,23 +311,6 @@ func (r *route) onGatewayRemoved(cfg config.Config) error {
 	return result.ErrorOrNil()
 }
 
-func (r *route) verifyResourceVersions(cfg config.Config) error {
-	r.gatewaysLock.Lock()
-	defer r.gatewaysLock.Unlock()
-
-	key := gatewayMapKey(cfg.Namespace, cfg.Name)
-	syncRoute, ok := r.gatewayMap[key]
-	if !ok {
-		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
-	}
-
-	if syncRoute.metadata.ResourceVersion != cfg.ResourceVersion {
-		return nil
-	}
-
-	return fmt.Errorf(eventDuplicatedMessage)
-}
-
 func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 	manageRoute, err := isManagedByIOR(cfg)
 	if err != nil {
@@ -284,14 +326,7 @@ func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 		return r.onGatewayAdded(cfg)
 
 	case model.EventUpdate:
-		if err = r.verifyResourceVersions(cfg); err != nil {
-			return err
-		}
-
-		var result *multierror.Error
-		result = multierror.Append(result, r.onGatewayRemoved(cfg))
-		result = multierror.Append(result, r.onGatewayAdded(cfg))
-		return result.ErrorOrNil()
+		return r.onGatewayUpdated(cfg)
 
 	case model.EventDelete:
 		return r.onGatewayRemoved(cfg)
@@ -327,8 +362,7 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
-func (r *route) createRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) (*v1.Route, error) {
-	IORLog.Debugf("Creating route for hostname %s", originalHost)
+func buildRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) *v1.Route {
 	actualHost, wildcard := getActualHost(originalHost, true)
 
 	var tlsConfig *v1.TLSConfig
@@ -364,7 +398,7 @@ func (r *route) createRoute(metadata config.Meta, originalHost string, tls *netw
 		}
 	}
 
-	nr, err := r.routerClient.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
+	return &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        getRouteName(metadata.Namespace, metadata.Name, originalHost),
 			Namespace:   serviceNamespace,
@@ -385,12 +419,34 @@ func (r *route) createRoute(metadata config.Meta, originalHost string, tls *netw
 			TLS:            tlsConfig,
 			WildcardPolicy: wildcard,
 		},
-	}, metav1.CreateOptions{})
+	}
+}
+
+func (r *route) createRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) (*v1.Route, error) {
+	IORLog.Debugf("Creating route for hostname %s", originalHost)
+
+	nr, err := r.routerClient.Routes(serviceNamespace).Create(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error creating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
 	}
 
 	IORLog.Infof("Created route %s/%s for hostname %s (gateway: %s/%s)",
+		nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
+		nr.Spec.Host,
+		metadata.Namespace, metadata.Name)
+
+	return nr, nil
+}
+
+func (r *route) updateRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) (*v1.Route, error) {
+	IORLog.Debugf("Updating route for hostname %s", originalHost)
+
+	nr, err := r.routerClient.Routes(serviceNamespace).Update(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.UpdateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("error updating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
+	}
+
+	IORLog.Infof("Updated route %s/%s for hostname %s (gateway: %s/%s)",
 		nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
 		nr.Spec.Host,
 		metadata.Namespace, metadata.Name)
