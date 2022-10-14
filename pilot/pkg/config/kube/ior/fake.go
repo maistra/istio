@@ -121,7 +121,26 @@ func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.C
 
 // Update implements routev1.RouteInterface
 func (fk *FakeRouter) Update(ctx context.Context, route *v1.Route, opts metav1.UpdateOptions) (*v1.Route, error) {
-	panic("not implemented")
+	fk.routesLock.Lock()
+	defer fk.routesLock.Unlock()
+
+	if _, ok := fk.routes[route.Name]; !ok {
+		return nil, fmt.Errorf("exisiting not found")
+	}
+
+	if strings.Contains(route.Spec.Host, "/") {
+		return nil, fmt.Errorf("invalid hostname")
+	}
+
+	if route.Spec.Host == "" {
+		generatedHostNumber++
+		route.Spec.Host = fmt.Sprintf("generated-host%d.com", generatedHostNumber)
+	}
+
+	fk.routes[route.Name] = route
+
+	countCallsIncrement("update")
+	return route, nil
 }
 
 // UpdateStatus implements routev1.RouteInterface
@@ -176,7 +195,8 @@ func (fk *FakeRouter) Watch(ctx context.Context, opts metav1.ListOptions) (watch
 
 // Patch implements routev1.RouteInterface
 func (fk *FakeRouter) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions,
-	subresources ...string) (result *v1.Route, err error) {
+	subresources ...string,
+) (result *v1.Route, err error) {
 	panic("not implemented")
 }
 
