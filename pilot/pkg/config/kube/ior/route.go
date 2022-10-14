@@ -189,9 +189,14 @@ func (r *route) onGatewayAdded(cfg config.Config) error {
 
 	syncRoute := r.addNewSyncRoute(cfg)
 
+	serviceNamespace, serviceName, err := r.findService(syncRoute.gateway)
+	if err != nil {
+		return err
+	}
+
 	for _, server := range syncRoute.gateway.Servers {
 		for _, host := range server.Hosts {
-			route, err := r.createRoute(cfg.Meta, syncRoute.gateway, host, server.Tls)
+			route, err := r.createRoute(cfg.Meta, host, server.Tls, serviceNamespace, serviceName)
 			if err != nil {
 				result = multierror.Append(result, err)
 			} else {
@@ -322,7 +327,7 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
-func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, originalHost string, tls *networking.ServerTLSSettings) (*v1.Route, error) {
+func (r *route) createRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) (*v1.Route, error) {
 	IORLog.Debugf("Creating route for hostname %s", originalHost)
 	actualHost, wildcard := getActualHost(originalHost, true)
 
@@ -334,11 +339,6 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 		if tls.HttpsRedirect {
 			tlsConfig.InsecureEdgeTerminationPolicy = v1.InsecureEdgeTerminationPolicyRedirect
 		}
-	}
-
-	serviceNamespace, serviceName, err := r.findService(gateway)
-	if err != nil {
-		return nil, err
 	}
 
 	// Copy annotations
