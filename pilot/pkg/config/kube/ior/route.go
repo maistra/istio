@@ -366,7 +366,7 @@ func (r *route) createRoute(metadata config.Meta, originalHost string, tls *netw
 
 	nr, err := r.routerClient.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        getRouteName(metadata.Namespace, metadata.Name, actualHost),
+			Name:        getRouteName(metadata.Namespace, metadata.Name, originalHost),
 			Namespace:   serviceNamespace,
 			Labels:      labels,
 			Annotations: annotations,
@@ -437,8 +437,8 @@ func (r *route) findService(gateway *networking.Gateway) (string, string, error)
 		gwSelector.String(), namespaces)
 }
 
-func getRouteName(namespace, name, actualHost string) string {
-	return fmt.Sprintf("%s-%s-%s", namespace, name, hostHash(actualHost))
+func getRouteName(namespace, name, host string) string {
+	return fmt.Sprintf("%s-%s-%s", namespace, name, hostHash(host))
 }
 
 // getActualHost returns the actual hostname to be used in the route
