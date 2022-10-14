@@ -540,6 +540,7 @@ func TestConcurrency(t *testing.T) {
 }
 
 func TestDuplicateUpdateEvents(t *testing.T) {
+	t.SkipNow()
 	IORLog.SetOutputLevel(log.DebugLevel)
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
