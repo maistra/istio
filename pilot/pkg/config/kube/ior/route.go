@@ -77,8 +77,8 @@ type route struct {
 	namespaceLock sync.Mutex
 }
 
-// NewRouterClient returns an OpenShift client for Routers
-func NewRouterClient() (routev1.RouteV1Interface, error) {
+// newRouterClient returns an OpenShift client for Routers
+func newRouterClient() (routev1.RouteV1Interface, error) {
 	config, err := kube.BuildClientConfig("", "")
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func newRoute(
 	return r, nil
 }
 
-func gatewaysMapKey(namespace, name string) string {
+func gatewayMapKey(namespace, name string) string {
 	return namespace + "/" + name
 }
 
@@ -138,7 +138,7 @@ func (r *route) addNewSyncRoute(cfg config.Config) *syncRoutes {
 		gateway:  gw,
 	}
 
-	r.gatewayMap[gatewaysMapKey(cfg.Namespace, cfg.Name)] = syncRoute
+	r.gatewayMap[gatewayMapKey(cfg.Namespace, cfg.Name)] = syncRoute
 	return syncRoute
 }
 
@@ -172,7 +172,7 @@ func (r *route) ensureNamespaceExists(cfg config.Config) error {
 	}
 }
 
-func (r *route) handleAdd(cfg config.Config) error {
+func (r *route) onGatewayAdded(cfg config.Config) error {
 	var result *multierror.Error
 
 	if err := r.ensureNamespaceExists(cfg); err != nil {
@@ -182,7 +182,7 @@ func (r *route) handleAdd(cfg config.Config) error {
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
 
-	if _, ok := r.gatewayMap[gatewaysMapKey(cfg.Namespace, cfg.Name)]; ok {
+	if _, ok := r.gatewayMap[gatewayMapKey(cfg.Namespace, cfg.Name)]; ok {
 		IORLog.Infof("gateway %s/%s already exists, not creating route(s) for it", cfg.Namespace, cfg.Name)
 		return nil
 	}
@@ -225,13 +225,13 @@ func isManagedByIOR(cfg config.Config) (bool, error) {
 	return manageRoute, nil
 }
 
-func (r *route) handleDel(cfg config.Config) error {
+func (r *route) onGatewayRemoved(cfg config.Config) error {
 	var result *multierror.Error
 
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
 
-	key := gatewaysMapKey(cfg.Namespace, cfg.Name)
+	key := gatewayMapKey(cfg.Namespace, cfg.Name)
 	syncRoute, ok := r.gatewayMap[key]
 	if !ok {
 		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
@@ -251,7 +251,7 @@ func (r *route) verifyResourceVersions(cfg config.Config) error {
 	r.gatewaysLock.Lock()
 	defer r.gatewaysLock.Unlock()
 
-	key := gatewaysMapKey(cfg.Namespace, cfg.Name)
+	key := gatewayMapKey(cfg.Namespace, cfg.Name)
 	syncRoute, ok := r.gatewayMap[key]
 	if !ok {
 		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
@@ -276,7 +276,7 @@ func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 
 	switch event {
 	case model.EventAdd:
-		return r.handleAdd(cfg)
+		return r.onGatewayAdded(cfg)
 
 	case model.EventUpdate:
 		if err = r.verifyResourceVersions(cfg); err != nil {
@@ -284,12 +284,12 @@ func (r *route) handleEvent(event model.Event, cfg config.Config) error {
 		}
 
 		var result *multierror.Error
-		result = multierror.Append(result, r.handleDel(cfg))
-		result = multierror.Append(result, r.handleAdd(cfg))
+		result = multierror.Append(result, r.onGatewayRemoved(cfg))
+		result = multierror.Append(result, r.onGatewayAdded(cfg))
 		return result.ErrorOrNil()
 
 	case model.EventDelete:
-		return r.handleDel(cfg)
+		return r.onGatewayRemoved(cfg)
 	}
 
 	return fmt.Errorf("unknown event type %s", event)

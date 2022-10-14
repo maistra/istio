@@ -35,7 +35,7 @@ func Run(
 	errorChannel chan error,
 ) {
 	IORLog.Info("setting up IOR")
-	rc, err := NewRouterClient()
+	rc, err := newRouterClient()
 	if err != nil {
 		return
 	}

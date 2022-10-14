@@ -580,7 +580,7 @@ func TestDuplicateUpdateEvents(t *testing.T) {
 	func() {
 		r.gatewaysLock.Lock()
 		defer r.gatewaysLock.Unlock()
-		if len(r.gatewaysMap) != 1 {
+		if len(r.gatewayMap) != 1 {
 			t.Fatal("error creating the first route")
 		}
 	}()
