@@ -119,9 +119,7 @@ func newRoute(
 	r.handleEventTimeout = kubeClient.GetHandleEventTimeout()
 	r.errorChannel = errorChannel
 
-	r.gatewaysLock.Lock()
 	r.gatewayMap = make(map[string]*syncRoutes)
-	r.gatewaysLock.Unlock()
 
 	return r, nil
 }
@@ -562,10 +560,13 @@ func (r *route) processEvent(old, curr config.Config, event model.Event) {
 }
 
 func (r *route) Run(stop <-chan struct{}) {
+	var aliveLock sync.Mutex
 	alive := true
 
 	go func(stop <-chan struct{}) {
 		<-stop
+		aliveLock.Lock()
+		defer aliveLock.Unlock()
 		alive = false
 		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
 	}(stop)
@@ -576,6 +577,8 @@ func (r *route) Run(stop <-chan struct{}) {
 	IORLog.Debugf("Registering IOR into Gateway broadcast")
 	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
 	r.store.RegisterEventHandler(kind, func(old, curr config.Config, evt model.Event) {
+		aliveLock.Lock()
+		defer aliveLock.Unlock()
 		if alive {
 			r.processEvent(old, curr, evt)
 		}
