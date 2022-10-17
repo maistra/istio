@@ -31,10 +31,13 @@ import (
 
 // ensure our config gets ignored if the user wants to change routing for
 // exported services
-var armageddonTime = time.Unix(1<<62-1, 0)
+var (
+	armageddonTime     = time.Unix(1<<62-1, 0)
+	prefixResourceName = "fed-imp"
+)
 
 func createResourceName(mesh cluster.ID, source federationmodel.ServiceKey) string {
-	return fmt.Sprintf("federation-imports-%s-%s-%s", mesh, source.Name, source.Namespace)
+	return common.ProcessResourceName(prefixResourceName, mesh.String(), source.Namespace, source.Name)
 }
 
 func (c *Controller) deleteRoutingResources(remote federationmodel.ServiceKey) error {
