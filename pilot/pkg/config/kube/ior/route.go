@@ -224,16 +224,16 @@ func (r *route) onGatewayUpdated(cfg config.Config) error {
 		return fmt.Errorf("gateway %s/%s does not exists, IOR failed to update", cfg.Namespace, cfg.Name)
 	}
 
-	new := r.addNewSyncRoute(cfg)
+	sr := r.addNewSyncRoute(cfg)
 
-	serviceNamespace, serviceName, err := r.findService(new.gateway)
+	serviceNamespace, serviceName, err := r.findService(sr.gateway)
 	if err != nil {
 		return errors.Wrapf(err, "gateway %s/%s does not specify a valid service target.", cfg.Namespace, cfg.Name)
 	}
 
 	cr := curr.routes
 
-	for _, server := range new.gateway.Servers {
+	for _, server := range sr.gateway.Servers {
 		for _, host := range server.Hosts {
 			var route *v1.Route
 			var gotRoute bool
@@ -252,14 +252,16 @@ func (r *route) onGatewayUpdated(cfg config.Config) error {
 			if err != nil {
 				result = multierror.Append(result, err)
 			} else {
-				new.routes[name] = route
+				sr.routes[name] = route
 				delete(cr, name)
 			}
 		}
 	}
 
 	for _, route := range cr {
-		r.deleteRoute(route)
+		if err := r.deleteRoute(route); err != nil {
+			result = multierror.Append(result, err)
+		}
 	}
 
 	return result.ErrorOrNil()
@@ -420,10 +422,18 @@ func buildRoute(metadata config.Meta, originalHost string, tls *networking.Serve
 	}
 }
 
-func (r *route) createRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) (*v1.Route, error) {
+func (r *route) createRoute(
+	metadata config.Meta,
+	originalHost string,
+	tls *networking.ServerTLSSettings,
+	serviceNamespace string, serviceName string,
+) (*v1.Route, error) {
 	IORLog.Debugf("Creating route for hostname %s", originalHost)
 
-	nr, err := r.routerClient.Routes(serviceNamespace).Create(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.CreateOptions{})
+	nr, err := r.
+		routerClient.
+		Routes(serviceNamespace).
+		Create(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error creating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
 	}
@@ -436,10 +446,18 @@ func (r *route) createRoute(metadata config.Meta, originalHost string, tls *netw
 	return nr, nil
 }
 
-func (r *route) updateRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) (*v1.Route, error) {
+func (r *route) updateRoute(
+	metadata config.Meta,
+	originalHost string,
+	tls *networking.ServerTLSSettings,
+	serviceNamespace string, serviceName string,
+) (*v1.Route, error) {
 	IORLog.Debugf("Updating route for hostname %s", originalHost)
 
-	nr, err := r.routerClient.Routes(serviceNamespace).Update(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.UpdateOptions{})
+	nr, err := r.
+		routerClient.
+		Routes(serviceNamespace).
+		Update(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.UpdateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error updating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
 	}
