@@ -75,8 +75,8 @@ func TestFormatResourceName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resourceName := FormatResourceName(tc.prefix, tc.mesh.String(),
 				tc.source.Namespace, tc.source.Name)
-			if len(resourceName) > labels.DNS1123LabelMaxLength {
-				t.Fatalf("%s length: %d, should be < 63",
+			if !labels.IsDNS1123Label(resourceName) {
+				t.Fatalf("%s length: %d, should be <= 63",
 					resourceName, len(resourceName))
 			}
 			if resourceName != tc.expectedResourceName {

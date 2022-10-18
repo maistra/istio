@@ -29,7 +29,7 @@ import (
 	"istio.io/istio/pkg/spiffe"
 )
 
-var hashLength = 8
+const hashLength = 8
 
 // DiscoveryServiceHostname returns the hostname used to represent a remote's
 // discovery service in the local mesh.
