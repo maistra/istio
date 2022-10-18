@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package federation
+package common
 
 import (
 	"testing"
@@ -22,52 +22,48 @@ import (
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
 )
 
-func TestCreateResourceName(t *testing.T) {
+func TestFormatResourceName(t *testing.T) {
 	testCases := []struct {
 		name                 string
+		prefix               string
 		mesh                 cluster.ID
 		source               federationmodel.ServiceKey
 		expectedResourceName string
 	}{
 		{
-			name: "standard mesh name + standard namespace + standard service name",
-			mesh: "mesh",
+			name:   "standard mesh name + standard namespace + standard service name",
+			prefix: "fed-exp",
+			mesh:   "mesh",
 			source: federationmodel.ServiceKey{
 				Namespace: "bookinfo",
 				Name:      "productpage",
 			},
-			expectedResourceName: "fed-imp-productpage-bookinfo-mesh",
+			expectedResourceName: "fed-exp-productpage-bookinfo-mesh",
 		},
 		{
-			name: "long mesh name",
-			mesh: "myveryveryverylongmesh",
+			name:   "long mesh name",
+			prefix: "fed-imp",
+			mesh:   "mesh-production",
 			source: federationmodel.ServiceKey{
 				Namespace: "bookinfo",
 				Name:      "productpage",
 			},
-			expectedResourceName: "fed-imp-productpage-bookinfo-myveryveryverylongmesh",
+			expectedResourceName: "fed-imp-productpage-bookinfo-mesh-production",
 		},
 		{
-			name: "long namespace",
-			mesh: "mesh",
+			name:   "long namespace",
+			prefix: "fed-exp",
+			mesh:   "mesh",
 			source: federationmodel.ServiceKey{
-				Namespace: "bigbigbigbigbookinfo",
+				Namespace: "bookinfo-production",
 				Name:      "productpage",
 			},
-			expectedResourceName: "fed-imp-productpage-bigbigbigbigbookinfo-mesh",
+			expectedResourceName: "fed-exp-productpage-bookinfo-production-mesh",
 		},
 		{
-			name: "long service name",
-			mesh: "mesh",
-			source: federationmodel.ServiceKey{
-				Namespace: "bookinfo",
-				Name:      "productpage-rest-private",
-			},
-			expectedResourceName: "fed-imp-productpage-rest-private-bookinfo-mesh",
-		},
-		{
-			name: "long mesh name + long namespace + long service name => truncated + hashed",
-			mesh: "test-remote",
+			name:   "long mesh name + long namespace + long service name",
+			prefix: "fed-imp",
+			mesh:   "test-remote",
 			source: federationmodel.ServiceKey{
 				Namespace: "bookinfo-production",
 				Name:      "productpage-rest-private",
@@ -76,14 +72,17 @@ func TestCreateResourceName(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		resourceName := createResourceName(tc.mesh, tc.source)
-		if len(resourceName) > labels.DNS1123LabelMaxLength {
-			t.Fatalf("%s\n%s length: %d, should be < 63", tc.name,
-				resourceName, len(resourceName))
-		}
-		if resourceName != tc.expectedResourceName {
-			t.Fatalf("%s\n%s not equals to the expected resource name %s", tc.name,
-				resourceName, tc.expectedResourceName)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			resourceName := FormatResourceName(tc.prefix, tc.mesh.String(),
+				tc.source.Namespace, tc.source.Name)
+			if len(resourceName) > labels.DNS1123LabelMaxLength {
+				t.Fatalf("%s length: %d, should be < 63",
+					resourceName, len(resourceName))
+			}
+			if resourceName != tc.expectedResourceName {
+				t.Fatalf("%s not equals to the expected resource name %s",
+					resourceName, tc.expectedResourceName)
+			}
+		})
 	}
 }

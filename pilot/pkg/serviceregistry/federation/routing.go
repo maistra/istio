@@ -37,7 +37,7 @@ var (
 )
 
 func createResourceName(mesh cluster.ID, source federationmodel.ServiceKey) string {
-	return common.ProcessResourceName(prefixResourceName, mesh.String(), source.Namespace, source.Name)
+	return common.FormatResourceName(prefixResourceName, mesh.String(), source.Namespace, source.Name)
 }
 
 func (c *Controller) deleteRoutingResources(remote federationmodel.ServiceKey) error {

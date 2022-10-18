@@ -30,8 +30,7 @@ import (
 )
 
 var (
-	maxNameLength = 63
-	hashLength    = 8
+	hashLength = 8
 )
 
 // DiscoveryServiceHostname returns the hostname used to represent a remote's
@@ -109,13 +108,13 @@ func hashResourceName(name string, n int) string {
 	return (hex.EncodeToString(hash[:]))[:n]
 }
 
-// ProcessResourceName returns the imported/exported resource name
-// checking if the length of the formatted name < maxNameLength
+// FormatResourceName returns the imported/exported resource name
+// checking if the length of the formatted name < DNS1123LabelMaxLength
 // If not returns the truncated formatted name suffixed by its hash part
-func ProcessResourceName(prefix, meshName, namespace, serviceName string) string {
+func FormatResourceName(prefix, meshName, namespace, serviceName string) string {
 	resourceName := fmt.Sprintf("%s-%s-%s-%s", prefix, serviceName, namespace, meshName)
-	if !labels.IsDNS1123Label(resourceName) {
-		return fmt.Sprintf("%s%s", resourceName[:maxNameLength-hashLength], hashResourceName(resourceName, hashLength))
+	if len(resourceName) > labels.DNS1123LabelMaxLength {
+		resourceName = resourceName[:labels.DNS1123LabelMaxLength-hashLength] + hashResourceName(resourceName, hashLength)
 	}
 	return resourceName
 }

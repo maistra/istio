@@ -49,7 +49,7 @@ var (
 )
 
 func createResourceName(mesh string, source federationmodel.ServiceKey) string {
-	return common.ProcessResourceName(prefixResourceName, mesh, source.Namespace, source.Name)
+	return common.FormatResourceName(prefixResourceName, mesh, source.Namespace, source.Name)
 }
 
 func (s *meshServer) deleteExportResources(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) error {
