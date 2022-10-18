@@ -39,6 +39,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/controller"
+	"istio.io/pkg/log"
 )
 
 const (
@@ -562,12 +563,14 @@ func (r *route) processEvent(old, curr config.Config, event model.Event) {
 		return
 	}
 
-	debugMessage := fmt.Sprintf("Event %v arrived:", event)
-	if event == model.EventUpdate {
-		debugMessage += fmt.Sprintf("\tOld object: %v", old)
+	if IORLog.GetOutputLevel() >= log.DebugLevel {
+		debugMessage := fmt.Sprintf("Event %v arrived:", event)
+		if event == model.EventUpdate {
+			debugMessage += fmt.Sprintf("\tOld object: %v", old)
+		}
+		debugMessage += fmt.Sprintf("\tNew object: %v", curr)
+		IORLog.Debug(debugMessage)
 	}
-	debugMessage += fmt.Sprintf("\tNew object: %v", curr)
-	IORLog.Debug(debugMessage)
 
 	if err := r.handleEvent(event, curr); err != nil {
 		IORLog.Errora(err)
