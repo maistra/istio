@@ -76,8 +76,8 @@ func TestFormatResourceName(t *testing.T) {
 			resourceName := FormatResourceName(tc.prefix, tc.mesh.String(),
 				tc.source.Namespace, tc.source.Name)
 			if !labels.IsDNS1123Label(resourceName) {
-				t.Fatalf("%s length: %d, should be <= 63",
-					resourceName, len(resourceName))
+				t.Fatalf("Not a valid RFC 1123 label. Current length of %s: %d (should be <= %d)",
+					resourceName, len(resourceName), labels.DNS1123LabelMaxLength)
 			}
 			if resourceName != tc.expectedResourceName {
 				t.Fatalf("%s not equals to the expected resource name %s",
