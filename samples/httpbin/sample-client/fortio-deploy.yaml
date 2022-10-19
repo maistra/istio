@@ -24,6 +24,8 @@ spec:
   template:
     metadata:
       annotations:
+        sidecar.istio.io/inject: "true"
+
         # This annotation causes Envoy to serve cluster.outbound statistics via 15000/stats
         # in addition to the stats normally served by Istio. The Circuit Breaking example task
         # gives an example of inspecting Envoy stats via proxy config.
