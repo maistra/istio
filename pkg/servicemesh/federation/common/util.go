@@ -15,6 +15,8 @@
 package common
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/mitchellh/hashstructure/v2"
@@ -22,9 +24,12 @@ import (
 	kubelabels "k8s.io/apimachinery/pkg/labels"
 	v1 "maistra.io/api/federation/v1"
 
+	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/spiffe"
 )
+
+const hashLength = 8
 
 // DiscoveryServiceHostname returns the hostname used to represent a remote's
 // discovery service in the local mesh.
@@ -93,4 +98,21 @@ func RemoteChecksum(remote v1.ServiceMeshPeerRemote) uint64 {
 		return 0
 	}
 	return checksum
+}
+
+// hashResourceName applies a sha256 on the host and truncates it to the first n char
+func hashResourceName(name string, n int) string {
+	hash := sha256.Sum256([]byte(name))
+	return (hex.EncodeToString(hash[:]))[:n]
+}
+
+// FormatResourceName returns the imported/exported resource name
+// checking if the length of the formatted name < DNS1123LabelMaxLength
+// If not returns the truncated formatted name suffixed by its hash part
+func FormatResourceName(prefix, meshName, namespace, serviceName string) string {
+	resourceName := fmt.Sprintf("%s-%s-%s-%s", prefix, serviceName, namespace, meshName)
+	if len(resourceName) > labels.DNS1123LabelMaxLength {
+		resourceName = resourceName[:labels.DNS1123LabelMaxLength-hashLength] + hashResourceName(resourceName, hashLength)
+	}
+	return resourceName
 }

@@ -44,11 +44,12 @@ var (
 	Schemas collection.Schemas
 	// ensure our config gets ignored if the user wants to change routing for
 	// exported services
-	armageddonTime = time.Unix(1<<62-1, 0)
+	armageddonTime     = time.Unix(1<<62-1, 0)
+	prefixResourceName = "fed-exp"
 )
 
 func createResourceName(mesh string, source federationmodel.ServiceKey) string {
-	return fmt.Sprintf("federation-exports-%s-%s-%s", mesh, source.Name, source.Namespace)
+	return common.FormatResourceName(prefixResourceName, mesh, source.Namespace, source.Name)
 }
 
 func (s *meshServer) deleteExportResources(source federationmodel.ServiceKey, target *federationmodel.ServiceMessage) error {
