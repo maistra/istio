@@ -5,6 +5,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 )
@@ -289,4 +290,13 @@ func (i *multiNamespaceInformer) GetIndexers() map[string]cache.Indexer {
 	}
 
 	return res
+}
+
+// SetTransform will pass the handler into each individual Informer and return an aggregate error
+func (i *multiNamespaceInformer) SetTransform(handler cache.TransformFunc) error {
+	errList := make([]error, len(i.informers))
+	for _, informer := range i.informers {
+		errList = append(errList, informer.SetTransform(handler))
+	}
+	return errors.NewAggregate(errList)
 }

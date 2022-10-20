@@ -40,6 +40,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/common/expfmt"
 	"go.opencensus.io/stats/view"
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -85,6 +86,9 @@ var (
 	appProberPattern = regexp.MustCompile(`^/app-health/[^/]+/(livez|readyz|startupz)$`)
 
 	promRegistry *prometheus.Registry
+
+	EnableHTTP2Probing = env.RegisterBoolVar("ISTIO_ENABLE_HTTP2_PROBING", true,
+		"If enabled, HTTP2 probes will be enabled for HTTPS probes, following Kubernetes").Get()
 
 	LegacyLocalhostProbeDestination = env.RegisterBoolVar("REWRITE_PROBE_LEGACY_LOCALHOST_DESTINATION", false,
 		"If enabled, readiness probes will be sent to 'localhost'. Otherwise, they will be sent to the Pod's IP, matching Kubernetes' behavior.")
@@ -165,6 +169,14 @@ func NewServer(config Options) (*Server, error) {
 	if config.IPv6 {
 		localhost = localHostIPv6
 		upstreamLocalAddress = UpstreamLocalAddressIPv6
+	} else {
+		// if not ipv6-only, it can be ipv4-only or dual-stack
+		// let InstanceIP decide the localhost
+		netIP := net.ParseIP(config.PodIP)
+		if netIP.To4() == nil && netIP.To16() != nil && !netIP.IsLinkLocalUnicast() {
+			localhost = localHostIPv6
+			upstreamLocalAddress = UpstreamLocalAddressIPv6
+		}
 	}
 	probes := make([]ready.Prober, 0)
 	if !config.NoEnvoy {
@@ -239,18 +251,22 @@ func NewServer(config Options) (*Server, error) {
 			d := &net.Dialer{
 				LocalAddr: s.upstreamLocalAddress,
 			}
+			transport, err := setTransportDefaults(&http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				DialContext:     d.DialContext,
+				// https://github.com/kubernetes/kubernetes/blob/0153febd9f0098d4b8d0d484927710eaf899ef40/pkg/probe/http/http.go#L55
+				// Match Kubernetes logic. This also ensures idle timeouts do not trigger probe failures
+				DisableKeepAlives: !ProbeKeepaliveConnections,
+			})
+			if err != nil {
+				return nil, err
+			}
 			// Construct a http client and cache it in order to reuse the connection.
 			s.appProbeClient[path] = &http.Client{
 				Timeout: time.Duration(prober.TimeoutSeconds) * time.Second,
 				// We skip the verification since kubelet skips the verification for HTTPS prober as well
 				// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-					DialContext:     d.DialContext,
-					// https://github.com/kubernetes/kubernetes/blob/0153febd9f0098d4b8d0d484927710eaf899ef40/pkg/probe/http/http.go#L55
-					// Match Kubernetes logic. This also ensures idle timeouts do not trigger probe failures
-					DisableKeepAlives: !ProbeKeepaliveConnections,
-				},
+				Transport:     transport,
 				CheckRedirect: redirectChecker(),
 			}
 		}
@@ -347,8 +363,8 @@ func (s *Server) Run(ctx context.Context) {
 	}
 	// for testing.
 	if s.statusPort == 0 {
-		addrs := strings.Split(l.Addr().String(), ":")
-		allocatedPort, _ := strconv.Atoi(addrs[len(addrs)-1])
+		_, hostPort, _ := net.SplitHostPort(l.Addr().String())
+		allocatedPort, _ := strconv.Atoi(hostPort)
 		s.mutex.Lock()
 		s.statusPort = uint16(allocatedPort)
 		s.mutex.Unlock()
@@ -857,4 +873,27 @@ func wrapIPv6(ipAddr string) string {
 		return ipAddr
 	}
 	return fmt.Sprintf("[%s]", ipAddr)
+}
+
+var defaultTransport = http.DefaultTransport.(*http.Transport)
+
+// SetTransportDefaults mirrors Kubernetes probe settings
+// https://github.com/kubernetes/kubernetes/blob/0153febd9f0098d4b8d0d484927710eaf899ef40/pkg/probe/http/http.go#L52
+func setTransportDefaults(t *http.Transport) (*http.Transport, error) {
+	if !EnableHTTP2Probing {
+		return t, nil
+	}
+	if t.TLSHandshakeTimeout == 0 {
+		t.TLSHandshakeTimeout = defaultTransport.TLSHandshakeTimeout
+	}
+	if t.IdleConnTimeout == 0 {
+		t.IdleConnTimeout = defaultTransport.IdleConnTimeout
+	}
+	t2, err := http2.ConfigureTransports(t)
+	if err != nil {
+		return nil, err
+	}
+	t2.ReadIdleTimeout = time.Duration(30) * time.Second
+	t2.PingTimeout = time.Duration(15) * time.Second
+	return t, nil
 }

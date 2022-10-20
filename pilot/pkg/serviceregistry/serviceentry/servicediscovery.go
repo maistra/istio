@@ -267,6 +267,11 @@ func (s *Controller) workloadEntryHandler(old, curr config.Config, event model.E
 		}
 		instance := s.convertWorkloadEntryToServiceInstances(wle, services, se, &key, s.Cluster())
 		instancesUpdated = append(instancesUpdated, instance...)
+		if event == model.EventDelete {
+			s.serviceInstances.deleteServiceEntryInstances(namespacedName, key)
+		} else {
+			s.serviceInstances.updateServiceEntryInstancesPerConfig(namespacedName, key, instance)
+		}
 		addConfigs(se, services)
 	}
 
@@ -281,6 +286,7 @@ func (s *Controller) workloadEntryHandler(old, curr config.Config, event model.E
 		}
 		instance := s.convertWorkloadEntryToServiceInstances(wle, services, se, &key, s.Cluster())
 		instancesDeleted = append(instancesDeleted, instance...)
+		s.serviceInstances.deleteServiceEntryInstances(namespacedName, key)
 		addConfigs(se, services)
 	}
 
@@ -488,6 +494,8 @@ func (s *Controller) WorkloadInstanceHandler(wi *model.WorkloadInstance, event m
 
 	instances := []*model.ServiceInstance{}
 	instancesDeleted := []*model.ServiceInstance{}
+	configsUpdated := map[model.ConfigKey]struct{}{}
+	fullPush := false
 	for _, cfg := range cfgs {
 		se := cfg.Spec.(*networking.ServiceEntry)
 		if se.WorkloadSelector == nil || !labels.Instance(se.WorkloadSelector.Labels).SubsetOf(wi.Endpoint.Labels) {
@@ -496,7 +504,7 @@ func (s *Controller) WorkloadInstanceHandler(wi *model.WorkloadInstance, event m
 		}
 		seNamespacedName := types.NamespacedName{Namespace: cfg.Namespace, Name: cfg.Name}
 		services := s.services.getServices(seNamespacedName)
-		instance := convertWorkloadInstanceToServiceInstance(wi.Endpoint, services, se)
+		instance := convertWorkloadInstanceToServiceInstance(wi, services, se)
 		instances = append(instances, instance...)
 		if addressToDelete != "" {
 			for _, i := range instance {
@@ -509,6 +517,20 @@ func (s *Controller) WorkloadInstanceHandler(wi *model.WorkloadInstance, event m
 			s.serviceInstances.deleteServiceEntryInstances(seNamespacedName, key)
 		} else {
 			s.serviceInstances.updateServiceEntryInstancesPerConfig(seNamespacedName, key, instance)
+		}
+		// If serviceentry's resolution is DNS, make a full push
+		// TODO: maybe cds?
+		if (se.Resolution == networking.ServiceEntry_DNS || se.Resolution == networking.ServiceEntry_DNS_ROUND_ROBIN) &&
+			se.WorkloadSelector != nil {
+
+			fullPush = true
+			for _, inst := range instance {
+				configsUpdated[model.ConfigKey{
+					Kind:      gvk.ServiceEntry,
+					Name:      string(inst.Service.Hostname),
+					Namespace: cfg.Namespace,
+				}] = struct{}{}
+			}
 		}
 	}
 	if len(instancesDeleted) > 0 {
@@ -523,6 +545,20 @@ func (s *Controller) WorkloadInstanceHandler(wi *model.WorkloadInstance, event m
 	s.mutex.Unlock()
 
 	s.edsUpdate(instances)
+
+	// ServiceEntry with WorkloadEntry results in STRICT_DNS cluster with hardcoded endpoints
+	// need to update CDS to refresh endpoints
+	// https://github.com/istio/istio/issues/39505
+	if fullPush {
+		log.Debugf("Full push triggered during event %s for workload instance (%s/%s) in namespace %s", event,
+			wi.Kind, wi.Endpoint.Address, wi.Namespace)
+		pushReq := &model.PushRequest{
+			Full:           true,
+			ConfigsUpdated: configsUpdated,
+			Reason:         []model.TriggerReason{model.EndpointUpdate},
+		}
+		s.XdsUpdater.ConfigUpdate(pushReq)
+	}
 }
 
 func (s *Controller) Provider() provider.ID {
@@ -950,7 +986,7 @@ func (s *Controller) buildServiceInstances(
 					currentServiceEntry.Hosts)
 				continue
 			}
-			instances := convertWorkloadInstanceToServiceInstance(wi.Endpoint, services, currentServiceEntry)
+			instances := convertWorkloadInstanceToServiceInstance(wi, services, currentServiceEntry)
 			serviceInstances = append(serviceInstances, instances...)
 			ckey := configKey{namespace: wi.Namespace, name: wi.Name}
 			if wi.Kind == model.PodKind {
