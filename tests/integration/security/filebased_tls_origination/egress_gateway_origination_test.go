@@ -59,8 +59,6 @@ func mustReadCert(t framework.TestContext, f string) string {
 // This test brings up an egress gateway to originate TLS connection. The test will ensure that requests
 // are routed securely through the egress gateway and that the TLS origination happens at the gateway.
 func TestEgressGatewayTls(t *testing.T) {
-	// FIXME: https://issues.redhat.com/browse/OSSM-755
-	t.Skip("https://github.com/istio/istio/issues/0")
 	framework.NewTest(t).
 		Features("security.egress.tls.filebased").
 		Run(func(t framework.TestContext) {

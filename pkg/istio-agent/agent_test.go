@@ -577,8 +577,6 @@ func TestAgent(t *testing.T) {
 		a.Check(t, security.WorkloadKeyCertResourceName, security.RootCertReqResourceName)
 	})
 	t.Run("GCP", func(t *testing.T) {
-		// FIXME: https://issues.redhat.com/browse/OSSM-755
-		t.Skip("https://github.com/istio/istio/issues/1")
 		os.MkdirAll(filepath.Join(wd, "var/run/secrets/tokens"), 0o755)
 		ioutil.WriteFile(filepath.Join(wd, "var/run/secrets/tokens/istio-token"), []byte("test-token"), 0o644)
 		a := Setup(t, func(a AgentTest) AgentTest {

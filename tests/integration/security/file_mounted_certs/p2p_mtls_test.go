@@ -39,12 +39,10 @@ const (
 	ClientCertsPath  = "tests/testdata/certs/mountedcerts-client"
 
 	// nolint: lll
-	ExpectedXfccHeader = `By=spiffe://cluster.local/ns/mounted-certs/sa/server;Hash=d05a05528f4cfab744394ae9153b10e2c8a9b491ba5368a296e92ad3ab2e94c9;Subject="CN=cluster.local";URI=spiffe://cluster.local/ns/mounted-certs/sa/client;DNS=client.mounted-certs.svc`
+	ExpectedXfccHeader = `By=spiffe://cluster.local/ns/mounted-certs/sa/server;Hash=a2508db4657223f6af27efea213ffc884fd0d1f8a69e4053ce58ac66eb3b0ebe;Subject="CN=client.mounted-certs.svc.cluster.local";URI=spiffe://cluster.local/ns/mounted-certs/sa/client;DNS=client.mounted-certs.svc`
 )
 
 func TestClientToServiceTls(t *testing.T) {
-	// FIXME: https://issues.redhat.com/browse/OSSM-755
-	t.Skip("https://github.com/istio/istio/issues/0")
 	framework.NewTest(t).
 		Features("security.peer.file-mounted-certs").
 		Run(func(t framework.TestContext) {
