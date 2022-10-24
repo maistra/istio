@@ -45,7 +45,7 @@ type Controller struct {
 }
 
 func NewController(stop <-chan struct{}, rwConfigStore model.ConfigStoreController,
-	kubeClient kube.Client, namespace string, statusManager *status.Manager, domainSuffix string, enableCRDScan bool,
+	kubeClient kube.Client, namespace string, statusManager *status.Manager, revision, domainSuffix string, enableCRDScan bool,
 ) (*Controller, error) {
 	ia := local.NewIstiodAnalyzer(analyzers.AllCombined(),
 		"", resource.Namespace(namespace), func(name collection.Name) {}, true)
@@ -63,7 +63,7 @@ func NewController(stop <-chan struct{}, rwConfigStore model.ConfigStoreControll
 			Remove(collections.K8SApiextensionsK8SIoV1Customresourcedefinitions)
 	}
 
-	store, err := crdclient.NewForSchemas(kubeClient, "default",
+	store, err := crdclient.NewForSchemas(kubeClient, revision,
 		domainSuffix, schemas, enableCRDScan)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load common types for analysis, releasing lease: %v", err)

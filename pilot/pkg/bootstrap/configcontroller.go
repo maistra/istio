@@ -336,7 +336,7 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 			AddRunFunction(func(stop <-chan struct{}) {
 				opts := args.RegistryOptions.KubeOptions
 				cont, err := incluster.NewController(
-					stop, s.RWConfigStore, s.kubeClient, args.Namespace, s.statusManager, opts.DomainSuffix, opts.EnableCRDScan)
+					stop, s.RWConfigStore, s.kubeClient, args.Namespace, s.statusManager, args.Revision, opts.DomainSuffix, opts.EnableCRDScan)
 				if err != nil {
 					return
 				}
