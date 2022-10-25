@@ -510,12 +510,13 @@ func (h *handler) patchExports() error {
 	}
 	newStatus := v1.ExportedServiceSetStatus{ExportedServices: exportedServices}
 
-	h.logger.Debugf("exportSet.Status=%+v", exportSet.Status)
+	h.logger.Debugf("oldStatus=%+v", exportSet.Status)
 	h.logger.Debugf("newStatus=%+v", newStatus)
 	if reflect.DeepEqual(exportSet.Status, newStatus) { // TODO: exportSet.Status may be stale, causing us to skip the update when we shouldn't
 		h.logger.Debugf("no status updates for ExportedServiceSet %s", h.mesh)
 		return nil
 	}
+	h.logger.Debugf("updating status for ExportedServiceSet %s", h.mesh)
 
 	updatedExportSet := exportSet.DeepCopy()
 	updatedExportSet.Status = newStatus
@@ -548,12 +549,13 @@ func (h *handler) patchImports() error {
 	}
 	newStatus := v1.ImportedServiceSetStatus{ImportedServices: importedServices}
 
-	h.logger.Debugf("importSet.Status=%+v", importSet.Status)
+	h.logger.Debugf("oldStatus=%+v", importSet.Status)
 	h.logger.Debugf("newStatus=%+v", newStatus)
 	if reflect.DeepEqual(importSet.Status, newStatus) { // TODO: importSet.Status may be stale, causing us to skip the update when we shouldn't
 		h.logger.Debugf("no status updates for ImportedServiceSet %s", h.mesh)
 		return nil
 	}
+	h.logger.Debugf("updating status for ImportedServiceSet %s", h.mesh)
 
 	updatedImportSet := importSet.DeepCopy()
 	updatedImportSet.Status = newStatus
