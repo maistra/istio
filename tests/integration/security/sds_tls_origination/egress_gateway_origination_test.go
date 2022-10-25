@@ -35,8 +35,6 @@ import (
 // TestSimpleTlsOrigination test SIMPLE TLS mode with TLS origination happening at Gateway proxy
 // It uses CredentialName set in DestinationRule API to fetch secrets from k8s API server
 func TestSimpleTlsOrigination(t *testing.T) {
-	// https://issues.redhat.com/browse/OSSM-755
-	t.Skip("https://github.com/istio/istio/issues/0")
 	framework.NewTest(t).
 		Features("security.egress.tls.sds").
 		Run(func(ctx framework.TestContext) {
@@ -139,8 +137,6 @@ func TestSimpleTlsOrigination(t *testing.T) {
 // TestMutualTlsOrigination test MUTUAL TLS mode with TLS origination happening at Gateway proxy
 // It uses CredentialName set in DestinationRule API to fetch secrets from k8s API server
 func TestMutualTlsOrigination(t *testing.T) {
-	// https://issues.redhat.com/browse/OSSM-755
-	t.Skip("https://github.com/istio/istio/issues/0")
 	framework.NewTest(t).
 		Features("security.egress.mtls.sds").
 		Run(func(ctx framework.TestContext) {
