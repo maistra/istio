@@ -25,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
-	maistraclient "maistra.io/api/client/versioned"
 	"maistra.io/api/client/versioned/fake"
 	v1 "maistra.io/api/federation/v1"
 
@@ -742,7 +741,7 @@ func TestStatusManager(t *testing.T) {
 			if err := manager.PushStatus(); err != nil {
 				t.Fatalf("error updating initial status: %s", err)
 			}
-			verifyPeerStatus(t, cs, tc.mesh, &v1.ServiceMeshPeerStatus{
+			verifyPeerStatus(t, rm, tc.mesh, &v1.ServiceMeshPeerStatus{
 				DiscoveryStatus: v1.ServiceMeshPeerDiscoveryStatus{
 					Inactive: []v1.PodPeerDiscoveryStatus{
 						{
@@ -759,20 +758,19 @@ func TestStatusManager(t *testing.T) {
 			for index, f := range tc.events {
 				t.Logf("processing event %d", index)
 				f.event(handler)
-				verifyPeerStatus(t, cs, tc.mesh, &f.expectedPeerStatus, f.peerStatusAssertion)
-				verifyExportStatus(t, cs, tc.mesh, &f.expectedExportStatus)
-				verifyImportStatus(t, cs, tc.mesh, &f.expectedImportStatus)
+				verifyPeerStatus(t, rm, tc.mesh, &f.expectedPeerStatus, f.peerStatusAssertion)
+				verifyExportStatus(t, rm, tc.mesh, &f.expectedExportStatus)
+				verifyImportStatus(t, rm, tc.mesh, &f.expectedImportStatus)
 			}
 		})
 	}
 }
 
-func verifyPeerStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName, expected *v1.ServiceMeshPeerStatus,
-	assert func(*testing.T, *v1.ServiceMeshPeerStatus) error,
-) {
+func verifyPeerStatus(t *testing.T, rm common.ResourceManager, name types.NamespacedName, expected *v1.ServiceMeshPeerStatus, assert func(*testing.T,
+	*v1.ServiceMeshPeerStatus) error) {
 	t.Helper()
 	tryMultipleTimes(t, func() error {
-		actual, err := cs.FederationV1().ServiceMeshPeers(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+		actual, err := rm.PeerInformer().Lister().ServiceMeshPeers(name.Namespace).Get(name.Name)
 		if err != nil {
 			return fmt.Errorf("unexpected error retrieving ServiceMeshPeer %s/%s: %s", name.Namespace, name.Name, err)
 		}
@@ -786,12 +784,10 @@ func verifyPeerStatus(t *testing.T, cs maistraclient.Interface, name types.Names
 	})
 }
 
-func verifyExportStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName,
-	expected *v1.ExportedServiceSetStatus,
-) {
+func verifyExportStatus(t *testing.T, rm common.ResourceManager, name types.NamespacedName, expected *v1.ExportedServiceSetStatus) {
 	t.Helper()
 	tryMultipleTimes(t, func() error {
-		actual, err := cs.FederationV1().ExportedServiceSets(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+		actual, err := rm.ExportsInformer().Lister().ExportedServiceSets(name.Namespace).Get(name.Name)
 		if err != nil {
 			return fmt.Errorf("unexpected error retrieving ExportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
 		}
@@ -805,12 +801,10 @@ func verifyExportStatus(t *testing.T, cs maistraclient.Interface, name types.Nam
 	})
 }
 
-func verifyImportStatus(t *testing.T, cs maistraclient.Interface, name types.NamespacedName,
-	expected *v1.ImportedServiceSetStatus,
-) {
+func verifyImportStatus(t *testing.T, rm common.ResourceManager, name types.NamespacedName, expected *v1.ImportedServiceSetStatus) {
 	t.Helper()
 	tryMultipleTimes(t, func() error {
-		actual, err := cs.FederationV1().ImportedServiceSets(name.Namespace).Get(context.TODO(), name.Name, metav1.GetOptions{})
+		actual, err := rm.ImportsInformer().Lister().ImportedServiceSets(name.Namespace).Get(name.Name)
 		if err != nil {
 			return fmt.Errorf("unexpected error retrieving ImportedServiceSet %s/%s: %s", name.Namespace, name.Name, err)
 		}
