@@ -20,9 +20,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	gateway "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
-	lister "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1alpha2"
+	gateway "sigs.k8s.io/gateway-api/apis/v1beta1"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1beta1"
+	lister "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1beta1"
 
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
@@ -40,15 +40,27 @@ type ClassController struct {
 	directClient gatewayclient.GatewayClassInterface
 }
 
-func NewClassController(client kube.Client) *ClassController {
+type ClassControllerInterface interface {
+	Run(stop <-chan struct{})
+}
+
+func NewClassController(client kube.Client, version string) ClassControllerInterface {
+	log.Infof("gateway class controller reading version %v", version)
+	if version == "v1alpha2" {
+		return NewClassControllerV1Alpha2(client)
+	}
+	return NewClassControllerV1Beta1(client)
+}
+
+func NewClassControllerV1Beta1(client kube.Client) ClassControllerInterface {
 	gc := &ClassController{}
 	gc.queue = controllers.NewQueue("gateway class",
 		controllers.WithReconciler(gc.Reconcile),
 		controllers.WithMaxAttempts(25))
 
-	class := client.GatewayAPIInformer().Gateway().V1alpha2().GatewayClasses()
+	class := client.GatewayAPIInformer().Gateway().V1beta1().GatewayClasses()
 	gc.classes = class.Lister()
-	gc.directClient = client.GatewayAPI().GatewayV1alpha2().GatewayClasses()
+	gc.directClient = client.GatewayAPI().GatewayV1beta1().GatewayClasses()
 	class.Informer().
 		AddEventHandler(controllers.FilteredObjectHandler(gc.queue.AddObject, func(o controllers.Object) bool {
 			return o.GetName() == DefaultClassName

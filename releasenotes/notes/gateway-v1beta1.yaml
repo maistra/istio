@@ -1,0 +1,8 @@
+apiVersion: release-notes/v2
+kind: feature
+area: traffic-management
+issues:
+- 41146
+releaseNotes:
+- |
+  **Fixed** the gateway-api integration to not fail when `v1alpha2` version is removed

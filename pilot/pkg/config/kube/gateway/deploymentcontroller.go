@@ -22,15 +22,15 @@ import (
 	"strings"
 	"text/template"
 
-	maistrav1alpha2 "github.com/maistra/xns-informer/pkg/generated/gatewayapi/apis/v1alpha2"
+	maistrav1beta1 "github.com/maistra/xns-informer/pkg/generated/gatewayapi/apis/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	klabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	gateway "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	"sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1alpha2"
+	gateway "sigs.k8s.io/gateway-api/apis/v1beta1"
+	lister "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1beta1"
 	"sigs.k8s.io/yaml"
 
 	"istio.io/istio/pkg/config"
@@ -55,21 +55,25 @@ import (
 //
 // Server Side Apply with go templates is an odd choice (no one likes YAML templating...) but is one of the few
 // remaining options after all others are ruled out.
-// * Merge patch/Update cannot be used. If we always enforce that our object is *exactly* the same as
-//   the in-cluster object we will get in endless loops due to other controllers that like to add annotations, etc.
-//   If we chose to allow any unknown fields, then we would never be able to remove fields we added, as
-//   we cannot tell if we created it or someone else did. SSA fixes these issues
-// * SSA using client-go Apply libraries is almost a good choice, but most third-party clients (Istio, MCS, and gateway-api)
-//   do not provide these libraries.
-// * SSA using standard API types doesn't work well either: https://github.com/kubernetes-sigs/controller-runtime/issues/1669
-// * This leaves YAML templates, converted to unstructured types and Applied with the dynamic client.
+//   - Merge patch/Update cannot be used. If we always enforce that our object is *exactly* the same as
+//     the in-cluster object we will get in endless loops due to other controllers that like to add annotations, etc.
+//     If we chose to allow any unknown fields, then we would never be able to remove fields we added, as
+//     we cannot tell if we created it or someone else did. SSA fixes these issues
+//   - SSA using client-go Apply libraries is almost a good choice, but most third-party clients (Istio, MCS, and gateway-api)
+//     do not provide these libraries.
+//   - SSA using standard API types doesn't work well either: https://github.com/kubernetes-sigs/controller-runtime/issues/1669
+//   - This leaves YAML templates, converted to unstructured types and Applied with the dynamic client.
 type DeploymentController struct {
 	client             kube.Client
 	queue              controllers.Queue
 	templates          *template.Template
 	patcher            patcher
-	gatewayLister      v1alpha2.GatewayLister
-	gatewayClassLister v1alpha2.GatewayClassLister
+	gatewayLister      lister.GatewayLister
+	gatewayClassLister lister.GatewayClassLister
+}
+
+type DeploymentControllerInterface interface {
+	Run(stop <-chan struct{})
 }
 
 // Patcher is a function that abstracts patching logic. This is largely because client-go fakes do not handle patching
@@ -77,14 +81,22 @@ type patcher func(gvr schema.GroupVersionResource, name string, namespace string
 
 // NewDeploymentController constructs a DeploymentController and registers required informers.
 // The controller will not start until Run() is called.
-func NewDeploymentController(client kube.Client) *DeploymentController {
-	var gwcInformer maistrav1alpha2.GatewayClassInformer
-	var gwcLister v1alpha2.GatewayClassLister
+func NewDeploymentController(client kube.Client, version string) DeploymentControllerInterface {
+	log.Infof("gateway deployment controller reading version %v", version)
+	if version == "v1alpha2" {
+		return NewDeploymentControllerV1Alpha2(client)
+	}
+	return NewDeploymentControllerV1beta1(client)
+}
+
+func NewDeploymentControllerV1beta1(client kube.Client) *DeploymentController {
+	gw := client.GatewayAPIInformer().Gateway().V1beta1().Gateways()
+	var gwcInformer maistrav1beta1.GatewayClassInformer
+	var gwcLister lister.GatewayClassLister
 	if client.GetMemberRoll() == nil {
-		gwcInformer = client.GatewayAPIInformer().Gateway().V1alpha2().GatewayClasses()
+		gwcInformer = client.GatewayAPIInformer().Gateway().V1beta1().GatewayClasses()
 		gwcLister = gwcInformer.Lister()
 	}
-	gw := client.GatewayAPIInformer().Gateway().V1alpha2().Gateways()
 	dc := &DeploymentController{
 		client:    client,
 		templates: processTemplates(),
