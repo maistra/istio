@@ -38,6 +38,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
+        maistra.io/exclude-cni: "false"
       tolerations:
         # Make sure istio-cni-node gets scheduled on all nodes.
         - effect: NoSchedule
