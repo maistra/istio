@@ -99,13 +99,13 @@ else
 fi
 
 log "Enabling federation for mesh1"
-sed "s:{{MESH2_CERT}}:$MESH2_CERT:g" export/configmap.yaml | oc1 apply -f -
-sed -e "s:{{MESH2_ADDRESS}}:$MESH2_ADDRESS:g" -e "s:{{MESH2_DISCOVERY_PORT}}:$MESH2_DISCOVERY_PORT:g" -e "s:{{MESH2_SERVICE_PORT}}:$MESH2_SERVICE_PORT:g" export/servicemeshpeer.yaml | oc1 apply -f -
+sed "s:{{MESH2_CERT}}:$MESH2_CERT:g" export/configmap.yaml.template | oc1 apply -f -
+sed -e "s:{{MESH2_ADDRESS}}:$MESH2_ADDRESS:g" -e "s:{{MESH2_DISCOVERY_PORT}}:$MESH2_DISCOVERY_PORT:g" -e "s:{{MESH2_SERVICE_PORT}}:$MESH2_SERVICE_PORT:g" export/servicemeshpeer.yaml.template |oc1 apply -f -
 oc1 apply -f export/exportedserviceset.yaml
 
 log "Enabling federation for mesh2"
-sed "s:{{MESH1_CERT}}:$MESH1_CERT:g" import/configmap.yaml | oc2 apply -f -
-sed -e "s:{{MESH1_ADDRESS}}:$MESH1_ADDRESS:g" -e "s:{{MESH1_DISCOVERY_PORT}}:$MESH1_DISCOVERY_PORT:g" -e "s:{{MESH1_SERVICE_PORT}}:$MESH1_SERVICE_PORT:g" import/servicemeshpeer.yaml | oc2 apply -f -
+sed "s:{{MESH1_CERT}}:$MESH1_CERT:g" import/configmap.yaml.template | oc2 apply -f -
+sed -e "s:{{MESH1_ADDRESS}}:$MESH1_ADDRESS:g" -e "s:{{MESH1_DISCOVERY_PORT}}:$MESH1_DISCOVERY_PORT:g" -e "s:{{MESH1_SERVICE_PORT}}:$MESH1_SERVICE_PORT:g" import/servicemeshpeer.yaml.template |oc2 apply -f -
 oc2 apply -f import/importedserviceset.yaml
 
 log "Installing bookinfo in mesh1"
