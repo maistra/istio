@@ -21,10 +21,7 @@ package maistra
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	v1 "k8s.io/api/apps/v1"
@@ -34,9 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-
-	// import maistra CRD manifests
-	_ "maistra.io/api/manifests"
+	"maistra.io/api/manifests"
 	"sigs.k8s.io/yaml"
 
 	maistrav1 "istio.io/istio/pkg/servicemesh/client/clientset/versioned/typed/servicemesh/v1"
@@ -47,21 +42,15 @@ import (
 	"istio.io/istio/pkg/test/util/retry"
 )
 
-var manifestsDir = env.IstioSrc + "/vendor/maistra.io/api/manifests"
-
 func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
-	crds, err := findCRDs()
+	crds, err := manifests.GetManifestsByName()
 	if err != nil {
 		return fmt.Errorf("cannot read maistra CRD YAMLs: %s", err)
 	}
 	for _, c := range ctx.Clusters().Kube().Primaries() {
 		for _, crd := range crds {
 			// we need to manually Create() the CRD because Apply() wants to write its content into an annotation which fails because of size limitations
-			rawYAML, err := ioutil.ReadFile(crd)
-			if err != nil {
-				return err
-			}
-			rawJSON, err := yaml.YAMLToJSON(rawYAML)
+			rawJSON, err := yaml.YAMLToJSON(crd)
 			if err != nil {
 				return err
 			}
@@ -78,20 +67,6 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 		}
 	}
 	return err
-}
-
-func findCRDs() (list []string, err error) {
-	list = []string{}
-	files, err := ioutil.ReadDir(manifestsDir)
-	if err != nil {
-		return
-	}
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".yaml") {
-			list = append(list, path.Join(manifestsDir, file.Name()))
-		}
-	}
-	return
 }
 
 func Install(ctx resource.Context) error {

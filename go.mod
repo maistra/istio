@@ -10,7 +10,7 @@ replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.5
 
 require (
 	cloud.google.com/go/compute v1.10.0
-	cloud.google.com/go/security v1.7.0
+	cloud.google.com/go/security v1.8.0
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20220903154154-e8044f6e4c72
 	github.com/Masterminds/sprig/v3 v3.2.2
@@ -48,7 +48,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.2.25
 	github.com/lucas-clemente/quic-go v0.29.0
-	github.com/maistra/xns-informer v0.0.0-20221101071835-0bb0aae89940
+	github.com/maistra/xns-informer v0.0.0-20221102145519-5945cbc17fa4
 	github.com/mattn/go-isatty v0.0.16
 	github.com/miekg/dns v1.1.50
 	github.com/mitchellh/copystructure v1.2.0
@@ -71,15 +71,15 @@ require (
 	go.opentelemetry.io/proto/otlp v0.19.0
 	go.uber.org/atomic v1.10.0
 	go.uber.org/multierr v1.8.0
-	golang.org/x/net v0.0.0-20220921155015-db77216a4ee9
-	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
+	golang.org/x/net v0.0.0-20221014081412-f15817d10f9b
+	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
 	golang.org/x/sync v0.0.0-20220907140024-f12130a52804
 	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8
 	golang.org/x/time v0.0.0-20220920022843-2ce7c2934d45
 	gomodules.xyz/jsonpatch/v3 v3.0.1
 	google.golang.org/api v0.96.0
-	google.golang.org/genproto v0.0.0-20220920201722-2b89144ce006
-	google.golang.org/grpc v1.49.0
+	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e
+	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/square/go-jose.v2 v2.6.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -98,7 +98,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20220803164354-a70c9af30aea
 	k8s.io/kubectl v0.25.1
 	k8s.io/utils v0.0.0-20220823124924-e9cbc92d1a73
-	maistra.io/api v0.0.0-20220301154558-8f6a12a9464b
+	maistra.io/api v0.0.0-20221103173341-6ef6ed929778
 	sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/gateway-api v0.5.1-0.20220921185115-ee7a83814203
 	sigs.k8s.io/mcs-api v0.1.0
@@ -111,7 +111,7 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.102.1 // indirect
+	cloud.google.com/go v0.104.0 // indirect
 	cloud.google.com/go/logging v1.5.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
@@ -166,7 +166,7 @@ require (
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/pprof v0.0.0-20220729232143-a41b82acbcb1 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.1.0 // indirect
-	github.com/googleapis/gax-go/v2 v2.4.0 // indirect
+	github.com/googleapis/gax-go/v2 v2.5.1 // indirect
 	github.com/grafana/regexp v0.0.0-20220304095617-2e8d9baf4ac2 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
