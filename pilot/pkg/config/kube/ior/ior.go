@@ -32,7 +32,6 @@ func Run(
 	store model.ConfigStoreCache,
 	pilotNamespace string,
 	stop <-chan struct{},
-	errorChannel chan error,
 ) {
 	IORLog.Info("setting up IOR")
 	rc, err := newRouterClient()
@@ -40,7 +39,7 @@ func Run(
 		return
 	}
 
-	r, err := newRoute(NewKubeClient(kubeClient), rc, store, pilotNamespace, kubeClient.GetMemberRoll(), stop, errorChannel)
+	r, err := newRoute(NewKubeClient(kubeClient), rc, store, pilotNamespace, kubeClient.GetMemberRoll(), stop)
 	if err != nil {
 		return
 	}
