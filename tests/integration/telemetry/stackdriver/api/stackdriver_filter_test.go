@@ -97,6 +97,9 @@ func TestStackdriverMonitoring(t *testing.T) {
 func TestMain(m *testing.M) {
 	// nolint: staticcheck
 	framework.NewSuite(m).
+		Skip("fake gcp metadata does not work anymore." +
+			"see: https://github.com/istio/istio/issues/35923#issuecomment-1302423155 " +
+			"https://issues.redhat.com/browse/OSSM-2252").
 		// We only run this on a single cluster because the fake GCP metadata does not yet support multi-cluster
 		RequireSingleCluster().
 		Label(label.CustomSetup).
