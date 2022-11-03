@@ -104,10 +104,10 @@ func newRoute(
 	pilotNamespace string,
 	mrc controller.MemberRollController,
 	stop <-chan struct{},
-) *route {
-	for !kubeClient.IsRouteSupported() {
-		IORLog.Infof("routes are not supported in this cluster; waiting for Route resource to become available...")
-		time.Sleep(10 * time.Second)
+	errorChannel chan error,
+) (*route, error) {
+	if !kubeClient.IsRouteSupported() {
+		return nil, fmt.Errorf("routes are not supported in this cluster")
 	}
 
 	r := &route{}
@@ -121,6 +121,7 @@ func newRoute(
 	r.stop = stop
 	r.initialSyncRun = make(chan struct{})
 	r.handleEventTimeout = kubeClient.GetHandleEventTimeout()
+	r.errorChannel = errorChannel
 
 	if r.mrc != nil {
 		IORLog.Debugf("Registering IOR into SMMR broadcast")
@@ -134,7 +135,7 @@ func newRoute(
 		}(stop)
 	}
 
-	return r
+	return r, nil
 }
 
 // initialSync runs on initialization only.
@@ -626,4 +627,46 @@ func hostHash(name string) string {
 
 	hash := sha256.Sum256([]byte(name))
 	return hex.EncodeToString(hash[:8])
+}
+
+func (r *route) processEvent(old, curr config.Config, event model.Event) {
+	_, ok := curr.Spec.(*networking.Gateway)
+
+	if !ok {
+		IORLog.Errorf("could not decode object as Gateway. Object = %v", curr)
+		return
+	}
+
+	debugMessage := fmt.Sprintf("Event %v arrived:", event)
+	if event == model.EventUpdate {
+		debugMessage += fmt.Sprintf("\tOld object: %v", old)
+	}
+	debugMessage += fmt.Sprintf("\tNew object: %v", curr)
+	IORLog.Debug(debugMessage)
+
+	if err := r.handleEvent(event, curr); err != nil {
+		IORLog.Errora(err)
+		if r.errorChannel != nil {
+			r.errorChannel <- err
+		}
+	}
+}
+
+func (r *route) Run(stop <-chan struct{}) {
+	alive := true
+	go func(s <-chan struct{}) {
+		// Stop responding to events when we are no longer a leader.
+		// The worker may be in the middle of handling an event. It will finish what it is doing then stop.
+		<-s
+		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
+		alive = false
+	}(stop)
+
+	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
+
+	r.store.RegisterEventHandler(kind, func(old, curr config.Config, evt model.Event) {
+		if alive {
+			r.processEvent(old, curr, evt)
+		}
+	})
 }
