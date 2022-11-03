@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/hashicorp/go-multierror"
 	v1 "github.com/openshift/api/route/v1"
@@ -51,36 +50,24 @@ const (
 	gatewayNamespaceLabel       = maistraPrefix + "gateway-namespace"
 	gatewayResourceVersionLabel = maistraPrefix + "gateway-resourceVersion"
 	ShouldManageRouteAnnotation = maistraPrefix + "manageRoute"
-
-	eventDuplicatedMessage = "event UPDATE arrived but resourceVersions are the same - ignoring"
 )
-
-type syncRoutes struct {
-	metadata config.Meta
-	gateway  *networking.Gateway
-	routes   map[string]*v1.Route
-}
 
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
-	pilotNamespace     string
-	routerClient       routev1.RouteV1Interface
-	kubeClient         kubernetes.Interface
-	store              model.ConfigStoreController
-	gatewaysMap        map[string]*syncRoutes
-	gatewaysLock       sync.Mutex
-	stop               <-chan struct{}
-	handleEventTimeout time.Duration
-	errorChannel       chan error
+	pilotNamespace string
+	routerClient   routev1.RouteV1Interface
+	kubeClient     kubernetes.Interface
+	store          model.ConfigStoreController
+	stop           <-chan struct{}
 
 	// memberroll functionality
 	mrc           controller.MemberRollController
-	namespaces    []string
 	namespaceLock sync.Mutex
+	namespaces    []string
 }
 
 // newRouterClient returns an OpenShift client for Routers
-func newRouterClient() (routev1.RouteV1Interface, error) {
+func NewRouterClient() (routev1.RouteV1Interface, error) {
 	config, err := kube.BuildClientConfig("", "")
 	if err != nil {
 		return nil, err
@@ -102,7 +89,6 @@ func newRoute(
 	pilotNamespace string,
 	mrc controller.MemberRollController,
 	stop <-chan struct{},
-	errorChannel chan error,
 ) (*route, error) {
 	if !kubeClient.IsRouteSupported() {
 		return nil, fmt.Errorf("routes are not supported in this cluster")
@@ -117,155 +103,8 @@ func newRoute(
 	r.mrc = mrc
 	r.namespaces = []string{pilotNamespace}
 	r.stop = stop
-	r.handleEventTimeout = kubeClient.GetHandleEventTimeout()
-	r.errorChannel = errorChannel
-
-	r.gatewayMap = make(map[string]*syncRoutes)
 
 	return r, nil
-}
-
-func gatewayMapKey(namespace, name string) string {
-	return namespace + "/" + name
-}
-
-// addNewSyncRoute creates a new syncRoutes and adds it to the gatewaysMap
-// Must be called with gatewaysLock locked
-func (r *route) addNewSyncRoute(cfg config.Config) *syncRoutes {
-	gw := cfg.Spec.(*networking.Gateway)
-	syncRoute := &syncRoutes{
-		metadata: cfg.Meta,
-		gateway:  gw,
-		routes:   make(map[string]*v1.Route),
-	}
-
-	r.gatewayMap[gatewayMapKey(cfg.Namespace, cfg.Name)] = syncRoute
-	return syncRoute
-}
-
-// ensureNamespaceExists makes sure the gateway namespace is present in r.namespaces
-// r.namespaces is updated by the SMMR controller, in SetNamespaces()
-// This handles the case where an ADD event comes before SetNamespaces() is called and
-// the unlikely case an ADD event arrives for a gateway whose namespace does not belong to the SMMR at all
-func (r *route) ensureNamespaceExists(cfg config.Config) error {
-	timeout := time.After(r.handleEventTimeout) // production default is 10s, but test default is only 1ms
-
-	for {
-		r.namespaceLock.Lock()
-		namespaces := r.namespaces
-		r.namespaceLock.Unlock()
-
-		for _, ns := range namespaces {
-			if ns == cfg.Namespace {
-				IORLog.Debugf("Namespace %s found in SMMR", cfg.Namespace)
-				return nil
-			}
-		}
-
-		select {
-		case <-timeout:
-			IORLog.Debugf("Namespace %s not found in SMMR. Aborting.", cfg.Namespace)
-			return fmt.Errorf("could not handle the ADD event for %s/%s: SMMR does not recognize this namespace", cfg.Namespace, cfg.Name)
-		default:
-			IORLog.Debugf("Namespace %s not found in SMMR, trying again", cfg.Namespace)
-		}
-		time.Sleep(r.handleEventTimeout / 100)
-	}
-}
-
-func (r *route) onGatewayAdded(cfg config.Config) error {
-	var result *multierror.Error
-
-	if err := r.ensureNamespaceExists(cfg); err != nil {
-		return err
-	}
-
-	r.gatewaysLock.Lock()
-	defer r.gatewaysLock.Unlock()
-
-	if _, ok := r.gatewayMap[gatewayMapKey(cfg.Namespace, cfg.Name)]; ok {
-		IORLog.Infof("gateway %s/%s already exists, not creating route(s) for it", cfg.Namespace, cfg.Name)
-		return nil
-	}
-
-	syncRoute := r.addNewSyncRoute(cfg)
-
-	serviceNamespace, serviceName, err := r.findService(syncRoute.gateway)
-	if err != nil {
-		return err
-	}
-
-	for _, server := range syncRoute.gateway.Servers {
-		for _, host := range server.Hosts {
-			route, err := r.createRoute(cfg.Meta, host, server.Tls, serviceNamespace, serviceName)
-			if err != nil {
-				result = multierror.Append(result, err)
-			} else {
-				syncRoute.routes[getRouteName(cfg.Meta.Namespace, cfg.Meta.Name, host)] = route
-			}
-		}
-	}
-
-	return result.ErrorOrNil()
-}
-
-func (r *route) onGatewayUpdated(cfg config.Config) error {
-	var result *multierror.Error
-
-	if err := r.ensureNamespaceExists(cfg); err != nil {
-		return err
-	}
-
-	r.gatewaysLock.Lock()
-	defer r.gatewaysLock.Unlock()
-
-	curr, gotGateway := r.gatewayMap[gatewayMapKey(cfg.Namespace, cfg.Name)]
-
-	if !gotGateway {
-		return fmt.Errorf("gateway %s/%s does not exists, IOR failed to update", cfg.Namespace, cfg.Name)
-	}
-
-	sr := r.addNewSyncRoute(cfg)
-
-	serviceNamespace, serviceName, err := r.findService(sr.gateway)
-	if err != nil {
-		return errors.Wrapf(err, "gateway %s/%s does not specify a valid service target.", cfg.Namespace, cfg.Name)
-	}
-
-	cr := curr.routes
-
-	for _, server := range sr.gateway.Servers {
-		for _, host := range server.Hosts {
-			var route *v1.Route
-			var gotRoute bool
-			var err error
-
-			name := getRouteName(cfg.Meta.Namespace, cfg.Meta.Name, host)
-
-			_, gotRoute = cr[name]
-
-			if gotRoute {
-				route, err = r.updateRoute(cfg.Meta, host, server.Tls, serviceNamespace, serviceName)
-			} else {
-				route, err = r.createRoute(cfg.Meta, host, server.Tls, serviceNamespace, serviceName)
-			}
-
-			if err != nil {
-				result = multierror.Append(result, err)
-			} else {
-				sr.routes[name] = route
-				delete(cr, name)
-			}
-		}
-	}
-
-	for _, route := range cr {
-		if err := r.deleteRoute(route); err != nil {
-			result = multierror.Append(result, err)
-		}
-	}
-
-	return result.ErrorOrNil()
 }
 
 func isManagedByIOR(cfg config.Config) (bool, error) {
@@ -290,55 +129,10 @@ func isManagedByIOR(cfg config.Config) (bool, error) {
 	return manageRoute, nil
 }
 
-func (r *route) onGatewayRemoved(cfg config.Config) error {
-	var result *multierror.Error
-
-	r.gatewaysLock.Lock()
-	defer r.gatewaysLock.Unlock()
-
-	key := gatewayMapKey(cfg.Namespace, cfg.Name)
-	syncRoute, ok := r.gatewayMap[key]
-	if !ok {
-		return fmt.Errorf("could not find an internal reference to gateway %s/%s", cfg.Namespace, cfg.Name)
-	}
-
-	IORLog.Debugf("The gateway %s/%s has %d route(s) associated with it. Removing them now.", cfg.Namespace, cfg.Name, len(syncRoute.routes))
-	for _, route := range syncRoute.routes {
-		result = multierror.Append(result, r.deleteRoute(route))
-	}
-
-	delete(r.gatewayMap, key)
-
-	return result.ErrorOrNil()
-}
-
-func (r *route) handleEvent(event model.Event, cfg config.Config) error {
-	manageRoute, err := isManagedByIOR(cfg)
-	if err != nil {
-		return err
-	}
-	if !manageRoute {
-		IORLog.Infof("Ignoring Gateway %s/%s as it is not managed by Istiod", cfg.Namespace, cfg.Name)
-		return nil
-	}
-
-	switch event {
-	case model.EventAdd:
-		return r.onGatewayAdded(cfg)
-
-	case model.EventUpdate:
-		return r.onGatewayUpdated(cfg)
-
-	case model.EventDelete:
-		return r.onGatewayRemoved(cfg)
-	}
-
-	return fmt.Errorf("unknown event type %s", event)
-}
-
 // Trigerred by SMMR controller when SMMR changes
 func (r *route) SetNamespaces(namespaces []string) {
-	IORLog.Debugf("UpdateNamespaces(%v)", namespaces)
+	IORLog.Debugf("update namespaces to %v", namespaces)
+
 	r.namespaceLock.Lock()
 	r.namespaces = namespaces
 	r.namespaceLock.Unlock()
@@ -356,10 +150,13 @@ func (r *route) deleteRoute(route *v1.Route) error {
 	host := getHost(*route)
 	err := r.routerClient.Routes(route.Namespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
 	if err != nil {
-		return fmt.Errorf("error deleting route %s/%s: %s", route.ObjectMeta.Namespace, route.ObjectMeta.Name, err)
+		return errors.Wrapf(err, "error deleting route %s/%s for the host %s",
+			route.ObjectMeta.Name,
+			route.ObjectMeta.Namespace,
+			host)
 	}
 
-	IORLog.Infof("Deleted route %s/%s (gateway hostname: %s)", route.ObjectMeta.Namespace, route.ObjectMeta.Name, host)
+	IORLog.Infof("route %s/%s deleted for the host %s", route.ObjectMeta.Name, route.ObjectMeta.Namespace, host)
 	return nil
 }
 
@@ -376,26 +173,23 @@ func buildRoute(metadata config.Meta, originalHost string, tls *networking.Serve
 		}
 	}
 
-	// Copy annotations
-	annotations := map[string]string{
+	// Copy annotationMap
+	annotationMap := map[string]string{
 		originalHostAnnotation: originalHost,
 	}
 	for keyName, keyValue := range metadata.Annotations {
 		if !strings.HasPrefix(keyName, "kubectl.kubernetes.io") && keyName != ShouldManageRouteAnnotation {
-			annotations[keyName] = keyValue
+			annotationMap[keyName] = keyValue
 		}
 	}
 
-	// Copy labels
-	labels := map[string]string{
-		generatedByLabel:            generatedByValue,
-		gatewayNamespaceLabel:       metadata.Namespace,
-		gatewayNameLabel:            metadata.Name,
-		gatewayResourceVersionLabel: metadata.ResourceVersion,
-	}
+	// Copy labelMap
+	labelMap := getDefaultRouteLabelMap(metadata.Name, metadata.Namespace)
+	labelMap[gatewayResourceVersionLabel] = metadata.ResourceVersion
+
 	for keyName, keyValue := range metadata.Labels {
 		if !strings.HasPrefix(keyName, maistraPrefix) {
-			labels[keyName] = keyValue
+			labelMap[keyName] = keyValue
 		}
 	}
 
@@ -403,8 +197,8 @@ func buildRoute(metadata config.Meta, originalHost string, tls *networking.Serve
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        getRouteName(metadata.Namespace, metadata.Name, originalHost),
 			Namespace:   serviceNamespace,
-			Labels:      labels,
-			Annotations: annotations,
+			Labels:      labelMap,
+			Annotations: annotationMap,
 		},
 		Spec: v1.RouteSpec{
 			Host: actualHost,
@@ -427,19 +221,22 @@ func (r *route) createRoute(
 	metadata config.Meta,
 	originalHost string,
 	tls *networking.ServerTLSSettings,
-	serviceNamespace string, serviceName string,
+	serviceNamespace, serviceName string,
 ) (*v1.Route, error) {
-	IORLog.Debugf("Creating route for hostname %s", originalHost)
+	IORLog.Debugf("creating route for hostname %s", originalHost)
 
 	nr, err := r.
 		routerClient.
 		Routes(serviceNamespace).
 		Create(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.CreateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error creating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
+		return nil, errors.Wrapf(err, "error creating a route for the host %s from gateway: %s/%s",
+			originalHost,
+			metadata.Namespace,
+			metadata.Name)
 	}
 
-	IORLog.Infof("Created route %s/%s for hostname %s (gateway: %s/%s)",
+	IORLog.Infof("route %s/%s created for hostname %s from gateway %s/%s",
 		nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
 		nr.Spec.Host,
 		metadata.Namespace, metadata.Name)
@@ -453,22 +250,33 @@ func (r *route) updateRoute(
 	tls *networking.ServerTLSSettings,
 	serviceNamespace string, serviceName string,
 ) (*v1.Route, error) {
-	IORLog.Debugf("Updating route for hostname %s", originalHost)
+	IORLog.Debugf("updating route for hostname %s", originalHost)
 
 	nr, err := r.
 		routerClient.
 		Routes(serviceNamespace).
 		Update(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.UpdateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error updating a route for the host %s (gateway: %s/%s): %s", originalHost, metadata.Namespace, metadata.Name, err)
+		return nil, errors.Wrapf(err, "error updating a route for the host %s from gateway: %s/%s",
+			originalHost,
+			metadata.Namespace,
+			metadata.Name)
 	}
 
-	IORLog.Infof("Updated route %s/%s for hostname %s (gateway: %s/%s)",
+	IORLog.Infof("route %s/%s updated for hostname %s from gateway %s/%s",
 		nr.ObjectMeta.Namespace, nr.ObjectMeta.Name,
 		nr.Spec.Host,
 		metadata.Namespace, metadata.Name)
 
 	return nr, nil
+}
+
+func (r *route) findRoutes(metadata config.Meta) (*v1.RouteList, error) {
+	defaultLabelSet := getDefaultRouteLabelMap(metadata.Name, metadata.Namespace)
+
+	labels := labels.SelectorFromSet(defaultLabelSet)
+
+	return r.routerClient.Routes(metadata.Namespace).List(context.TODO(), metav1.ListOptions{LabelSelector: labels.String()})
 }
 
 // findService tries to find a service that matches with the given gateway selector
@@ -482,32 +290,37 @@ func (r *route) findService(gateway *networking.Gateway) (string, string, error)
 
 	for _, ns := range namespaces {
 		// Get the list of pods that match the gateway selector
-		podList, err := r.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{LabelSelector: gwSelector.String()})
+		pods, err := r.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{LabelSelector: gwSelector.String()})
 		if err != nil {
-			return "", "", fmt.Errorf("could not get the list of pods in namespace %s: %v", ns, err)
+			return "", "", errors.Wrapf(err, "could not get the list of pods with labels %s", gwSelector.String())
 		}
+
+		IORLog.Debugf("found %d pod(s) under %s namespace with %s gateway selector", len(pods.Items), ns, gwSelector)
 
 		// Get the list of services in this namespace
-		svcList, err := r.kubeClient.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
+		services, err := r.kubeClient.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			return "", "", fmt.Errorf("could not get the list of services in namespace %s: %v", ns, err)
+			return "", "", errors.Wrapf(err, "could not get all the services in namespace %s", ns)
 		}
 
-		// Look for a service whose selector matches the pod labels
-		for _, pod := range podList.Items {
-			podLabels := labels.Set(pod.ObjectMeta.Labels)
+		IORLog.Debugf("found %d service(s) under %s namespace", len(services.Items), ns)
 
-			for _, svc := range svcList.Items {
-				svcSelector := labels.SelectorFromSet(svc.Spec.Selector)
+		for _, pod := range pods.Items {
+			podLabels := labels.Set(pod.ObjectMeta.Labels)
+			// Look for a service whose selector matches the pod labels
+			for _, service := range services.Items {
+				svcSelector := labels.SelectorFromSet(service.Spec.Selector)
+
+				IORLog.Debugf("matching service selector %s against %s")
 				if svcSelector.Matches(podLabels) {
-					return ns, svc.Name, nil
+					return pod.Namespace, service.Name, nil
 				}
+
 			}
 		}
 	}
 
-	return "", "", fmt.Errorf("could not find a service that matches the gateway selector `%s'. Namespaces where we looked at: %v",
-		gwSelector.String(), namespaces)
+	return "", "", fmt.Errorf("could not find a service that matches the gateway selector '%s'", gwSelector.String())
 }
 
 func getRouteName(namespace, name, host string) string {
@@ -555,34 +368,127 @@ func hostHash(name string) string {
 	return hex.EncodeToString(hash[:8])
 }
 
-func (r *route) processEvent(old, curr config.Config, event model.Event) {
-	_, ok := curr.Spec.(*networking.Gateway)
+func (r *route) reconcileGateway(config *config.Config, routes *v1.RouteList) error {
+	gateway, ok := config.Spec.(*networking.Gateway)
 
 	if !ok {
-		IORLog.Errorf("could not decode object as Gateway. Object = %v", curr)
-		return
+		return fmt.Errorf("could not decode spec as Gateway from %v", config)
 	}
 
-	if IORLog.GetOutputLevel() >= log.DebugLevel {
-		debugMessage := fmt.Sprintf("Event %v arrived:", event)
-		if event == model.EventUpdate {
-			debugMessage += fmt.Sprintf("\tOld object: %v", old)
+	var serviceNamespace string
+	var serviceName string
+	var err error
+
+	serviceNamespace, serviceName, err = r.findService(gateway)
+
+	if err != nil {
+		return errors.Wrapf(err, "gateway %s/%s does not specify a valid service", config.Namespace, config.Name)
+	}
+
+	routeMap := make(map[string]v1.Route)
+
+	for _, v := range routes.Items {
+		routeMap[v.Name] = v
+	}
+
+	var result *multierror.Error
+
+	for _, server := range gateway.Servers {
+		for _, host := range server.Hosts {
+			var route *v1.Route
+			var err error
+
+			name := getRouteName(config.Namespace, config.Name, host)
+
+			_, found := routeMap[name]
+
+			if found {
+				route, err = r.updateRoute(config.Meta, host, server.Tls, serviceNamespace, serviceName)
+			} else {
+				route, err = r.createRoute(config.Meta, host, server.Tls, serviceNamespace, serviceName)
+			}
+
+			if err != nil {
+				result = multierror.Append(result, err)
+			} else {
+				delete(routeMap, route.Name)
+			}
 		}
-		debugMessage += fmt.Sprintf("\tNew object: %v", curr)
+	}
+
+	for k, v := range routeMap {
+		IORLog.Debugf("clean up route %s for host %s", k, getHost(v))
+		if err := r.deleteRoute(&v); err != nil {
+			result = multierror.Append(result, err)
+		}
+	}
+
+	return result.ErrorOrNil()
+}
+
+func (r *route) processEvent(old, curr *config.Config, event model.Event) error {
+	if IORLog.GetOutputLevel() >= log.DebugLevel {
+		debugMessage := fmt.Sprintf("event %v arrived:", event)
+		if event == model.EventUpdate {
+			debugMessage += fmt.Sprintf("\told object: %v", old)
+		}
+		debugMessage += fmt.Sprintf("\tnew object: %v", curr)
+
 		IORLog.Debug(debugMessage)
 	}
 
-	if err := r.handleEvent(event, curr); err != nil {
-		IORLog.Errora(err)
-		if r.errorChannel != nil {
-			r.errorChannel <- err
+	var (
+		err       error
+		isManaged bool
+	)
+
+	isManaged, err = isManagedByIOR(*curr)
+
+	if err != nil {
+		return err
+	}
+
+	if !isManaged {
+		IORLog.Debugf("skipped processing routes for gateway %s/%s, as it is annotated by user", curr.Name, curr.Namespace)
+		return nil
+	}
+
+	config := r.store.Get(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), curr.Name, curr.Namespace)
+
+	// Stop early
+	if config != nil && curr.ResourceVersion < config.ResourceVersion {
+		return nil
+	}
+
+	var routes *v1.RouteList
+
+	routes, err = r.findRoutes(curr.Meta)
+
+	if err != nil {
+		return errors.Wrapf(err, "unable to find routes matching gateway %s/%s", curr.Name, curr.Namespace)
+	}
+
+	if config != nil {
+		return r.reconcileGateway(config, routes)
+	}
+
+	var result *multierror.Error
+
+	for _, route := range routes.Items {
+		if err := r.deleteRoute(&route); err != nil {
+			result = multierror.Append(result, err)
 		}
 	}
+
+	return result.ErrorOrNil()
 }
 
 func (r *route) Run(stop <-chan struct{}) {
 	var aliveLock sync.Mutex
 	alive := true
+
+	IORLog.Debugf("Registering IOR into SMMR broadcast")
+	r.mrc.Register(r, "ior")
 
 	go func(stop <-chan struct{}) {
 		<-stop
@@ -592,16 +498,24 @@ func (r *route) Run(stop <-chan struct{}) {
 		IORLog.Info("This pod is no longer a leader. IOR stopped responding")
 	}(stop)
 
-	IORLog.Debugf("Registering IOR into SMMR broadcast")
-	r.mrc.Register(r, "ior")
-
 	IORLog.Debugf("Registering IOR into Gateway broadcast")
 	kind := collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind()
 	r.store.RegisterEventHandler(kind, func(old, curr config.Config, evt model.Event) {
 		aliveLock.Lock()
 		defer aliveLock.Unlock()
 		if alive {
-			r.processEvent(old, curr, evt)
+			err := r.processEvent(&old, &curr, evt)
+			if err != nil {
+				IORLog.Errorf("failed to process gateway %s/%s event %s: %s", curr.Name, curr.Namespace, evt.String(), err)
+			}
 		}
 	})
+}
+
+func getDefaultRouteLabelMap(name, namespace string) map[string]string {
+	return map[string]string{
+		generatedByLabel:      generatedByValue,
+		gatewayNamespaceLabel: namespace,
+		gatewayNameLabel:      name,
+	}
 }

@@ -23,7 +23,6 @@ import (
 
 	routeapiv1 "github.com/openshift/api/route/v1"
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
-	"github.com/stretchr/testify/assert"
 	k8sioapicorev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -44,7 +43,6 @@ const prefixedLabel = maistraPrefix + "fake"
 func initClients(
 	t *testing.T,
 	stop <-chan struct{},
-	errorChannel chan error,
 	mrc memberroll.MemberRollController,
 ) (model.ConfigStoreController, KubeClient, routev1.RouteV1Interface, *route) {
 	t.Helper()
@@ -67,7 +65,7 @@ func initClients(
 		return nil
 	}, retry.Timeout(time.Second))
 
-	r, err := newRoute(iorKubeClient, routerClient, store, "istio-system", mrc, stop, errorChannel)
+	r, err := newRoute(iorKubeClient, routerClient, store, "istio-system", mrc, stop)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,16 +142,6 @@ func TestCreate(t *testing.T) {
 			1,
 			"",
 			true,
-			nil,
-		},
-		{
-			"Non-existing namespace",
-			"non-existing",
-			[]string{"fail.com"},
-			map[string]string{"istio": "ingressgateway"},
-			0,
-			"could not handle the ADD event for non-existing",
-			false,
 			nil,
 		},
 		{
@@ -241,7 +229,6 @@ func TestCreate(t *testing.T) {
 	IORLog.SetOutputLevel(log.DebugLevel)
 
 	var stop chan struct{}
-	var errorChannel chan error
 	var store model.ConfigStoreController
 	var k8sClient KubeClient
 	var routerClient routev1.RouteV1Interface
@@ -249,65 +236,31 @@ func TestCreate(t *testing.T) {
 	var r *route
 	controlPlaneNs := "istio-system"
 
-	for _, testType := range []string{"initialSync", "events"} {
-		if testType == "events" {
-			stop = make(chan struct{})
-			defer func() { close(stop) }()
-			errorChannel = make(chan error)
-			mrc = newFakeMemberRollController()
-			store, k8sClient, routerClient, r = initClients(t, stop, errorChannel, mrc)
-			r.Run(stop)
-			mrc.setNamespaces(controlPlaneNs)
+	stop = make(chan struct{})
+	defer func() { close(stop) }()
+	mrc = newFakeMemberRollController()
+	store, k8sClient, routerClient, r = initClients(t, stop, mrc)
+	r.Run(stop)
+	mrc.setNamespaces(controlPlaneNs)
 
-			createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
-		}
+	createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
 
-		for i, c := range cases {
-			t.Run(testType+"-"+c.testName, func(t *testing.T) {
-				if testType == "initialSync" {
-					stop = make(chan struct{})
-					defer func() { close(stop) }()
-					errorChannel = make(chan error)
-					mrc = newFakeMemberRollController()
-					store, k8sClient, routerClient, r = initClients(t, stop, errorChannel, mrc)
-					createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
-					r.Run(stop)
-				}
-				gatewayName := fmt.Sprintf("gw%d", i)
-				createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls, c.annotations)
-				if testType == "initialSync" {
-					mrc.setNamespaces(controlPlaneNs)
-				}
-				list, _ := getRoutes(t, routerClient, controlPlaneNs, c.expectedRoutes, time.Second)
-				if err := getError(errorChannel); err != nil {
-					if c.expectedError == "" {
-						t.Fatal(err)
-					}
+	for i, c := range cases {
+		t.Run(c.testName, func(t *testing.T) {
+			gatewayName := fmt.Sprintf("gw%d", i)
+			createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls, c.annotations)
 
-					if !strings.Contains(err.Error(), c.expectedError) {
-						t.Fatalf("expected error message containing `%s', got: %s", c.expectedError, err.Error())
-					}
+			list, _ := getRoutes(t, routerClient, controlPlaneNs, c.expectedRoutes, time.Second)
 
-					// Error is expected and matches the golden string, nothing to do
-				} else {
-					if c.expectedError != "" {
-						t.Fatalf("expected error message containing `%s', got success", c.expectedError)
-					}
+			// Only continue the validation if any route is expected to be created
+			if c.expectedRoutes > 0 {
+				validateRoutes(t, c.hosts, list, gatewayName, c.tls)
 
-					// Only continue the validation if any route is expected to be created
-					if c.expectedRoutes > 0 {
-						validateRoutes(t, c.hosts, list, gatewayName, c.tls)
-
-						// Remove the gateway and expect all routes get removed
-						deleteGateway(t, store, c.ns, gatewayName)
-						_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
-						if err := getError(errorChannel); err != nil {
-							t.Fatal(err)
-						}
-					}
-				}
-			})
-		}
+				// Remove the gateway and expect all routes get removed
+				deleteGateway(t, store, c.ns, gatewayName)
+				_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
+			}
+		})
 	}
 }
 
@@ -412,11 +365,12 @@ func TestEdit(t *testing.T) {
 		},
 	}
 
+	IORLog.SetOutputLevel(log.DebugLevel)
+
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	errorChannel := make(chan error)
 	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient, r := initClients(t, stop, errorChannel, mrc)
+	store, k8sClient, routerClient, r := initClients(t, stop, mrc)
 	r.Run(stop)
 
 	controlPlane := "istio-system"
@@ -425,89 +379,15 @@ func TestEdit(t *testing.T) {
 	mrc.setNamespaces("istio-system")
 
 	list, _ := getRoutes(t, routerClient, controlPlane, 1, time.Second)
-	if err := getError(errorChannel); err != nil {
-		t.Fatal(err)
-	}
 
 	for i, c := range cases {
 		t.Run(c.testName, func(t *testing.T) {
 			editGateway(t, store, c.ns, "gw", c.hosts, c.gwSelector, c.tls, fmt.Sprintf("%d", i+2))
 			list, _ = getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
-			if err := getError(errorChannel); err != nil {
-				t.Fatal(err)
-			}
 
 			validateRoutes(t, c.hosts, list, "gw", c.tls)
 		})
 	}
-}
-
-// TestPerf makes sure we are not doing more API calls than necessary
-func TestPerf(t *testing.T) {
-	t.SkipNow()
-	IORLog.SetOutputLevel(log.DebugLevel)
-	countCallsReset()
-
-	stop := make(chan struct{})
-	defer func() { close(stop) }()
-	errorChannel := make(chan error)
-	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient, r := initClients(t, stop, errorChannel, mrc)
-	r.Run(stop)
-
-	// Create a bunch of namespaces and gateways, and make sure they don't take too long to be created
-	createIngressGateway(t, k8sClient.GetActualClient(), "istio-system", map[string]string{"istio": "ingressgateway"})
-	qty := 100
-	qtyNamespaces := qty + 1
-	createGateways(t, store, 1, qty)
-	mrc.setNamespaces(generateNamespaces(qty)...)
-
-	// It takes ~ 2s on my laptop, it's slower on prow
-	_, ignore := getRoutes(t, routerClient, "istio-system", qty, time.Minute)
-	if err := getError(errorChannel); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, qty, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
-	assert.Equal(t, 0, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
-	assert.Equal(t, qtyNamespaces, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
-	// qty=number of Create() calls; qtyNamespaces=number of List() calls
-	assert.Equal(t, qty+qtyNamespaces, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
-
-	// Now we have a lot of routes created, let's create one more gateway. We don't expect a lot of new API calls
-	countCallsReset()
-	createGateway(t, store, "ns1", "gw-ns1-1", []string{"instant.com"}, map[string]string{"istio": "ingressgateway"}, false, nil)
-	_, ignore = getRoutes(t, routerClient, "istio-system", qty+1, time.Second)
-	if err := getError(errorChannel); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 1, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
-	assert.Equal(t, 0, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
-	assert.Equal(t, 0, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
-	assert.Equal(t, 1, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
-
-	// Editing. We don't expect a lot of new API calls
-	countCallsReset()
-	editGateway(t, store, "ns1", "gw-ns1-1", []string{"edited.com", "edited-other.com"}, map[string]string{"istio": "ingressgateway"}, false, "2")
-	_, ignore = getRoutes(t, routerClient, "istio-system", qty+2, time.Second)
-	if err := getError(errorChannel); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 2, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
-	assert.Equal(t, 1, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
-	assert.Equal(t, 0, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
-	assert.Equal(t, 3, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
-
-	// Same for deletion. We don't expect a lot of new API calls
-	countCallsReset()
-	deleteGateway(t, store, "ns1", "gw-ns1-1")
-	_, ignore = getRoutes(t, routerClient, "istio-system", qty, time.Second)
-	if err := getError(errorChannel); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 0, countCallsGet("create"), "wrong number of calls to client.Routes().Create()")
-	assert.Equal(t, 2, countCallsGet("delete"), "wrong number of calls to client.Routes().Delete()")
-	assert.Equal(t, 0, countCallsGet("list")-ignore, "wrong number of calls to client.Routes().List()")
-	assert.Equal(t, 2, countCallsGet("routes")-ignore, "wrong number of calls to client.Routes()")
 }
 
 // TestConcurrency makes sure IOR can respond to events even when doing its initial sync
@@ -515,9 +395,8 @@ func TestConcurrency(t *testing.T) {
 	IORLog.SetOutputLevel(log.DebugLevel)
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	errorChannel := make(chan error)
 	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient, r := initClients(t, stop, errorChannel, mrc)
+	store, k8sClient, routerClient, r := initClients(t, stop, mrc)
 	r.Run(stop)
 
 	qty := 10
@@ -537,66 +416,6 @@ func TestConcurrency(t *testing.T) {
 
 	// And expect all `qty * 2` gateways to be created
 	_, _ = getRoutes(t, routerClient, "istio-system", (qty * runs), time.Minute)
-	if err := getError(errorChannel); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestDuplicateUpdateEvents(t *testing.T) {
-	t.SkipNow()
-	IORLog.SetOutputLevel(log.DebugLevel)
-	stop := make(chan struct{})
-	defer func() { close(stop) }()
-	errorChannel := make(chan error)
-	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient, route := initClients(t, stop, errorChannel, mrc)
-	route.Run(stop)
-
-	r, err := newRoute(k8sClient, routerClient, store, "istio-system", mrc, stop, errorChannel)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	mrc.setNamespaces("istio-system")
-	createIngressGateway(t, k8sClient.GetActualClient(), "istio-system", map[string]string{"istio": "ingressgateway"})
-
-	cfg := config.Config{
-		Meta: config.Meta{
-			GroupVersionKind: collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(),
-			Namespace:        "istio-system",
-			Name:             "a",
-			ResourceVersion:  "1",
-		},
-		Spec: &networking.Gateway{
-			Servers: []*networking.Server{
-				{
-					Hosts: []string{"a.com"},
-				},
-			},
-		},
-	}
-
-	// Create the first router, should work just fine
-	err := r.handleEvent(model.EventAdd, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	func() {
-		r.gatewaysLock.Lock()
-		defer r.gatewaysLock.Unlock()
-		if len(r.gatewayMap) != 1 {
-			t.Fatal("error creating the first route")
-		}
-	}()
-
-	// Simulate an UPDATE event with the same data, should be ignored
-	err = r.handleEvent(model.EventUpdate, cfg)
-	if err == nil {
-		t.Fatalf("expecting the error: %q, but got nothing", eventDuplicatedMessage)
-	}
-	if msg := err.Error(); msg != eventDuplicatedMessage {
-		t.Fatalf("expecting the error: %q, but got %q", eventDuplicatedMessage, msg)
-	}
 }
 
 func generateNamespaces(qty int) []string {
@@ -620,21 +439,6 @@ func createGateways(t *testing.T, store model.ConfigStoreController, begin, end 
 			false,
 			nil)
 	}
-}
-
-// getError tries to read an error from the error channel.
-// It tries 3 times beforing returning nil, in case of there's no error in the channel,
-// this is to give some time to async functions to run and fill the channel properly
-func getError(errorChannel chan error) error {
-	for i := 1; i < 3; i++ {
-		select {
-		case err := <-errorChannel:
-			return err
-		default:
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	return nil
 }
 
 // getRoutes is a helper function that keeps trying getting a list of routes until it gets `size` items.
