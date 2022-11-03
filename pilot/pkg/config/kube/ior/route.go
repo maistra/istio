@@ -36,6 +36,7 @@ import (
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config"
+	istiolabels "istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/servicemesh/controller"
@@ -52,6 +53,7 @@ const (
 	ShouldManageRouteAnnotation = maistraPrefix + "manageRoute"
 
 	eventDuplicatedMessage = "event UPDATE arrived but resourceVersions are the same - ignoring"
+	hashLength             = 8
 )
 
 type syncRoutes struct {
@@ -197,7 +199,7 @@ func (r *route) initialSync(initialNamespaces []string) error {
 		for _, server := range syncRoute.gateway.Servers {
 			for _, host := range server.Hosts {
 				actualHost, _ := getActualHost(host, false)
-				routeName := getRouteName(syncRoute.metadata.Namespace, syncRoute.metadata.Name, actualHost)
+				routeName := getRouteName(syncRoute.metadata.Namespace, syncRoute.metadata.Name, actualHost, syncRoute.metadata.Namespace)
 				route, ok := routes[routeName]
 				if ok {
 					// A route for this host was found, remove its entry in this map so that in the end only orphan routes are left
@@ -512,7 +514,7 @@ func (r *route) createRoute(metadata config.Meta, gateway *networking.Gateway, o
 
 	nr, err := r.routerClient.Routes(serviceNamespace).Create(context.TODO(), &v1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        getRouteName(metadata.Namespace, metadata.Name, actualHost),
+			Name:        getRouteName(metadata.Namespace, metadata.Name, actualHost, serviceNamespace),
 			Namespace:   serviceNamespace,
 			Labels:      labels,
 			Annotations: annotations,
@@ -583,8 +585,13 @@ func (r *route) findService(gateway *networking.Gateway) (string, string, error)
 		gwSelector.String(), namespaces)
 }
 
-func getRouteName(namespace, name, actualHost string) string {
-	return fmt.Sprintf("%s-%s-%s", namespace, name, hostHash(actualHost))
+func getRouteName(namespace, name, actualHost, serviceNamespace string) string {
+	routeName := fmt.Sprintf("%s-%s-%s", namespace, name, hostHash(actualHost))
+	routeHost := fmt.Sprintf("%s-%s", routeName, serviceNamespace)
+	if len(routeHost) > istiolabels.DNS1123LabelMaxLength {
+		routeName = routeName[:istiolabels.DNS1123LabelMaxLength-(len(serviceNamespace)+1)]
+	}
+	return routeName
 }
 
 // getActualHost returns the actual hostname to be used in the route
@@ -625,5 +632,5 @@ func hostHash(name string) string {
 	}
 
 	hash := sha256.Sum256([]byte(name))
-	return hex.EncodeToString(hash[:8])
+	return hex.EncodeToString(hash[:hashLength])
 }
