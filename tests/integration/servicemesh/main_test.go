@@ -29,6 +29,7 @@ var i istio.Instance
 
 func TestMain(m *testing.M) {
 	// do not change order of setup functions
+	// nolint: staticcheck
 	framework.
 		NewSuite(m).
 		RequireMaxClusters(1).
