@@ -44,18 +44,9 @@ else
 	move_generated=
 endif
 
-.PHONY: maistra-gen-k8s-client
-maistra-gen-k8s-client:
+.PHONY: maistra-gen
+maistra-gen:
 	@$(client_gen) --clientset-name $(kube_clientset_name) --input-base "" --input  $(kube_api_packages) --output-package $(kube_clientset_package) -h $(kube_go_header_text)
 	@$(lister_gen) --input-dirs $(kube_api_packages) --output-package $(kube_listers_package) -h $(kube_go_header_text)
 	@$(informer_gen) --input-dirs $(kube_api_packages) --versioned-clientset-package $(kube_clientset_package)/$(kube_clientset_name) --listers-package $(kube_listers_package) --output-package $(kube_informers_package) -h $(kube_go_header_text)
 	@$(move_generated)
-
-.PHONY: vendor
-vendor:
-	@echo "updating vendor"
-	@go mod vendor
-	@echo "done updating vendor"
-
-.PHONY: gen
-maistra-gen: maistra-gen-k8s-client vendor
