@@ -250,22 +250,6 @@ var (
 	countCallsLock sync.Mutex
 )
 
-func countCallsReset() {
-	countCallsLock.Lock()
-	defer countCallsLock.Unlock()
-	countCalls = map[string]int{}
-}
-
-func countCallsGet(k string) int {
-	countCallsLock.Lock()
-	defer countCallsLock.Unlock()
-	v, ok := countCalls[k]
-	if !ok {
-		v = 0
-	}
-	return v
-}
-
 func countCallsIncrement(k string) {
 	countCallsLock.Lock()
 	defer countCallsLock.Unlock()

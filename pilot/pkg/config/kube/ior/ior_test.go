@@ -250,7 +250,7 @@ func TestCreate(t *testing.T) {
 			gatewayName := fmt.Sprintf("gw%d", i)
 			createGateway(t, store, c.ns, gatewayName, c.hosts, c.gwSelector, c.tls, c.annotations)
 
-			list, _ := getRoutes(t, routerClient, controlPlaneNs, c.expectedRoutes, time.Second)
+			list := getRoutes(t, routerClient, controlPlaneNs, c.expectedRoutes, time.Second)
 
 			// Only continue the validation if any route is expected to be created
 			if c.expectedRoutes > 0 {
@@ -258,7 +258,7 @@ func TestCreate(t *testing.T) {
 
 				// Remove the gateway and expect all routes get removed
 				deleteGateway(t, store, c.ns, gatewayName)
-				_, _ = getRoutes(t, routerClient, c.ns, 0, time.Second)
+				_ = getRoutes(t, routerClient, c.ns, 0, time.Second)
 			}
 		})
 	}
@@ -378,12 +378,12 @@ func TestEdit(t *testing.T) {
 	createGateway(t, store, controlPlane, "gw", []string{"abc.com"}, map[string]string{"istio": "ingressgateway"}, false, nil)
 	mrc.setNamespaces("istio-system")
 
-	list, _ := getRoutes(t, routerClient, controlPlane, 1, time.Second)
+	list := getRoutes(t, routerClient, controlPlane, 1, time.Second)
 
 	for i, c := range cases {
 		t.Run(c.testName, func(t *testing.T) {
 			editGateway(t, store, c.ns, "gw", c.hosts, c.gwSelector, c.tls, fmt.Sprintf("%d", i+2))
-			list, _ = getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
+			list = getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
 
 			validateRoutes(t, c.hosts, list, "gw", c.tls)
 		})
@@ -415,7 +415,7 @@ func TestConcurrency(t *testing.T) {
 	mrc.setNamespaces(generateNamespaces(qty * runs)...)
 
 	// And expect all `qty * 2` gateways to be created
-	_, _ = getRoutes(t, routerClient, "istio-system", (qty * runs), time.Minute)
+	_ = getRoutes(t, routerClient, "istio-system", (qty * runs), time.Minute)
 }
 
 func generateNamespaces(qty int) []string {
@@ -443,7 +443,7 @@ func createGateways(t *testing.T, store model.ConfigStoreController, begin, end 
 
 // getRoutes is a helper function that keeps trying getting a list of routes until it gets `size` items.
 // It returns the list of routes itself and the number of retries it run
-func getRoutes(t *testing.T, routerClient routev1.RouteV1Interface, ns string, size int, timeout time.Duration) (*routeapiv1.RouteList, int) {
+func getRoutes(t *testing.T, routerClient routev1.RouteV1Interface, ns string, size int, timeout time.Duration) *routeapiv1.RouteList {
 	var list *routeapiv1.RouteList
 
 	t.Helper()
@@ -464,7 +464,7 @@ func getRoutes(t *testing.T, routerClient routev1.RouteV1Interface, ns string, s
 		return nil
 	}, retry.Timeout(timeout))
 
-	return list, count
+	return list
 }
 
 func findRouteByHost(list *routeapiv1.RouteList, host string) *routeapiv1.Route {
