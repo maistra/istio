@@ -71,7 +71,6 @@ require (
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.11.0
-	github.com/stretchr/testify v1.7.1
 	github.com/vishvananda/netlink v1.2.0-beta
 	github.com/yl2chen/cidranger v1.0.2
 	go.opencensus.io v0.23.0
@@ -226,6 +225,7 @@ require (
 	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
+	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
 	github.com/vbatts/tar-split v0.11.2 // indirect
 	github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f // indirect
