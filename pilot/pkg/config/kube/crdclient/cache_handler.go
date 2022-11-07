@@ -21,8 +21,10 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc" // import OIDC cluster authentication plugin, e.g. for Tectonic
 	"k8s.io/client-go/tools/cache"
 
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config"
+	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/schema/resource"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/kclient"
@@ -84,9 +86,14 @@ func (h *cacheHandler) callHandlers(old config.Config, curr config.Config, event
 func createCacheHandler(cl *Client, schema resource.Schema, i informers.GenericInformer) *cacheHandler {
 	scope.Debugf("registered CRD %v", schema.GroupVersionKind())
 	h := &cacheHandler{
-		client:   cl,
-		schema:   schema,
-		informer: kclient.NewUntyped(cl.client, i.Informer(), kclient.Filter{ObjectFilter: cl.namespacesFilter}),
+		client: cl,
+		schema: schema,
+	}
+	// if in gw controller mode, don't filter gw-api resources
+	if features.EnableGatewayControllerMode && schema.Group() == gvk.KubernetesGateway.Group {
+		h.informer = kclient.NewUntyped(cl.client, i.Informer(), kclient.Filter{ObjectFilter: func(obj any) bool { return true }})
+	} else {
+		h.informer = kclient.NewUntyped(cl.client, i.Informer(), kclient.Filter{ObjectFilter: cl.namespacesFilter})
 	}
 
 	kind := schema.Kind()

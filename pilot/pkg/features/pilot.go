@@ -778,6 +778,10 @@ var (
 		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
 
 	EnableFederation = env.RegisterBoolVar("PILOT_ENABLE_FEDERATION", false, "").Get()
+
+	EnableGatewayControllerMode = env.Register("PILOT_ENABLE_GATEWAY_CONTROLLER_MODE", false,
+		"If enabled, istiod will watch Gateway API and k8s resources in every namespace, but Istio resources will be limited to "+
+			"namespaces that match the meshConfig.discoverySelectors").Get()
 )
 
 // EnableEndpointSliceController returns the value of the feature flag and whether it was actually specified.

@@ -338,6 +338,11 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 				nil,
 			)
 		}
+
+		// don't use discoveryFilters if in gw-controller mode. always watch all namespaces
+		if features.EnableGatewayControllerMode {
+			c.opts.DiscoveryNamespacesFilter = namespace.NewDiscoveryNamespacesFilter(c.namespaces, []*metav1.LabelSelector{})
+		}
 		if c.opts.DiscoveryNamespacesFilter == nil {
 			c.opts.DiscoveryNamespacesFilter = namespace.NewDiscoveryNamespacesFilter(c.namespaces, options.MeshWatcher.Mesh().DiscoverySelectors)
 		}
