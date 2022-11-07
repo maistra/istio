@@ -1181,7 +1181,7 @@ func (s *Server) initControllers(args *PilotArgs) error {
 
 	s.initSDSServer()
 
-	if features.EnableEnhancedResourceScoping {
+	if features.EnableEnhancedResourceScoping || features.EnableGatewayControllerMode {
 		// setup namespace filter
 		args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter = s.multiclusterController.DiscoveryNamespacesFilter
 	}
