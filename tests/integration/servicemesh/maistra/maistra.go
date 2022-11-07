@@ -254,7 +254,7 @@ func generateMaistraArguments(opts InstallationOptions) string {
 		"path": "/spec/template/spec/containers/0/env/2",
 		"value": {
 			"name": "PILOT_ENABLE_GATEWAY_API",
-			"value": "%t"
+			"value": "%[1]t"
 		}
 	},
 	{
@@ -262,7 +262,7 @@ func generateMaistraArguments(opts InstallationOptions) string {
 		"path": "/spec/template/spec/containers/0/env/3",
 		"value": {
 			"name": "PILOT_ENABLE_GATEWAY_API_STATUS",
-			"value": "%t"
+			"value": "%[1]t"
 		}
 	},
 	{
@@ -270,7 +270,7 @@ func generateMaistraArguments(opts InstallationOptions) string {
 		"path": "/spec/template/spec/containers/0/env/4",
 		"value": {
 			"name": "PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER",
-			"value": "%t"
+			"value": "%[1]t"
 		}
 	},
 	{
@@ -297,7 +297,7 @@ func generateMaistraArguments(opts InstallationOptions) string {
 			"value": ""
 		}
 	}
-]`, opts.EnableGatewayAPI, opts.EnableGatewayAPI, opts.EnableGatewayAPI)
+]`, opts.EnableGatewayAPI)
 }
 
 const enableIOR = `[
