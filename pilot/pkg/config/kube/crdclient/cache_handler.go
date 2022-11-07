@@ -22,9 +22,11 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc" // import OIDC cluster authentication plugin, e.g. for Tectonic
 	"k8s.io/client-go/tools/cache"
 
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/kube/informer"
 	"istio.io/pkg/log"
 )
@@ -82,9 +84,14 @@ func (h *cacheHandler) onEvent(old any, curr any, event model.Event) error {
 func createCacheHandler(cl *Client, schema collection.Schema, i informers.GenericInformer) *cacheHandler {
 	scope.Debugf("registered CRD %v", schema.Resource().GroupVersionKind())
 	h := &cacheHandler{
-		client:   cl,
-		schema:   schema,
-		informer: informer.NewFilteredSharedIndexInformer(cl.namespacesFilter, i.Informer()),
+		client: cl,
+		schema: schema,
+	}
+	// if in gw controller mode, don't filter gw-api resources
+	if features.EnableGatewayControllerMode && schema.Resource().Group() == gvk.KubernetesGateway.Group {
+		h.informer = informer.NewFilteredSharedIndexInformer(func(obj any) bool { return true }, i.Informer())
+	} else {
+		h.informer = informer.NewFilteredSharedIndexInformer(cl.namespacesFilter, i.Informer())
 	}
 
 	h.lister = func(namespace string) cache.GenericNamespaceLister {

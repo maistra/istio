@@ -372,6 +372,11 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 			c.registerHandlers(nsInformer, "Namespaces", c.onSystemNamespaceEvent, nil)
 		}
 
+		// don't use discoveryFilters if in gw-controller mode. always watch all namespaces
+		if features.EnableGatewayControllerMode {
+			c.opts.DiscoveryNamespacesFilter = filter.NewDiscoveryNamespacesFilter(c.nsLister, []*metav1.LabelSelector{})
+		}
+
 		if c.opts.DiscoveryNamespacesFilter == nil {
 			c.opts.DiscoveryNamespacesFilter = filter.NewDiscoveryNamespacesFilter(c.nsLister, options.MeshWatcher.Mesh().DiscoverySelectors)
 		}
