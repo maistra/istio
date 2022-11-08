@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
+	listerv1 "k8s.io/client-go/listers/core/v1"
 
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/model"
@@ -60,10 +61,11 @@ type route struct {
 	store          model.ConfigStoreController
 	stop           <-chan struct{}
 
+	podLister     listerv1.PodLister
+	serviceLister listerv1.ServiceLister
+
 	// memberroll functionality
-	mrc           controller.MemberRollController
-	namespaceLock sync.Mutex
-	namespaces    []string
+	mrc controller.MemberRollController
 }
 
 // newRouterClient returns an OpenShift client for Routers
@@ -101,8 +103,10 @@ func newRoute(
 	r.pilotNamespace = pilotNamespace
 	r.store = store
 	r.mrc = mrc
-	r.namespaces = []string{pilotNamespace}
 	r.stop = stop
+
+	r.podLister = kubeClient.GetActualClient().KubeInformer().Core().V1().Pods().Lister()
+	r.serviceLister = kubeClient.GetActualClient().KubeInformer().Core().V1().Services().Lister()
 
 	return r, nil
 }
@@ -127,15 +131,6 @@ func isManagedByIOR(cfg config.Config) (bool, error) {
 	}
 
 	return manageRoute, nil
-}
-
-// Trigerred by SMMR controller when SMMR changes
-func (r *route) SetNamespaces(namespaces []string) {
-	IORLog.Debugf("update namespaces to %v", namespaces)
-
-	r.namespaceLock.Lock()
-	r.namespaces = namespaces
-	r.namespaceLock.Unlock()
 }
 
 func getHost(route v1.Route) string {
@@ -282,41 +277,34 @@ func (r *route) findRoutes(metadata config.Meta) (*v1.RouteList, error) {
 // findService tries to find a service that matches with the given gateway selector
 // Returns the namespace and service name that is a match, or an error
 func (r *route) findService(gateway *networking.Gateway) (string, string, error) {
-	r.namespaceLock.Lock()
-	namespaces := r.namespaces
-	r.namespaceLock.Unlock()
-
 	gwSelector := labels.SelectorFromSet(gateway.Selector)
 
-	for _, ns := range namespaces {
-		// Get the list of pods that match the gateway selector
-		pods, err := r.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{LabelSelector: gwSelector.String()})
+	// Get the list of pods that match the gateway selector
+	pods, err := r.podLister.List(gwSelector)
+	if err != nil {
+		return "", "", errors.Wrapf(err, "could not get the list of pods with labels %s", gwSelector.String())
+	}
+
+	IORLog.Debugf("found %d pod(s) with %s gateway selector", len(pods), gwSelector)
+
+	// Get the list of services in this namespace
+
+	for _, pod := range pods {
+		services, err := r.serviceLister.Services(pod.Namespace).List(labels.Everything())
 		if err != nil {
-			return "", "", errors.Wrapf(err, "could not get the list of pods with labels %s", gwSelector.String())
+			return "", "", errors.Wrapf(err, "could not get all the services in namespace %s", pod.Namespace)
 		}
+		IORLog.Debugf("found %d service(s) under %s namespace", len(services), pod.Namespace)
+		podLabels := labels.Set(pod.ObjectMeta.Labels)
+		// Look for a service whose selector matches the pod labels
+		for _, service := range services {
+			svcSelector := labels.SelectorFromSet(service.Spec.Selector)
 
-		IORLog.Debugf("found %d pod(s) under %s namespace with %s gateway selector", len(pods.Items), ns, gwSelector)
-
-		// Get the list of services in this namespace
-		services, err := r.kubeClient.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return "", "", errors.Wrapf(err, "could not get all the services in namespace %s", ns)
-		}
-
-		IORLog.Debugf("found %d service(s) under %s namespace", len(services.Items), ns)
-
-		for _, pod := range pods.Items {
-			podLabels := labels.Set(pod.ObjectMeta.Labels)
-			// Look for a service whose selector matches the pod labels
-			for _, service := range services.Items {
-				svcSelector := labels.SelectorFromSet(service.Spec.Selector)
-
-				IORLog.Debugf("matching service selector %s against %s")
-				if svcSelector.Matches(podLabels) {
-					return pod.Namespace, service.Name, nil
-				}
-
+			IORLog.Debugf("matching service selector %s against %s")
+			if svcSelector.Matches(podLabels) {
+				return pod.Namespace, service.Name, nil
 			}
+
 		}
 	}
 
@@ -488,7 +476,6 @@ func (r *route) Run(stop <-chan struct{}) {
 	alive := true
 
 	IORLog.Debugf("Registering IOR into SMMR broadcast")
-	r.mrc.Register(r, "ior")
 
 	go func(stop <-chan struct{}) {
 		<-stop
