@@ -47,7 +47,7 @@ spec:
               - key: maistra.io/exclude-cni
                 operator: NotIn
                 values:
-                - true
+                - "true"
       tolerations:
         # Make sure istio-cni-node gets scheduled on all nodes.
         - effect: NoSchedule
