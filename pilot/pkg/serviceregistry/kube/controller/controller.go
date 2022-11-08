@@ -154,11 +154,11 @@ type Options struct {
 	// present for istiod to function.
 	EnableCRDScan bool
 
-	// DisableNodeAccess determines whether the controller should attempt to
-	// watch and/or list Node objects.  If this is true, some features will not
-	// be available, e.g. NodePort gateways and determining locality information
-	// based on Nodes.
-	DisableNodeAccess bool
+	// EnableNodeAccess determines whether the controller should attempt to
+	// watch and/or list Node objects. If this is set to false, some features
+	// will not be available, e.g. NodePort gateways and determining locality
+	// information based on Nodes.
+	EnableNodeAccess bool
 
 	// EnableIngressClassName determines whether the controller will support
 	// processing Kubernetes Ingress resources that use the new (as of 1.18)
@@ -393,7 +393,7 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		c.endpoints = newEndpointsController(c)
 	}
 
-	if !options.DisableNodeAccess {
+	if options.EnableNodeAccess {
 		// This is for getting the node IPs of a selected set of nodes
 		c.nodeInformer = kubeClient.KubeInformer().Core().V1().Nodes().Informer()
 		_ = c.nodeInformer.SetTransform(kubelib.StripUnusedFields)

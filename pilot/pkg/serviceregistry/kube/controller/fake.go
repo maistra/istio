@@ -204,6 +204,7 @@ func NewFakeControllerWithOptions(t test.Failer, opts FakeControllerOptions) (*F
 		ClusterID:                 opts.ClusterID,
 		DiscoveryNamespacesFilter: opts.DiscoveryNamespacesFilter,
 		MeshServiceController:     meshServiceController,
+		EnableNodeAccess:          true,
 	}
 	c := NewController(opts.Client, options)
 	meshServiceController.AddRegistry(c)

@@ -127,7 +127,7 @@ func patchIstiodArgs(kubeClient kubernetes.Interface) error {
 	{
 		"op": "add",
 		"path": "/spec/template/spec/containers/0/args/3",
-		"value": "--disableNodeAccess=true"
+		"value": "--enableNodeAccess=false"
 	},
 	{
 		"op": "add",
