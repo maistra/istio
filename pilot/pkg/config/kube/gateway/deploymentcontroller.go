@@ -104,7 +104,7 @@ func NewDeploymentController(client kube.Client) *DeploymentController {
 			t := true
 			_, err := c.Patch(context.Background(), name, types.ApplyPatchType, data, metav1.PatchOptions{
 				Force:        &t,
-				FieldManager: ControllerName,
+				FieldManager: string(ControllerName),
 			}, subresources...)
 			return err
 		},
@@ -185,7 +185,7 @@ func (d *DeploymentController) Reconcile(req types.NamespacedName) error {
 		}
 	} else {
 		// Didn't find gateway class... it must use implicit Istio one.
-		if gw.Spec.GatewayClassName != DefaultClassName {
+		if string(gw.Spec.GatewayClassName) != DefaultClassName {
 			return nil
 		}
 	}
