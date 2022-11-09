@@ -50,6 +50,11 @@ import (
 	istiolog "istio.io/pkg/log"
 )
 
+var (
+	ManagedByControllerLabel = "gateway.istio.io/managed"
+	ManagedByControllerValue = strings.ReplaceAll(features.GatewayAPIControllerName, "/", "-")
+)
+
 // DeploymentController implements a controller that materializes a Gateway into an in cluster gateway proxy
 // to serve requests from. This is implemented with a Deployment and Service today.
 // The implementation makes a few non-obvious choices - namely using Server Side Apply from go templates
@@ -111,7 +116,7 @@ var classInfos = getClassInfos()
 
 func getClassInfos() map[string]classInfo {
 	m := map[string]classInfo{
-		DefaultClassName: {
+		string(DefaultClassName): {
 			controller:  constants.ManagedGatewayController,
 			description: "The default Istio GatewayClass",
 			templates:   "kube-gateway",
@@ -151,7 +156,7 @@ func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *mode
 			t := true
 			_, err := c.Patch(context.Background(), name, types.ApplyPatchType, data, metav1.PatchOptions{
 				Force:        &t,
-				FieldManager: constants.ManagedGatewayController,
+				FieldManager: string(ControllerName),
 			}, subresources...)
 			return err
 		},
@@ -247,6 +252,7 @@ func (d *DeploymentController) Reconcile(req types.NamespacedName) error {
 		}
 	} else {
 		// Didn't find gateway class, and it wasn't an implicitly known one
+		// The initial known `classInfos` include waypoint and default gateway.
 		if _, f := classInfos[string(gw.Spec.GatewayClassName)]; !f {
 			return nil
 		}

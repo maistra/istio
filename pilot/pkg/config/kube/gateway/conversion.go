@@ -44,8 +44,12 @@ import (
 	"istio.io/istio/pkg/util/sets"
 )
 
+var (
+	DefaultClassName = k8sbeta.ObjectName(features.GatewayAPIDefaultGatewayClass)
+	ControllerName   = k8sbeta.GatewayController(features.GatewayAPIControllerName)
+)
+
 const (
-	DefaultClassName             = "istio"
 	gatewayAliasForAnnotationKey = "gateway.istio.io/alias-for"
 	gatewayTLSTerminateModeKey   = "gateway.istio.io/tls-terminate-mode"
 	gatewayNameOverride          = "gateway.istio.io/name-override"
@@ -1261,10 +1265,10 @@ func getGatewayClasses(r KubernetesResources) map[string]k8s.GatewayController {
 			})
 		}
 	}
-	if !allFound.Contains(DefaultClassName) {
+	if !allFound.Contains(string(DefaultClassName)) {
 		// Allow `istio` class without explicit GatewayClass. However, if it already exists then do not
 		// add it here, in case it points to a different controller.
-		res[DefaultClassName] = constants.ManagedGatewayController
+		res[string(DefaultClassName)] = constants.ManagedGatewayController
 	}
 	if features.EnableAmbientControllers && !allFound.Contains(constants.WaypointGatewayClassName) {
 		res[constants.WaypointGatewayClassName] = constants.ManagedGatewayMeshController
