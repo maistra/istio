@@ -22,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gateway "sigs.k8s.io/gateway-api/apis/v1beta1"
 
-	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient/clienttest"
 	"istio.io/istio/pkg/test"
@@ -71,19 +70,19 @@ func TestClassController(t *testing.T) {
 	}
 
 	// Class should be created initially
-	expectClass(DefaultClassName, constants.ManagedGatewayController)
+	expectClass(string(DefaultClassName), string(ControllerName))
 
 	// Once we delete it, it should be added back
-	deleteClass(DefaultClassName)
-	expectClass(DefaultClassName, constants.ManagedGatewayController)
+	deleteClass(string(DefaultClassName))
+	expectClass(string(DefaultClassName), string(ControllerName))
 
 	// Overwrite the class, controller should not reconcile it back
-	createClass(DefaultClassName, "different-controller")
-	expectClass(DefaultClassName, "different-controller")
+	createClass(string(DefaultClassName), "different-controller")
+	expectClass(string(DefaultClassName), "different-controller")
 
 	// Once we delete it, it should be added back
-	deleteClass(DefaultClassName)
-	expectClass(DefaultClassName, constants.ManagedGatewayController)
+	deleteClass(string(DefaultClassName))
+	expectClass(string(DefaultClassName), string(ControllerName))
 
 	// Create an unrelated GatewayClass, we should not do anything to it
 	createClass("something-else", "different-controller")
