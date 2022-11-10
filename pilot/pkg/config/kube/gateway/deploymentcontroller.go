@@ -23,7 +23,7 @@ import (
 	"text/template"
 	"time"
 
-	maistrav1alpha2 "github.com/maistra/xns-informer/pkg/generated/gatewayapi/apis/v1beta1"
+	maistrav1beta1 "github.com/maistra/xns-informer/pkg/generated/gatewayapi/apis/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -84,7 +84,7 @@ type patcher func(gvr schema.GroupVersionResource, name string, namespace string
 // NewDeploymentController constructs a DeploymentController and registers required informers.
 // The controller will not start until Run() is called.
 func NewDeploymentController(client kube.Client) *DeploymentController {
-	var gwcInformer maistrav1alpha2.GatewayClassInformer
+	var gwcInformer maistrav1beta1.GatewayClassInformer
 	var gwcLister lister.GatewayClassLister
 	if client.GetMemberRoll() == nil {
 		gwcInformer = client.GatewayAPIInformer().Gateway().V1beta1().GatewayClasses()
