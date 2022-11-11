@@ -39,16 +39,21 @@ import (
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/framework/resource"
+	"istio.io/istio/pkg/test/scopes"
 	"istio.io/istio/pkg/test/util/retry"
 )
 
 func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
+	scopes.Framework.Infof("=== Applying Maistra CRD's")
 	crds, err := manifests.GetManifestsByName()
 	if err != nil {
 		return fmt.Errorf("cannot read maistra CRD YAMLs: %s", err)
 	}
+	scopes.Framework.Infof("=== Got %d Maistra CRD's", len(crds))
+
 	for _, c := range ctx.Clusters().Kube().Primaries() {
-		for _, crd := range crds {
+		for name, crd := range crds {
+			scopes.Framework.Infof("=== Applying Maistra CRD %q", name)
 			// we need to manually Create() the CRD because Apply() wants to write its content into an annotation which fails because of size limitations
 			rawJSON, err := yaml.YAMLToJSON(crd)
 			if err != nil {
@@ -66,6 +71,9 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 			}
 		}
 	}
+
+	scopes.Framework.Infof("=== Waiting 10s after applying Maistra CRD's")
+	time.Sleep(time.Second * 10)
 	return err
 }
 
