@@ -1,5 +1,7 @@
 # Istio
 
+test
+
 ## Issues for this repository are disabled
 
 Issues for this repository are tracked in Red Hat Jira. Please head to <https://issues.redhat.com/browse/OSSM> in order to browse or open an issue.
