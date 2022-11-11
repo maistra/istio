@@ -33,18 +33,22 @@ import (
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
-	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/pkg/log"
 )
 
 const prefixedLabel = maistraPrefix + "fake"
 
-func initClients(
+func newClients(
 	t *testing.T,
 	stop <-chan struct{},
-	mrc memberroll.MemberRollController,
-) (model.ConfigStoreController, KubeClient, routev1.RouteV1Interface, *route) {
+) (
+	model.ConfigStoreController,
+	KubeClient,
+	routev1.RouteV1Interface,
+	*fakeMemberRollController,
+	*route,
+) {
 	t.Helper()
 
 	k8sClient := kube.NewFakeClient()
@@ -60,8 +64,18 @@ func initClients(
 		t.Fatal(err)
 	}
 
+	return store, iorKubeClient, routerClient, newFakeMemberRollController(), r
+}
+
+func runClients(
+	t *testing.T,
+	store model.ConfigStoreController,
+	kubeClient KubeClient,
+	routeClient routev1.RouteV1Interface,
+	stop <-chan struct{},
+) {
 	go store.Run(stop)
-	k8sClient.RunAndWait(stop)
+	kubeClient.GetActualClient().RunAndWait(stop)
 	cache.WaitForCacheSync(stop, store.HasSynced)
 	retry.UntilSuccessOrFail(t, func() error {
 		if !store.HasSynced() {
@@ -69,8 +83,23 @@ func initClients(
 		}
 		return nil
 	}, retry.Timeout(time.Second))
+}
 
-	return store, iorKubeClient, routerClient, r
+func initClients(
+	t *testing.T,
+	stop <-chan struct{},
+) (
+	model.ConfigStoreController,
+	KubeClient,
+	routev1.RouteV1Interface,
+	*fakeMemberRollController,
+	*route,
+) {
+	store, iorKubeClient, routerClient, mrc, r := newClients(t, stop)
+
+	runClients(t, store, iorKubeClient, routerClient, stop)
+
+	return store, iorKubeClient, routerClient, mrc, r
 }
 
 func TestCreate(t *testing.T) {
@@ -228,18 +257,10 @@ func TestCreate(t *testing.T) {
 
 	IORLog.SetOutputLevel(log.DebugLevel)
 
-	var stop chan struct{}
-	var store model.ConfigStoreController
-	var k8sClient KubeClient
-	var routerClient routev1.RouteV1Interface
-	var mrc *fakeMemberRollController
-	var r *route
 	controlPlaneNs := "istio-system"
-
-	stop = make(chan struct{})
+	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	mrc = newFakeMemberRollController()
-	store, k8sClient, routerClient, r = initClients(t, stop, mrc)
+	store, k8sClient, routerClient, mrc, r := initClients(t, stop)
 	r.Run(stop)
 	mrc.setNamespaces(controlPlaneNs)
 
@@ -369,8 +390,7 @@ func TestEdit(t *testing.T) {
 
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient, r := initClients(t, stop, mrc)
+	store, k8sClient, routerClient, mrc, r := initClients(t, stop)
 	r.Run(stop)
 
 	controlPlane := "istio-system"
@@ -395,8 +415,7 @@ func TestConcurrency(t *testing.T) {
 	IORLog.SetOutputLevel(log.DebugLevel)
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	mrc := newFakeMemberRollController()
-	store, k8sClient, routerClient, r := initClients(t, stop, mrc)
+	store, k8sClient, routerClient, mrc, r := initClients(t, stop)
 	r.Run(stop)
 
 	qty := 10
