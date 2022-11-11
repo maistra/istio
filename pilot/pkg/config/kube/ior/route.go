@@ -38,7 +38,6 @@ import (
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/log"
 )
 
@@ -55,17 +54,13 @@ const (
 
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
-	pilotNamespace string
-	routerClient   routev1.RouteV1Interface
-	kubeClient     kubernetes.Interface
-	store          model.ConfigStoreController
-	stop           <-chan struct{}
+	routerClient routev1.RouteV1Interface
+	kubeClient   kubernetes.Interface
+	store        model.ConfigStoreController
+	stop         <-chan struct{}
 
 	podLister     listerv1.PodLister
 	serviceLister listerv1.ServiceLister
-
-	// memberroll functionality
-	mrc controller.MemberRollController
 }
 
 // newRouterClient returns an OpenShift client for Routers
@@ -88,8 +83,6 @@ func newRoute(
 	kubeClient KubeClient,
 	routerClient routev1.RouteV1Interface,
 	store model.ConfigStoreController,
-	pilotNamespace string,
-	mrc controller.MemberRollController,
 	stop <-chan struct{},
 ) (*route, error) {
 	if !kubeClient.IsRouteSupported() {
@@ -100,9 +93,7 @@ func newRoute(
 
 	r.kubeClient = kubeClient.GetActualClient().Kube()
 	r.routerClient = routerClient
-	r.pilotNamespace = pilotNamespace
 	r.store = store
-	r.mrc = mrc
 	r.stop = stop
 
 	r.podLister = kubeClient.GetActualClient().KubeInformer().Core().V1().Pods().Lister()

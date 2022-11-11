@@ -55,7 +55,7 @@ func initClients(
 		t.Fatal(err)
 	}
 
-	r, err := newRoute(iorKubeClient, routerClient, store, "istio-system", mrc, stop)
+	r, err := newRoute(iorKubeClient, routerClient, store, stop)
 	if err != nil {
 		t.Fatal(err)
 	}
