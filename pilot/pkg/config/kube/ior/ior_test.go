@@ -55,6 +55,11 @@ func initClients(
 		t.Fatal(err)
 	}
 
+	r, err := newRoute(iorKubeClient, routerClient, store, "istio-system", mrc, stop)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	go store.Run(stop)
 	k8sClient.RunAndWait(stop)
 	cache.WaitForCacheSync(stop, store.HasSynced)
@@ -64,11 +69,6 @@ func initClients(
 		}
 		return nil
 	}, retry.Timeout(time.Second))
-
-	r, err := newRoute(iorKubeClient, routerClient, store, "istio-system", mrc, stop)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	return store, iorKubeClient, routerClient, r
 }
