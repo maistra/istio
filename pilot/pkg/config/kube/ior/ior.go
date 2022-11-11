@@ -30,7 +30,6 @@ type IOR struct {
 func Run(
 	kubeClient kube.Client,
 	store model.ConfigStoreController,
-	pilotNamespace string,
 	stop <-chan struct{},
 ) {
 	IORLog.Info("setting up IOR")
@@ -39,7 +38,7 @@ func Run(
 		return
 	}
 
-	r, err := newRoute(NewKubeClient(kubeClient), rc, store, pilotNamespace, kubeClient.GetMemberRoll(), stop)
+	r, err := newRoute(NewKubeClient(kubeClient), rc, store, stop)
 	if err != nil {
 		return
 	}
