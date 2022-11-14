@@ -24,6 +24,7 @@ import (
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/keycertbundle"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
@@ -32,12 +33,12 @@ import (
 	"istio.io/istio/security/pkg/k8s"
 )
 
-const (
+var (
 	// CACertNamespaceConfigMap is the name of the ConfigMap in each namespace storing the root cert of non-Kube CA.
-	CACertNamespaceConfigMap = "istio-ca-root-cert"
-)
+	CACertNamespaceConfigMap = features.CACertConfigMapName
 
-var configMapLabel = map[string]string{"istio.io/config": "true"}
+	configMapLabel = map[string]string{"istio.io/config": "true"}
+)
 
 // NamespaceController manages reconciles a configmap in each namespace with a desired set of data.
 type NamespaceController struct {

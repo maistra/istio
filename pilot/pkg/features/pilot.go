@@ -713,6 +713,9 @@ var (
 	EnableGatewayControllerMode = env.Register("PILOT_ENABLE_GATEWAY_CONTROLLER_MODE", false,
 		"If enabled, istiod will watch Gateway API and k8s resources in every namespace, but Istio resources will be limited to "+
 			"namespaces that match the meshConfig.discoverySelectors").Get()
+
+	CACertConfigMapName = env.RegisterStringVar("PILOT_CA_CERT_CONFIG_MAP_NAME", "istio-ca-root-cert",
+		"Name of the ConfigMap that stores the CA Root Certificate.").Get()
 )
 
 // EnableEndpointSliceController returns the value of the feature flag and whether it was actually specified.
