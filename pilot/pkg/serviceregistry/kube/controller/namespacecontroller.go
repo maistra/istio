@@ -33,9 +33,6 @@ import (
 )
 
 const (
-	// CACertNamespaceConfigMap is the name of the ConfigMap in each namespace storing the root cert of non-Kube CA.
-	CACertNamespaceConfigMap = "istio-ca-root-cert"
-
 	// maxRetries is the number of times a namespace will be retried before it is dropped out of the queue.
 	// With the current rate-limiter in use (5ms*2^(maxRetries-1)) the following numbers represent the
 	// sequence of delays between successive queuing of a namespace.
@@ -43,6 +40,9 @@ const (
 	// 5ms, 10ms, 20ms, 40ms, 80ms
 	maxRetries = 5
 )
+
+// CACertNamespaceConfigMap is the name of the ConfigMap in each namespace storing the root cert of non-Kube CA.
+var CACertNamespaceConfigMap = features.CACertConfigMapName
 
 var configMapLabel = map[string]string{"istio.io/config": "true"}
 

@@ -344,10 +344,11 @@ func TestVersionManagement(t *testing.T) {
 }
 
 func testInjectionConfig(t test.Failer) func() inject.WebhookConfig {
-	vc, err := inject.NewValuesConfig(`
+	vc, err := inject.NewValuesConfig(fmt.Sprintf(`
 global:
   hub: test
-  tag: test`)
+  tag: test
+  caCertConfigMapName: %s`, features.CACertConfigMapName))
 	if err != nil {
 		t.Fatal(err)
 	}
