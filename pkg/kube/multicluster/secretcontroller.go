@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -150,10 +151,15 @@ func NewController(kubeclientset kube.Client, namespace string, clusterID cluste
 		informer:            secretsInformer,
 	}
 
-	nsInformer := kubeclientset.KubeInformer().Core().V1().Namespaces().Informer()
-	_ = nsInformer.SetTransform(kube.StripUnusedFields)
-	nsLister := kubeclientset.KubeInformer().Core().V1().Namespaces().Lister()
-	controller.DiscoveryNamespacesFilter = filter.NewDiscoveryNamespacesFilter(nsLister, meshWatcher.Mesh().GetDiscoverySelectors())
+	var nsInformer cache.SharedIndexInformer
+	var nsLister listerv1.NamespaceLister
+	if informerClient.GetMemberRoll() == nil {
+		nsInformer = informerClient.KubeInformer().Core().V1().Namespaces().Informer()
+		nsLister = informerClient.KubeInformer().Core().V1().Namespaces().Lister()
+		_ = nsInformer.SetTransform(kube.StripUnusedFields)
+		controller.DiscoveryNamespacesFilter = filter.NewDiscoveryNamespacesFilter(nsLister, meshWatcher.Mesh().GetDiscoverySelectors())
+	}
+
 	controller.queue = controllers.NewQueue("multicluster secret",
 		controllers.WithMaxAttempts(maxRetries),
 		controllers.WithReconciler(controller.processItem))
