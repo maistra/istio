@@ -488,7 +488,7 @@ templates:
       {{- if eq .Values.global.pilotCertProvider "istiod" }}
       - name: istiod-ca-cert
         configMap:
-          name: istio-ca-root-cert
+          name: {{ .Values.global.caCertConfigMapName }}
       {{- end }}
       {{- if eq .Values.global.pilotCertProvider "kubernetes" }}
       - name: kube-ca-cert
@@ -743,7 +743,7 @@ templates:
       {{- if eq .Values.global.pilotCertProvider "istiod" }}
       - name: istiod-ca-cert
         configMap:
-          name: istio-ca-root-cert
+          name: {{ .Values.global.caCertConfigMapName }}
       {{- end }}
       {{- if .Values.global.mountMtlsCerts }}
       # Use the key and cert mounted to /etc/certs/ for the in-cluster mTLS communications.
@@ -1124,7 +1124,7 @@ templates:
       {{- if eq .Values.global.pilotCertProvider "istiod" }}
       - name: istiod-ca-cert
         configMap:
-          name: istio-ca-root-cert
+          name: {{ .Values.global.caCertConfigMapName }}
       {{- end }}
       {{- if .Values.global.mountMtlsCerts }}
       # Use the key and cert mounted to /etc/certs/ for the in-cluster mTLS communications.
@@ -1360,7 +1360,7 @@ templates:
                   expirationSeconds: 43200
                   path: istio-token
           - configMap:
-              name: istio-ca-root-cert
+              name: {{ .Values.global.caCertConfigMapName }}
             name: istiod-ca-cert
           {{- if .Values.global.imagePullSecrets }}
           imagePullSecrets:
@@ -1647,7 +1647,7 @@ templates:
           {{- if eq .Values.global.pilotCertProvider "istiod" }}
           - name: istiod-ca-cert
             configMap:
-              name: istio-ca-root-cert
+              name: {{ .Values.global.caCertConfigMapName }}
           {{- end }}
           {{- if .Values.global.imagePullSecrets }}
           imagePullSecrets:

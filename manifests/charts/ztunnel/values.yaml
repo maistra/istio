@@ -50,6 +50,9 @@ multiCluster:
 meshConfig:
   defaultConfig:
     proxyMetadata: {}
+global:
+  # The name of the ConfigMap that stores the CA Root Certificate
+  caCertConfigMapName: "istio-ca-root-cert"
 
 # Ambient redirection mode: "iptables" or "ebpf"
 redirectMode: "iptables"
