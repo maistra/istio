@@ -79,6 +79,7 @@ data:
         },
         "autoscalingv2API": true,
         "caAddress": "",
+        "caCertConfigMapName": "istio-ca-root-cert",
         "caName": "",
         "configCluster": false,
         "defaultNodeSelector": {},
@@ -694,7 +695,7 @@ data:
           {{- if eq .Values.global.pilotCertProvider "istiod" }}
           - name: istiod-ca-cert
             configMap:
-              name: istio-ca-root-cert
+              name: {{ .Values.global.caCertConfigMapName }}
           {{- end }}
           {{- if eq .Values.global.pilotCertProvider "kubernetes" }}
           - name: kube-ca-cert
@@ -941,7 +942,7 @@ data:
           {{- if eq .Values.global.pilotCertProvider "istiod" }}
           - name: istiod-ca-cert
             configMap:
-              name: istio-ca-root-cert
+              name: {{ .Values.global.caCertConfigMapName }}
           {{- end }}
           {{- if .Values.global.mountMtlsCerts }}
           # Use the key and cert mounted to /etc/certs/ for the in-cluster mTLS communications.
