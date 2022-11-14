@@ -23,7 +23,7 @@
 // ie only Routes from the same namespace will be taken into account for
 // that listener.
 
-package smmr
+package v1alpha2
 
 import (
 	"context"
@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 		NewSuite(m).
 		RequireMaxClusters(1).
 		Setup(maistra.ApplyServiceMeshCRDs).
-		Setup(maistra.ApplyGatewayAPICRDs).
+		Setup(maistra.ApplyGatewayAPICRDs("v1alpha2")).
 		Setup(istio.Setup(&i, nil)).
 		Setup(deployment.SetupSingleNamespace(&apps, deployment.Config{})).
 		Setup(maistra.Install(maistra.InstallationOptions{EnableGatewayAPI: true})).
@@ -85,13 +85,6 @@ func TestGateway(t *testing.T) {
 				false, apps.Namespace.Name(), t.Clusters().Configs()...)
 			retry.UntilSuccessOrFail(t, func() error {
 				err := t.ConfigIstio().YAML("", fmt.Sprintf(`
-apiVersion: gateway.networking.k8s.io/v1alpha2
-kind: GatewayClass
-metadata:
-  name: istio
-spec:
-  controllerName: istio.io/gateway-controller
----
 apiVersion: gateway.networking.k8s.io/v1alpha2
 kind: Gateway
 metadata:
