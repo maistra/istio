@@ -31,14 +31,6 @@ rules:
     resources: ["endpointslices"]
     verbs: ["get", "list", "watch"]
 
-  # discovery and routing
-  - apiGroups: [""]
-    resources: ["pods", "nodes", "services", "namespaces", "endpoints"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["discovery.k8s.io"]
-    resources: ["endpointslices"]
-    verbs: ["get", "list", "watch"]
-
   # ingress controller
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
