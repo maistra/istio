@@ -47,6 +47,7 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot read maistra CRD YAMLs: %s", err)
 	}
+
 	for _, c := range ctx.Clusters().Kube().Primaries() {
 		for _, crd := range crds {
 			// we need to manually Create() the CRD because Apply() wants to write its content into an annotation which fails because of size limitations
@@ -65,6 +66,8 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 				}
 			}
 		}
+
+		c.InvalidateDiscovery()
 	}
 	return err
 }
