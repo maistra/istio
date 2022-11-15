@@ -25,16 +25,13 @@ import (
 	"istio.io/istio/tests/integration/servicemesh/maistra"
 )
 
-var i istio.Instance
-
 func TestMain(m *testing.M) {
 	// do not change order of setup functions
 	// nolint: staticcheck
 	framework.
 		NewSuite(m).
-		RequireMaxClusters(1).
 		Setup(maistra.ApplyServiceMeshCRDs).
-		Setup(istio.Setup(&i, nil)).
+		Setup(istio.Setup(nil, nil)).
 		Setup(maistra.Install).
 		Run()
 }
