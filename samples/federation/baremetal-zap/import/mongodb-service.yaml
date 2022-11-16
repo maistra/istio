@@ -1,0 +1,12 @@
+# This is required, as apparently a VirtualService matching 
+# mysqldb.mesh2-bookinfo.svc.cluster.local does not create DNS entry for routing
+kind: Service
+apiVersion: v1
+metadata:
+  name: mysqldb
+  namespace: mesh2-bookinfo
+spec:
+  type: ClusterIP
+  ports:
+  - port: 27017
+    name: mysql
