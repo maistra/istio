@@ -157,9 +157,6 @@ type Client interface {
 	// GetKubernetesVersion returns the Kubernetes server version
 	GetKubernetesVersion() (*kubeVersion.Info, error)
 
-	// SetNamespaces sets watched namespaces if no MemberRoll controller exists.
-	SetNamespaces(namespaces []string)
-
 	// AddMemberRoll creates a MemberRollController and adds it to the client.
 	AddMemberRoll(namespace, memberRollName string) error
 
@@ -552,20 +549,6 @@ func (c *client) ExtInformer() kubeExtInformers.SharedInformerFactory {
 
 func (c *client) HasStarted() bool {
 	return c.started.Load()
-}
-
-func (c *client) SetNamespaces(namespaces []string) {
-	// This is a no-op if a MemberRoll controller exists.
-	if c.memberRoll != nil {
-		return
-	}
-
-	c.kubeInformer.SetNamespaces(namespaces)
-	c.istioInformer.SetNamespaces(namespaces)
-	c.dynamicInformer.SetNamespaces(namespaces)
-	if features.EnableGatewayAPI {
-		c.gatewayapiInformer.SetNamespaces(namespaces)
-	}
 }
 
 func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {

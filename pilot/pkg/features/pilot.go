@@ -695,6 +695,9 @@ var (
 		false,
 		"True if the stats runtime should use the Envoy extension instead of the compiled Wasm extension.",
 	).Get()
+
+	EnableIOR = env.RegisterBoolVar("ENABLE_IOR", false,
+		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
 )
 
 // EnableEndpointSliceController returns the value of the feature flag and whether it was actually specified.
