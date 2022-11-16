@@ -46,7 +46,7 @@ rules:
 
   # Use for Kubernetes Service APIs
   - apiGroups: ["networking.x-k8s.io", "gateway.networking.k8s.io"]
-    resources: ["gateways", "httproutes", "tcproutes", "tlsroutes", "udproutes", "referencepolicies"]
+    resources: ["gateways", "httproutes", "tcproutes", "tlsroutes", "udproutes", "referencepolicies", "referencegrants"]
     verbs: ["get", "watch", "list"]
   - apiGroups: ["networking.x-k8s.io", "gateway.networking.k8s.io"]
     resources: ["gateways/status", "httproutes/status", "tcproutes/status", "tlsroutes/status", "udproutes/status", "referencepolicies/status"]

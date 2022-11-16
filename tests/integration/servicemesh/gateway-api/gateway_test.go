@@ -23,7 +23,7 @@
 // ie only Routes from the same namespace will be taken into account for
 // that listener.
 
-package v1alpha2
+package gateway_api
 
 import (
 	"context"
@@ -33,7 +33,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8s "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	k8s "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/config/protocol"
@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 		NewSuite(m).
 		RequireMaxClusters(1).
 		Setup(maistra.ApplyServiceMeshCRDs).
-		Setup(maistra.ApplyGatewayAPICRDs("v1alpha2")).
+		Setup(maistra.ApplyGatewayAPICRDs()).
 		Setup(istio.Setup(&i, nil)).
 		Setup(deployment.SetupSingleNamespace(&apps, deployment.Config{})).
 		Setup(maistra.Install(maistra.InstallationOptions{EnableGatewayAPI: true})).
@@ -85,7 +85,7 @@ func TestGateway(t *testing.T) {
 				false, apps.Namespace.Name(), t.Clusters().Configs()...)
 			retry.UntilSuccessOrFail(t, func() error {
 				err := t.ConfigIstio().YAML("", fmt.Sprintf(`
-apiVersion: gateway.networking.k8s.io/v1alpha2
+apiVersion: gateway.networking.k8s.io/v1beta1
 kind: Gateway
 metadata:
   name: gateway
@@ -148,7 +148,7 @@ spec:
 			}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
 			retry.UntilSuccessOrFail(t, func() error {
 				err := t.ConfigIstio().YAML(apps.Namespace.Name(), `
-apiVersion: gateway.networking.k8s.io/v1alpha2
+apiVersion: gateway.networking.k8s.io/v1beta1
 kind: HTTPRoute
 metadata:
   name: http
@@ -179,7 +179,7 @@ spec:
     - name: b
       port: 80
 ---
-apiVersion: gateway.networking.k8s.io/v1alpha2
+apiVersion: gateway.networking.k8s.io/v1beta1
 kind: HTTPRoute
 metadata:
   name: b
@@ -209,7 +209,7 @@ spec:
 			}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
 			retry.UntilSuccessOrFail(t, func() error {
 				err := t.ConfigIstio().YAML(secondaryNamespace.Name(), fmt.Sprintf(`
-apiVersion: gateway.networking.k8s.io/v1alpha2
+apiVersion: gateway.networking.k8s.io/v1beta1
 kind: HTTPRoute
 metadata:
   name: http
@@ -322,7 +322,7 @@ spec:
 					})
 					t.NewSubTest("status").Run(func(t framework.TestContext) {
 						retry.UntilSuccessOrFail(t, func() error {
-							gw, err := t.Clusters().Kube().Default().GatewayAPI().GatewayV1alpha2().Gateways("istio-system").Get(
+							gw, err := t.Clusters().Kube().Default().GatewayAPI().GatewayV1beta1().Gateways("istio-system").Get(
 								context.Background(), "gateway", metav1.GetOptions{})
 							if err != nil {
 								return err
@@ -335,7 +335,7 @@ spec:
 					})
 				})
 				t.NewSubTest("managed").Run(func(t framework.TestContext) {
-					t.ConfigIstio().YAML(apps.Namespace.Name(), `apiVersion: gateway.networking.k8s.io/v1alpha2
+					t.ConfigIstio().YAML(apps.Namespace.Name(), `apiVersion: gateway.networking.k8s.io/v1beta1
 kind: Gateway
 metadata:
   name: gateway
@@ -347,7 +347,7 @@ spec:
     port: 80
     protocol: HTTP
 ---
-apiVersion: gateway.networking.k8s.io/v1alpha2
+apiVersion: gateway.networking.k8s.io/v1beta1
 kind: HTTPRoute
 metadata:
   name: http
