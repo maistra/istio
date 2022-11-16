@@ -1,0 +1,23 @@
+apiVersion: federation.maistra.io/v1
+kind: ServiceMeshPeer
+metadata:
+  name: mesh2
+  namespace: mesh1-system
+spec:
+  remote:
+    addresses:
+    - {{MESH2_ADDRESS}}
+    discoveryPort: {{MESH2_DISCOVERY_PORT}}
+    servicePort: {{MESH2_SERVICE_PORT}}
+  gateways:
+    ingress:
+      name: mesh2-ingress
+    egress:
+      name: mesh2-egress
+  security:
+    trustDomain: mesh2.local
+    clientID: mesh2.local/ns/mesh2-system/sa/mesh1-egress-service-account
+    # same as default, if certificateChain is omitted
+    certificateChain:
+      kind: ConfigMap
+      name: mesh2-ca-root-cert
