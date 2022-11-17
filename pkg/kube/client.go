@@ -228,7 +228,7 @@ type CLIClient interface {
 	// SetPortManager overrides the default port manager to provision local ports
 	SetPortManager(PortManager)
 
-	// InvalidateDiscovery invalidates the discovery client
+	// InvalidateDiscovery() invalidates the discovery client, useful after manually changing CRD's
 	InvalidateDiscovery()
 }
 
