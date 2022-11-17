@@ -23,7 +23,7 @@
 // ie only Routes from the same namespace will be taken into account for
 // that listener.
 
-package gateway_api
+package gateway
 
 import (
 	"context"
@@ -58,7 +58,6 @@ func TestMain(m *testing.M) {
 	// nolint: staticcheck
 	framework.
 		NewSuite(m).
-		RequireMaxClusters(1).
 		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(maistra.ApplyGatewayAPICRDs()).
 		Setup(istio.Setup(&i, nil)).
@@ -74,163 +73,28 @@ func TestGateway(t *testing.T) {
 			secondaryNamespace := namespace.NewOrFail(t, t, namespace.Config{
 				Prefix: "secondary",
 				Inject: true,
+				Labels: map[string]string{"test": "test"},
 			})
 			memberNamespace := apps.Namespace.Name()
+
 			if err := maistra.ApplyServiceMeshMemberRoll(t, memberNamespace); err != nil {
 				t.Fatalf("failed to apply SMMR for namespace %s: %s", memberNamespace, err)
 			}
+
 			ingressutil.CreateIngressKubeSecretInNamespace(t, "test-gateway-cert-same", ingressutil.TLS, ingressutil.IngressCredentialA,
 				false, apps.Namespace.Name(), t.Clusters().Configs()...)
+
 			ingressutil.CreateIngressKubeSecretInNamespace(t, "test-gateway-cert-cross", ingressutil.TLS, ingressutil.IngressCredentialB,
 				false, apps.Namespace.Name(), t.Clusters().Configs()...)
-			retry.UntilSuccessOrFail(t, func() error {
-				err := t.ConfigIstio().YAML("", fmt.Sprintf(`
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: Gateway
-metadata:
-  name: gateway
-  namespace: istio-system
-spec:
-  addresses:
-  - value: istio-ingressgateway
-    type: Hostname
-  gatewayClassName: istio
-  listeners:
-  - name: http
-    hostname: "*.domain.example"
-    port: 80
-    protocol: HTTP
-    allowedRoutes:
-      namespaces:
-        from: All
-  - name: http-secondary
-    hostname: "secondary.namespace"
-    port: 80
-    protocol: HTTP
-    allowedRoutes:
-      namespaces:
-        selector:
-          matchLabels:
-            test: test
-  - name: tcp
-    port: 31400
-    protocol: TCP
-    allowedRoutes:
-      namespaces:
-        from: All
-  - name: tls-cross
-    hostname: cross-namespace.domain.example
-    port: 443
-    protocol: HTTPS
-    allowedRoutes:
-      namespaces:
-        from: All
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - kind: Secret
-        name: test-gateway-cert-cross
-        namespace: "%s"
-  - name: tls-same
-    hostname: same-namespace.domain.example
-    port: 443
-    protocol: HTTPS
-    allowedRoutes:
-      namespaces:
-        from: All
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - kind: Secret
-        name: test-gateway-cert-same
----`, apps.Namespace.Name())).Apply()
-				return err
-			}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
-			retry.UntilSuccessOrFail(t, func() error {
-				err := t.ConfigIstio().YAML(apps.Namespace.Name(), `
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
-metadata:
-  name: http
-spec:
-  hostnames: ["my.domain.example"]
-  parentRefs:
-  - name: gateway
-    namespace: istio-system
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /get/
-    backendRefs:
-    - name: b
-      port: 80
----
-apiVersion: gateway.networking.k8s.io/v1alpha2
-kind: TCPRoute
-metadata:
-  name: tcp
-spec:
-  parentRefs:
-  - name: gateway
-    namespace: istio-system
-  rules:
-  - backendRefs:
-    - name: b
-      port: 80
----
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
-metadata:
-  name: b
-spec:
-  parentRefs:
-  - kind: Mesh
-    name: istio
-  - name: gateway
-    namespace: istio-system
-  hostnames: ["b"]
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /path
-    filters:
-    - type: RequestHeaderModifier
-      requestHeaderModifier:
-        add:
-        - name: my-added-header
-          value: added-value
-    backendRefs:
-    - name: b
-      port: 80
-`).Apply()
-				return err
-			}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
-			retry.UntilSuccessOrFail(t, func() error {
-				err := t.ConfigIstio().YAML(secondaryNamespace.Name(), fmt.Sprintf(`
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
-metadata:
-  name: http
-spec:
-  hostnames: ["secondary.namespace"]
-  parentRefs:
-  - name: gateway
-    namespace: istio-system
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /get/
-    backendRefs:
-    - name: b
-      namespace: %s
-      port: 80
-`, apps.Namespace.Name())).Apply()
-				return err
-			}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
+
+			applyGatewayOrFail(t)
+
+			applyRoutesForPrimaryNsOrFail(t)
+
+			applyRoutesForSecondaryNsOrFail(t, secondaryNamespace)
+
 			for _, ingr := range istio.IngressesOrFail(t, t) {
+
 				t.NewSubTest(ingr.Cluster().StableName()).Run(func(t framework.TestContext) {
 					t.NewSubTest("http").Run(func(t framework.TestContext) {
 						paths := []string{"/get", "/get/", "/get/prefix"}
@@ -312,7 +176,10 @@ spec:
 								HTTP: echo.HTTP{
 									Path: "/path",
 								},
-								Check: check.And(check.OK(), check.RequestHeader("my-added-header", "added-value")),
+								Check: check.And(
+									check.OK(),
+									check.RequestHeader("my-added-header", "added-value"),
+								),
 							})
 							if err != nil {
 								return fmt.Errorf("failed to execute request to ingress route: %s", err)
@@ -334,6 +201,7 @@ spec:
 						})
 					})
 				})
+
 				t.NewSubTest("managed").Run(func(t framework.TestContext) {
 					t.ConfigIstio().YAML(apps.Namespace.Name(), `apiVersion: gateway.networking.k8s.io/v1beta1
 kind: Gateway
@@ -378,4 +246,160 @@ spec:
 				})
 			}
 		})
+}
+
+func applyRoutesForSecondaryNsOrFail(t framework.TestContext, secondaryNamespace namespace.Instance) {
+	retry.UntilSuccessOrFail(t, func() error {
+		err := t.ConfigIstio().YAML(secondaryNamespace.Name(), fmt.Sprintf(`
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: http
+spec:
+  hostnames: ["secondary.namespace"]
+  parentRefs:
+  - name: gateway
+    namespace: istio-system
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /get/
+    backendRefs:
+    - name: b
+      namespace: %s
+      port: 80
+`, apps.Namespace.Name())).Apply()
+		return err
+	}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
+}
+
+func applyRoutesForPrimaryNsOrFail(t framework.TestContext) {
+	retry.UntilSuccessOrFail(t, func() error {
+		err := t.ConfigIstio().YAML(apps.Namespace.Name(), `
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: http
+spec:
+  hostnames: ["my.domain.example"]
+  parentRefs:
+  - name: gateway
+    namespace: istio-system
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /get/
+    backendRefs:
+    - name: b
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: tcp
+spec:
+  parentRefs:
+  - name: gateway
+    namespace: istio-system
+  rules:
+  - backendRefs:
+    - name: b
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: b
+spec:
+  parentRefs:
+  - kind: Service
+    name: b
+  - name: gateway
+    namespace: istio-system
+  hostnames: ["b"]
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /path
+    filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        add:
+        - name: my-added-header
+          value: added-value
+    backendRefs:
+    - name: b
+      port: 80
+`).Apply()
+		return err
+	}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
+}
+
+func applyGatewayOrFail(t framework.TestContext) {
+	retry.UntilSuccessOrFail(t, func() error {
+		err := t.ConfigIstio().YAML("", fmt.Sprintf(`
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: gateway
+  namespace: istio-system
+spec:
+  addresses:
+  - value: istio-ingressgateway
+    type: Hostname
+  gatewayClassName: istio
+  listeners:
+  - name: http
+    hostname: "*.domain.example"
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: http-secondary
+    hostname: "secondary.namespace"
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        selector:
+          matchLabels:
+            test: test
+  - name: tcp
+    port: 31400
+    protocol: TCP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: tls-cross
+    hostname: cross-namespace.domain.example
+    port: 443
+    protocol: HTTPS
+    allowedRoutes:
+      namespaces:
+        from: All
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: test-gateway-cert-cross
+        namespace: "%s"
+  - name: tls-same
+    hostname: same-namespace.domain.example
+    port: 443
+    protocol: HTTPS
+    allowedRoutes:
+      namespaces:
+        from: All
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: test-gateway-cert-same
+---`, apps.Namespace.Name())).Apply()
+		return err
+	}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
 }
