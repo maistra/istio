@@ -16,7 +16,6 @@ package install
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -67,7 +66,7 @@ func TestCopyBinaries(t *testing.T) {
 
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			srcDir, err := ioutil.TempDir("", fmt.Sprintf("test-case-%d-src-", i))
+			srcDir, err := os.MkdirTemp("", fmt.Sprintf("test-case-%d-src-", i))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -77,13 +76,13 @@ func TestCopyBinaries(t *testing.T) {
 				}
 			}()
 			for filename, contents := range c.srcFiles {
-				err := ioutil.WriteFile(filepath.Join(srcDir, filename), []byte(contents), os.ModePerm)
+				err := os.WriteFile(filepath.Join(srcDir, filename), []byte(contents), os.ModePerm)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			targetDir, err := ioutil.TempDir("", fmt.Sprintf("test-case-%d-target-", i))
+			targetDir, err := os.MkdirTemp("", fmt.Sprintf("test-case-%d-target-", i))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -93,7 +92,7 @@ func TestCopyBinaries(t *testing.T) {
 				}
 			}()
 			for filename, contents := range c.existingFiles {
-				err := ioutil.WriteFile(filepath.Join(targetDir, filename), []byte(contents), os.ModePerm)
+				err := os.WriteFile(filepath.Join(targetDir, filename), []byte(contents), os.ModePerm)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -105,7 +104,7 @@ func TestCopyBinaries(t *testing.T) {
 			}
 
 			for filename, expectedContents := range c.expectedFiles {
-				contents, err := ioutil.ReadFile(filepath.Join(targetDir, filename))
+				contents, err := os.ReadFile(filepath.Join(targetDir, filename))
 				if err != nil {
 					t.Fatal(err)
 				}
