@@ -296,7 +296,7 @@ spec:
       certificateRefs:
       - kind: Secret
         name: test-gateway-cert-cross
-        namespace: "%s"
+        namespace: "%[1]s"
   - name: tls-same
     hostname: same-namespace.domain.example
     port: 443
@@ -309,6 +309,20 @@ spec:
       certificateRefs:
       - kind: Secret
         name: test-gateway-cert-same
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: ReferenceGrant
+metadata:
+  name: allow-gateways-to-ref-secrets
+  namespace: %[1]s
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    namespace: istio-system
+  to:
+  - group: ""
+    kind: Secret
 ---`, apps.Namespace.Name())).Apply()
 		return err
 	}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
