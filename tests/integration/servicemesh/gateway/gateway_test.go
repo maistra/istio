@@ -248,28 +248,68 @@ spec:
 		})
 }
 
-func applyRoutesForSecondaryNsOrFail(t framework.TestContext, secondaryNamespace namespace.Instance) {
+func applyGatewayOrFail(t framework.TestContext) {
 	retry.UntilSuccessOrFail(t, func() error {
-		err := t.ConfigIstio().YAML(secondaryNamespace.Name(), fmt.Sprintf(`
+		err := t.ConfigIstio().YAML("", fmt.Sprintf(`
 apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
+kind: Gateway
 metadata:
-  name: http
+  name: gateway
+  namespace: istio-system
 spec:
-  hostnames: ["secondary.namespace"]
-  parentRefs:
-  - name: gateway
-    namespace: istio-system
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /get/
-    backendRefs:
-    - name: b
-      namespace: %s
-      port: 80
-`, apps.Namespace.Name())).Apply()
+  addresses:
+  - value: istio-ingressgateway
+    type: Hostname
+  gatewayClassName: istio
+  listeners:
+  - name: http
+    hostname: "*.domain.example"
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: http-secondary
+    hostname: "secondary.namespace"
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        selector:
+          matchLabels:
+            test: test
+  - name: tcp
+    port: 31400
+    protocol: TCP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: tls-cross
+    hostname: cross-namespace.domain.example
+    port: 443
+    protocol: HTTPS
+    allowedRoutes:
+      namespaces:
+        from: All
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: test-gateway-cert-cross
+        namespace: "%s"
+  - name: tls-same
+    hostname: same-namespace.domain.example
+    port: 443
+    protocol: HTTPS
+    allowedRoutes:
+      namespaces:
+        from: All
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: test-gateway-cert-same
+---`, apps.Namespace.Name())).Apply()
 		return err
 	}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
 }
@@ -338,68 +378,28 @@ spec:
 	}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
 }
 
-func applyGatewayOrFail(t framework.TestContext) {
+func applyRoutesForSecondaryNsOrFail(t framework.TestContext, secondaryNamespace namespace.Instance) {
 	retry.UntilSuccessOrFail(t, func() error {
-		err := t.ConfigIstio().YAML("", fmt.Sprintf(`
+		err := t.ConfigIstio().YAML(secondaryNamespace.Name(), fmt.Sprintf(`
 apiVersion: gateway.networking.k8s.io/v1beta1
-kind: Gateway
+kind: HTTPRoute
 metadata:
-  name: gateway
-  namespace: istio-system
+  name: http
 spec:
-  addresses:
-  - value: istio-ingressgateway
-    type: Hostname
-  gatewayClassName: istio
-  listeners:
-  - name: http
-    hostname: "*.domain.example"
-    port: 80
-    protocol: HTTP
-    allowedRoutes:
-      namespaces:
-        from: All
-  - name: http-secondary
-    hostname: "secondary.namespace"
-    port: 80
-    protocol: HTTP
-    allowedRoutes:
-      namespaces:
-        selector:
-          matchLabels:
-            test: test
-  - name: tcp
-    port: 31400
-    protocol: TCP
-    allowedRoutes:
-      namespaces:
-        from: All
-  - name: tls-cross
-    hostname: cross-namespace.domain.example
-    port: 443
-    protocol: HTTPS
-    allowedRoutes:
-      namespaces:
-        from: All
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - kind: Secret
-        name: test-gateway-cert-cross
-        namespace: "%s"
-  - name: tls-same
-    hostname: same-namespace.domain.example
-    port: 443
-    protocol: HTTPS
-    allowedRoutes:
-      namespaces:
-        from: All
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - kind: Secret
-        name: test-gateway-cert-same
----`, apps.Namespace.Name())).Apply()
+  hostnames: ["secondary.namespace"]
+  parentRefs:
+  - name: gateway
+    namespace: istio-system
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /get/
+    backendRefs:
+    - name: b
+      namespace: %s
+      port: 80
+`, apps.Namespace.Name())).Apply()
 		return err
 	}, retry.Delay(time.Second*10), retry.Timeout(time.Second*90))
 }
