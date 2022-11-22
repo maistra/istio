@@ -178,7 +178,7 @@ func getPodName(ctx framework.TestContext, namespace, appName string) (string, e
 
 func applyGatewayOrFail(ctx framework.TestContext, ns string, hosts ...string) {
 	gwYAML := fmt.Sprintf(`
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
   name: %s
@@ -203,22 +203,22 @@ spec:
 
 func applyVirtualServiceOrFail(ctx framework.TestContext, ns, gatewayNs, virtualServiceName string) {
 	vsYAML := fmt.Sprintf(`
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: %s
+  name: %[1]s
 spec:
   hosts:
-  - "%s.maistra.io"
+  - "%[1]s.maistra.io"
   gateways:
-  - %s/%s
+  - %[2]s/%[3]s
   http:
   - route:
     - destination:
         host: localhost
         port:
           number: 8080
-`, virtualServiceName, virtualServiceName, gatewayNs, gatewayName)
+`, virtualServiceName, gatewayNs, gatewayName)
 	// retry because of flaky validation webhook
 	retry.UntilSuccessOrFail(ctx, func() error {
 		return ctx.ConfigIstio().YAML(ns, vsYAML).Apply()

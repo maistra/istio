@@ -34,6 +34,6 @@ func TestMain(m *testing.M) {
 		Setup(router.InstallOpenShiftRouter).
 		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(nil, nil)).
-		Setup(maistra.Install).
+		Setup(maistra.Install(maistra.InstallationOptions{EnableGatewayAPI: false})).
 		Run()
 }
