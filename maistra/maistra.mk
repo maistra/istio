@@ -53,11 +53,3 @@ $(foreach TGT,$(MAISTRA_IMAGES),$(eval PUSH_MAISTRA_IMAGES+=push.$(TGT)))
 # This target will build and push all the container images
 .PHONY: maistra-image.push
 maistra-image.push: $(PUSH_MAISTRA_IMAGES)
-
-.PHONY: vendor
-vendor:
-	@echo "updating vendor"
-	@go mod vendor
-	@echo "done updating vendor"
-
-gen: vendor
