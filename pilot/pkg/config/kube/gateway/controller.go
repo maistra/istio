@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	klabels "k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"istio.io/istio/pilot/pkg/credentials"
 	"istio.io/istio/pilot/pkg/features"
@@ -98,11 +99,9 @@ func NewController(
 ) *Controller {
 	var ctl *status.Controller
 
-	namespaces := kclient.New[*corev1.Namespace](kc)
 	gatewayController := &Controller{
 		client:                kc,
 		cache:                 c,
-		namespaces:            namespaces,
 		credentialsController: credsController,
 		cluster:               options.ClusterID,
 		domain:                options.DomainSuffix,
@@ -112,16 +111,19 @@ func NewController(
 		waitForCRD:    waitForCRD,
 	}
 
-	namespaces.AddEventHandler(controllers.EventHandler[*corev1.Namespace]{
-		AddFunc: func(ns *corev1.Namespace) {
-			gatewayController.namespaceEvent(nil, ns)
-		},
-		UpdateFunc: func(oldNs, newNs *corev1.Namespace) {
-			if !labels.Instance(oldNs.Labels).Equals(newNs.Labels) {
-				gatewayController.namespaceEvent(oldNs, newNs)
-			}
-		},
-	})
+	if !kc.IsMultiTenant() {
+		gatewayController.namespaces = kclient.New[*corev1.Namespace](kc)
+		gatewayController.namespaces.AddEventHandler(controllers.EventHandler[*corev1.Namespace]{
+			AddFunc: func(ns *corev1.Namespace) {
+				gatewayController.namespaceEvent(nil, ns)
+			},
+			UpdateFunc: func(oldNs, newNs *corev1.Namespace) {
+				if !labels.Instance(oldNs.Labels).Equals(newNs.Labels) {
+					gatewayController.namespaceEvent(oldNs, newNs)
+				}
+			},
+		})
+	}
 
 	if credsController != nil {
 		credsController.AddSecretHandler(gatewayController.secretEvent)
@@ -203,10 +205,25 @@ func (c *Controller) Reconcile(ps *model.PushContext) error {
 		return nil
 	}
 
-	nsl := c.namespaces.List("", klabels.Everything())
-	namespaces := make(map[string]*corev1.Namespace, len(nsl))
-	for _, ns := range nsl {
-		namespaces[ns.Name] = ns
+	namespaces := map[string]*corev1.Namespace{}
+	if c.namespaces != nil {
+		nsl := c.namespaces.List("", klabels.Everything())
+		for _, ns := range nsl {
+			namespaces[ns.Name] = ns
+		}
+	} else {
+		// we don't support namespace selectors in multi-tenant Istio right now,
+		// so we remove them, inducing default behavior (namespace-local)
+		for _, obj := range gateway {
+			gw := obj.Spec.(*v1beta1.GatewaySpec)
+			for _, listener := range gw.Listeners {
+				if listener.AllowedRoutes != nil &&
+					listener.AllowedRoutes.Namespaces != nil &&
+					listener.AllowedRoutes.Namespaces.Selector != nil {
+					listener.AllowedRoutes.Namespaces.Selector = nil
+				}
+			}
+		}
 	}
 	input.Namespaces = namespaces
 
@@ -281,6 +298,9 @@ func (c *Controller) RegisterEventHandler(typ config.GroupVersionKind, handler m
 }
 
 func (c *Controller) Run(stop <-chan struct{}) {
+	if c.namespaces == nil {
+		return
+	}
 	go func() {
 		if c.waitForCRD(gvk.GatewayClass, stop) {
 			gcc := NewClassController(c.client)
@@ -291,7 +311,7 @@ func (c *Controller) Run(stop <-chan struct{}) {
 }
 
 func (c *Controller) HasSynced() bool {
-	return c.cache.HasSynced() && c.namespaces.HasSynced()
+	return c.cache.HasSynced() && (c.namespaces == nil || c.namespaces.HasSynced())
 }
 
 func (c *Controller) SecretAllowed(resourceName string, namespace string) bool {
