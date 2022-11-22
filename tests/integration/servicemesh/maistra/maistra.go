@@ -21,7 +21,6 @@ package maistra
 import (
 	"context"
 	"fmt"
-	"istio.io/istio/pkg/test/framework/components/echo"
 	"path/filepath"
 	"time"
 
@@ -32,13 +31,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	maistrav1 "maistra.io/api/client/versioned/typed/core/v1"
-	// import maistra CRD manifests
 	"maistra.io/api/manifests"
 	"sigs.k8s.io/yaml"
 
 	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
+	"istio.io/istio/pkg/test/framework/components/echo"
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/pkg/test/framework/components/namespace"
 	"istio.io/istio/pkg/test/framework/resource"
@@ -54,7 +53,12 @@ var (
 	smmrTmpl     = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/smmr.tmpl.yaml")
 )
 
-func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
+type InstallationOptions struct {
+	EnableGatewayAPI bool
+	OutboundAllowAny bool
+}
+
+func ApplyServiceMeshCRDs(ctx resource.Context) error {
 	crds, err := manifests.GetManifestsByName()
 	if err != nil {
 		return fmt.Errorf("cannot read maistra CRD YAMLs: %s", err)
@@ -81,7 +85,26 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 	return err
 }
 
-func Install(istioNs namespace.Getter) resource.SetupFn {
+func ApplyGatewayAPICRDs(ctx resource.Context) error {
+	for _, c := range ctx.Clusters() {
+		if err := c.ApplyYAMLFiles(
+			"", filepath.Join(env.IstioSrc, "tests/integration/pilot/testdata/gateway-api-crd.yaml"),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func Install(istioNs namespace.Getter, opts *InstallationOptions) resource.SetupFn {
+	enableGatewayAPI := false
+	outboundTrafficPolicyMode := "REGISTRY_ONLY"
+	if opts != nil {
+		enableGatewayAPI = opts.EnableGatewayAPI
+		if opts.OutboundAllowAny {
+			outboundTrafficPolicyMode = "ALLOW_ANY"
+		}
+	}
 	return istio.Setup(nil, func(ctx resource.Context, cfg *istio.Config) {
 		ctx.Settings().SkipWorkloadClasses = append(ctx.Settings().SkipWorkloadClasses, echo.Delta, echo.Headless, echo.TProxy, echo.VM, echo.External)
 		ctx.Settings().SkipDelta = true
@@ -95,7 +118,7 @@ namespace: %[1]s
 revision: %[2]s
 meshConfig:
   outboundTrafficPolicy:
-    mode: REGISTRY_ONLY
+    mode: %[3]s
 components:
   pilot:
     k8s:
@@ -117,11 +140,11 @@ values:
     istioNamespace: %[1]s
   pilot:
     env:
-      PILOT_ENABLE_GATEWAY_API: false
-      PILOT_ENABLE_GATEWAY_API_STATUS: false
-      PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER: false
+      PILOT_ENABLE_GATEWAY_API: %[4]t
+      PILOT_ENABLE_GATEWAY_API_STATUS: %[4]t
+      PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER: %[4]t
       PRIORITIZED_LEADER_ELECTION: false
-`, istioNs.Get().Name(), istioNs.Get().Prefix())
+`, istioNs.Get().Name(), istioNs.Get().Prefix(), outboundTrafficPolicyMode, enableGatewayAPI)
 	})
 }
 
