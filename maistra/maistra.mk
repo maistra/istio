@@ -1,6 +1,6 @@
 # Container images labels
-MAISTRA_VERSION ?= 2.3.0
-ISTIO_VERSION ?= 1.14.3
+MAISTRA_VERSION ?= 2.4.0
+ISTIO_VERSION ?= 1.16.0
 
 BASE_DISTRIBUTION ?= ubi8
 
