@@ -274,7 +274,8 @@ refresh-goldens:
 		./pkg/bootstrap/... \
 		./pkg/kube/inject/... \
 		./pilot/pkg/security/authz/builder/... \
-		./cni/pkg/plugin/...
+		./cni/pkg/plugin/... \
+		./istioctl/cmd/...
 
 update-golden: refresh-goldens
 
