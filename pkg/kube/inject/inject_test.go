@@ -592,6 +592,8 @@ spec:
     - name: hello
       image: fake.docker.io/google-samples/hello-go-gke:1.0
     - name: istio-proxy
+      securityContext:
+        runAsUser: 1337
       image: proxy
 `
 	runWebhook(t, webhook, []byte(input), []byte(fmt.Sprintf(expected, "sidecar,init")), false)
