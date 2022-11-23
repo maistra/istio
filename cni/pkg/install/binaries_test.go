@@ -15,7 +15,6 @@
 package install
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -64,17 +63,9 @@ func TestCopyBinaries(t *testing.T) {
 		},
 	}
 
-	for i, c := range cases {
+	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			srcDir, err := os.MkdirTemp("", fmt.Sprintf("test-case-%d-src-", i))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() {
-				if err := os.RemoveAll(srcDir); err != nil {
-					t.Fatal(err)
-				}
-			}()
+			srcDir := t.TempDir()
 			for filename, contents := range c.srcFiles {
 				err := os.WriteFile(filepath.Join(srcDir, filename), []byte(contents), os.ModePerm)
 				if err != nil {
@@ -82,15 +73,7 @@ func TestCopyBinaries(t *testing.T) {
 				}
 			}
 
-			targetDir, err := os.MkdirTemp("", fmt.Sprintf("test-case-%d-target-", i))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() {
-				if err := os.RemoveAll(targetDir); err != nil {
-					t.Fatal(err)
-				}
-			}()
+			targetDir := t.TempDir()
 			for filename, contents := range c.existingFiles {
 				err := os.WriteFile(filepath.Join(targetDir, filename), []byte(contents), os.ModePerm)
 				if err != nil {
@@ -98,7 +81,7 @@ func TestCopyBinaries(t *testing.T) {
 				}
 			}
 
-			err = copyBinaries(srcDir, []string{targetDir}, c.updateBinaries, c.skipBinaries, c.prefix)
+			err := copyBinaries(srcDir, []string{targetDir}, c.updateBinaries, c.skipBinaries, c.prefix)
 			if err != nil {
 				t.Fatal(err)
 			}
