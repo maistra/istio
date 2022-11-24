@@ -142,6 +142,9 @@ type Options struct {
 	// Maximum burst for throttle when communicating with the kubernetes API
 	KubernetesAPIBurst int
 
+	// Whether to log requests sent to the kubernetes API
+	LogKubernetesAPIRequests bool
+
 	// SyncTimeout, if set, causes HasSynced to be returned when timeout.
 	SyncTimeout time.Duration
 
