@@ -28,6 +28,7 @@ func TestCopyBinaries(t *testing.T) {
 		expectedFiles  map[string]string // {filename: contents. ...}
 		updateBinaries bool
 		skipBinaries   []string
+		prefix         string
 	}{
 		{
 			name:          "basic",
@@ -54,6 +55,12 @@ func TestCopyBinaries(t *testing.T) {
 			srcFiles:      map[string]string{"istio-cni": "cni111", "istio-iptables": "iptables111"},
 			expectedFiles: map[string]string{"istio-cni": "cni111"},
 		},
+		{
+			name:          "binaries prefix",
+			prefix:        "prefix-",
+			srcFiles:      map[string]string{"istio-cni": "cni111", "istio-iptables": "iptables111"},
+			expectedFiles: map[string]string{"prefix-istio-cni": "cni111", "prefix-istio-iptables": "iptables111"},
+		},
 	}
 
 	for _, c := range cases {
@@ -74,7 +81,7 @@ func TestCopyBinaries(t *testing.T) {
 				}
 			}
 
-			err := copyBinaries(srcDir, []string{targetDir}, c.updateBinaries, c.skipBinaries)
+			err := copyBinaries(srcDir, []string{targetDir}, c.updateBinaries, c.skipBinaries, c.prefix)
 			if err != nil {
 				t.Fatal(err)
 			}

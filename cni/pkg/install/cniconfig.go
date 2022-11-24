@@ -180,7 +180,7 @@ func getCNIConfigFilepath(ctx context.Context, cfg pluginConfig) (string, error)
 		return filepath.Join(cfg.mountedCNINetDir, filename), nil
 	}
 
-	watcher, fileModified, errChan, err := util.CreateFileWatcher(cfg.mountedCNINetDir)
+	watcher, fileModified, errChan, err := util.CreateFileWatcher("", []string{cfg.mountedCNINetDir})
 	if err != nil {
 		return "", err
 	}
