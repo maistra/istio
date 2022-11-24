@@ -15,9 +15,14 @@
 package bootstrap
 
 import (
+	"net/http"
+
+	"k8s.io/client-go/rest"
+
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
 	"istio.io/pkg/ledger"
+	"istio.io/pkg/log"
 )
 
 func hasKubeRegistry(registries []string) bool {
@@ -38,3 +43,20 @@ func buildLedger(ca RegistryOptions) ledger.Ledger {
 	}
 	return result
 }
+
+func installRequestLogger(config *rest.Config) {
+	config.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+		return requestLogger{rt: rt}
+	})
+}
+
+type requestLogger struct {
+	rt http.RoundTripper
+}
+
+func (rl requestLogger) RoundTrip(req *http.Request) (*http.Response, error) {
+	log.Infof("Performing Kubernetes API request: %s %s", req.Method, req.URL)
+	return rl.rt.RoundTrip(req)
+}
+
+var _ http.RoundTripper = requestLogger{}
