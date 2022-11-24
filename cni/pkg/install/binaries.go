@@ -24,7 +24,7 @@ import (
 
 // Copies/mirrors any files present in a single source dir to N number of target dirs
 // and returns a set of the filenames copied.
-func copyBinaries(srcDir string, targetDirs []string) (sets.Set[string], error) {
+func copyBinaries(srcDir string, targetDirs []string, binariesPrefix string) (sets.Set[string], error) {
 	copiedFilenames := sets.Set[string]{}
 	srcFiles, err := os.ReadDir(srcDir)
 	if err != nil {
@@ -37,6 +37,7 @@ func copyBinaries(srcDir string, targetDirs []string) (sets.Set[string], error) 
 		}
 
 		filename := f.Name()
+		targetFilename := binariesPrefix + filename
 		srcFilepath := filepath.Join(srcDir, filename)
 
 		for _, targetDir := range targetDirs {
@@ -44,15 +45,16 @@ func copyBinaries(srcDir string, targetDirs []string) (sets.Set[string], error) 
 				installLog.Infof("Directory %s is not writable, skipping.", targetDir)
 				continue
 			}
+			targetFilepath := filepath.Join(targetDir, targetFilename)
 
-			err := file.AtomicCopy(srcFilepath, targetDir, filename)
+			err := file.AtomicCopy(srcFilepath, targetDir, targetFilename)
 			if err != nil {
 				return copiedFilenames, err
 			}
-			installLog.Infof("Copied %s to %s.", filename, targetDir)
+			installLog.Infof("Copied %s to %s.", filename, targetFilepath)
 		}
 
-		copiedFilenames.Insert(filename)
+		copiedFilenames.Insert(targetFilename)
 	}
 
 	return copiedFilenames, nil

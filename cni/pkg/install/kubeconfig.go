@@ -119,6 +119,11 @@ func createKubeConfig(cfg *config.InstallConfig) (kubeconfig, error) {
 		return kubeconfig{}, err
 	}
 
+	// When using Multus, the net.d dir might not exist yet, so we must create it
+	if err := os.MkdirAll(cfg.MountedCNINetDir, os.FileMode(0o755)); err != nil {
+		return kubeconfig{}, err
+	}
+
 	return kubeconfig{
 		Full:     string(fullYaml),
 		Redacted: string(redacted),

@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/util/sets"
@@ -40,6 +41,7 @@ type PodInfo struct {
 	Annotations       map[string]string
 	ProxyType         string
 	ProxyEnvironments map[string]string
+	ProxyConfig       *meshconfig.ProxyConfig
 	ProxyUID          *int64
 	ProxyGID          *int64
 }

@@ -28,6 +28,7 @@ func TestCopyBinaries(t *testing.T) {
 		srcFiles      map[string]string
 		existingFiles map[string]string
 		expectedFiles map[string]string
+		prefix        string
 	}{
 		{
 			name:          "basic",
@@ -39,6 +40,12 @@ func TestCopyBinaries(t *testing.T) {
 			srcFiles:      map[string]string{"istio-cni": "cni111", "istio-iptables": "iptables111"},
 			existingFiles: map[string]string{"istio-cni": "cni000", "istio-iptables": "iptables111"},
 			expectedFiles: map[string]string{"istio-cni": "cni111", "istio-iptables": "iptables111"},
+		},
+		{
+			name:          "binaries prefix",
+			prefix:        "prefix-",
+			srcFiles:      map[string]string{"istio-cni": "cni111", "istio-iptables": "iptables111"},
+			expectedFiles: map[string]string{"prefix-istio-cni": "cni111", "prefix-istio-iptables": "iptables111"},
 		},
 	}
 
@@ -54,7 +61,7 @@ func TestCopyBinaries(t *testing.T) {
 				file.WriteOrFail(t, filepath.Join(targetDir, filename), []byte(contents))
 			}
 
-			binariesCopied, err := copyBinaries(srcDir, []string{targetDir})
+			binariesCopied, err := copyBinaries(srcDir, []string{targetDir}, c.prefix)
 			if err != nil {
 				t.Fatal(err)
 			}
