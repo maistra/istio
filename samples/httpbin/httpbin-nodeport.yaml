@@ -27,7 +27,7 @@ spec:
   ports:
   - name: http
     port: 8000
-    targetPort: 80
+    targetPort: 8000
   selector:
     app: httpbin
 ---
@@ -54,4 +54,5 @@ spec:
         imagePullPolicy: IfNotPresent
         name: httpbin
         ports:
-        - containerPort: 80
+        - containerPort: 8000
+        command: ["gunicorn", "-b", "0.0.0.0:8000", "httpbin:app", "-k", "gevent"]
