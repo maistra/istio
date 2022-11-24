@@ -27,13 +27,15 @@ spec:
       version: v2-mysql
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
       labels:
         app: ratings
         version: v2-mysql
     spec:
       containers:
       - name: ratings
-        image: docker.io/istio/examples-bookinfo-ratings-v2:1.17.0
+        image: quay.io/maistra/examples-bookinfo-ratings-v2:2.4.0
         imagePullPolicy: IfNotPresent
         env:
           # ratings-v2 will use mongodb as the default db backend.

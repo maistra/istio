@@ -53,13 +53,15 @@ spec:
       version: v1
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
       labels:
         app: mysqldb
         version: v1
     spec:
       containers:
       - name: mysqldb
-        image: docker.io/istio/examples-bookinfo-mysqldb:1.17.0
+        image: quay.io/maistra/examples-bookinfo-mysqldb:2.4.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3306
