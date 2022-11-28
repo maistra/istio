@@ -25,7 +25,6 @@ import (
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	k8sioapicorev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/cache"
 
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/config/kube/crdclient"
@@ -428,6 +427,92 @@ func TestConcurrency(t *testing.T) {
 
 	// And expect all `qty * 2` gateways to be created
 	_ = getRoutes(t, routerClient, "istio-system", (qty * runs), time.Minute)
+}
+
+const (
+	createFuncName = "Create"
+	deleteFuncName = "Delete"
+	listFuncName   = "List"
+)
+
+func TestStatelessness(t *testing.T) {
+	type state struct {
+		name           string
+		ns             string
+		hosts          []string
+		gwSelector     map[string]string
+		expectedRoutes int
+		tls            bool
+	}
+
+	watchedNamespace := "istio-system"
+
+	initialState := state{
+		"gw",
+		watchedNamespace,
+		[]string{"ghi.org", "jkl.com"},
+		map[string]string{"istio": "ingressgateway"},
+		2,
+		false,
+	}
+
+	IORLog.SetOutputLevel(log.DebugLevel)
+
+	stop := make(chan struct{})
+	defer func() { close(stop) }()
+	iorStop := make(chan struct{})
+	store, kubeClient, routerClient, mrc, r := newClients(t, nil)
+	runClients(t, store, kubeClient, routerClient, stop)
+	r.Run(iorStop)
+
+	mrc.setNamespaces(watchedNamespace)
+
+	createIngressGateway(t, kubeClient.GetActualClient(), watchedNamespace, map[string]string{"istio": "ingressgateway"})
+	createGateway(t, store, initialState.ns, initialState.name, initialState.hosts, map[string]string{"istio": "ingressgateway"}, initialState.tls, nil)
+
+	list := getRoutes(t, routerClient, watchedNamespace, 2, time.Second)
+	validateRoutes(t, initialState.hosts, list, initialState.name, initialState.tls)
+
+	fr, ok := routerClient.Routes(watchedNamespace).(*FakeRouter)
+
+	if !ok {
+		t.Fatal(fmt.Errorf("failed to convert to FakeRouter"))
+	}
+
+	listCallCount := fr.GetCallCount(listFuncName)
+	createCallCount := fr.GetCallCount(createFuncName)
+	deleteCallCount := fr.GetCallCount(deleteFuncName)
+
+	close(iorStop)
+
+	backupIOR := newRoute(kubeClient, routerClient, store)
+	backupIOR.Run(stop)
+
+	store.SyncAll()
+
+	if fr.GetCallCount(listFuncName) == listCallCount {
+		t.Fatal(fmt.Errorf("expect to call List, but got the same %d", listCallCount))
+	}
+
+	if fr.GetCallCount(createFuncName) > createCallCount {
+		t.Fatal(
+			fmt.Errorf(
+				"expect not to call Create, initially %d and got %d after",
+				createCallCount,
+				fr.GetCallCount(createFuncName),
+			),
+		)
+	}
+
+	if fr.GetCallCount(deleteFuncName) > deleteCallCount {
+		t.Fatal(
+			fmt.Errorf(
+				"expect not to call Delete, initially %d and got %d after",
+				deleteCallCount,
+				fr.GetCallCount(deleteFuncName),
+			),
+		)
+	}
 }
 
 func generateNamespaces(qty int) []string {
