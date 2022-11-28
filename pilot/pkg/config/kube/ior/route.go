@@ -369,7 +369,6 @@ func (r *route) reconcileGateway(config *config.Config, routes *v1.RouteList) er
 
 	for _, server := range gateway.Servers {
 		for _, host := range server.Hosts {
-			var route *v1.Route
 			var err error
 
 			name := getRouteName(config.Namespace, config.Name, host)
@@ -377,15 +376,16 @@ func (r *route) reconcileGateway(config *config.Config, routes *v1.RouteList) er
 			_, found := routeMap[name]
 
 			if found {
-				route, err = r.updateRoute(config.Meta, host, server.Tls, serviceNamespace, serviceName)
+				_, err = r.updateRoute(config.Meta, host, server.Tls, serviceNamespace, serviceName)
+
+				// We always want to remove the route to avoid getting deleted.
+				delete(routeMap, name)
 			} else {
-				route, err = r.createRoute(config.Meta, host, server.Tls, serviceNamespace, serviceName)
+				_, err = r.createRoute(config.Meta, host, server.Tls, serviceNamespace, serviceName)
 			}
 
 			if err != nil {
 				result = multierror.Append(result, err)
-			} else {
-				delete(routeMap, route.Name)
 			}
 		}
 	}
