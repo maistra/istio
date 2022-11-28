@@ -38,10 +38,7 @@ func Run(
 		return
 	}
 
-	r, err := newRoute(NewKubeClient(kubeClient), rc, store, stop)
-	if err != nil {
-		return
-	}
+	r := newRoute(NewKubeClient(kubeClient), rc, store)
 
 	r.Run(stop)
 }

@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	v1 "github.com/openshift/api/route/v1"
@@ -30,7 +31,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 
 	networking "istio.io/api/networking/v1alpha3"
@@ -55,9 +55,7 @@ const (
 // route manages the integration between Istio Gateways and OpenShift Routes
 type route struct {
 	routerClient routev1.RouteV1Interface
-	kubeClient   kubernetes.Interface
 	store        model.ConfigStoreController
-	stop         <-chan struct{}
 
 	podLister     listerv1.PodLister
 	serviceLister listerv1.ServiceLister
@@ -83,23 +81,20 @@ func newRoute(
 	kubeClient KubeClient,
 	routerClient routev1.RouteV1Interface,
 	store model.ConfigStoreController,
-	stop <-chan struct{},
-) (*route, error) {
-	if !kubeClient.IsRouteSupported() {
-		return nil, fmt.Errorf("routes are not supported in this cluster")
+) *route {
+	for !kubeClient.IsRouteSupported() {
+		IORLog.Infof("routes are not supported in this cluster; waiting for Route resource to become available...")
+		time.Sleep(10 * time.Second)
 	}
 
-	r := &route{}
+	r := &route{
+		routerClient:  routerClient,
+		store:         store,
+		podLister:     kubeClient.GetActualClient().KubeInformer().Core().V1().Pods().Lister(),
+		serviceLister: kubeClient.GetActualClient().KubeInformer().Core().V1().Services().Lister(),
+	}
 
-	r.kubeClient = kubeClient.GetActualClient().Kube()
-	r.routerClient = routerClient
-	r.store = store
-	r.stop = stop
-
-	r.podLister = kubeClient.GetActualClient().KubeInformer().Core().V1().Pods().Lister()
-	r.serviceLister = kubeClient.GetActualClient().KubeInformer().Core().V1().Services().Lister()
-
-	return r, nil
+	return r
 }
 
 func isManagedByIOR(cfg config.Config) (bool, error) {
