@@ -41,9 +41,9 @@ const prefixedLabel = maistraPrefix + "fake"
 
 func newClients(
 	t *testing.T,
-	stop <-chan struct{},
+	kubeClient kube.Client,
 ) (
-	model.ConfigStoreController,
+	*crdclient.Client,
 	KubeClient,
 	routev1.RouteV1Interface,
 	*fakeMemberRollController,
@@ -51,7 +51,10 @@ func newClients(
 ) {
 	t.Helper()
 
-	kubeClient := kube.NewFakeClient()
+	if kubeClient == nil {
+		kubeClient = kube.NewFakeClient()
+	}
+
 	iorKubeClient := NewFakeKubeClient(kubeClient)
 	routerClient := NewFakeRouterClient()
 	store, err := crdclient.New(kubeClient, "", "", false)
@@ -59,10 +62,7 @@ func newClients(
 		t.Fatal(err)
 	}
 
-	r, err := newRoute(iorKubeClient, routerClient, store, stop)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r := newRoute(iorKubeClient, routerClient, store)
 
 	return store, iorKubeClient, routerClient, newFakeMemberRollController(), r
 }
@@ -76,13 +76,6 @@ func runClients(
 ) {
 	go store.Run(stop)
 	kubeClient.GetActualClient().RunAndWait(stop)
-	cache.WaitForCacheSync(stop, store.HasSynced)
-	retry.UntilSuccessOrFail(t, func() error {
-		if !store.HasSynced() {
-			return fmt.Errorf("store has not synced yet")
-		}
-		return nil
-	}, retry.Timeout(time.Second))
 }
 
 func initClients(
@@ -95,7 +88,7 @@ func initClients(
 	*fakeMemberRollController,
 	*route,
 ) {
-	store, iorKubeClient, routerClient, mrc, r := newClients(t, stop)
+	store, iorKubeClient, routerClient, mrc, r := newClients(t, nil)
 
 	runClients(t, store, iorKubeClient, routerClient, stop)
 
