@@ -291,7 +291,7 @@ func (r *route) findService(gateway *networking.Gateway) (string, string, error)
 		for _, service := range services {
 			svcSelector := labels.SelectorFromSet(service.Spec.Selector)
 
-			IORLog.Debugf("matching service selector %s against %s")
+			IORLog.Debugf("matching service selector %s against %s", svcSelector.String(), podLabels)
 			if svcSelector.Matches(podLabels) {
 				return pod.Namespace, service.Name, nil
 			}
