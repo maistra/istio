@@ -67,10 +67,8 @@ func newClients(
 }
 
 func runClients(
-	t *testing.T,
 	store model.ConfigStoreController,
 	kubeClient KubeClient,
-	routeClient routev1.RouteV1Interface,
 	stop <-chan struct{},
 ) {
 	go store.Run(stop)
@@ -89,7 +87,7 @@ func initClients(
 ) {
 	store, iorKubeClient, routerClient, mrc, r := newClients(t, nil)
 
-	runClients(t, store, iorKubeClient, routerClient, stop)
+	runClients(store, iorKubeClient, stop)
 
 	return store, iorKubeClient, routerClient, mrc, r
 }
@@ -462,7 +460,7 @@ func TestStatelessness(t *testing.T) {
 	defer func() { close(stop) }()
 	iorStop := make(chan struct{})
 	store, kubeClient, routerClient, mrc, r := newClients(t, nil)
-	runClients(t, store, kubeClient, routerClient, stop)
+	runClients(store, kubeClient, stop)
 	r.Run(iorStop)
 
 	mrc.setNamespaces(watchedNamespace)
