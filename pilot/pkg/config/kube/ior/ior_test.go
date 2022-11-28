@@ -384,11 +384,11 @@ func TestEdit(t *testing.T) {
 	defer func() { close(stop) }()
 	store, k8sClient, routerClient, mrc, r := initClients(t, stop)
 	r.Run(stop)
+	mrc.setNamespaces("istio-system")
 
 	controlPlane := "istio-system"
 	createIngressGateway(t, k8sClient.GetActualClient(), controlPlane, map[string]string{"istio": "ingressgateway"})
 	createGateway(t, store, controlPlane, "gw", []string{"abc.com"}, map[string]string{"istio": "ingressgateway"}, false, nil)
-	mrc.setNamespaces("istio-system")
 
 	list := getRoutes(t, routerClient, controlPlane, 1, time.Second)
 
