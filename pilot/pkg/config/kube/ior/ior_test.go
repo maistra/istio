@@ -25,7 +25,6 @@ import (
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	k8sioapicorev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/cache"
 
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/config/kube/crdclient"
@@ -41,9 +40,9 @@ const prefixedLabel = maistraPrefix + "fake"
 
 func newClients(
 	t *testing.T,
-	stop <-chan struct{},
+	k8sClient kube.Client,
 ) (
-	model.ConfigStoreController,
+	*crdclient.Client,
 	KubeClient,
 	routev1.RouteV1Interface,
 	*fakeMemberRollController,
@@ -51,7 +50,10 @@ func newClients(
 ) {
 	t.Helper()
 
-	k8sClient := kube.NewFakeClient()
+	if k8sClient == nil {
+		k8sClient = kube.NewFakeClient()
+	}
+
 	iorKubeClient := NewFakeKubeClient(k8sClient)
 	routerClient := NewFakeRouterClient()
 	store, err := crdclient.New(k8sClient, crdclient.Option{})
@@ -59,12 +61,9 @@ func newClients(
 		t.Fatal(err)
 	}
 
-	r, err := newRoute(iorKubeClient, routerClient, store, stop)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r := newRoute(iorKubeClient, routerClient, store)
 
-	return store, iorKubeClient, routerClient, newFakeMemberRollController(), r
+	return store.(*crdclient.Client), iorKubeClient, routerClient, newFakeMemberRollController(), r
 }
 
 func runClients(
@@ -76,13 +75,6 @@ func runClients(
 ) {
 	go store.Run(stop)
 	kubeClient.GetActualClient().RunAndWait(stop)
-	cache.WaitForCacheSync(stop, store.HasSynced)
-	retry.UntilSuccessOrFail(t, func() error {
-		if !store.HasSynced() {
-			return fmt.Errorf("store has not synced yet")
-		}
-		return nil
-	}, retry.Timeout(time.Second))
 }
 
 func initClients(
@@ -95,7 +87,7 @@ func initClients(
 	*fakeMemberRollController,
 	*route,
 ) {
-	store, iorKubeClient, routerClient, mrc, r := newClients(t, stop)
+	store, iorKubeClient, routerClient, mrc, r := newClients(t, nil)
 
 	runClients(t, store, iorKubeClient, routerClient, stop)
 
