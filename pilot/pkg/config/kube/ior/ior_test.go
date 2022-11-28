@@ -510,8 +510,8 @@ func createService(t *testing.T, client kube.Client, ns string, labels map[strin
 	t.Helper()
 
 	_, err := client.Kube().CoreV1().Services(ns).Create(context.TODO(), &k8sioapicorev1.Service{
-		ObjectMeta: v1.ObjectMeta{
-			Labels: labels,
+		Spec: k8sioapicorev1.ServiceSpec{
+			Selector: labels,
 		},
 	}, v1.CreateOptions{})
 	if err != nil {
