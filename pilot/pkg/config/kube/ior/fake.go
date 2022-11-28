@@ -34,8 +34,10 @@ import (
 
 // FakeRouter implements routev1.RouteInterface
 type FakeRouter struct {
-	routes     map[string]*v1.Route
-	routesLock sync.Mutex
+	routes         map[string]*v1.Route
+	routesLock     sync.Mutex
+	callCounts     map[string]int
+	callCountsLock sync.Mutex
 }
 
 // FakeRouterClient implements routev1.RouteV1Interface
@@ -75,7 +77,8 @@ func NewFakeRouterClient() routev1.RouteV1Interface {
 // NewFakeRouter creates a new FakeRouter
 func NewFakeRouter() routev1.RouteInterface {
 	return &FakeRouter{
-		routes: make(map[string]*v1.Route),
+		routes:     make(map[string]*v1.Route),
+		callCounts: make(map[string]int),
 	}
 }
 
@@ -93,11 +96,30 @@ func (rc *FakeRouterClient) Routes(namespace string) routev1.RouteInterface {
 		rc.routesByNamespace[namespace] = NewFakeRouter()
 	}
 
-	countCallsIncrement("routes")
 	return rc.routesByNamespace[namespace]
 }
 
-var generatedHostNumber int
+func (fk *FakeRouter) GetCallCount(functionName string) int {
+	fk.callCountsLock.Lock()
+	defer fk.callCountsLock.Unlock()
+
+	return fk.callCounts[functionName]
+}
+
+func (fk *FakeRouter) incrementCallCount(functionName string) int {
+	fk.callCountsLock.Lock()
+	fk.callCounts[functionName]++
+	num := fk.callCounts[functionName]
+	fk.callCountsLock.Unlock()
+
+	return num
+}
+
+func (fk *FakeRouter) generateHost() string {
+	num := fk.incrementCallCount("generateHost")
+
+	return fmt.Sprintf("generated-host%d.com", num)
+}
 
 // Create implements routev1.RouteInterface
 func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.CreateOptions) (*v1.Route, error) {
@@ -109,13 +131,12 @@ func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.C
 	}
 
 	if route.Spec.Host == "" {
-		generatedHostNumber++
-		route.Spec.Host = fmt.Sprintf("generated-host%d.com", generatedHostNumber)
+		route.Spec.Host = fk.generateHost()
 	}
 
 	fk.routes[route.Name] = route
 
-	countCallsIncrement("create")
+	fk.incrementCallCount("Create")
 	return route, nil
 }
 
@@ -125,7 +146,7 @@ func (fk *FakeRouter) Update(ctx context.Context, route *v1.Route, opts metav1.U
 	defer fk.routesLock.Unlock()
 
 	if _, ok := fk.routes[route.Name]; !ok {
-		return nil, fmt.Errorf("exisiting not found")
+		return nil, fmt.Errorf("existing route not found")
 	}
 
 	if strings.Contains(route.Spec.Host, "/") {
@@ -133,13 +154,12 @@ func (fk *FakeRouter) Update(ctx context.Context, route *v1.Route, opts metav1.U
 	}
 
 	if route.Spec.Host == "" {
-		generatedHostNumber++
-		route.Spec.Host = fmt.Sprintf("generated-host%d.com", generatedHostNumber)
+		route.Spec.Host = fk.generateHost()
 	}
 
 	fk.routes[route.Name] = route
 
-	countCallsIncrement("update")
+	fk.incrementCallCount("Update")
 	return route, nil
 }
 
@@ -159,7 +179,7 @@ func (fk *FakeRouter) Delete(ctx context.Context, name string, opts metav1.Delet
 
 	delete(fk.routes, name)
 
-	countCallsIncrement("delete")
+	fk.incrementCallCount("Delete")
 	return nil
 }
 
@@ -184,7 +204,7 @@ func (fk *FakeRouter) List(ctx context.Context, opts metav1.ListOptions) (*v1.Ro
 	}
 	result := &v1.RouteList{Items: items}
 
-	countCallsIncrement("list")
+	fk.incrementCallCount("List")
 	return result, nil
 }
 
@@ -243,15 +263,4 @@ func (fk *fakeMemberRollController) invokeListeners() {
 	for _, l := range fk.listeners {
 		l.SetNamespaces(fk.namespaces)
 	}
-}
-
-var (
-	countCalls     = map[string]int{}
-	countCallsLock sync.Mutex
-)
-
-func countCallsIncrement(k string) {
-	countCallsLock.Lock()
-	defer countCallsLock.Unlock()
-	countCalls[k]++
 }
