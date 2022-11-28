@@ -429,11 +429,6 @@ func (r *route) processEvent(old, curr *config.Config, event model.Event) error 
 
 	config := r.store.Get(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), curr.Name, curr.Namespace)
 
-	// Stop early
-	if config != nil && curr.ResourceVersion < config.ResourceVersion {
-		return nil
-	}
-
 	var routes *v1.RouteList
 
 	routes, err = r.findRoutes(curr.Meta)
@@ -443,7 +438,7 @@ func (r *route) processEvent(old, curr *config.Config, event model.Event) error 
 	}
 
 	if config != nil {
-		return r.reconcileGateway(config, routes)
+		return r.reconcileGateway(curr, routes)
 	}
 
 	var result *multierror.Error
