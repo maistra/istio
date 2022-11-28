@@ -38,6 +38,7 @@ import (
 	lister "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1beta1"
 	"sigs.k8s.io/yaml"
 
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/config/schema/gvk"
@@ -81,6 +82,7 @@ type DeploymentController struct {
 	patcher            patcher
 	gatewayLister      lister.GatewayLister
 	gatewayClassLister lister.GatewayClassLister
+	defaultLabels      map[string]string
 }
 
 // Patcher is a function that abstracts patching logic. This is largely because client-go fakes do not handle patching
@@ -151,6 +153,14 @@ func NewDeploymentController(client kube.Client) *DeploymentController {
 		}))
 	}
 
+	defaultLabels := make(map[string]string, 0)
+	err := json.Unmarshal([]byte(features.DefaultLabelsForInjectedGateways), &defaultLabels)
+	if err != nil {
+		log.Warnf("failed to parse default labels for Deployments: %v", err)
+	} else {
+		dc.defaultLabels = defaultLabels
+	}
+
 	return dc
 }
 
@@ -210,6 +220,7 @@ func (d *DeploymentController) configureIstioGateway(log *istiolog.Scope, gw gat
 	log.Info("service updated")
 
 	dep := deploymentInput{Gateway: &gw, KubeVersion122: kube.IsAtLeastVersion(d.client, 22)}
+	d.setDefaultLabels(dep.Gateway)
 	if err := d.ApplyTemplate("deployment.yaml", dep); err != nil {
 		return fmt.Errorf("update deployment: %v", err)
 	}
@@ -238,6 +249,18 @@ func (d *DeploymentController) configureIstioGateway(log *istiolog.Scope, gw gat
 	}
 	log.Info("gateway updated")
 	return nil
+}
+
+func (d *DeploymentController) setDefaultLabels(gateway *gateway.Gateway) {
+	for key, value := range d.defaultLabels {
+		if gateway.Labels == nil {
+			gateway.Labels = make(map[string]string, len(d.defaultLabels))
+		}
+		// don't override user values
+		if _, ok := gateway.Labels[key]; !ok {
+			gateway.Labels[key] = value
+		}
+	}
 }
 
 // ApplyTemplate renders a template with the given input and (server-side) applies the results to the cluster.
