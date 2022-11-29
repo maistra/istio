@@ -721,11 +721,13 @@ func buildGatewayListenerTLSContext(
 	return BuildListenerTLSContext(server.Tls, proxy, mesh, transportProtocol, gateway.IsTCPServerWithTLSTermination(server))
 }
 
-func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol) tls.TlsParameters_TlsProtocol {
+func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol, defaultTLSProtocol tls.TlsParameters_TlsProtocol) tls.TlsParameters_TlsProtocol {
 	out := tls.TlsParameters_TlsProtocol(in) // There should be a one-to-one enum mapping
-	if out < tls.TlsParameters_TLS_AUTO || out > tls.TlsParameters_TLSv1_3 {
-		log.Warnf("was not able to map TLS protocol to Envoy TLS protocol")
-		return tls.TlsParameters_TLS_AUTO
+	if out <= tls.TlsParameters_TLS_AUTO || out > tls.TlsParameters_TLSv1_3 {
+		if out != tls.TlsParameters_TLS_AUTO {
+			log.Warnf("was not able to map TLS protocol to Envoy TLS protocol")
+		}
+		return defaultTLSProtocol
 	}
 	return out
 }

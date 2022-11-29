@@ -88,6 +88,12 @@
       "servicePort": 0
     },
     "tag": "latest",
+    "tls": {
+      "cipherSuites": [],
+      "ecdhCurves": [],
+      "maxProtocolVersion": "",
+      "minProtocolVersion": ""
+    },
     "tracer": {
       "datadog": {},
       "lightstep": {},

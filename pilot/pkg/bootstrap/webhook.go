@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"strings"
 
+	tls_features "istio.io/istio/pkg/features"
 	istiolog "istio.io/pkg/log"
 )
 
@@ -57,10 +58,14 @@ func (s *Server) initSecureWebhookServer(args *PilotArgs) {
 		Addr:     args.ServerOptions.HTTPSAddr,
 		ErrorLog: log.New(&httpServerErrorLogWriter{}, "", 0),
 		Handler:  s.httpsMux,
+		// Disabled, because returns false-positive error
+		//nolint:gosec
 		TLSConfig: &tls.Config{
-			GetCertificate: s.getIstiodCertificate,
-			MinVersion:     tls.VersionTLS12,
-			CipherSuites:   args.ServerOptions.TLSOptions.CipherSuits,
+			GetCertificate:   s.getIstiodCertificate,
+			MinVersion:       tls_features.TLSMinProtocolVersion.GetGoTLSProtocolVersion(),
+			MaxVersion:       tls_features.TLSMaxProtocolVersion.GetGoTLSProtocolVersion(),
+			CipherSuites:     tls_features.TLSCipherSuites.GetGoTLSCipherSuites(),
+			CurvePreferences: tls_features.TLSECDHCurves.GetGoTLSECDHCurves(),
 		},
 	}
 }
