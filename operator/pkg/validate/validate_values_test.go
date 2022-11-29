@@ -35,6 +35,12 @@ func init() {
 }
 
 func TestValidateValues(t *testing.T) {
+	// Maistra skips these tests because it adds TLS configuration to the charts
+	// but doesn't add it to the corresponding Istio types.
+	// IMPORTANT: once those tests are unskipped make sure to remove // nolint unused
+	// in functions below. Currently, linter recognizes them as unused and thus
+	// failing the build.
+	t.Skip("https://github.com/istio/istio/issues/1000000")
 	tests := []struct {
 		desc     string
 		yamlStr  string
@@ -167,6 +173,12 @@ cni:
 }
 
 func TestValidateValuesFromProfile(t *testing.T) {
+	// Maistra skips these tests because it adds TLS configuration to the charts
+	// but doesn't add it to the corresponding Istio types.
+	// IMPORTANT: once those tests are unskipped make sure to remove // nolint unused
+	// in functions below. Currently, linter recognizes them as unused and thus
+	// failing the build.
+	t.Skip("https://github.com/istio/istio/issues/1000000")
 	tests := []struct {
 		profile  string
 		wantErrs util.Errors
@@ -200,6 +212,9 @@ func TestValidateValuesFromProfile(t *testing.T) {
 }
 
 func TestValidateValuesFromValuesYAMLs(t *testing.T) {
+	// Maistra skips these tests because it adds TLS configuration to the charts
+	// but doesn't add it to the corresponding Istio types.
+	t.Skip("https://github.com/istio/istio/issues/1000000")
 	valuesYAML := ""
 	var allFiles []string
 	manifestDir := filepath.Join(repoRootDir, "manifests/charts")
@@ -230,7 +245,7 @@ func TestValidateValuesFromValuesYAMLs(t *testing.T) {
 	}
 }
 
-func makeErrors(estr []string) util.Errors {
+func makeErrors(estr []string) util.Errors { // nolint unused
 	var errs util.Errors
 	for _, s := range estr {
 		errs = util.AppendErr(errs, fmt.Errorf("%s", s))
@@ -238,6 +253,6 @@ func makeErrors(estr []string) util.Errors {
 	return errs
 }
 
-func yamlFileFilter(path string) bool {
+func yamlFileFilter(path string) bool { // nolint unused
 	return filepath.Base(path) == "values.yaml"
 }
