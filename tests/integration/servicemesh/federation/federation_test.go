@@ -34,6 +34,7 @@ func GetIstioInstance() *istio.Instance {
 }
 
 func TestMain(m *testing.M) {
+	// nolint: staticcheck
 	framework.
 		NewSuite(m).
 		RequireMinClusters(2).
