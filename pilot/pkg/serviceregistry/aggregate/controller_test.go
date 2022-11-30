@@ -25,7 +25,6 @@ import (
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry"
-	"istio.io/istio/pilot/pkg/serviceregistry/federation"
 	"istio.io/istio/pilot/pkg/serviceregistry/memory"
 	"istio.io/istio/pilot/pkg/serviceregistry/mock"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
@@ -117,47 +116,6 @@ func buildMockControllerForMultiCluster() (*Controller, *memory.ServiceDiscovery
 	ctls.AddRegistry(registry2)
 
 	return ctls, discovery1, discovery2
-}
-
-func buildMockControllerForFederation() *Controller {
-	discovery1 = memory.NewServiceDiscovery(
-		mock.MakeService(mock.ServiceArgs{
-			Hostname:        "hello.default.svc.cluster.local",
-			Address:         "10.1.1.0",
-			ServiceAccounts: []string{},
-			ClusterID:       "cluster-1",
-		}),
-	)
-
-	discovery2 = memory.NewServiceDiscovery(
-		mock.MakeService(mock.ServiceArgs{
-			Hostname:        "hello.default.svc.cluster.local",
-			Address:         "10.1.2.0",
-			ServiceAccounts: []string{},
-			ClusterID:       "cluster-2",
-		}),
-		mock.WorldService.DeepCopy(),
-	)
-
-	registry1 := serviceregistry.Simple{
-		ProviderID:       provider.Kubernetes,
-		ClusterID:        "cluster-1",
-		ServiceDiscovery: discovery1,
-		Controller:       &mock.Controller{},
-	}
-
-	registry2 := serviceregistry.Simple{
-		ProviderID:       provider.Federation,
-		ClusterID:        "cluster-2",
-		ServiceDiscovery: discovery2,
-		Controller:       &federation.Controller{},
-	}
-
-	ctls := NewController(Options{})
-	ctls.AddRegistry(registry1)
-	ctls.AddRegistry(registry2)
-
-	return ctls
 }
 
 func TestServicesForMultiCluster(t *testing.T) {

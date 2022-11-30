@@ -16,7 +16,6 @@ package status
 
 import (
 	"context"
-	"encoding/json"
 	"reflect"
 	"sort"
 	"strings"
@@ -27,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/util/retry"
 	v1 "maistra.io/api/federation/v1"
 
@@ -570,26 +568,6 @@ func (h *handler) patchImports() error {
 		}
 	}
 	return nil
-}
-
-func (h *handler) createPatch(newObj, oldObj interface{}, metadata strategicpatch.LookupPatchMeta) ([]byte, error) {
-	newBytes, err := json.Marshal(newObj)
-	if err != nil {
-		return nil, err
-	}
-	oldBytes, err := json.Marshal(oldObj)
-	if err != nil {
-		return nil, err
-	}
-
-	h.logger.Debugf("old bytes: %s", string(oldBytes))
-	h.logger.Debugf("new bytes: %s", string(newBytes))
-
-	patch, err := strategicpatch.CreateTwoWayMergePatchUsingLookupPatchMeta(oldBytes, newBytes, metadata)
-	if err != nil {
-		return nil, err
-	}
-	return patch, nil
 }
 
 func (h *handler) putDiscoveryStatus(statuses []v1.PodPeerDiscoveryStatus, newStatus v1.PeerDiscoveryStatus) []v1.PodPeerDiscoveryStatus {

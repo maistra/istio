@@ -292,15 +292,6 @@ func (s *Server) UpdateService(svc *model.Service, event model.Event) {
 	})
 }
 
-// resync ensures the export lists are current.  used for testing
-func (s *Server) resync() {
-	_, _ = s.resyncNetworkGateways()
-	s.meshes.Range(func(_, value interface{}) bool {
-		value.(*meshServer).resync()
-		return true
-	})
-}
-
 type GatewayEndpointsProvider interface {
 	GetGatewayEndpoints() []*federationmodel.ServiceEndpoint
 }
@@ -340,10 +331,6 @@ func (s *meshServer) updateExportConfig(exportConfig *common.ServiceExporter) {
 	s.exportConfig = exportConfig
 	s.Unlock()
 	s.resync()
-}
-
-func (s *meshServer) getServiceHostName(exportedName *v1.ServiceName) string {
-	return fmt.Sprintf("%s.%s.svc.%s-exports.local", exportedName.Name, exportedName.Namespace, s.mesh.Name)
 }
 
 func (s *meshServer) getServiceMessage(svc *model.Service, exportedName *federationmodel.ServiceKey) *federationmodel.ServiceMessage {
@@ -387,27 +374,6 @@ func (s *meshServer) getServiceListMessage() *federationmodel.ServiceListMessage
 	sort.Slice(ret.Services, func(i, j int) bool { return strings.Compare(ret.Services[i].Hostname, ret.Services[j].Hostname) < 0 })
 	ret.Checksum = ret.GenerateChecksum()
 	return ret
-}
-
-func (s *meshServer) handleServiceList(response http.ResponseWriter) {
-	ret := func() *federationmodel.ServiceListMessage {
-		s.RLock()
-		defer s.RUnlock()
-		return s.getServiceListMessage()
-	}()
-
-	respBytes, err := json.Marshal(ret)
-	if err != nil {
-		s.logger.Errorf("failed to marshal to json: %s", err)
-		response.WriteHeader(500)
-		return
-	}
-	_, err = response.Write(respBytes)
-	if err != nil {
-		s.logger.Errorf("failed to send response: %s", err)
-		response.WriteHeader(500)
-		return
-	}
 }
 
 func getClientConnectionKey(request *http.Request) string {
