@@ -30,7 +30,6 @@ import (
 	"time"
 
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/golang/protobuf/ptypes"
 	"go.uber.org/atomic"
 	"golang.org/x/net/http2"
 	google_rpc "google.golang.org/genproto/googleapis/rpc/status"
@@ -41,7 +40,8 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
-	anypb "google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	v1 "maistra.io/api/security/v1"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
@@ -568,7 +568,7 @@ func (p *XdsProxy) handleUpstreamResponse(con *ProxyConnection) {
 					continue
 				}
 				var tb v1.TrustBundleResponse
-				if err := ptypes.UnmarshalAny(resp.Resources[0], &tb); err != nil { // nolint
+				if err := anypb.UnmarshalTo(resp.Resources[0], &tb, proto.UnmarshalOptions{}); err != nil {
 					proxyLog.Errorf("failed to unmarshall trust bundles: %v", err)
 					continue
 				}
