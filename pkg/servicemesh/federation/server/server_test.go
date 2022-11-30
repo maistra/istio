@@ -18,7 +18,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -624,7 +623,7 @@ func getServiceList(t *testing.T, addr, remoteName string) federationmodel.Servi
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Status code is not OK: %v (%s)", resp.StatusCode, resp.Status)
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
