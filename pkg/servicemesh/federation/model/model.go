@@ -29,6 +29,8 @@ type ServiceListMessage struct {
 }
 
 type ServiceMessage struct {
+	// `json:",inline"` is not an official json struct-tag. see https://github.com/mgechev/revive/issues/520
+	// other files with the same struct-tag are skipped, because they have "generated" header
 	//nolint:revive
 	ServiceKey      `json:",inline"`
 	ServicePorts    []*ServicePort `json:"servicePorts,omitempty"`
