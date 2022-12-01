@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	corev1 "k8s.io/api/core/v1"
 	v1 "maistra.io/api/federation/v1"
 
