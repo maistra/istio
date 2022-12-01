@@ -40,7 +40,7 @@ func (client mockPromAPI) LabelNames(ctx context.Context, matches []string, star
 	panic("implement me")
 }
 
-func (client mockPromAPI) LabelValues(ctx context.Context, label string, matches []string, startTime time.Time, endTime time.Time) (prometheus_model.LabelValues, promv1.Warnings, error) {
+func (client mockPromAPI) LabelValues(ctx context.Context, label string, matches []string, startTime time.Time, endTime time.Time) (prometheus_model.LabelValues, promv1.Warnings, error) { // nolint: lll
 	panic("implement me")
 }
 
