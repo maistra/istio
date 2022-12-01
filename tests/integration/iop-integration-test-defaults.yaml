@@ -4,7 +4,6 @@ kind: IstioOperator
 metadata:
   name: install
 spec:
-  # TODO: make sure that this meshConfig is necessary
   meshConfig:
     accessLogFile: "/dev/stdout"
     defaultConfig:
