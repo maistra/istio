@@ -1167,11 +1167,6 @@ func (s *Server) initFederationControllers(args *PilotArgs) error {
 		return nil
 	}
 
-	if s.kubeClient == nil {
-		log.Errorf("could not initialize federation discovery server: kubeClient is nil")
-		return nil
-	}
-
 	peerCertVerifier, err := s.createPeerCertVerifier(args.ServerOptions.TLSOptions)
 	if err != nil {
 		return err
