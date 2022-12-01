@@ -767,7 +767,8 @@ func TestStatusManager(t *testing.T) {
 }
 
 func verifyPeerStatus(t *testing.T, rm common.ResourceManager, name types.NamespacedName, expected *v1.ServiceMeshPeerStatus, assert func(*testing.T,
-	*v1.ServiceMeshPeerStatus) error) {
+	*v1.ServiceMeshPeerStatus) error,
+) {
 	t.Helper()
 	tryMultipleTimes(t, func() error {
 		actual, err := rm.PeerInformer().Lister().ServiceMeshPeers(name.Namespace).Get(name.Name)
