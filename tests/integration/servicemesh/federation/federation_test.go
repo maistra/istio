@@ -34,6 +34,8 @@ func GetIstioInstance() *istio.Instance {
 }
 
 func TestMain(m *testing.M) {
+	// Ignoring staticcheck linter. RequireMinClusters is now deprecated, but we need at least 2 clusters for this
+	// test to make it work.
 	// nolint: staticcheck
 	framework.
 		NewSuite(m).
