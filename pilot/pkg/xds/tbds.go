@@ -39,11 +39,7 @@ func tbdsNeedsPush(req *model.PushRequest) bool {
 		return false
 	}
 
-	if len(req.ConfigsUpdated) == 0 {
-		return true
-	}
-
-	return false
+	return len(req.ConfigsUpdated) == 0
 }
 
 // Generate returns protobuf containing TrustBundle for given proxy
