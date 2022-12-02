@@ -893,7 +893,10 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	var err error
 	var proxyUID *int64
 	var proxyGID *int64
+	tproxyInterceptionMode := pod.Annotations != nil && pod.Annotations["sidecar.istio.io/interceptionMode"] == string(model.InterceptionTproxy)
 	if hasOnlyIstioProxyContainer(pod) {
+		// we're injecting a gateway pod
+		// we set proxyUID/GID to whatever UID/GID is specified in securityContext.RunAsUser/RunAsGroup
 		if pod.Spec.SecurityContext != nil {
 			if pod.Spec.SecurityContext.RunAsUser != nil {
 				proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser)
@@ -917,37 +920,42 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 				break
 			}
 		}
-	} else {
-		tproxyInterceptionMode := pod.Annotations != nil && pod.Annotations["sidecar.istio.io/interceptionMode"] == string(model.InterceptionTproxy)
-		if !tproxyInterceptionMode {
-			proxyUID, err = getProxyUIDFromAnnotation(pod)
-			if err != nil {
-				log.Infof("Could not get proxyUID from annotation: %v", err)
+	} else if !tproxyInterceptionMode {
+		// we're injecting a normal pod (with app container and optional sidecar container)
+		// we set proxyUID to the main app container's UID incremented by 1
+		// we set proxyGID to the main app container's UID
+		proxyUID, err = getProxyUIDFromAnnotation(pod)
+		if err != nil {
+			log.Infof("Could not get proxyUID from annotation: %v", err)
+		}
+		if proxyUID == nil {
+			if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
+				proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser + 1)
+				// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
+				proxyGID = pod.Spec.SecurityContext.RunAsUser
 			}
-			if proxyUID == nil {
-				if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
-					proxyUID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsUser + 1)
-					// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
-					proxyGID = pod.Spec.SecurityContext.RunAsUser
-				}
-				for _, c := range pod.Spec.Containers {
-					if c.Name != ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
-						uid := *c.SecurityContext.RunAsUser + 1
-						if proxyUID == nil || uid > *proxyUID {
-							proxyUID = &uid
-						}
-						if proxyGID == nil {
-							proxyGID = c.SecurityContext.RunAsUser
-						}
+			for _, c := range pod.Spec.Containers {
+				if c.Name != ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
+					uid := *c.SecurityContext.RunAsUser + 1
+					if proxyUID == nil || uid > *proxyUID {
+						proxyUID = &uid
+					}
+					if proxyGID == nil {
+						proxyGID = c.SecurityContext.RunAsUser
 					}
 				}
 			}
-			if proxyUID == nil {
-				proxyUID = pointer.Int64Ptr(DefaultSidecarProxyUID)
-			}
-			if proxyGID == nil {
-				proxyGID = pointer.Int64Ptr(DefaultSidecarProxyUID)
-			}
+		}
+	}
+
+	// We need to set the UID/GID to something, or the injected manifest will fail to parse (this happens because
+	// {{ .ProxyUID/GID }} in the charts get resolved to "nil" (with quotes), which can't be parsed as a float).
+	if !tproxyInterceptionMode { // because the proxy must run as root in TPROXY mode, we must leave the proxyUID unset
+		if proxyUID == nil {
+			proxyUID = pointer.Int64Ptr(DefaultSidecarProxyUID)
+		}
+		if proxyGID == nil {
+			proxyGID = pointer.Int64Ptr(DefaultSidecarProxyUID)
 		}
 	}
 
