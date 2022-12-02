@@ -36,6 +36,7 @@ import (
 	ocprom "contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/hashicorp/go-multierror"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/common/expfmt"
 	"go.opencensus.io/stats/view"
 	"k8s.io/apimachinery/pkg/util/intstr"
