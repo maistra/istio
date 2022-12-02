@@ -37,22 +37,18 @@ type mockPromAPI struct {
 }
 
 func (client mockPromAPI) LabelNames(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]string, promv1.Warnings, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
-func (client mockPromAPI) LabelValues(ctx context.Context, label string, matches []string, startTime time.Time, endTime time.Time) (prometheus_model.LabelValues, promv1.Warnings, error) {
-	//TODO implement me
+func (client mockPromAPI) LabelValues(ctx context.Context, label string, matches []string, startTime time.Time, endTime time.Time) (prometheus_model.LabelValues, promv1.Warnings, error) { // nolint: lll
 	panic("implement me")
 }
 
 func (client mockPromAPI) QueryExemplars(ctx context.Context, query string, startTime time.Time, endTime time.Time) ([]promv1.ExemplarQueryResult, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
 func (client mockPromAPI) Buildinfo(ctx context.Context) (promv1.BuildinfoResult, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
