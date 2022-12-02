@@ -36,6 +36,26 @@ type mockPromAPI struct {
 	cannedResponse map[string]prometheus_model.Value
 }
 
+func (client mockPromAPI) LabelNames(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]string, promv1.Warnings, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (client mockPromAPI) LabelValues(ctx context.Context, label string, matches []string, startTime time.Time, endTime time.Time) (prometheus_model.LabelValues, promv1.Warnings, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (client mockPromAPI) QueryExemplars(ctx context.Context, query string, startTime time.Time, endTime time.Time) ([]promv1.ExemplarQueryResult, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (client mockPromAPI) Buildinfo(ctx context.Context) (promv1.BuildinfoResult, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func mockExecClientAuthNoPilot(_, _, _ string) (kube.ExtendedClient, error) {
 	return &kube.MockClient{}, nil
 }
@@ -167,11 +187,6 @@ func (client mockPromAPI) Flags(ctx context.Context) (promv1.FlagsResult, error)
 	return nil, nil
 }
 
-func (client mockPromAPI) LabelValues(_ context.Context, _ string,
-	_ time.Time, _ time.Time) (prometheus_model.LabelValues, promv1.Warnings, error) {
-	return nil, nil, nil
-}
-
 func (client mockPromAPI) Query(ctx context.Context, query string, ts time.Time) (prometheus_model.Value, promv1.Warnings, error) {
 	canned, ok := client.cannedResponse[query]
 	if !ok {
@@ -206,10 +221,6 @@ func (client mockPromAPI) Rules(ctx context.Context) (promv1.RulesResult, error)
 
 func (client mockPromAPI) Targets(ctx context.Context) (promv1.TargetsResult, error) {
 	return promv1.TargetsResult{}, nil
-}
-
-func (client mockPromAPI) LabelNames(ctx context.Context, startTime time.Time, endTime time.Time) ([]string, promv1.Warnings, error) {
-	return nil, nil, nil
 }
 
 func (client mockPromAPI) TargetsMetadata(ctx context.Context, matchTarget string, metric string, limit string) ([]promv1.MetricMetadata, error) {

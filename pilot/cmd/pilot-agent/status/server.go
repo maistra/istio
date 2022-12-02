@@ -107,8 +107,8 @@ type Server struct {
 func init() {
 	registry := prometheus.NewRegistry()
 	wrapped := prometheus.WrapRegistererWithPrefix("istio_agent_", prometheus.Registerer(registry))
-	wrapped.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	wrapped.MustRegister(prometheus.NewGoCollector())
+	wrapped.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	wrapped.MustRegister(collectors.NewGoCollector())
 
 	promRegistry = registry
 	// go collector metrics collide with other metrics.
