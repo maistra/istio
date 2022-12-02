@@ -894,7 +894,7 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	var proxyUID *int64
 	var proxyGID *int64
 	tproxyInterceptionMode := pod.Annotations != nil && pod.Annotations["sidecar.istio.io/interceptionMode"] == string(model.InterceptionTproxy)
-	if hasOnlyIstioProxyContainer(pod) {
+	if len(pod.Spec.Containers) == 1 && pod.Spec.Containers[0].Name == ProxyContainerName {
 		// we're injecting a gateway pod
 		// we set proxyUID/GID to whatever UID/GID is specified in securityContext.RunAsUser/RunAsGroup
 		if pod.Spec.SecurityContext != nil {
@@ -906,18 +906,16 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 				proxyGID = pointer.Int64Ptr(*pod.Spec.SecurityContext.RunAsGroup)
 			}
 		}
-		for _, c := range pod.Spec.Containers {
-			if c.Name == ProxyContainerName && c.SecurityContext != nil {
-				if c.SecurityContext.RunAsUser != nil {
-					proxyUID = pointer.Int64Ptr(*c.SecurityContext.RunAsUser)
-					if proxyGID == nil {
-						proxyGID = pointer.Int64Ptr(*proxyUID)
-					}
+		container := pod.Spec.Containers[0]
+		if container.SecurityContext != nil {
+			if container.SecurityContext.RunAsUser != nil {
+				proxyUID = pointer.Int64Ptr(*container.SecurityContext.RunAsUser)
+				if proxyGID == nil {
+					proxyGID = pointer.Int64Ptr(*proxyUID)
 				}
-				if c.SecurityContext.RunAsGroup != nil {
-					proxyGID = pointer.Int64Ptr(*c.SecurityContext.RunAsGroup)
-				}
-				break
+			}
+			if container.SecurityContext.RunAsGroup != nil {
+				proxyGID = pointer.Int64Ptr(*container.SecurityContext.RunAsGroup)
 			}
 		}
 	} else if !tproxyInterceptionMode {
@@ -994,10 +992,6 @@ func (wh *Webhook) inject(ar *kube.AdmissionReview, path string) *kube.Admission
 	}
 	totalSuccessfulInjections.Increment()
 	return &reviewResponse
-}
-
-func hasOnlyIstioProxyContainer(pod corev1.Pod) bool {
-	return len(pod.Spec.Containers) == 1 && pod.Spec.Containers[0].Name == ProxyContainerName
 }
 
 func (wh *Webhook) serveInject(w http.ResponseWriter, r *http.Request) {
