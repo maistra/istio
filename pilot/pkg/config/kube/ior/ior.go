@@ -24,7 +24,7 @@ import (
 var IORLog = log.RegisterScope("ior", "IOR logging", 0)
 
 type IOR struct {
-	route
+	routeController
 }
 
 func Run(

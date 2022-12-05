@@ -52,8 +52,8 @@ const (
 	ShouldManageRouteAnnotation = maistraPrefix + "manageRoute"
 )
 
-// route manages the integration between Istio Gateways and OpenShift Routes
-type route struct {
+// routeController manages the integration between Istio Gateways and OpenShift Routes
+type routeController struct {
 	routerClient routev1.RouteV1Interface
 	store        model.ConfigStoreController
 
@@ -81,13 +81,13 @@ func newRoute(
 	kubeClient KubeClient,
 	routerClient routev1.RouteV1Interface,
 	store model.ConfigStoreController,
-) *route {
+) *routeController {
 	for !kubeClient.IsRouteSupported() {
 		IORLog.Infof("routes are not supported in this cluster; waiting for Route resource to become available...")
 		time.Sleep(10 * time.Second)
 	}
 
-	r := &route{
+	r := &routeController{
 		routerClient:  routerClient,
 		store:         store,
 		podLister:     kubeClient.GetActualClient().KubeInformer().Core().V1().Pods().Lister(),
@@ -126,7 +126,7 @@ func getHost(route v1.Route) string {
 	return route.Spec.Host
 }
 
-func (r *route) deleteRoute(route *v1.Route) error {
+func (r *routeController) deleteRoute(route *v1.Route) error {
 	var immediate int64
 	host := getHost(*route)
 	err := r.routerClient.Routes(route.Namespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
@@ -198,7 +198,7 @@ func buildRoute(metadata config.Meta, originalHost string, tls *networking.Serve
 	}
 }
 
-func (r *route) createRoute(
+func (r *routeController) createRoute(
 	metadata config.Meta,
 	originalHost string,
 	tls *networking.ServerTLSSettings,
@@ -225,7 +225,7 @@ func (r *route) createRoute(
 	return nr, nil
 }
 
-func (r *route) updateRoute(
+func (r *routeController) updateRoute(
 	metadata config.Meta,
 	originalHost string,
 	tls *networking.ServerTLSSettings,
@@ -252,7 +252,7 @@ func (r *route) updateRoute(
 	return nr, nil
 }
 
-func (r *route) findRoutes(metadata config.Meta) (*v1.RouteList, error) {
+func (r *routeController) findRoutes(metadata config.Meta) (*v1.RouteList, error) {
 	defaultLabelSet := getDefaultRouteLabelMap(metadata.Name, metadata.Namespace)
 
 	labels := labels.SelectorFromSet(defaultLabelSet)
@@ -262,7 +262,7 @@ func (r *route) findRoutes(metadata config.Meta) (*v1.RouteList, error) {
 
 // findService tries to find a service that matches with the given gateway selector
 // Returns the namespace and service name that is a match, or an error
-func (r *route) findService(gateway *networking.Gateway) (string, string, error) {
+func (r *routeController) findService(gateway *networking.Gateway) (string, string, error) {
 	gwSelector := labels.SelectorFromSet(gateway.Selector)
 
 	// Get the list of pods that match the gateway selector
@@ -342,7 +342,7 @@ func hostHash(name string) string {
 	return hex.EncodeToString(hash[:8])
 }
 
-func (r *route) reconcileGateway(config *config.Config, routes *v1.RouteList) error {
+func (r *routeController) reconcileGateway(config *config.Config, routes *v1.RouteList) error {
 	gateway, ok := config.Spec.(*networking.Gateway)
 
 	if !ok {
@@ -400,7 +400,7 @@ func (r *route) reconcileGateway(config *config.Config, routes *v1.RouteList) er
 	return result.ErrorOrNil()
 }
 
-func (r *route) processEvent(old, curr *config.Config, event model.Event) error {
+func (r *routeController) processEvent(old, curr *config.Config, event model.Event) error {
 	if IORLog.GetOutputLevel() >= log.DebugLevel {
 		debugMessage := fmt.Sprintf("event %v arrived:", event)
 		if event == model.EventUpdate {
@@ -452,7 +452,7 @@ func (r *route) processEvent(old, curr *config.Config, event model.Event) error 
 	return result.ErrorOrNil()
 }
 
-func (r *route) Run(stop <-chan struct{}) {
+func (r *routeController) Run(stop <-chan struct{}) {
 	var aliveLock sync.Mutex
 	alive := true
 

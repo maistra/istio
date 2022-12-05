@@ -46,7 +46,7 @@ func newClients(
 	KubeClient,
 	routev1.RouteV1Interface,
 	*fakeMemberRollController,
-	*route,
+	*routeController,
 ) {
 	t.Helper()
 
@@ -83,7 +83,7 @@ func initClients(
 	KubeClient,
 	routev1.RouteV1Interface,
 	*fakeMemberRollController,
-	*route,
+	*routeController,
 ) {
 	store, iorKubeClient, routerClient, mrc, r := newClients(t, nil)
 
