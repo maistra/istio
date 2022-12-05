@@ -23,10 +23,6 @@ import (
 // IORLog is IOR-scoped log
 var IORLog = log.RegisterScope("ior", "IOR logging", 0)
 
-type IOR struct {
-	routeController
-}
-
 func Run(
 	kubeClient kube.Client,
 	store model.ConfigStoreController,
