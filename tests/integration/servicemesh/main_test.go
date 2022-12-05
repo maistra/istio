@@ -31,6 +31,7 @@ func TestMain(m *testing.M) {
 	// nolint: staticcheck
 	framework.
 		NewSuite(m).
+		RequireMaxClusters(1).
 		Setup(router.InstallOpenShiftRouter).
 		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(istio.Setup(nil, nil)).
