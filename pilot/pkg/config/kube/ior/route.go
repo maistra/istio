@@ -411,13 +411,7 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 		IORLog.Debug(debugMessage)
 	}
 
-	var (
-		err       error
-		isManaged bool
-	)
-
-	isManaged, err = isManagedByIOR(*curr)
-
+	isManaged, err := isManagedByIOR(*curr)
 	if err != nil {
 		return err
 	}
@@ -434,7 +428,7 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 	routes, err = r.findRoutes(curr.Meta)
 
 	if err != nil {
-		return errors.Wrapf(err, "unable to find routes matching gateway %s/%s", curr.Name, curr.Namespace)
+		return errors.Wrapf(err, "error finding routes matching gateway %s/%s", curr.Name, curr.Namespace)
 	}
 
 	if config != nil {
