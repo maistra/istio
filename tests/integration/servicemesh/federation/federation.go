@@ -109,9 +109,6 @@ components:
     label:
       unique: ingress
     k8s:
-      env:
-      - name: ISTIO_META_ROUTER_MODE
-        value: sni-dnat
       service:
         ports:
         # required for handling service requests from mesh2
@@ -127,9 +124,6 @@ components:
     label:
       unique: egress
     k8s:
-      env:
-      - name: ISTIO_META_ROUTER_MODE
-        value: sni-dnat
       service:
         ports:
         # required for handling service requests from mesh2
