@@ -32,7 +32,6 @@ spec:
         requestedNetworkView:
         # we want to view services on mesh1's network
         - network-mesh1
-        routerMode: sni-dnat
         service:
           metadata:
             labels:
@@ -60,7 +59,6 @@ spec:
       # ingress gateway definition for handing requests from mesh1
       mesh1-ingress:
         enabled: true
-        routerMode: sni-dnat
         service:
           type: NodePort
           metadata:
