@@ -471,7 +471,7 @@ func TestStatelessness(t *testing.T) {
 	list := getRoutes(t, routerClient, watchedNamespace, 2, time.Second)
 	validateRoutes(t, initialState.hosts, list, initialState.name, initialState.tls)
 
-	fr, ok := routerClient.Routes(watchedNamespace).(*FakeRouter)
+	fr, ok := routerClient.Routes(initialState.name).(*FakeRouter)
 
 	if !ok {
 		t.Fatal(fmt.Errorf("failed to convert to FakeRouter"))
