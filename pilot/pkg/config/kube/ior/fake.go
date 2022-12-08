@@ -24,6 +24,7 @@ import (
 	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
@@ -34,20 +35,33 @@ import (
 
 // FakeRouter implements routev1.RouteInterface
 type FakeRouter struct {
+	namespace      string
 	routes         map[string]*v1.Route
 	routesLock     sync.Mutex
-	callCounts     map[string]int
-	callCountsLock sync.Mutex
+	callCounts     *map[string]int
+	callCountsLock *sync.Mutex
+}
+
+type FakeAggregateRouter struct {
+	FakeRouter
+	routersByNamespace map[string]*FakeRouter
 }
 
 // FakeRouterClient implements routev1.RouteV1Interface
 type FakeRouterClient struct {
-	routesByNamespace     map[string]routev1.RouteInterface
-	routesByNamespaceLock sync.Mutex
+	routersByNamespace     map[string]*FakeRouter
+	routersByNamespaceLock sync.Mutex
+	callCounts             *map[string]int
+	callCountsLock         sync.Mutex
 }
 
 type fakeKubeClient struct {
 	client kube.Client
+}
+
+type FakeRouterInterface interface {
+	routev1.RouteInterface
+	getRoutes()
 }
 
 // NewFakeKubeClient creates a new FakeKubeClient
@@ -69,17 +83,63 @@ func (c *fakeKubeClient) GetHandleEventTimeout() time.Duration {
 
 // NewFakeRouterClient creates a new FakeRouterClient
 func NewFakeRouterClient() routev1.RouteV1Interface {
+	cc := make(map[string]int)
+
 	return &FakeRouterClient{
-		routesByNamespace: make(map[string]routev1.RouteInterface),
+		routersByNamespace: make(map[string]*FakeRouter),
+		callCounts:         &cc,
 	}
 }
 
 // NewFakeRouter creates a new FakeRouter
-func NewFakeRouter() routev1.RouteInterface {
+func NewFakeRouter(namespace string, callCounts *map[string]int, callCountsLock *sync.Mutex) *FakeRouter {
 	return &FakeRouter{
-		routes:     make(map[string]*v1.Route),
-		callCounts: make(map[string]int),
+		namespace:      namespace,
+		routes:         make(map[string]*v1.Route),
+		callCounts:     callCounts,
+		callCountsLock: callCountsLock,
 	}
+}
+
+func NewFakeAggregateRouter(routersByNamespace map[string]*FakeRouter, callCounts *map[string]int, callCountsLock *sync.Mutex) *FakeAggregateRouter {
+	fk := &FakeAggregateRouter{
+		FakeRouter{
+			namespace:      "",
+			routes:         nil,
+			callCounts:     callCounts,
+			callCountsLock: callCountsLock,
+		},
+		routersByNamespace,
+	}
+
+	return fk
+}
+
+func (fk *FakeRouter) getRoutes() map[string]*v1.Route {
+	fk.routesLock.Lock()
+	defer fk.routesLock.Unlock()
+
+	res := make(map[string]*v1.Route)
+
+	for n, r := range fk.routes {
+		res[fmt.Sprintf("%s/%s", fk.namespace, n)] = r
+	}
+
+	return res
+}
+
+func (fk *FakeAggregateRouter) getRoutes() map[string]*v1.Route {
+	res := make(map[string]*v1.Route)
+
+	for _, r := range fk.routersByNamespace {
+		routes := r.getRoutes()
+
+		for k, v := range routes {
+			res[k] = v
+		}
+	}
+
+	return res
 }
 
 // RESTClient implements routev1.RouteV1Interface
@@ -89,27 +149,37 @@ func (rc *FakeRouterClient) RESTClient() rest.Interface {
 
 // Routes implements routev1.RouteV1Interface
 func (rc *FakeRouterClient) Routes(namespace string) routev1.RouteInterface {
-	rc.routesByNamespaceLock.Lock()
-	defer rc.routesByNamespaceLock.Unlock()
+	rc.routersByNamespaceLock.Lock()
+	defer rc.routersByNamespaceLock.Unlock()
 
-	if _, ok := rc.routesByNamespace[namespace]; !ok {
-		rc.routesByNamespace[namespace] = NewFakeRouter()
+	if namespace == metav1.NamespaceAll {
+		return NewFakeAggregateRouter(rc.routersByNamespace, rc.callCounts, &rc.callCountsLock)
 	}
 
-	return rc.routesByNamespace[namespace]
+	router, ok := rc.routersByNamespace[namespace]
+
+	if !ok {
+		router = NewFakeRouter(namespace, rc.callCounts, &rc.callCountsLock)
+		rc.routersByNamespace[namespace] = router
+	}
+
+	return router
 }
 
 func (fk *FakeRouter) GetCallCount(functionName string) int {
 	fk.callCountsLock.Lock()
 	defer fk.callCountsLock.Unlock()
 
-	return fk.callCounts[functionName]
+	cc := *fk.callCounts
+
+	return cc[functionName]
 }
 
 func (fk *FakeRouter) incrementCallCount(functionName string) int {
 	fk.callCountsLock.Lock()
-	fk.callCounts[functionName]++
-	num := fk.callCounts[functionName]
+	cc := *fk.callCounts
+	cc[functionName]++
+	num := cc[functionName]
 	fk.callCountsLock.Unlock()
 
 	return num
@@ -121,11 +191,27 @@ func (fk *FakeRouter) generateHost() string {
 	return fmt.Sprintf("generated-host%d.com", num)
 }
 
-// Create implements routev1.RouteInterface
-func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.CreateOptions) (*v1.Route, error) {
+func (fk *FakeRouter) getRoute(name string) *v1.Route {
 	fk.routesLock.Lock()
 	defer fk.routesLock.Unlock()
 
+	return fk.routes[name]
+}
+
+func (fk *FakeRouter) setRoute(name string, route *v1.Route) error {
+	fk.routesLock.Lock()
+	if route == nil {
+		delete(fk.routes, name)
+	} else {
+		fk.routes[name] = route
+	}
+	fk.routesLock.Unlock()
+
+	return nil
+}
+
+// Create implements routev1.RouteInterface
+func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.CreateOptions) (*v1.Route, error) {
 	if strings.Contains(route.Spec.Host, "/") {
 		return nil, fmt.Errorf("invalid hostname")
 	}
@@ -134,18 +220,17 @@ func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.C
 		route.Spec.Host = fk.generateHost()
 	}
 
-	fk.routes[route.Name] = route
+	err := fk.setRoute(route.Name, route)
 
 	fk.incrementCallCount("Create")
-	return route, nil
+	return route, err
 }
 
 // Update implements routev1.RouteInterface
 func (fk *FakeRouter) Update(ctx context.Context, route *v1.Route, opts metav1.UpdateOptions) (*v1.Route, error) {
-	fk.routesLock.Lock()
-	defer fk.routesLock.Unlock()
+	curr := fk.getRoute(route.Name)
 
-	if _, ok := fk.routes[route.Name]; !ok {
+	if curr == nil {
 		return nil, fmt.Errorf("existing route not found")
 	}
 
@@ -157,10 +242,10 @@ func (fk *FakeRouter) Update(ctx context.Context, route *v1.Route, opts metav1.U
 		route.Spec.Host = fk.generateHost()
 	}
 
-	fk.routes[route.Name] = route
+	err := fk.setRoute(route.Name, route)
 
 	fk.incrementCallCount("Update")
-	return route, nil
+	return route, err
 }
 
 // UpdateStatus implements routev1.RouteInterface
@@ -170,14 +255,12 @@ func (fk *FakeRouter) UpdateStatus(ctx context.Context, route *v1.Route, opts me
 
 // Delete implements routev1.RouteInterface
 func (fk *FakeRouter) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
-	fk.routesLock.Lock()
-	defer fk.routesLock.Unlock()
-
-	if _, ok := fk.routes[name]; !ok {
+	route := fk.getRoute(name)
+	if route == nil {
 		return fmt.Errorf("route %s not found", name)
 	}
 
-	delete(fk.routes, name)
+	fk.setRoute(name, nil)
 
 	fk.incrementCallCount("Delete")
 	return nil
@@ -195,12 +278,29 @@ func (fk *FakeRouter) Get(ctx context.Context, name string, opts metav1.GetOptio
 
 // List implements routev1.RouteInterface
 func (fk *FakeRouter) List(ctx context.Context, opts metav1.ListOptions) (*v1.RouteList, error) {
-	fk.routesLock.Lock()
-	defer fk.routesLock.Unlock()
+	var items []v1.Route
+	for _, route := range fk.getRoutes() {
+		items = append(items, *route)
+	}
+	result := &v1.RouteList{Items: items}
+
+	fk.incrementCallCount("List")
+	return result, nil
+}
+
+func (fk *FakeAggregateRouter) List(ctx context.Context, opts metav1.ListOptions) (*v1.RouteList, error) {
+	selector, err := labels.Parse(opts.LabelSelector)
+	if err != nil {
+		return nil, err
+	}
 
 	var items []v1.Route
-	for _, route := range fk.routes {
-		items = append(items, *route)
+
+	for _, route := range fk.getRoutes() {
+		var s labels.Set = route.Labels
+		if selector.Matches(s) {
+			items = append(items, *route)
+		}
 	}
 	result := &v1.RouteList{Items: items}
 
