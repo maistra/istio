@@ -58,6 +58,7 @@ func TestMain(m *testing.M) {
 	// nolint: staticcheck
 	framework.
 		NewSuite(m).
+		RequireMaxClusters(1).
 		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(maistra.ApplyGatewayAPICRDs()).
 		Setup(istio.Setup(&i, nil)).
