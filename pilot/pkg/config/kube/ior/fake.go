@@ -198,7 +198,7 @@ func (fk *FakeRouter) getRoute(name string) *v1.Route {
 	return fk.routes[name]
 }
 
-func (fk *FakeRouter) setRoute(name string, route *v1.Route) error {
+func (fk *FakeRouter) setRoute(name string, route *v1.Route) {
 	fk.routesLock.Lock()
 	if route == nil {
 		delete(fk.routes, name)
@@ -206,8 +206,6 @@ func (fk *FakeRouter) setRoute(name string, route *v1.Route) error {
 		fk.routes[name] = route
 	}
 	fk.routesLock.Unlock()
-
-	return nil
 }
 
 // Create implements routev1.RouteInterface
@@ -220,10 +218,10 @@ func (fk *FakeRouter) Create(ctx context.Context, route *v1.Route, opts metav1.C
 		route.Spec.Host = fk.generateHost()
 	}
 
-	err := fk.setRoute(route.Name, route)
+	fk.setRoute(route.Name, route)
 
 	fk.incrementCallCount("Create")
-	return route, err
+	return route, nil
 }
 
 // Update implements routev1.RouteInterface
@@ -242,10 +240,10 @@ func (fk *FakeRouter) Update(ctx context.Context, route *v1.Route, opts metav1.U
 		route.Spec.Host = fk.generateHost()
 	}
 
-	err := fk.setRoute(route.Name, route)
+	fk.setRoute(route.Name, route)
 
 	fk.incrementCallCount("Update")
-	return route, err
+	return route, nil
 }
 
 // UpdateStatus implements routev1.RouteInterface
