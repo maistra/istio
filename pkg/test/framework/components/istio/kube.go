@@ -479,7 +479,7 @@ func (i *istioImpl) installRemoteCommon(c cluster.Cluster, defaultsIOPFile, iopF
 		args.AppendSet("values.global.multiCluster.clusterName", c.Name())
 	}
 
-	if discovery {
+	if discovery && i.cfg.DeployEastWestGW {
 		// Configure the cluster and network arguments to pass through the injector webhook.
 		remoteIstiodAddress, err := i.RemoteDiscoveryAddressFor(c)
 		if err != nil {
