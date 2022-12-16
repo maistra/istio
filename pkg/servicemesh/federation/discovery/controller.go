@@ -279,7 +279,7 @@ func (c *Controller) delete(ctx context.Context, instance *v1.ServiceMeshPeer) e
 func (c *Controller) getRegistry(clusterID cluster.ID) serviceregistry.Instance {
 	for _, registry := range c.sc.GetRegistries() {
 		if registry.Cluster() == clusterID {
-			return registry
+			return c.sc.Unwrap(registry)
 		}
 	}
 	return nil
