@@ -32,6 +32,7 @@ import (
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/pkg/test/framework/resource"
 	kubetest "istio.io/istio/pkg/test/kube"
+	"istio.io/istio/pkg/test/scopes"
 	"istio.io/istio/pkg/test/util/retry"
 )
 
@@ -96,6 +97,7 @@ func setupConfig(_ resource.Context, cfg *istio.Config) {
 	if cfg == nil {
 		return
 	}
+	cfg.IstiodlessRemotes = false
 	cfg.DeployEastWestGW = false
 	cfg.ConfigureMultiCluster = false
 	cfg.ConfigureRemoteCluster = false
@@ -162,11 +164,17 @@ func CreateServiceMeshPeersOrFail(ctx framework.TestContext) {
 			if remoteCluster == cluster.Name() {
 				continue
 			}
+			caCertConfigMapName := remoteCluster + "-ca-cert"
+			scopes.Framework.Infof("Creating config map %s, ip: %s, cluster: %s", caCertConfigMapName, remoteIP, remoteCluster)
 			configMap := remoteCerts[remoteCluster]
 			configMap.ObjectMeta = metav1.ObjectMeta{
-				Name: remoteCluster + "-ca-cert",
+				Name: caCertConfigMapName,
 			}
-			if _, err := cluster.Kube().CoreV1().ConfigMaps("istio-system").Create(context.TODO(), configMap, metav1.CreateOptions{}); err != nil {
+			_, err := cluster.Kube().CoreV1().ConfigMaps("istio-system").Create(context.TODO(), configMap, metav1.CreateOptions{})
+			ctx.Cleanup(func() {
+				cluster.Kube().CoreV1().ConfigMaps("istio-system").Delete(context.TODO(), caCertConfigMapName, metav1.DeleteOptions{})
+			})
+			if err != nil {
 				ctx.Fatalf("failed to create config map %s: %s", configMap.ObjectMeta.Name, err)
 			}
 			ctx.ConfigKube(cluster).YAML("istio-system", fmt.Sprintf(`
@@ -189,7 +197,7 @@ spec:
         certificateChain:
             kind: ConfigMap
             name: %s
-`, remoteCluster, remoteIP, remoteCluster+".local", remoteCluster+".local/ns/istio-system/sa/federation-egress-service-account", remoteCluster+"-ca-cert")).
+`, remoteCluster, remoteIP, remoteCluster+".local", remoteCluster+".local/ns/istio-system/sa/federation-egress-service-account", caCertConfigMapName)).
 				ApplyOrFail(ctx)
 		}
 	}
@@ -247,6 +255,7 @@ func checkConnectivity(ctx framework.TestContext, source cluster.Cluster, namesp
 		ctx.Fatal(err)
 	}
 	cmd := "curl http://ratings.bookinfo.svc.primary-imports.local:9080/ratings/123"
+	scopes.Framework.Infof("(SKIPPING) >>>>> $ %s", cmd)
 	err = retry.UntilSuccess(func() error {
 		stdout, _, err := source.PodExec(podName, namespace, "sleep", cmd)
 		if err != nil {
@@ -255,7 +264,7 @@ func checkConnectivity(ctx framework.TestContext, source cluster.Cluster, namesp
 			return fmt.Errorf("podexec output does not look right: %s", stdout)
 		}
 		return nil
-	}, retry.Timeout(300*time.Second), retry.Delay(time.Second))
+	}, retry.Timeout(2*time.Hour), retry.Delay(time.Second))
 	if err != nil {
 		ctx.Fatal(err)
 	}
