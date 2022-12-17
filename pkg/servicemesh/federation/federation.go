@@ -104,7 +104,7 @@ func internalNew(opt Options, cs maistraclient.Interface) (*Federation, error) {
 	name := types.NamespacedName{Name: opt.IstiodPodName, Namespace: opt.IstiodNamespace}
 	statusManager := status.NewManager(name, resourceManager, leaderElection)
 	configStore := newConfigStore()
-	server, err := server.NewServer(server.Options{
+	srv, err := server.NewServer(server.Options{
 		BindAddress: opt.BindAddress,
 		Env:         opt.Env,
 		Network:     opt.LocalNetwork,
@@ -117,7 +117,7 @@ func internalNew(opt Options, cs maistraclient.Interface) (*Federation, error) {
 	exportController, err := exports.NewController(exports.Options{
 		ResourceManager:      resourceManager,
 		ResyncPeriod:         opt.ResyncPeriod,
-		ServiceExportManager: server,
+		ServiceExportManager: srv,
 	})
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func internalNew(opt Options, cs maistraclient.Interface) (*Federation, error) {
 		XDSUpdater:        opt.XDSUpdater,
 		Env:               opt.Env,
 		ConfigStore:       configStore,
-		FederationManager: server,
+		FederationManager: srv,
 		StatusManager:     statusManager,
 	})
 	if err != nil {
@@ -147,7 +147,7 @@ func internalNew(opt Options, cs maistraclient.Interface) (*Federation, error) {
 
 	federation := &Federation{
 		configStore:         configStore,
-		server:              server,
+		server:              srv,
 		exportController:    exportController,
 		importController:    importController,
 		discoveryController: discoveryController,

@@ -105,10 +105,10 @@ func NewServer(opt Options) (*Server, error) {
 		network:     opt.Network,
 		listener:    listener,
 	}
-	mux := mux.NewRouter()
-	mux.HandleFunc("/v1/services/{mesh}", fed.handleServiceList)
-	mux.HandleFunc("/v1/watch/{mesh}", fed.handleWatch)
-	fed.httpServer.Handler = mux
+	router := mux.NewRouter()
+	router.HandleFunc("/v1/services/{mesh}", fed.handleServiceList)
+	router.HandleFunc("/v1/watch/{mesh}", fed.handleWatch)
+	fed.httpServer.Handler = router
 	return fed, nil
 }
 
