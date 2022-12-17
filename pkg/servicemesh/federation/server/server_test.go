@@ -983,7 +983,7 @@ func TestWatch(t *testing.T) {
 					Attributes: model.ServiceAttributes{
 						ClusterExternalAddresses: model.AddressMap{
 							Addresses: map[cluster.ID][]string{
-								cluster.ID("network1"): {"a"},
+								"network1": {"a"},
 							},
 						},
 					},
