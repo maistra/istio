@@ -97,7 +97,7 @@ func setupConfig(_ resource.Context, cfg *istio.Config) {
 	if cfg == nil {
 		return
 	}
-	cfg.IstiodlessRemotes = false
+	cfg.IstiodlessRemotes = false // We need istiod for Federation to work
 	cfg.DeployEastWestGW = false
 	cfg.ConfigureMultiCluster = false
 	cfg.ConfigureRemoteCluster = false
