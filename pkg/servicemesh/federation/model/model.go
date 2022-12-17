@@ -14,7 +14,7 @@
 
 package model
 
-import hashstructure "github.com/mitchellh/hashstructure/v2"
+import "github.com/mitchellh/hashstructure/v2"
 
 type ServiceKey struct {
 	Name      string `json:"name,omitempty"`
