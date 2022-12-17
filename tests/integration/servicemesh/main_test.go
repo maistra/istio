@@ -28,6 +28,8 @@ import (
 
 func TestMain(m *testing.M) {
 	// do not change order of setup functions
+	// Ignoring staticcheck linter. In multicluster setup these tests are currently not working.
+	// nolint: staticcheck
 	framework.
 		NewSuite(m).
 		RequireMaxClusters(1).
