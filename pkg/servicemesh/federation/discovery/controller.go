@@ -163,7 +163,6 @@ func (c *Controller) reconcile(resourceName string) error {
 }
 
 func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) error {
-	registry := c.getRegistry(cluster.ID(instance.Name))
 	if instance.Spec.Security.TrustDomain != "" && instance.Spec.Security.TrustDomain != c.env.Mesh().GetTrustDomain() {
 		rootCert, err := c.getRootCertForMesh(instance)
 		if err != nil {
@@ -183,6 +182,7 @@ func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) e
 	}
 
 	// check for existing registry
+	registry := c.getRegistry(cluster.ID(instance.Name))
 	if registry != nil {
 		// if there's an existing registry, make sure it's one of ours
 		if registry.Provider() != provider.Federation {
