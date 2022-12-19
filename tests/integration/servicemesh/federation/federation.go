@@ -255,7 +255,6 @@ func checkConnectivity(ctx framework.TestContext, source cluster.Cluster, namesp
 		ctx.Fatal(err)
 	}
 	cmd := "curl http://ratings.bookinfo.svc.primary-imports.local:9080/ratings/123"
-	scopes.Framework.Infof("(SKIPPING) >>>>> $ %s", cmd)
 	err = retry.UntilSuccess(func() error {
 		stdout, _, err := source.PodExec(podName, namespace, "sleep", cmd)
 		if err != nil {
