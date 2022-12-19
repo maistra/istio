@@ -32,7 +32,6 @@ import (
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/pkg/test/framework/resource"
 	kubetest "istio.io/istio/pkg/test/kube"
-	"istio.io/istio/pkg/test/scopes"
 	"istio.io/istio/pkg/test/util/retry"
 )
 
@@ -165,7 +164,6 @@ func CreateServiceMeshPeersOrFail(ctx framework.TestContext) {
 				continue
 			}
 			caCertConfigMapName := remoteCluster + "-ca-cert"
-			scopes.Framework.Infof("Creating config map %s, ip: %s, cluster: %s", caCertConfigMapName, remoteIP, remoteCluster)
 			configMap := remoteCerts[remoteCluster]
 			configMap.ObjectMeta = metav1.ObjectMeta{
 				Name: caCertConfigMapName,
