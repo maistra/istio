@@ -264,7 +264,7 @@ func checkConnectivity(ctx framework.TestContext, source cluster.Cluster, namesp
 			return fmt.Errorf("podexec output does not look right: %s", stdout)
 		}
 		return nil
-	}, retry.Timeout(2*time.Hour), retry.Delay(time.Second))
+	}, retry.Timeout(5*time.Minute), retry.Delay(time.Second))
 	if err != nil {
 		ctx.Fatal(err)
 	}
