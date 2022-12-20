@@ -18,11 +18,11 @@
 package servicemesh
 
 import (
-	"istio.io/istio/pkg/test/framework/components/namespace"
 	"testing"
 
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istio"
+	"istio.io/istio/pkg/test/framework/components/namespace"
 	"istio.io/istio/tests/integration/servicemesh/maistra"
 )
 
