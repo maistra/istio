@@ -87,6 +87,8 @@ var (
 		DumpKubernetesManifests: false,
 		IstiodlessRemotes:       true,
 		EnableCNI:               false,
+		ConfigureMultiCluster:   true,
+		ConfigureRemoteCluster:  true,
 	}
 )
 
@@ -171,6 +173,12 @@ type Config struct {
 	// IngressGatewayIstioLabel allows overriding the selector of the ingressgateway service (defaults to istio=ingressgateway)
 	// This field should only be set when DeployIstio is false
 	IngressGatewayIstioLabel string
+
+	ConfigureMultiCluster bool
+
+	ConfigureRemoteCluster bool
+
+	DifferentTrustDomains bool
 }
 
 func (c *Config) OverridesYAML(s *resource.Settings) string {
@@ -341,7 +349,9 @@ func (c *Config) String() string {
 	result += fmt.Sprintf("EnableCNI:                      %v\n", c.EnableCNI)
 	result += fmt.Sprintf("IngressGatewayServiceName:      %v\n", c.IngressGatewayServiceName)
 	result += fmt.Sprintf("IngressGatewayServiceNamespace: %v\n", c.IngressGatewayServiceNamespace)
-	result += fmt.Sprintf("IngressGatewayIstioLabel:     	 %v\n", c.IngressGatewayIstioLabel)
+	result += fmt.Sprintf("IngressGatewayIstioLabel:       %v\n", c.IngressGatewayIstioLabel)
+	result += fmt.Sprintf("ConfigureMultiCluster:          %v\n", c.ConfigureMultiCluster)
+	result += fmt.Sprintf("DifferentTrustDomains:          %v\n", c.DifferentTrustDomains)
 
 	return result
 }

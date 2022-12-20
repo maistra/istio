@@ -301,6 +301,7 @@ EOF
   declare -a DEPLOY_KIND_JOBS
   for i in "${!CLUSTER_NAMES[@]}"; do
     deploy_kind "${i}" & DEPLOY_KIND_JOBS+=("${!}")
+    sleep 5
   done
 
   for pid in "${DEPLOY_KIND_JOBS[@]}"; do

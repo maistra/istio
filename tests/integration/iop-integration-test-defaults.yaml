@@ -4,6 +4,12 @@ kind: IstioOperator
 metadata:
   name: install
 spec:
+  meshConfig:
+    accessLogFile: "/dev/stdout"
+    defaultConfig:
+      proxyMetadata:
+        ISTIO_META_DNS_CAPTURE: "true"
+        ISTIO_META_DNS_AUTO_ALLOCATE: "true"
   components:
     ingressGateways:
       - name: istio-ingressgateway

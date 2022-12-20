@@ -123,6 +123,10 @@ type secretCache struct {
 	mu       sync.RWMutex
 	workload *security.SecretItem
 	certRoot []byte
+
+	// Read/Write to trustBundleMap and trustBundleExpireTime should use getRootCertByTrustDomain() and setRootCertByTrustDomain().
+	trustBundleMap        map[string][]byte
+	trustBundleExpireTime time.Time
 }
 
 // GetRoot returns cached root cert and cert expiration time. This method is thread safe.
@@ -223,6 +227,7 @@ func (sc *SecretManagerClient) getCachedSecret(resourceName string) (secret *sec
 				ResourceName: resourceName,
 				RootCert:     rootCertBundle,
 			}
+			sc.addTrustBundles(ns)
 			cacheLog.WithLabels("ttl", time.Until(c.ExpireTime)).Info("returned workload trust anchor from cache")
 
 		} else {
@@ -239,6 +244,30 @@ func (sc *SecretManagerClient) getCachedSecret(resourceName string) (secret *sec
 		return ns
 	}
 	return nil
+}
+
+func (sc *SecretManagerClient) GetTrustBundles() (trustBundles map[string][]byte, earliestExpiry time.Time) {
+	sc.cache.mu.RLock()
+	trustBundles = sc.cache.trustBundleMap
+	earliestExpiry = sc.cache.trustBundleExpireTime
+	if trustBundles != nil && sc.cache.certRoot != nil {
+		trustBundles[sc.configOptions.TrustDomain] = sc.cache.certRoot
+	}
+	sc.cache.mu.RUnlock()
+	return trustBundles, earliestExpiry
+}
+
+func (sc *SecretManagerClient) SetTrustBundles(trustBundles map[string][]byte, earliestExpiry time.Time) {
+	sc.cache.mu.Lock()
+	trustBundlesUpdated := !compareTrustBundles(sc.cache.trustBundleMap, trustBundles)
+	if trustBundlesUpdated {
+		sc.cache.trustBundleMap = trustBundles
+		sc.cache.trustBundleExpireTime = earliestExpiry
+	}
+	sc.cache.mu.Unlock()
+	if trustBundlesUpdated {
+		sc.OnSecretUpdate(security.RootCertReqResourceName)
+	}
 }
 
 // GenerateSecret passes the cached secret to SDS.StreamSecrets and SDS.FetchSecret.
@@ -304,6 +333,7 @@ func (sc *SecretManagerClient) GenerateSecret(resourceName string) (secret *secu
 
 	if resourceName == security.RootCertReqResourceName {
 		ns.RootCert = sc.mergeTrustAnchorBytes(ns.RootCert)
+		sc.addTrustBundles(ns)
 	} else {
 		// If periodic cert refresh resulted in discovery of a new root, trigger a ROOTCA request to refresh trust anchor
 		oldRoot := sc.cache.GetRoot()
@@ -498,6 +528,7 @@ func (sc *SecretManagerClient) generateFileSecret(resourceName string) (bool, *s
 		if sitem, err = sc.generateRootCertFromExistingFile(cf.CaCertificatePath, resourceName, true); err == nil {
 			// If retrieving workload trustBundle, then merge other configured trustAnchors in ProxyConfig
 			sitem.RootCert = sc.mergeTrustAnchorBytes(sitem.RootCert)
+			sc.addTrustBundles(sitem)
 			sc.addFileWatcher(cf.CaCertificatePath, resourceName)
 		}
 	// Default workload certificate.
@@ -773,4 +804,26 @@ func (sc *SecretManagerClient) mergeConfigTrustBundle(rootCerts []string) []byte
 		anchorBytes = pkiutil.AppendCertByte(anchorBytes, []byte(cert))
 	}
 	return anchorBytes
+}
+
+func (sc *SecretManagerClient) addTrustBundles(secretItem *security.SecretItem) {
+	trustBundles, trustBundleExpiry := sc.GetTrustBundles()
+	secretItem.TrustBundles = trustBundles
+	if trustBundles != nil && trustBundleExpiry.Before(secretItem.ExpireTime) {
+		secretItem.ExpireTime = trustBundleExpiry
+	}
+}
+
+// returns true if trust bundles are the same
+func compareTrustBundles(a map[string][]byte, b map[string][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		//nolint:gocritic
+		if string(b[k]) != string(v) {
+			return false
+		}
+	}
+	return true
 }

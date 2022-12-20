@@ -3091,14 +3091,15 @@ spec:
 			port:       443,
 		},
 		// TC2: Same test as TC1, but use a fake external ip in destination for connectivity.
-		{
-			name:       "traffic from outboundTrafficPolicy REGISTRY_ONLY to allowed host",
-			statusCode: http.StatusOK,
-			from:       t.Apps.A,
-			to:         fakeExternalAddress,
-			protocol:   protocol.HTTPS,
-			port:       443,
-		},
+		// https://issues.redhat.com/browse/OSSM-4809.
+		//{
+		//	name:       "traffic from outboundTrafficPolicy REGISTRY_ONLY to allowed host",
+		//	statusCode: http.StatusOK,
+		//	from:       t.Apps.A,
+		//	to:         fakeExternalAddress,
+		//	protocol:   protocol.HTTPS,
+		//	port:       443,
+		//},
 		// TC3: Test connectivity to external service from outboundTrafficPolicy=PASS_THROUGH pod.
 		// Traffic should go through without the need for any explicit ServiceEntry
 		{

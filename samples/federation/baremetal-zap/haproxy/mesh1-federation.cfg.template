@@ -1,0 +1,84 @@
+#---------------------------------------------------------------------
+# haproxy configuration for libvirt federation.
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+# Global settings
+#---------------------------------------------------------------------
+global
+    log 127.0.0.1:514  local2 debug
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     4000
+    user        haproxy
+    group       haproxy
+    daemon
+
+    # turn on stats unix socket
+    stats socket /var/lib/haproxy/stats
+
+    # utilize system-wide crypto-policies
+    ssl-default-bind-ciphers PROFILE=SYSTEM
+    ssl-default-server-ciphers PROFILE=SYSTEM
+
+#---------------------------------------------------------------------
+# common defaults that all the 'listen' and 'backend' sections will
+# use if not designated in their block
+#---------------------------------------------------------------------
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option http-server-close
+
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 3000
+
+#---------------------------------------------------------------------
+# MESH1 Service Port 
+#---------------------------------------------------------------------
+frontend mesh1-service
+    mode        tcp
+    option      tcplog
+    bind        *:{{MESH1_SERVICE_PORT}}
+    default_backend mesh1-service
+
+#---------------------------------------------------------------------
+# MESH1 Discovery Port 
+#---------------------------------------------------------------------
+frontend mesh1-discovery
+    mode        tcp
+    option      tcplog
+    bind        *:{{MESH1_DISCOVERY_PORT}}
+    default_backend mesh1-discovery
+
+#---------------------------------------------------------------------
+# MESH2 Service Port 
+#---------------------------------------------------------------------
+frontend mesh2-service
+    mode        tcp
+    option      tcplog
+    bind        *:{{MESH2_SERVICE_PORT}}
+    default_backend mesh2-service
+
+#---------------------------------------------------------------------
+# MESH2 Discovery Port 
+#---------------------------------------------------------------------
+frontend mesh2-discovery
+    mode        tcp
+    option      tcplog
+    bind        *:{{MESH2_DISCOVERY_PORT}}
+    default_backend mesh2-discovery
+
+#---------------------------------------------------------------------
+# Federation backends
+#---------------------------------------------------------------------
+
