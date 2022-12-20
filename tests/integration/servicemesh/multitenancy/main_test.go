@@ -35,6 +35,7 @@ import (
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/echo"
 	"istio.io/istio/pkg/test/framework/components/echo/check"
+	"istio.io/istio/pkg/test/framework/components/echo/match"
 	"istio.io/istio/pkg/test/framework/components/namespace"
 	"istio.io/istio/pkg/test/framework/resource"
 	"istio.io/istio/pkg/test/util/retry"
@@ -48,7 +49,9 @@ var (
 	appNs1 namespace.Instance
 	appNs2 namespace.Instance
 	appNs3 namespace.Instance
-	apps   echo.Instances
+
+	apps    echo.Instances
+	appsMux sync.Mutex
 
 	svcEntryTmpl = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/multitenancy/testdata/service-entry.tmpl.yaml")
 )
@@ -77,18 +80,19 @@ func TestMain(m *testing.M) {
 			namespace.Setup(&appNs1, namespace.Config{Prefix: "app-1-tenant-1"}),
 			namespace.Setup(&appNs2, namespace.Config{Prefix: "app-2-tenant-1"}),
 			namespace.Setup(&appNs3, namespace.Config{Prefix: "app-3-tenant-2"})).
-		Setup(
-			maistra.DeployEchos(&apps, map[string]namespace.Getter{
-				"a": namespace.Future(&appNs1),
-				"b": namespace.Future(&appNs2),
-				"c": namespace.Future(&appNs3),
-			}, nil)).
+		SetupParallel(
+			maistra.DeployEchos(&apps, &appsMux, "a", namespace.Future(&appNs1), maistra.AppOpts{NoSidecar: true}),
+			maistra.DeployEchos(&apps, &appsMux, "b", namespace.Future(&appNs2), maistra.AppOpts{NoSidecar: true}),
+			maistra.DeployEchos(&apps, &appsMux, "c", namespace.Future(&appNs3), maistra.AppOpts{NoSidecar: true}),
+		).
 		Run()
 }
 
 func TestMultiTenancy(t *testing.T) {
 	framework.NewTest(t).Run(func(ctx framework.TestContext) {
-		a, b, c := apps[0], apps[1], apps[2]
+		a := match.ServiceName(echo.NamespacedName{Name: "a", Namespace: appNs1}).GetMatches(apps).Instances()[0]
+		b := match.ServiceName(echo.NamespacedName{Name: "b", Namespace: appNs2}).GetMatches(apps).Instances()[0]
+		c := match.ServiceName(echo.NamespacedName{Name: "c", Namespace: appNs3}).GetMatches(apps).Instances()[0]
 
 		ctx.NewSubTest("apps can communicate across other namespaces").Run(func(t framework.TestContext) {
 			for _, to := range []echo.Instance{b, c} {

@@ -174,6 +174,7 @@ func TestRemoveFromMesh(t *testing.T) {
 			args:              strings.Split("experimental remove-from-mesh service test", " "),
 			expectedException: true,
 			k8sConfigs:        cannedK8sConfig,
+			namespace:         "default",
 			expectedOutput:    "Error: service \"test\" does not exist, skip\n",
 		},
 		{
@@ -181,6 +182,7 @@ func TestRemoveFromMesh(t *testing.T) {
 			args:              strings.Split("experimental remove-from-mesh deployment test", " "),
 			expectedException: true,
 			k8sConfigs:        cannedK8sConfig,
+			namespace:         "default",
 			expectedOutput:    "Error: deployment \"test\" does not exist\n",
 		},
 		{
@@ -188,6 +190,7 @@ func TestRemoveFromMesh(t *testing.T) {
 			args:              strings.Split("x rm svc test", " "),
 			expectedException: true,
 			k8sConfigs:        cannedK8sConfig,
+			namespace:         "default",
 			expectedOutput:    "Error: service \"test\" does not exist, skip\n",
 		},
 		{
@@ -195,6 +198,7 @@ func TestRemoveFromMesh(t *testing.T) {
 			args:              strings.Split("x rm deploy test", " "),
 			expectedException: true,
 			k8sConfigs:        cannedK8sConfig,
+			namespace:         "default",
 			expectedOutput:    "Error: deployment \"test\" does not exist\n",
 		},
 		{

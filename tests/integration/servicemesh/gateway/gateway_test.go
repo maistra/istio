@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,6 +46,7 @@ import (
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/echo"
 	"istio.io/istio/pkg/test/framework/components/echo/check"
+	"istio.io/istio/pkg/test/framework/components/echo/match"
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/pkg/test/framework/components/namespace"
 	testKube "istio.io/istio/pkg/test/kube"
@@ -59,6 +61,7 @@ var (
 	secondaryNs namespace.Instance
 	appNs       namespace.Instance
 	apps        echo.Instances
+	appsMux     sync.Mutex
 )
 
 func TestMain(m *testing.M) {
@@ -86,11 +89,11 @@ func TestGateway(t *testing.T) {
 				t.Errorf("failed to apply SMMR for namespace %s: %s", appNs.Name(), err)
 			}
 
-			if err := maistra.DeployEchos(&apps, map[string]namespace.Getter{
-				"a": namespace.Future(&appNs),
-				"b": namespace.Future(&appNs),
-			}, &maistra.AppOpts{Revision: istioNs.Prefix()})(t); err != nil {
-				t.Errorf("failed to deploy apps: %s", err)
+			if err := maistra.DeployEchos(&apps, &appsMux, "a", namespace.Future(&appNs), maistra.AppOpts{Revision: istioNs.Prefix()})(t); err != nil {
+				t.Errorf("failed to deploy app 'a': %s", err)
+			}
+			if err := maistra.DeployEchos(&apps, &appsMux, "b", namespace.Future(&appNs), maistra.AppOpts{Revision: istioNs.Prefix()})(t); err != nil {
+				t.Errorf("failed to deploy app 'b': %s", err)
 			}
 
 			t.NewSubTest("unmanaged").Run(UnmanagedGatewayTest)
@@ -209,7 +212,8 @@ spec:
     - name: b
       port: 80
 `).ApplyOrFail(t)
-	apps[1].CallOrFail(t, echo.CallOptions{
+	a := match.ServiceName(echo.NamespacedName{Name: "a", Namespace: appNs}).GetMatches(apps).Instances()[0]
+	a.CallOrFail(t, echo.CallOptions{
 		Port:   echo.Port{ServicePort: 80},
 		Scheme: scheme.HTTP,
 		HTTP: echo.HTTP{
@@ -415,8 +419,10 @@ spec:
 				})
 			})
 			t.NewSubTest("mesh").Run(func(t framework.TestContext) {
-				_ = apps[0].CallOrFail(t, echo.CallOptions{
-					To:    apps[1],
+				a := match.ServiceName(echo.NamespacedName{Name: "a", Namespace: appNs}).GetMatches(apps).Instances()[0]
+				b := match.ServiceName(echo.NamespacedName{Name: "b", Namespace: appNs}).GetMatches(apps).Instances()[0]
+				_ = a.CallOrFail(t, echo.CallOptions{
+					To:    b,
 					Count: 1,
 					Port: echo.Port{
 						Name: "http",

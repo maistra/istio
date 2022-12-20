@@ -218,6 +218,33 @@ func toEnvoySecret(s *security.SecretItem, caRootPath string, pkpConf *mesh.Priv
 	secret := &tls.Secret{
 		Name: s.ResourceName,
 	}
+
+	if s.TrustBundles != nil {
+		spiffeValidatorConfig := &tls.SPIFFECertValidatorConfig{}
+		for trustDomain, rootCert := range s.TrustBundles {
+			spiffeValidatorConfig.TrustDomains = append(
+				spiffeValidatorConfig.TrustDomains,
+				&tls.SPIFFECertValidatorConfig_TrustDomain{
+					Name: trustDomain,
+					TrustBundle: &core.DataSource{
+						Specifier: &core.DataSource_InlineBytes{
+							InlineBytes: rootCert,
+						},
+					},
+				},
+			)
+		}
+		secret.Type = &tls.Secret_ValidationContext{
+			ValidationContext: &tls.CertificateValidationContext{
+				CustomValidatorConfig: &core.TypedExtensionConfig{
+					Name:        "envoy.tls.cert_validator.spiffe",
+					TypedConfig: protoconv.MessageToAny(spiffeValidatorConfig),
+				},
+			},
+		}
+		return secret
+	}
+
 	var cfg security.SdsCertificateConfig
 	ok := false
 	if s.ResourceName == security.FileRootSystemCACert {

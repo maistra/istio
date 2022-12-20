@@ -1,0 +1,16 @@
+apiVersion: federation.maistra.io/v1
+kind: ImportedServiceSet
+metadata:
+  name: mesh1
+  namespace: mesh2-system
+spec:
+  importRules:
+    - type: NameSelector
+      # Set to true to aggregate remote endpoint with local services.
+      # When true, services will be imported as <name>.mesh2-bookinfo.svc.cluster.local
+      importAsLocal: false
+      nameSelector:
+        namespace: bookinfo
+        alias:
+          # services will be imported as <name>.mesh2-bookinfo.svc.mesh1-imports.local
+          namespace: mesh2-bookinfo

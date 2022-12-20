@@ -1,0 +1,19 @@
+apiVersion: federation.maistra.io/v1
+kind: ServiceMeshPeer
+metadata:
+  name: {{ .RemoteClusterName }}
+spec:
+  remote:
+    addresses:
+    - {{ .RemoteClusterAddr }}
+  gateways:
+    ingress:
+      name: federation-ingress
+    egress:
+      name: federation-egress
+  security:
+    trustDomain: "{{ .RemoteClusterName }}.local"
+    clientID: "{{ .RemoteClusterName }}.local/ns/istio-system/sa/federation-egress-service-account"
+    certificateChain:
+      kind: ConfigMap
+      name: "{{ .RemoteClusterName }}-ca-cert"

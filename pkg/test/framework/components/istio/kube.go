@@ -291,17 +291,19 @@ func newKube(ctx resource.Context, cfg Config) (Instance, error) {
 	}
 
 	// For multicluster, create and push the CA certs to all clusters to establish a shared root of trust.
-	if i.env.IsMultiCluster() {
+	if i.env.IsMultiCluster() && cfg.ConfigureMultiCluster {
 		if err := i.deployCACerts(); err != nil {
 			return nil, err
 		}
 	}
 
-	// First install remote-config clusters.
-	// We do this first because the external istiod needs to read the config cluster at startup.
-	for _, c := range ctx.Clusters().Kube().Configs().Remotes() {
-		if err = i.installConfigCluster(c); err != nil {
-			return i, err
+	if cfg.ConfigureRemoteCluster {
+		// First install remote-config clusters.
+		// We do this first because the external istiod needs to read the config cluster at startup.
+		for _, c := range ctx.Clusters().Kube().Configs().Remotes() {
+			if err = i.installConfigCluster(c); err != nil {
+				return i, err
+			}
 		}
 	}
 
@@ -340,7 +342,7 @@ func newKube(ctx resource.Context, cfg Config) (Instance, error) {
 		return nil, fmt.Errorf("%d errors occurred deploying remote clusters: %v", errs.Len(), errs.ErrorOrNil())
 	}
 
-	if ctx.Clusters().IsMulticluster() {
+	if ctx.Clusters().IsMulticluster() && cfg.ConfigureMultiCluster {
 		// Need to determine if there is a setting to watch cluster secret in config cluster
 		// or in external cluster. The flag is named LOCAL_CLUSTER_SECRET_WATCHER and set as
 		// an environment variable for istiod.
@@ -372,7 +374,7 @@ func newKube(ctx resource.Context, cfg Config) (Instance, error) {
 		}
 
 		// remote clusters only need east-west gateway for multi-network purposes
-		if ctx.Environment().IsMultiNetwork() {
+		if ctx.Environment().IsMultiNetwork() && i.cfg.DeployEastWestGW {
 			spec := i.remoteIOP.spec
 			if c.IsConfig() {
 				spec = i.configIOP.spec
@@ -521,7 +523,7 @@ func (i *istioImpl) installRemoteCommon(c cluster.Cluster, defaultsIOPFile, iopF
 		args.AppendSet("values.global.multiCluster.clusterName", c.Name())
 	}
 
-	if discovery {
+	if discovery && i.cfg.DeployEastWestGW {
 		// Configure the cluster and network arguments to pass through the injector webhook.
 		remoteIstiodAddress, err := i.RemoteDiscoveryAddressFor(c)
 		if err != nil {
@@ -530,7 +532,7 @@ func (i *istioImpl) installRemoteCommon(c cluster.Cluster, defaultsIOPFile, iopF
 		args.AppendSet("values.global.remotePilotAddress", remoteIstiodAddress.Addr().String())
 	}
 
-	if i.externalControlPlane || i.cfg.IstiodlessRemotes {
+	if i.externalControlPlane || i.cfg.IstiodlessRemotes || !i.cfg.DeployEastWestGW {
 		args.AppendSet("values.istiodRemote.injectionPath",
 			fmt.Sprintf("/inject/net/%s/cluster/%s", c.NetworkName(), c.Name()))
 	}
@@ -604,6 +606,11 @@ func commonInstallArgs(ctx resource.Context, cfg Config, c cluster.Cluster, defa
 	if cfg.EnableCNI {
 		args.AppendSet("components.cni.namespace", "kube-system")
 		args.AppendSet("components.cni.enabled", "true")
+	}
+
+	if cfg.DifferentTrustDomains {
+		delete(cfg.Values, "meshConfig.trustDomain")
+		args.AppendSet("values.meshConfig.trustDomain", c.Name()+".local")
 	}
 
 	// Include all user-specified values.
