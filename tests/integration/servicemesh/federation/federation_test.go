@@ -22,7 +22,6 @@ import (
 
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istio"
-	"istio.io/istio/pkg/test/framework/label"
 	"istio.io/istio/tests/integration/servicemesh/maistra"
 )
 
@@ -47,7 +46,6 @@ func TestMain(m *testing.M) {
 
 func TestFederation(t *testing.T) {
 	framework.NewTest(t).
-		Label(label.Multicluster).
 		Run(func(ctx framework.TestContext) {
 			CreateServiceMeshPeersOrFail(ctx)
 			primary := ctx.Clusters().GetByName("primary")
