@@ -1600,6 +1600,11 @@ rules:
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["delete"]
+
+# For MeshFederation support
+- apiGroups: ["federation.maistra.io"]
+  resources: ["servicemeshpeers", "servicemeshpeers/status", "exportedservicesets", "exportedservicesets/status", "importedservicesets", "importedservicesets/status"]
+  verbs: ["get", "list", "watch", "patch", "update"]
 ---
 # Source: istiod/templates/rolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -1646,6 +1651,9 @@ spec:
       protocol: TCP
     - port: 15014
       name: http-monitoring # prometheus stats
+      protocol: TCP
+    - port: 8188
+      name: http-discovery # federation discovery
       protocol: TCP
   selector:
     app: istiod
@@ -1709,6 +1717,8 @@ spec:
             protocol: TCP
           - containerPort: 15017
             protocol: TCP
+          - containerPort: 8188
+            protocol: TCP
           readinessProbe:
             httpGet:
               path: /ready
@@ -1740,6 +1750,8 @@ spec:
                 fieldPath: spec.serviceAccountName
           - name: KUBECONFIG
             value: /var/run/secrets/remote/config
+          - name: PILOT_ENABLE_FEDERATION
+            value: "true"
           - name: PILOT_TRACE_SAMPLING
             value: "1"
           - name: PILOT_ENABLE_PROTOCOL_SNIFFING_FOR_OUTBOUND
@@ -1882,6 +1894,28 @@ spec:
 # Adapted from istio-discovery/templates/mutatingwebhook.yaml
 # Removed paths for legacy and default selectors since a revision tag
 # is inherently created from a specific revision
+---
+# Source: istiod/templates/federation.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: istiod
+  namespace: istio-system
+  labels:
+    istio.io/rev: default
+    install.operator.istio.io/owning-resource: unknown
+    operator.istio.io/component: "Pilot"
+    app: istiod
+    istio: pilot
+    release: istio
+spec:
+  host: istiod.istio-system.svc.cluster.local
+  trafficPolicy:
+    portLevelSettings:
+    - port:
+        number: 8188
+      tls:
+        mode: SIMPLE
 ---
 # Source: istiod/templates/telemetryv2_1.13.yaml
 # Note: http stats filter is wasm enabled only in sidecars.

@@ -43,8 +43,14 @@ func (mh mockMeshConfigHolder) Mesh() *meshconfig.MeshConfig {
 	}
 }
 
+var (
+	meshHolder mockMeshConfigHolder
+	discovery1 *memory.ServiceDiscovery
+	discovery2 *memory.ServiceDiscovery
+)
+
 func buildMockController() *Controller {
-	discovery1 := memory.NewServiceDiscovery(mock.ReplicatedFooServiceV1.DeepCopy(),
+	discovery1 = memory.NewServiceDiscovery(mock.ReplicatedFooServiceV1.DeepCopy(),
 		mock.HelloService.DeepCopy(),
 		mock.ExtHTTPService.DeepCopy(),
 	)
@@ -53,7 +59,7 @@ func buildMockController() *Controller {
 		discovery1.AddInstance(mock.HelloService.Hostname, mock.MakeServiceInstance(mock.HelloService, port, 1, model.Locality{}))
 	}
 
-	discovery2 := memory.NewServiceDiscovery(mock.ReplicatedFooServiceV2.DeepCopy(),
+	discovery2 = memory.NewServiceDiscovery(mock.ReplicatedFooServiceV2.DeepCopy(),
 		mock.WorldService.DeepCopy(),
 		mock.ExtHTTPSService.DeepCopy(),
 	)
@@ -73,7 +79,7 @@ func buildMockController() *Controller {
 		Controller:       &mock.Controller{},
 	}
 
-	ctls := NewController(Options{&mockMeshConfigHolder{}})
+	ctls := NewController(Options{&meshHolder})
 	ctls.AddRegistry(registry1)
 	ctls.AddRegistry(registry2)
 
@@ -82,9 +88,9 @@ func buildMockController() *Controller {
 
 // return aggregator and cluster1 and cluster2 service discovery
 func buildMockControllerForMultiCluster() (*Controller, *memory.ServiceDiscovery, *memory.ServiceDiscovery) {
-	discovery1 := memory.NewServiceDiscovery(mock.HelloService)
+	discovery1 = memory.NewServiceDiscovery(mock.HelloService)
 
-	discovery2 := memory.NewServiceDiscovery(mock.MakeService(mock.ServiceArgs{
+	discovery2 = memory.NewServiceDiscovery(mock.MakeService(mock.ServiceArgs{
 		Hostname:        mock.HelloService.Hostname,
 		Address:         "10.1.2.0",
 		ServiceAccounts: []string{},

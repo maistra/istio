@@ -1,0 +1,89 @@
+apiVersion: maistra.io/v2
+kind: ServiceMeshControlPlane
+metadata:
+  name: fed-export
+  namespace: mesh1-system
+spec:
+  version: v2.1
+  runtime:
+    defaults:
+      container:
+        # for testing, to ensure we're always using the latest dev image
+        imagePullPolicy: Always
+  addons:
+    grafana:
+      enabled: true
+    kiali:
+      enabled: true
+    prometheus:
+      enabled: true
+  tracing:
+    type: Jaeger
+    sampling: 10000
+  proxy:
+    accessLogging:
+      file:
+        name: /dev/stdout
+  gateways:
+    additionalEgress:
+      # egress gateway definition for sending requests from mesh2
+      mesh2-egress:
+        enabled: true
+        requestedNetworkView:
+        # we want to view services on mesh2's network
+        - network-mesh2
+        service:
+          metadata:
+            labels:
+              # to prevent mesh2-egress's service from including default egress pods
+              federation.maistra.io/egress-for: mesh2
+          ports:
+          # required for sending service requests to mesh2
+          - port: 15443
+            name: tls
+          # required for sending discovery requests to mesh2
+          - port: 8188
+            name: http-discovery
+        runtime:
+          deployment:
+            autoScaling:
+              enabled: false
+          container:
+            # constrain resources for use in smaller environments
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits: {}
+    additionalIngress:
+      # ingress gateway definition for handing requests from mesh2
+      mesh2-ingress:
+        enabled: true
+        service:
+          type: NodePort
+          metadata:
+            labels:
+              # to prevent mesh2-ingress's service from including default ingress pods
+              federation.maistra.io/ingress-for: mesh2
+          ports:
+          # required for handling service requests from mesh2
+          - port: 15443
+            name: tls
+          # required for handing discovery requests from mesh2
+          - port: 8188
+            name: https-discovery
+        runtime:
+          deployment:
+            autoScaling:
+              enabled: false
+          container:
+            # constrain resources for use in smaller environments
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits: {}
+  security:
+    trust:
+      # unique trust domain for this mesh, mesh1
+      domain: mesh1.local

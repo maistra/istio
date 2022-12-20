@@ -1,0 +1,21 @@
+apiVersion: federation.maistra.io/v1
+kind: ExportedServiceSet
+metadata:
+  name: mesh2
+  namespace: mesh1-system
+spec:
+  exportRules:
+  - type: NameSelector
+    nameSelector:
+      namespace: mesh1-bookinfo
+      name: ratings
+      alias:
+        namespace: bookinfo
+        name: ratings
+  - type: NameSelector
+    nameSelector:
+      namespace: mesh1-bookinfo
+      name: mysqldb
+      alias:
+        namespace: bookinfo
+        name: mysqldb

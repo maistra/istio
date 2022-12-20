@@ -217,64 +217,90 @@ func toEnvoySecret(s *security.SecretItem, caRootPath string, pkpConf *mesh.Priv
 	secret := &tls.Secret{
 		Name: s.ResourceName,
 	}
-	var cfg security.SdsCertificateConfig
-	ok := false
-	if s.ResourceName == security.FileRootSystemCACert {
-		cfg, ok = security.SdsCertificateConfigFromResourceNameForOSCACert(caRootPath)
-	} else {
-		cfg, ok = security.SdsCertificateConfigFromResourceName(s.ResourceName)
-	}
-	if s.ResourceName == security.RootCertReqResourceName || (ok && cfg.IsRootCertificate()) {
+
+	if s.TrustBundles != nil {
+		spiffeValidatorConfig := &tls.SPIFFECertValidatorConfig{}
+		for trustDomain, rootCert := range s.TrustBundles {
+			spiffeValidatorConfig.TrustDomains = append(
+				spiffeValidatorConfig.TrustDomains,
+				&tls.SPIFFECertValidatorConfig_TrustDomain{
+					Name: trustDomain,
+					TrustBundle: &core.DataSource{
+						Specifier: &core.DataSource_InlineBytes{
+							InlineBytes: rootCert,
+						},
+					},
+				},
+			)
+		}
 		secret.Type = &tls.Secret_ValidationContext{
 			ValidationContext: &tls.CertificateValidationContext{
-				TrustedCa: &core.DataSource{
-					Specifier: &core.DataSource_InlineBytes{
-						InlineBytes: s.RootCert,
-					},
+				CustomValidatorConfig: &core.TypedExtensionConfig{
+					Name:        "envoy.tls.cert_validator.spiffe",
+					TypedConfig: protoconv.MessageToAny(spiffeValidatorConfig),
 				},
 			},
 		}
 	} else {
-		switch pkpConf.GetProvider().(type) {
-		case *mesh.PrivateKeyProvider_Cryptomb:
-			crypto := pkpConf.GetCryptomb()
-			msg := protoconv.MessageToAny(&cryptomb.CryptoMbPrivateKeyMethodConfig{
-				PollDelay: durationpb.New(time.Duration(crypto.GetPollDelay().Nanos)),
-				PrivateKey: &core.DataSource{
-					Specifier: &core.DataSource_InlineBytes{
-						InlineBytes: s.PrivateKey,
-					},
-				},
-			})
-			secret.Type = &tls.Secret_TlsCertificate{
-				TlsCertificate: &tls.TlsCertificate{
-					CertificateChain: &core.DataSource{
+		var cfg security.SdsCertificateConfig
+		ok := false
+		if s.ResourceName == security.FileRootSystemCACert {
+			cfg, ok = security.SdsCertificateConfigFromResourceNameForOSCACert(caRootPath)
+		} else {
+			cfg, ok = security.SdsCertificateConfigFromResourceName(s.ResourceName)
+		}
+		if s.ResourceName == security.RootCertReqResourceName || (ok && cfg.IsRootCertificate()) {
+			secret.Type = &tls.Secret_ValidationContext{
+				ValidationContext: &tls.CertificateValidationContext{
+					TrustedCa: &core.DataSource{
 						Specifier: &core.DataSource_InlineBytes{
-							InlineBytes: s.CertificateChain,
-						},
-					},
-					PrivateKeyProvider: &tls.PrivateKeyProvider{
-						ProviderName: "cryptomb",
-						ConfigType: &tls.PrivateKeyProvider_TypedConfig{
-							TypedConfig: msg,
+							InlineBytes: s.RootCert,
 						},
 					},
 				},
 			}
-		default:
-			secret.Type = &tls.Secret_TlsCertificate{
-				TlsCertificate: &tls.TlsCertificate{
-					CertificateChain: &core.DataSource{
-						Specifier: &core.DataSource_InlineBytes{
-							InlineBytes: s.CertificateChain,
-						},
-					},
+		} else {
+			switch pkpConf.GetProvider().(type) {
+			case *mesh.PrivateKeyProvider_Cryptomb:
+				crypto := pkpConf.GetCryptomb()
+				msg := protoconv.MessageToAny(&cryptomb.CryptoMbPrivateKeyMethodConfig{
+					PollDelay: durationpb.New(time.Duration(crypto.GetPollDelay().Nanos)),
 					PrivateKey: &core.DataSource{
 						Specifier: &core.DataSource_InlineBytes{
 							InlineBytes: s.PrivateKey,
 						},
 					},
-				},
+				})
+				secret.Type = &tls.Secret_TlsCertificate{
+					TlsCertificate: &tls.TlsCertificate{
+						CertificateChain: &core.DataSource{
+							Specifier: &core.DataSource_InlineBytes{
+								InlineBytes: s.CertificateChain,
+							},
+						},
+						PrivateKeyProvider: &tls.PrivateKeyProvider{
+							ProviderName: "cryptomb",
+							ConfigType: &tls.PrivateKeyProvider_TypedConfig{
+								TypedConfig: msg,
+							},
+						},
+					},
+				}
+			default:
+				secret.Type = &tls.Secret_TlsCertificate{
+					TlsCertificate: &tls.TlsCertificate{
+						CertificateChain: &core.DataSource{
+							Specifier: &core.DataSource_InlineBytes{
+								InlineBytes: s.CertificateChain,
+							},
+						},
+						PrivateKey: &core.DataSource{
+							Specifier: &core.DataSource_InlineBytes{
+								InlineBytes: s.PrivateKey,
+							},
+						},
+					},
+				}
 			}
 		}
 	}
