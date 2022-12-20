@@ -35,6 +35,8 @@ import (
 	"istio.io/istio/pkg/test/util/retry"
 )
 
+const defaultTimeout = 5 * time.Minute
+
 var (
 	bookinfoManifests = []string{
 		env.IstioSrc + "/samples/bookinfo/platform/kube/bookinfo.yaml",
@@ -53,7 +55,7 @@ func InstallBookinfo(ctx framework.TestContext, c cluster.Cluster, namespace str
 			return fmt.Errorf("ratings pod is not ready: %v", err)
 		}
 		return nil
-	}, retry.Timeout(300*time.Second), retry.Delay(time.Second)); err != nil {
+	}, retry.Timeout(defaultTimeout), retry.Delay(time.Second)); err != nil {
 		ctx.Fatal(err)
 	}
 }
@@ -67,7 +69,7 @@ func InstallSleep(ctx framework.TestContext, c cluster.Cluster, namespace string
 			return fmt.Errorf("sleep pod is not ready: %v", err)
 		}
 		return nil
-	}, retry.Timeout(300*time.Second), retry.Delay(time.Second)); err != nil {
+	}, retry.Timeout(defaultTimeout), retry.Delay(time.Second)); err != nil {
 		ctx.Fatal(err)
 	}
 }
@@ -228,7 +230,7 @@ func checkConnectivity(ctx framework.TestContext, source cluster.Cluster, namesp
 		}
 		podName = podList.Items[0].Name
 		return nil
-	}, retry.Timeout(300*time.Second), retry.Delay(time.Second))
+	}, retry.Timeout(defaultTimeout), retry.Delay(time.Second))
 	if err != nil {
 		ctx.Fatal(err)
 	}
@@ -241,7 +243,7 @@ func checkConnectivity(ctx framework.TestContext, source cluster.Cluster, namesp
 			return fmt.Errorf("podexec output does not look right: %s", stdout)
 		}
 		return nil
-	}, retry.Timeout(5*time.Minute), retry.Delay(time.Second))
+	}, retry.Timeout(defaultTimeout), retry.Delay(time.Second))
 	if err != nil {
 		ctx.Fatal(err)
 	}
