@@ -18,6 +18,7 @@
 package servicemesh
 
 import (
+	"istio.io/istio/pkg/test/framework/components/namespace"
 	"testing"
 
 	"istio.io/istio/pkg/test/framework"
@@ -50,11 +51,13 @@ func TestFederation(t *testing.T) {
 			CreateServiceMeshPeersOrFail(ctx)
 			primary := ctx.Clusters().GetByName("primary")
 			secondary := ctx.Clusters().GetByName("cross-network-primary")
-			primaryNamespace := CreateNamespace(ctx, primary, "bookinfo")
-			secondaryNamespace := CreateNamespace(ctx, secondary, "bookinfo")
-			SetupExportsAndImportsOrFail(ctx, primaryNamespace)
-			InstallBookinfo(ctx, primary, primaryNamespace)
-			InstallSleep(ctx, secondary, secondaryNamespace)
-			checkConnectivity(ctx, secondary, secondaryNamespace)
+			bookinfoNs := namespace.NewOrFail(t, ctx, namespace.Config{
+				Prefix: "bookinfo",
+				Inject: true,
+			})
+			SetupExportsAndImportsOrFail(ctx, bookinfoNs.Name())
+			InstallBookinfo(ctx, primary, bookinfoNs.Name())
+			InstallSleep(ctx, secondary, bookinfoNs.Name())
+			checkConnectivity(ctx, secondary, bookinfoNs.Name())
 		})
 }

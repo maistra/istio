@@ -72,26 +72,6 @@ func InstallSleep(ctx framework.TestContext, c cluster.Cluster, namespace string
 	}
 }
 
-// TODO for some reason namespace.NewOrFail() doesn't work so I'm doing this manually
-func CreateNamespace(ctx framework.TestContext, cluster cluster.Cluster, prefix string) string {
-	ns, err := cluster.Kube().CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%d", prefix, rnd.Intn(99999)),
-			Labels: map[string]string{
-				"istio-injection": "enabled",
-			},
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		ctx.Fatal(err)
-	}
-	name := ns.Name
-	ctx.Cleanup(func() {
-		cluster.Kube().CoreV1().Namespaces().Delete(context.TODO(), name, metav1.DeleteOptions{})
-	})
-	return name
-}
-
 func setupConfig(_ resource.Context, cfg *istio.Config) {
 	if cfg == nil {
 		return
