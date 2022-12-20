@@ -20,7 +20,6 @@ package servicemesh
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -43,7 +42,6 @@ var (
 		env.IstioSrc + "/samples/bookinfo/networking/bookinfo-gateway.yaml",
 	}
 	sleepManifest = env.IstioSrc + "/samples/sleep/sleep.yaml"
-	rnd           = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
 func InstallBookinfo(ctx framework.TestContext, c cluster.Cluster, namespace string) {
