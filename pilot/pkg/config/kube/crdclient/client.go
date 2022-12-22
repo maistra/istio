@@ -170,17 +170,18 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 		client:           client,
 		istioClient:      client.Istio(),
 		gatewayAPIClient: client.GatewayAPI(),
-		crdMetadataInformer: client.MetadataInformer().ForResource(collections.K8SApiextensionsK8SIoV1Customresourcedefinitions.Resource().
-			GroupVersionResource()).Informer(),
 		beginSync:        atomic.NewBool(false),
 		initialSync:      atomic.NewBool(false),
 		logger:           scope.WithLabels("controller", opts.Identifier),
 		namespacesFilter: opts.NamespacesFilter,
 	}
-	_ = out.crdMetadataInformer.SetTransform(kube.StripUnusedFields)
 
 	var known map[string]struct{}
 	if opts.EnableCRDScan {
+		out.crdMetadataInformer = client.MetadataInformer().ForResource(collections.K8SApiextensionsK8SIoV1Customresourcedefinitions.Resource().
+			GroupVersionResource()).Informer()
+		_ = out.crdMetadataInformer.SetTransform(kube.StripUnusedFields)
+
 		var err error
 		known, err = knownCRDs(client.Ext())
 		if err != nil {
