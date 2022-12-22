@@ -116,8 +116,12 @@ func (c *Controller) Run(stopChan <-chan struct{}) {
 	}
 }
 
+func (c *Controller) Start(stopChan <-chan struct{}) {
+	c.Controller.StartController(stopChan, c.HasSynced)
+}
+
 func (c *Controller) HasSynced() bool {
-	return c.Controller.HasSynced()
+	return c.Controller.HasSynced() && c.rm.KubeClient().KubeInformer().Core().V1().ConfigMaps().Informer().HasSynced()
 }
 
 func (c *Controller) RunInformer(_ <-chan struct{}) {

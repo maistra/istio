@@ -99,6 +99,10 @@ func NewController(opt Options) *Controller {
 }
 
 func (c *Controller) Start(stopChan <-chan struct{}) {
+	c.StartController(stopChan, c.HasSynced)
+}
+
+func (c *Controller) StartController(stopChan <-chan struct{}, hasSynced func() bool) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
@@ -107,7 +111,7 @@ func (c *Controller) Start(stopChan <-chan struct{}) {
 
 	c.RunInformer(stopChan)
 
-	cache.WaitForCacheSync(stopChan, c.HasSynced)
+	cache.WaitForCacheSync(stopChan, hasSynced)
 	c.Logger.Infof("Controller synced in %s", time.Since(t0))
 
 	c.Logger.Info("Starting workers")
