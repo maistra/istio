@@ -72,6 +72,7 @@ type Options struct {
 
 type Federation struct {
 	configStore         model.ConfigStoreController
+	resourceManager     common.ResourceManager
 	server              *server.Server
 	exportController    *exports.Controller
 	importController    *imports.Controller
@@ -152,6 +153,7 @@ func internalNew(opt Options, cs maistraclient.Interface) (*Federation, error) {
 		importController:    importController,
 		discoveryController: discoveryController,
 		leaderElection:      leaderElection,
+		resourceManager:     resourceManager,
 	}
 	return federation, nil
 }
@@ -176,7 +178,7 @@ func (f *Federation) StartControllers(stopCh <-chan struct{}) {
 }
 
 func (f *Federation) HasSynced() bool {
-	return f.importController.HasSynced() && f.exportController.HasSynced() && f.discoveryController.HasSynced()
+	return f.resourceManager.HasSynced()
 }
 
 func (f *Federation) StartServer(stopCh <-chan struct{}) {

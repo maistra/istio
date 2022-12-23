@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package controller
 
 import (
@@ -35,6 +36,7 @@ type (
 		Informer     cache.SharedIndexInformer
 		Reconciler   ReconcilerFunc
 		Logger       *log.Scope
+		HasSynced    func() bool
 	}
 )
 
@@ -44,6 +46,7 @@ type Controller struct {
 	queue        workqueue.RateLimitingInterface
 	resyncPeriod time.Duration
 	reconcile    ReconcilerFunc
+	hasSynced    func() bool
 }
 
 // NewController creates a new Aggregate controller
@@ -62,6 +65,7 @@ func NewController(opt Options) *Controller {
 		Logger:       opt.Logger,
 		resyncPeriod: opt.ResyncPeriod,
 		reconcile:    opt.Reconciler,
+		hasSynced:    opt.HasSynced,
 	}
 
 	controller.informer.AddEventHandler(
@@ -99,10 +103,6 @@ func NewController(opt Options) *Controller {
 }
 
 func (c *Controller) Start(stopChan <-chan struct{}) {
-	c.StartController(stopChan, c.HasSynced)
-}
-
-func (c *Controller) StartController(stopChan <-chan struct{}, hasSynced func() bool) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
@@ -111,7 +111,7 @@ func (c *Controller) StartController(stopChan <-chan struct{}, hasSynced func() 
 
 	c.RunInformer(stopChan)
 
-	cache.WaitForCacheSync(stopChan, hasSynced)
+	cache.WaitForCacheSync(stopChan, c.hasSynced)
 	c.Logger.Infof("Controller synced in %s", time.Since(t0))
 
 	c.Logger.Info("Starting workers")
@@ -120,10 +120,6 @@ func (c *Controller) StartController(stopChan <-chan struct{}, hasSynced func() 
 
 func (c *Controller) RunInformer(stopChan <-chan struct{}) {
 	go c.informer.Run(stopChan)
-}
-
-func (c *Controller) HasSynced() bool {
-	return c.informer.HasSynced()
 }
 
 func (c *Controller) worker() {

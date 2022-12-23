@@ -101,6 +101,7 @@ func NewController(opt Options) (*Controller, error) {
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
+		HasSynced:    opt.ResourceManager.HasSynced,
 	})
 	controller.Controller = internalController
 
@@ -114,14 +115,6 @@ func (c *Controller) Run(stopChan <-chan struct{}) {
 	for _, registryStopCh := range c.stopChannels {
 		close(registryStopCh)
 	}
-}
-
-func (c *Controller) Start(stopChan <-chan struct{}) {
-	c.Controller.StartController(stopChan, c.HasSynced)
-}
-
-func (c *Controller) HasSynced() bool {
-	return c.Controller.HasSynced() && c.rm.HasSynced()
 }
 
 func (c *Controller) RunInformer(_ <-chan struct{}) {

@@ -61,6 +61,7 @@ func NewController(opt Options) (*Controller, error) {
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
+		HasSynced:    opt.ResourceManager.HasSynced,
 	})
 	controller.Controller = internalController
 
@@ -69,14 +70,6 @@ func NewController(opt Options) (*Controller, error) {
 
 func (c *Controller) RunInformer(stopChan <-chan struct{}) {
 	// no-op, informer is started by the shared factory in Federation.Start()
-}
-
-func (c *Controller) Start(stopChan <-chan struct{}) {
-	c.Controller.StartController(stopChan, c.HasSynced)
-}
-
-func (c *Controller) HasSynced() bool {
-	return c.Controller.HasSynced() && c.rm.HasSynced()
 }
 
 func (c *Controller) reconcile(resourceName string) error {
