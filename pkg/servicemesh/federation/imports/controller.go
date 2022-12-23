@@ -71,6 +71,14 @@ func (c *Controller) RunInformer(stopChan <-chan struct{}) {
 	// no-op, informer is started by the shared factory in Federation.Start()
 }
 
+func (c *Controller) Start(stopChan <-chan struct{}) {
+	c.Controller.StartController(stopChan, c.HasSynced)
+}
+
+func (c *Controller) HasSynced() bool {
+	return c.Controller.HasSynced() && c.rm.HasSynced()
+}
+
 func (c *Controller) reconcile(resourceName string) error {
 	c.Logger.Debugf("Reconciling ServiceImports %s", resourceName)
 	defer func() {

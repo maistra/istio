@@ -622,7 +622,7 @@ func (h *handler) removeDeadPods(statuses []v1.PodPeerDiscoveryStatus) []v1.PodP
 	for index, status := range statuses {
 		// XXX: this shouldn't be necessary, but patching isn't working correctly
 		if index == 0 || statuses[index].Pod != statuses[index-1].Pod {
-			if _, err := h.manager.rm.KubeClient().KubeInformer().Core().V1().Pods().Lister().Pods(h.manager.name.Namespace).Get(status.Pod); err == nil {
+			if _, err := h.manager.rm.PodInformer().Lister().Pods(h.manager.name.Namespace).Get(status.Pod); err == nil {
 				filteredStatuses = append(filteredStatuses, status)
 			}
 		}

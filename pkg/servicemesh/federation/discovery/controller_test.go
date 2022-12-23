@@ -23,6 +23,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	coreinformersv1 "k8s.io/client-go/informers/core/v1"
+	discoveryinformersv1 "k8s.io/client-go/informers/discovery/v1"
 	"k8s.io/client-go/tools/cache"
 	maistrainformersfederationv1 "maistra.io/api/client/informers/externalversions/federation/v1"
 	maistraclient "maistra.io/api/client/versioned"
@@ -80,7 +82,19 @@ func (m *fakeResourceManager) MaistraClientSet() maistraclient.Interface {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *fakeResourceManager) KubeClient() kube.Client {
+func (m *fakeResourceManager) ConfigMapInformer() coreinformersv1.ConfigMapInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) EndpointSliceInformer() discoveryinformersv1.EndpointSliceInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) PodInformer() coreinformersv1.PodInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) ServiceInformer() coreinformersv1.ServiceInformer {
 	panic("not implemented") // TODO: Implement
 }
 

@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	corev1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	v1 "maistra.io/api/federation/v1"
 
@@ -61,7 +60,6 @@ type Controller struct {
 	localNetwork      string
 	localClusterID    string
 	rm                common.ResourceManager
-	configMapInformer corev1.ConfigMapInformer
 	env               *model.Environment
 	federationManager server.FederationManager
 	statusManager     status.Manager
@@ -90,7 +88,6 @@ func NewController(opt Options) (*Controller, error) {
 		localClusterID:        opt.LocalClusterID,
 		localNetwork:          opt.LocalNetwork,
 		rm:                    opt.ResourceManager,
-		configMapInformer:     opt.ResourceManager.KubeClient().KubeInformer().Core().V1().ConfigMaps(),
 		env:                   opt.Env,
 		sc:                    opt.ServiceController,
 		stopChannels:          make(map[cluster.ID]chan struct{}),
@@ -124,7 +121,7 @@ func (c *Controller) Start(stopChan <-chan struct{}) {
 }
 
 func (c *Controller) HasSynced() bool {
-	return c.Controller.HasSynced() && c.configMapInformer.Informer().HasSynced()
+	return c.Controller.HasSynced() && c.rm.HasSynced()
 }
 
 func (c *Controller) RunInformer(_ <-chan struct{}) {
@@ -218,16 +215,16 @@ func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) e
 		c.Logger.Infof("initializing Federation service registry for %q at %s", instance.Name, instance.Spec.Remote.Addresses)
 		// create a registry instance
 		options := federationregistry.Options{
-			KubeClient:     c.rm.KubeClient(),
-			ConfigStore:    c.ConfigStoreController,
-			StatusHandler:  statusHandler,
-			XDSUpdater:     c.xds,
-			ResyncPeriod:   time.Minute * 5,
-			DomainSuffix:   c.env.DomainSuffix,
-			LocalClusterID: c.localClusterID,
-			LocalNetwork:   c.localNetwork,
-			ClusterID:      instance.Name,
-			Network:        fmt.Sprintf("network-%s", instance.Name),
+			ResourceManager: c.rm,
+			ConfigStore:     c.ConfigStoreController,
+			StatusHandler:   statusHandler,
+			XDSUpdater:      c.xds,
+			ResyncPeriod:    time.Minute * 5,
+			DomainSuffix:    c.env.DomainSuffix,
+			LocalClusterID:  c.localClusterID,
+			LocalNetwork:    c.localNetwork,
+			ClusterID:       instance.Name,
+			Network:         fmt.Sprintf("network-%s", instance.Name),
 		}
 		registry = federationregistry.NewController(options, instance, importConfig)
 		// register the new instance
@@ -327,7 +324,7 @@ func (c *Controller) getRootCertForMesh(instance *v1.ServiceMeshPeer) (string, e
 	entryKey := common.DefaultFederationRootCertName
 	switch instance.Spec.Security.CertificateChain.Kind {
 	case "", "ConfigMap":
-		cm, err := c.configMapInformer.Lister().ConfigMaps(instance.Namespace).Get(name)
+		cm, err := c.rm.ConfigMapInformer().Lister().ConfigMaps(instance.Namespace).Get(name)
 		if err != nil {
 			return "", fmt.Errorf("error getting configmap %s in namespace %s: %v", name, instance.Namespace, err)
 		}
