@@ -34,9 +34,9 @@ import (
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/servicemesh/federation/common"
+	kubecontroller "istio.io/istio/pkg/servicemesh/federation/kube"
 	"istio.io/istio/pkg/servicemesh/federation/server"
 	"istio.io/istio/pkg/servicemesh/federation/status"
-	kubecontroller "istio.io/istio/pkg/servicemesh/kube/controller/controller"
 )
 
 const controllerName = "federation-discovery-controller"
