@@ -24,7 +24,7 @@ import (
 	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pkg/servicemesh/federation/common"
-	kubecontroller "istio.io/istio/pkg/servicemesh/kube/controller/controller"
+	kubecontroller "istio.io/istio/pkg/servicemesh/federation/kube"
 )
 
 const controllerName = "federation-exports-controller"

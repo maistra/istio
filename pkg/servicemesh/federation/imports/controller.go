@@ -27,7 +27,7 @@ import (
 	"istio.io/istio/pilot/pkg/serviceregistry/aggregate"
 	"istio.io/istio/pilot/pkg/serviceregistry/federation"
 	"istio.io/istio/pkg/servicemesh/federation/common"
-	kubecontroller "istio.io/istio/pkg/servicemesh/kube/controller/controller"
+	kubecontroller "istio.io/istio/pkg/servicemesh/federation/kube"
 )
 
 const controllerName = "federation-imports-controller"
