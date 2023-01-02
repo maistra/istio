@@ -33,8 +33,8 @@ import (
 	federationregistry "istio.io/istio/pilot/pkg/serviceregistry/federation"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
 	"istio.io/istio/pkg/cluster"
-	kubecontroller "istio.io/istio/pkg/kube/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
+	kubecontroller "istio.io/istio/pkg/servicemesh/federation/kube"
 	"istio.io/istio/pkg/servicemesh/federation/server"
 	"istio.io/istio/pkg/servicemesh/federation/status"
 )
