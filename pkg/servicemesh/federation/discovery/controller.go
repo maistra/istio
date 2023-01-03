@@ -101,6 +101,7 @@ func NewController(opt Options) (*Controller, error) {
 		Logger:       logger,
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
+		HasSynced:    opt.ResourceManager.HasSynced,
 	})
 	controller.Controller = internalController
 
@@ -114,10 +115,6 @@ func (c *Controller) Run(stopChan <-chan struct{}) {
 	for _, registryStopCh := range c.stopChannels {
 		close(registryStopCh)
 	}
-}
-
-func (c *Controller) HasSynced() bool {
-	return c.Controller.HasSynced()
 }
 
 func (c *Controller) RunInformer(_ <-chan struct{}) {
@@ -211,16 +208,16 @@ func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) e
 		c.Logger.Infof("initializing Federation service registry for %q at %s", instance.Name, instance.Spec.Remote.Addresses)
 		// create a registry instance
 		options := federationregistry.Options{
-			KubeClient:     c.rm.KubeClient(),
-			ConfigStore:    c.ConfigStoreController,
-			StatusHandler:  statusHandler,
-			XDSUpdater:     c.xds,
-			ResyncPeriod:   time.Minute * 5,
-			DomainSuffix:   c.env.DomainSuffix,
-			LocalClusterID: c.localClusterID,
-			LocalNetwork:   c.localNetwork,
-			ClusterID:      instance.Name,
-			Network:        fmt.Sprintf("network-%s", instance.Name),
+			ResourceManager: c.rm,
+			ConfigStore:     c.ConfigStoreController,
+			StatusHandler:   statusHandler,
+			XDSUpdater:      c.xds,
+			ResyncPeriod:    time.Minute * 5,
+			DomainSuffix:    c.env.DomainSuffix,
+			LocalClusterID:  c.localClusterID,
+			LocalNetwork:    c.localNetwork,
+			ClusterID:       instance.Name,
+			Network:         fmt.Sprintf("network-%s", instance.Name),
 		}
 		registry = federationregistry.NewController(options, instance, importConfig)
 		// register the new instance
@@ -320,7 +317,7 @@ func (c *Controller) getRootCertForMesh(instance *v1.ServiceMeshPeer) (string, e
 	entryKey := common.DefaultFederationRootCertName
 	switch instance.Spec.Security.CertificateChain.Kind {
 	case "", "ConfigMap":
-		cm, err := c.rm.KubeClient().KubeInformer().Core().V1().ConfigMaps().Lister().ConfigMaps(instance.Namespace).Get(name)
+		cm, err := c.rm.ConfigMapInformer().Lister().ConfigMaps(instance.Namespace).Get(name)
 		if err != nil {
 			return "", fmt.Errorf("error getting configmap %s in namespace %s: %v", name, instance.Namespace, err)
 		}

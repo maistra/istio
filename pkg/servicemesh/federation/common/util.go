@@ -22,10 +22,11 @@ import (
 	"github.com/mitchellh/hashstructure/v2"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	kubelabels "k8s.io/apimachinery/pkg/labels"
+	coreinformersv1 "k8s.io/client-go/informers/core/v1"
+	discoveryinformersv1 "k8s.io/client-go/informers/discovery/v1"
 	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pkg/config/labels"
-	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/spiffe"
 )
 
@@ -44,8 +45,10 @@ func DefaultFederationCARootResourceName(instance *v1.ServiceMeshPeer) string {
 }
 
 // EndpointSlicesForService returns the Endpoints for the named service.
-func EndpointSlicesForService(client kube.Client, name, namespace string) ([]*discoveryv1.EndpointSlice, error) {
-	endpointSlices, err := client.KubeInformer().Discovery().V1().EndpointSlices().Lister().EndpointSlices(namespace).
+func EndpointSlicesForService(
+	endpointSliceInformer discoveryinformersv1.EndpointSliceInformer, name, namespace string,
+) ([]*discoveryv1.EndpointSlice, error) {
+	endpointSlices, err := endpointSliceInformer.Lister().EndpointSlices(namespace).
 		List(kubelabels.Set{discoveryv1.LabelServiceName: name}.AsSelector())
 	if err != nil {
 		return nil, err
@@ -64,15 +67,16 @@ func ContainsPort(ports []discoveryv1.EndpointPort, expectedPort int32) bool {
 
 // ServiceAccountsForService returns a list of service account names used by all
 // pods implementing the service.
-func ServiceAccountsForService(client kube.Client, name, namespace string) (map[string]string, error) {
+func ServiceAccountsForService(
+	serviceInformer coreinformersv1.ServiceInformer, podInformer coreinformersv1.PodInformer, name, namespace string,
+) (map[string]string, error) {
 	serviceAccountByIP := map[string]string{}
-	service, err := client.KubeInformer().Core().V1().Services().Lister().Services(namespace).Get(name)
+	service, err := serviceInformer.Lister().Services(namespace).Get(name)
 	if err != nil {
 		return serviceAccountByIP, err
 	}
 
-	pods, err := client.KubeInformer().Core().V1().Pods().Lister().Pods(namespace).
-		List(kubelabels.Set(service.Spec.Selector).AsSelector())
+	pods, err := podInformer.Lister().Pods(namespace).List(kubelabels.Set(service.Spec.Selector).AsSelector())
 	if err != nil {
 		return serviceAccountByIP, err
 	}

@@ -60,6 +60,7 @@ func NewController(opt Options) (*Controller, error) {
 		Logger:       common.Logger.WithLabels("component", controllerName),
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
+		HasSynced:    opt.ResourceManager.HasSynced,
 	})
 	controller.Controller = internalController
 
