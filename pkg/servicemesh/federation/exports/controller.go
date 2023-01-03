@@ -23,8 +23,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	v1 "maistra.io/api/federation/v1"
 
-	kubecontroller "istio.io/istio/pkg/kube/controller"
 	"istio.io/istio/pkg/servicemesh/federation/common"
+	kubecontroller "istio.io/istio/pkg/servicemesh/federation/kube"
 )
 
 const controllerName = "federation-exports-controller"
@@ -60,6 +60,7 @@ func NewController(opt Options) (*Controller, error) {
 		Logger:       common.Logger.WithLabels("component", controllerName),
 		ResyncPeriod: opt.ResyncPeriod,
 		Reconciler:   controller.reconcile,
+		HasSynced:    opt.ResourceManager.HasSynced,
 	})
 	controller.Controller = internalController
 
