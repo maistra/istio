@@ -36,6 +36,7 @@ type (
 		Informer     cache.SharedIndexInformer
 		Reconciler   ReconcilerFunc
 		Logger       *log.Scope
+		HasSynced    func() bool
 	}
 )
 
@@ -45,6 +46,7 @@ type Controller struct {
 	queue        workqueue.RateLimitingInterface
 	resyncPeriod time.Duration
 	reconcile    ReconcilerFunc
+	hasSynced    func() bool
 }
 
 // NewController creates a new Aggregate controller
@@ -63,6 +65,7 @@ func NewController(opt Options) *Controller {
 		Logger:       opt.Logger,
 		resyncPeriod: opt.ResyncPeriod,
 		reconcile:    opt.Reconciler,
+		hasSynced:    opt.HasSynced,
 	}
 
 	controller.informer.AddEventHandler(
@@ -108,7 +111,7 @@ func (c *Controller) Start(stopChan <-chan struct{}) {
 
 	c.RunInformer(stopChan)
 
-	cache.WaitForCacheSync(stopChan, c.HasSynced)
+	cache.WaitForCacheSync(stopChan, c.hasSynced)
 	c.Logger.Infof("Controller synced in %s", time.Since(t0))
 
 	c.Logger.Info("Starting workers")
@@ -117,10 +120,6 @@ func (c *Controller) Start(stopChan <-chan struct{}) {
 
 func (c *Controller) RunInformer(stopChan <-chan struct{}) {
 	go c.informer.Run(stopChan)
-}
-
-func (c *Controller) HasSynced() bool {
-	return c.informer.HasSynced()
 }
 
 func (c *Controller) worker() {
