@@ -43,7 +43,6 @@ import (
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/visibility"
-	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/network"
 	"istio.io/istio/pkg/servicemesh/federation/common"
 	federationmodel "istio.io/istio/pkg/servicemesh/federation/model"
@@ -76,7 +75,7 @@ type Controller struct {
 
 	logger *log.Scope
 
-	kubeClient    kube.Client
+	rm            common.ResourceManager
 	statusHandler status.Handler
 	configStore   model.ConfigStoreCache
 	xdsUpdater    model.XDSUpdater
@@ -112,16 +111,16 @@ type existingImport struct {
 }
 
 type Options struct {
-	DomainSuffix   string
-	LocalClusterID string
-	LocalNetwork   string
-	ClusterID      string
-	Network        string
-	KubeClient     kube.Client
-	StatusHandler  status.Handler
-	ConfigStore    model.ConfigStoreCache
-	XDSUpdater     model.XDSUpdater
-	ResyncPeriod   time.Duration
+	DomainSuffix    string
+	LocalClusterID  string
+	LocalNetwork    string
+	ClusterID       string
+	Network         string
+	ResourceManager common.ResourceManager
+	StatusHandler   status.Handler
+	ConfigStore     model.ConfigStoreCache
+	XDSUpdater      model.XDSUpdater
+	ResyncPeriod    time.Duration
 }
 
 func defaultDomainSuffixForMesh(mesh *v1.ServiceMeshPeer) string {
@@ -178,10 +177,10 @@ func NewController(opt Options, mesh *v1.ServiceMeshPeer, importConfig *v1.Impor
 		clusterID:         cluster.ID(opt.ClusterID),
 		networkID:         network.ID(opt.Network),
 		localDomainSuffix: localDomainSuffix,
+		rm:                opt.ResourceManager,
 		imports:           map[federationmodel.ServiceKey]*existingImport{},
 		serviceStore:      map[host.Name]*model.Service{},
 		instanceStore:     map[host.Name][]*model.ServiceInstance{},
-		kubeClient:        opt.KubeClient,
 		statusHandler:     opt.StatusHandler,
 		configStore:       opt.ConfigStore,
 		xdsUpdater:        opt.XDSUpdater,
@@ -489,14 +488,14 @@ func (c *Controller) updateGateways(serviceList *federationmodel.ServiceListMess
 }
 
 func (c *Controller) getEgressServiceAddrs() ([]model.NetworkGateway, []string) {
-	endpoints, err := common.EndpointsForService(c.kubeClient, c.egressName, c.namespace)
+	endpoints, err := common.EndpointsForService(c.rm.EndpointsInformer(), c.egressName, c.namespace)
 	if err != nil {
 		c.logger.Errorf("unabled to retrieve endpoints for federation egress gateway %s: %s", c.egressName, err)
 		return nil, nil
 	}
 	serviceAccountByIP := map[string]string{}
 	if !c.useDirectCalls {
-		serviceAccountByIP, err = common.ServiceAccountsForService(c.kubeClient, c.egressName, c.namespace)
+		serviceAccountByIP, err = common.ServiceAccountsForService(c.rm.ServiceInformer(), c.rm.PodInformer(), c.egressName, c.namespace)
 		if err != nil {
 			c.logger.Warnf("unable to retrieve ServiceAccount information for imported services accessed through %s: %s",
 				c.egressName, err)

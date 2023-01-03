@@ -22,10 +22,10 @@ import (
 	"github.com/mitchellh/hashstructure/v2"
 	corev1 "k8s.io/api/core/v1"
 	kubelabels "k8s.io/apimachinery/pkg/labels"
+	coreinformersv1 "k8s.io/client-go/informers/core/v1"
 	v1 "maistra.io/api/federation/v1"
 
 	"istio.io/istio/pkg/config/labels"
-	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/spiffe"
 )
 
@@ -53,21 +53,22 @@ func DefaultFederationCARootResourceName(instance *v1.ServiceMeshPeer) string {
 }
 
 // EndpointsForService returns the Endpoints for the named service.
-func EndpointsForService(client kube.Client, name, namespace string) (*corev1.Endpoints, error) {
-	return client.KubeInformer().Core().V1().Endpoints().Lister().Endpoints(namespace).Get(name)
+func EndpointsForService(endpointsInformer coreinformersv1.EndpointsInformer, name, namespace string) (*corev1.Endpoints, error) {
+	return endpointsInformer.Lister().Endpoints(namespace).Get(name)
 }
 
 // ServiceAccountsForService returns a list of service account names used by all
 // pods implementing the service.
-func ServiceAccountsForService(client kube.Client, name, namespace string) (map[string]string, error) {
+func ServiceAccountsForService(
+	serviceInformer coreinformersv1.ServiceInformer, podInformer coreinformersv1.PodInformer, name, namespace string,
+) (map[string]string, error) {
 	serviceAccountByIP := map[string]string{}
-	service, err := client.KubeInformer().Core().V1().Services().Lister().Services(namespace).Get(name)
+	service, err := serviceInformer.Lister().Services(namespace).Get(name)
 	if err != nil {
 		return serviceAccountByIP, err
 	}
 
-	pods, err := client.KubeInformer().Core().V1().Pods().Lister().Pods(namespace).
-		List(kubelabels.Set(service.Spec.Selector).AsSelector())
+	pods, err := podInformer.Lister().Pods(namespace).List(kubelabels.Set(service.Spec.Selector).AsSelector())
 	if err != nil {
 		return serviceAccountByIP, err
 	}

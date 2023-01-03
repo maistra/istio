@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	coreinformersv1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	maistrainformersfederationv1 "maistra.io/api/client/informers/externalversions/federation/v1"
 	maistraclient "maistra.io/api/client/versioned"
@@ -80,7 +81,19 @@ func (m *fakeResourceManager) MaistraClientSet() maistraclient.Interface {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *fakeResourceManager) KubeClient() kube.Client {
+func (m *fakeResourceManager) ConfigMapInformer() coreinformersv1.ConfigMapInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) EndpointsInformer() coreinformersv1.EndpointsInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) PodInformer() coreinformersv1.PodInformer {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *fakeResourceManager) ServiceInformer() coreinformersv1.ServiceInformer {
 	panic("not implemented") // TODO: Implement
 }
 
