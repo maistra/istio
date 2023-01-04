@@ -59,11 +59,13 @@ func NewMemberRollController(config *rest.Config, namespace string, memberRollNa
 
 	rc := cs.RESTClient()
 
-	return &serviceMeshMemberRollController{
+	controller := &serviceMeshMemberRollController{
 		informer:       newMemberRollSharedInformer(rc, namespace, resync),
 		namespace:      namespace,
 		memberRollName: memberRollName,
-	}, nil
+	}
+	controller.Register(&namespaceLogger{}, "namespace logger")
+	return controller, nil
 }
 
 func newMemberRollSharedInformer(restClient rest.Interface, namespace string, resync time.Duration) cache.SharedIndexInformer {
@@ -234,4 +236,10 @@ func (smmrl *serviceMeshMemberRollListener) OnDelete(obj interface{}) {
 		}
 	}
 	smmrl.updateNamespaces("deleted", serviceMeshMemberRoll.Name, nil)
+}
+
+type namespaceLogger struct{}
+
+func (nl *namespaceLogger) SetNamespaces(namespaces []string) {
+	smmrLog.Infof("Member namespace list updated: %v", namespaces)
 }
