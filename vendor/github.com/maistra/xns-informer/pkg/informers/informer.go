@@ -262,12 +262,12 @@ func (i *multiNamespaceInformer) AddIndexers(indexers cache.Indexers) error {
 
 // HasSynced checks if each namespaced informer has synced.
 func (i *multiNamespaceInformer) HasSynced() bool {
-	i.lock.Lock()
-	defer i.lock.Unlock()
-
 	if !i.namespaces.Initialized() {
 		return false
 	}
+
+	i.lock.Lock()
+	defer i.lock.Unlock()
 
 	for _, informer := range i.informers {
 		if synced := informer.HasSynced(); !synced {
