@@ -698,7 +698,7 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/maistra/xns-informer v0.0.0-20221007121715-3ae7b6592ef4
+# github.com/maistra/xns-informer v0.0.0-20230111131321-f30df3aa99d1
 ## explicit
 github.com/maistra/xns-informer/pkg/generated/istio
 github.com/maistra/xns-informer/pkg/generated/istio/internalinterfaces
@@ -1753,7 +1753,7 @@ k8s.io/utils/exec
 k8s.io/utils/integer
 k8s.io/utils/pointer
 k8s.io/utils/trace
-# maistra.io/api v0.0.0-20221007124415-b84e26fa5e00
+# maistra.io/api v0.0.0-20230111143421-30535aac4950
 ## explicit
 maistra.io/api/client/informers/externalversions
 maistra.io/api/client/informers/externalversions/core
