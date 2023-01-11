@@ -841,8 +841,8 @@ github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e/go.mod h1:C1wdFJiN
 github.com/mailru/easyjson v0.7.0/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7ldAVICs=
 github.com/mailru/easyjson v0.7.6 h1:8yTIVnZgCoiM1TgqoeTl+LfU5Jg6/xL3QhGQnimLYnA=
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/maistra/xns-informer v0.0.0-20221007121714-8000c40e5493 h1:FxVGuZ8VKZ0prLPdr6iFIGtkRB3+R7MekFlpTLDwdyc=
-github.com/maistra/xns-informer v0.0.0-20221007121714-8000c40e5493/go.mod h1:0ZUF4kjow/MlN7Gp6OY7w2qBsWSG4MDBNxUp1VSSs/A=
+github.com/maistra/xns-informer v0.0.0-20230111132921-1f7d63a02498 h1:i6IiV3qUfNEZESXueCbEGyHzlMIGoHTC5ZIXOf/tQRM=
+github.com/maistra/xns-informer v0.0.0-20230111132921-1f7d63a02498/go.mod h1:0ZUF4kjow/MlN7Gp6OY7w2qBsWSG4MDBNxUp1VSSs/A=
 github.com/markbates/errx v1.1.0/go.mod h1:PLa46Oex9KNbVDZhKel8v1OT7hD5JZ2eI7AHhA0wswc=
 github.com/markbates/oncer v1.0.0/go.mod h1:Z59JA581E9GP6w96jai+TGqafHPW+cPfRxz2aSZ0mcI=
 github.com/markbates/safe v1.0.1/go.mod h1:nAqgmRi7cY2nqMc92/bSEeQA+R4OheNU2T1kNSCBdG0=
@@ -2048,8 +2048,8 @@ k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a/go.mod h1:jPW/WVKK9YHAvNhRxK0md/
 k8s.io/utils v0.0.0-20210820185131-d34e5cb4466e/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b h1:wxEMGetGMur3J1xuGLQY7GEQYg9bZxKn3tKo5k/eYcs=
 k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
-maistra.io/api v0.0.0-20221007125615-5c35cb5b350d h1:Texq+OQJBQ+cgFTsPKv/PW71Q5n4pGUD0bNLSyO4Gjk=
-maistra.io/api v0.0.0-20221007125615-5c35cb5b350d/go.mod h1:EsneypJgwFMukk0I/pYLmtU87DxrrG8FW32XJyJgAf0=
+maistra.io/api v0.0.0-20230111143421-e8f25f462372 h1:0/eaMr04kEghCJOMqk+YzviIF/K+3uiW5nTN1GG6WrU=
+maistra.io/api v0.0.0-20230111143421-e8f25f462372/go.mod h1:Q05ekQ21xuAbmo+TIUPAg/Z9rqUgXw8+wh0mEGsZWhM=
 oras.land/oras-go v0.4.0/go.mod h1:VJcU+VE4rkclUbum5C0O7deEZbBYnsnpbGSACwTjOcg=
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/letsencrypt v0.0.3/go.mod h1:buyQKZ6IXrRnB7TdkHP0RyEybLx18HHyOSoTyoOLqNY=
