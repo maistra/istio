@@ -51,7 +51,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.2.23
 	github.com/lucas-clemente/quic-go v0.27.0
-	github.com/maistra/xns-informer v0.0.0-20221025103952-40690c0de12c
+	github.com/maistra/xns-informer v0.0.0-20230111133120-6dfd424e4c7d
 	github.com/mattn/go-isatty v0.0.14
 	github.com/miekg/dns v1.1.48
 	github.com/mitchellh/copystructure v1.2.0
@@ -104,7 +104,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42
 	k8s.io/kubectl v0.24.2
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
-	maistra.io/api v0.0.0-20220922161140-df825ecdc2bb
+	maistra.io/api v0.0.0-20230111185725-3d1d3c41a16b
 	sigs.k8s.io/controller-runtime v0.12.1
 	sigs.k8s.io/gateway-api v0.5.1-0.20220921185115-ee7a83814203
 	sigs.k8s.io/mcs-api v0.1.0
