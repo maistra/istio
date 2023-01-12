@@ -125,3 +125,6 @@ require (
 )
 
 replace github.com/envoyproxy/go-control-plane => github.com/envoyproxy/go-control-plane v0.9.9
+
+// OSSM-2430
+replace github.com/Masterminds/goutils => github.com/Masterminds/goutils v1.1.1
