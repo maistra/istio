@@ -74,11 +74,11 @@ require (
 	go.opentelemetry.io/proto/otlp v0.19.0
 	go.uber.org/atomic v1.10.0
 	go.uber.org/multierr v1.8.0
-	golang.org/x/net v0.0.0-20221014081412-f15817d10f9b
-	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
-	golang.org/x/sync v0.0.0-20220907140024-f12130a52804
-	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8
-	golang.org/x/time v0.0.0-20220920022843-2ce7c2934d45
+	golang.org/x/net v0.4.0
+	golang.org/x/oauth2 v0.3.0
+	golang.org/x/sync v0.1.0
+	golang.org/x/sys v0.3.0
+	golang.org/x/time v0.3.0
 	gomodules.xyz/jsonpatch/v3 v3.0.1
 	google.golang.org/api v0.96.0
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e
@@ -87,19 +87,19 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	helm.sh/helm/v3 v3.10.0
-	istio.io/api v0.0.0-20230103010033-8d175ae198c3
-	istio.io/client-go v1.16.2-0.20230103010534-c92d592d49e3
+	helm.sh/helm/v3 v3.10.3
+	istio.io/api v0.0.0-20230112051313-cdb0e9169226
+	istio.io/client-go v1.16.2-0.20230112051813-4909dd097ff6
 	istio.io/pkg v0.0.0-20221107183613-574f8d141535
-	k8s.io/api v0.25.1
-	k8s.io/apiextensions-apiserver v0.25.0
-	k8s.io/apimachinery v0.25.1
-	k8s.io/apiserver v0.25.1
-	k8s.io/cli-runtime v0.25.1
-	k8s.io/client-go v0.25.1
+	k8s.io/api v0.25.2
+	k8s.io/apiextensions-apiserver v0.25.2
+	k8s.io/apimachinery v0.25.2
+	k8s.io/apiserver v0.25.2
+	k8s.io/cli-runtime v0.25.2
+	k8s.io/client-go v0.25.2
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/kube-openapi v0.0.0-20220803164354-a70c9af30aea
-	k8s.io/kubectl v0.25.1
+	k8s.io/kubectl v0.25.2
 	k8s.io/utils v0.0.0-20220823124924-e9cbc92d1a73
 	maistra.io/api v0.0.0-20230111144121-735ea988a305
 	sigs.k8s.io/controller-runtime v0.13.0
@@ -242,8 +242,8 @@ require (
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/exp v0.0.0-20220921164117-439092de6870
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/term v0.3.0 // indirect
+	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	gomodules.xyz/orderedmap v0.1.0 // indirect
@@ -251,7 +251,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	k8s.io/component-base v0.25.1 // indirect
+	k8s.io/component-base v0.25.2 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/kustomize/api v0.12.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.13.9 // indirect
