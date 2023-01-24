@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/protobuf/proto"
 	any "google.golang.org/protobuf/types/known/anypb"
 	v1 "maistra.io/api/security/v1"
 
@@ -557,7 +556,7 @@ func (p *XdsProxy) handleUpstreamResponse(con *ProxyConnection) {
 					continue
 				}
 				var tb v1.TrustBundleResponse
-				if err := proto.Unmarshal(resp.Resources[0].Value, &tb); err != nil {
+				if err := resp.Resources[0].UnmarshalTo(&tb); err != nil {
 					proxyLog.Errorf("failed to unmarshall trust bundles: %v", err)
 					continue
 				}
