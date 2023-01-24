@@ -16,10 +16,10 @@ package xds
 
 import (
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"istio.io/istio/pilot/pkg/networking/util"
 	v1 "maistra.io/api/security/v1"
 
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pilot/pkg/networking/util"
 	fedmodel "istio.io/istio/pkg/servicemesh/federation/model"
 )
 
