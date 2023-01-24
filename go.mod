@@ -10,6 +10,8 @@ replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.5
 
 replace sigs.k8s.io/gateway-api => github.com/istio/gateway-api v0.0.0-20221006194514-510afb48c902
 
+replace maistra.io/api => github.com/luksa/api v0.0.0-20230124122005-7ffba183d577
+
 require (
 	cloud.google.com/go/compute v1.6.0
 	cloud.google.com/go/security v1.3.0
