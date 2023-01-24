@@ -30,7 +30,6 @@ import (
 	"time"
 
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/golang/protobuf/ptypes"
 	"go.uber.org/atomic"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -557,7 +556,7 @@ func (p *XdsProxy) handleUpstreamResponse(con *ProxyConnection) {
 					continue
 				}
 				var tb v1.TrustBundleResponse
-				if err := ptypes.UnmarshalAny(resp.Resources[0], &tb); err != nil { // nolint
+				if err := resp.Resources[0].UnmarshalTo(&tb); err != nil {
 					proxyLog.Errorf("failed to unmarshall trust bundles: %v", err)
 					continue
 				}
