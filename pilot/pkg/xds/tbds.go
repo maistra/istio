@@ -16,11 +16,11 @@ package xds
 
 import (
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	"istio.io/istio/pilot/pkg/networking/util"
 	v1 "maistra.io/api/security/v1"
 
 	"istio.io/istio/pilot/pkg/model"
 	fedmodel "istio.io/istio/pkg/servicemesh/federation/model"
-	"istio.io/istio/pkg/util/gogo"
 )
 
 // TbdsGenerator generates trust bundle configuration for proxies to consume
@@ -65,7 +65,6 @@ func (e *TbdsGenerator) Generate(_ *model.Proxy, _ *model.WatchedResource, req *
 			RootCert:    cert,
 		})
 	}
-	// TODO: Remove package gogo and use MassageToAny from "istio.io/istio/pilot/pkg/networking/util"
-	resources := model.Resources{&discovery.Resource{Resource: gogo.MessageToAny(tb)}}
+	resources := model.Resources{&discovery.Resource{Resource: util.MessageToAny(tb)}}
 	return resources, model.DefaultXdsLogDetails, nil
 }
