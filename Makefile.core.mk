@@ -29,6 +29,14 @@ $(error $(warning))
 endif
 
 #-----------------------------------------------------------------------------
+# Workaround git issues on OpenShift Prow CI
+#-----------------------------------------------------------------------------
+ifeq ($(CI),true)
+  $(shell git config --global --add safe.directory '*')
+endif
+
+
+#-----------------------------------------------------------------------------
 # Global Variables
 #-----------------------------------------------------------------------------
 ISTIO_GO := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
