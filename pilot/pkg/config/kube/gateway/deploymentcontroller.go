@@ -47,9 +47,9 @@ import (
 	istiolog "istio.io/pkg/log"
 )
 
-const (
+var (
 	ManagedByControllerLabel = "gateway.istio.io/managed"
-	ManagedByControllerValue = "istio.io-gateway-controller"
+	ManagedByControllerValue = strings.ReplaceAll(features.GatewayAPIControllerName, "/", "-")
 )
 
 // DeploymentController implements a controller that materializes a Gateway into an in cluster gateway proxy
