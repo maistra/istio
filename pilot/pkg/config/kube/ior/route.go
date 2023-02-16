@@ -25,7 +25,6 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	v1 "github.com/openshift/api/route/v1"
-
 	routeclient "github.com/openshift/client-go/route/clientset/versioned"
 	routeListerV1 "github.com/openshift/client-go/route/listers/route/v1"
 	"github.com/pkg/errors"

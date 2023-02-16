@@ -34,6 +34,8 @@ import (
 	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
 	osrouteinformer "github.com/maistra/xns-informer/pkg/generated/openshift/route"
 	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
+	osrouteclient "github.com/openshift/client-go/route/clientset/versioned"
+	osroutefake "github.com/openshift/client-go/route/clientset/versioned/fake"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/credentials"
@@ -96,9 +98,6 @@ import (
 	"istio.io/istio/pkg/test/util/yml"
 	"istio.io/pkg/log"
 	"istio.io/pkg/version"
-
-	osrouteclient "github.com/openshift/client-go/route/clientset/versioned"
-	osroutefake "github.com/openshift/client-go/route/clientset/versioned/fake"
 )
 
 const (

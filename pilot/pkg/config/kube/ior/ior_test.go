@@ -27,6 +27,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	networking "istio.io/api/networking/v1alpha3"
+	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pilot/pkg/config/kube/crdclient"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config"
@@ -34,8 +35,6 @@ import (
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/pkg/log"
-
-	istioclient "istio.io/client-go/pkg/clientset/versioned"
 )
 
 const prefixedLabel = maistraPrefix + "fake"
