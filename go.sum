@@ -805,8 +805,8 @@ github.com/mailru/easyjson v0.7.0/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/maistra/xns-informer v0.0.0-20230111124621-73ee35e5f523 h1:NjeYQr1oG3nrSWUqmOIQMIYucJI8t/nPp0txdKwraYk=
-github.com/maistra/xns-informer v0.0.0-20230111124621-73ee35e5f523/go.mod h1:2DP6ps5pmbxaazskTazVHwwLF+RiW+EtcJqQxLBaWH8=
+github.com/maistra/xns-informer v0.0.0-20230213111714-f8d2c0b0070d h1:r5dEcBh/3VTleWxk9vwWarGHNIkHm9ckL8hSi0RuXwM=
+github.com/maistra/xns-informer v0.0.0-20230213111714-f8d2c0b0070d/go.mod h1:spcyztqFmNgRgHI9LgWfh4pjamak9cSphQfI3PxGxJM=
 github.com/maratori/testpackage v1.0.1/go.mod h1:ddKdw+XG0Phzhx8BFDTKgpWP4i7MpApTE5fXSKAqwDU=
 github.com/marten-seemann/qpack v0.2.1 h1:jvTsT/HpCn2UZJdP+UUB53FfUUgeOyG5K1ns0OJOGVs=
 github.com/marten-seemann/qpack v0.2.1/go.mod h1:F7Gl5L1jIgN1D11ucXefiuJS9UMVP2opoCp2jDKb7wc=

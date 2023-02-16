@@ -22,6 +22,7 @@ import (
 	gatewayapiinformer "github.com/maistra/xns-informer/pkg/generated/gatewayapi"
 	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
 	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
+	osrouteinformer "github.com/maistra/xns-informer/pkg/generated/openshift/route"
 	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
@@ -42,6 +43,7 @@ import (
 	mcsapisclient "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned"
 	mcsapisinformer "sigs.k8s.io/mcs-api/pkg/client/informers/externalversions"
 
+	osrouteclient "github.com/openshift/client-go/route/clientset/versioned"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/pkg/version"
@@ -96,6 +98,10 @@ func (c MockClient) Istio() istioclient.Interface {
 	panic("not used in mock")
 }
 
+func (c MockClient) OsRoute() osrouteclient.Interface {
+	panic("not used in mock")
+}
+
 func (c MockClient) GatewayAPI() serviceapisclient.Interface {
 	panic("not used in mock")
 }
@@ -105,6 +111,10 @@ func (c MockClient) MCSApis() mcsapisclient.Interface {
 }
 
 func (c MockClient) IstioInformer() istioinformer.SharedInformerFactory {
+	panic("not used in mock")
+}
+
+func (c MockClient) OsRouteInformer() osrouteinformer.SharedInformerFactory {
 	panic("not used in mock")
 }
 

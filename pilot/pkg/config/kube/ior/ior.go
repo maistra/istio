@@ -29,12 +29,7 @@ func Run(
 	stop <-chan struct{},
 ) {
 	IORLog.Info("setting up IOR")
-	rc, err := NewRouterClient()
-	if err != nil {
-		return
-	}
-
-	r := newRoute(NewKubeClient(kubeClient), rc, store)
+	r := newRoute(NewKubeClient(kubeClient), store)
 
 	r.Run(stop)
 }

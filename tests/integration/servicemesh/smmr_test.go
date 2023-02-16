@@ -28,7 +28,6 @@ import (
 	routeapiv1 "github.com/openshift/api/route/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"istio.io/istio/pilot/pkg/config/kube/ior"
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istioctl"
 	"istio.io/istio/pkg/test/framework/components/namespace"
@@ -111,13 +110,11 @@ func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expecte
 }
 
 func verifyThatRouteExistsOrFail(ctx framework.TestContext, expectedGwNs, expectedGwName, expectedHost string) {
-	routerClient, err := ior.NewRouterClient()
-	if err != nil {
-		ctx.Fatalf("failed to create Router client: %s", err)
-	}
+	routerClient := ctx.AllClusters().Default().OsRoute()
+	var err error
 	var routes *routeapiv1.RouteList
 	retry.UntilSuccessOrFail(ctx, func() error {
-		routes, err = routerClient.Routes("istio-system").List(context.TODO(), metav1.ListOptions{})
+		routes, err = routerClient.RouteV1().Routes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to get Routes: %s", err)
 		}

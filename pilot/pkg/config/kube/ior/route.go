@@ -25,7 +25,9 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	v1 "github.com/openshift/api/route/v1"
-	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+
+	routeclient "github.com/openshift/client-go/route/clientset/versioned"
+	routeListerV1 "github.com/openshift/client-go/route/listers/route/v1"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +39,6 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collections"
-	"istio.io/istio/pkg/kube"
 	"istio.io/pkg/log"
 )
 
@@ -54,32 +55,18 @@ const (
 
 // routeController manages the integration between Istio Gateways and OpenShift Routes
 type routeController struct {
-	routerClient routev1.RouteV1Interface
-	store        model.ConfigStoreController
+	store model.ConfigStoreController
 
 	podLister     listerv1.PodLister
 	serviceLister listerv1.ServiceLister
-}
 
-// newRouterClient returns an OpenShift client for Routers
-func NewRouterClient() (routev1.RouteV1Interface, error) {
-	config, err := kube.BuildClientConfig("", "")
-	if err != nil {
-		return nil, err
-	}
-
-	client, err := routev1.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	return client, nil
+	routeClient routeclient.Interface
+	routeLister routeListerV1.RouteLister
 }
 
 // newRoute returns a new instance of Route object
 func newRoute(
 	kubeClient KubeClient,
-	routerClient routev1.RouteV1Interface,
 	store model.ConfigStoreController,
 ) *routeController {
 	for !kubeClient.IsRouteSupported() {
@@ -88,10 +75,12 @@ func newRoute(
 	}
 
 	r := &routeController{
-		routerClient:  routerClient,
 		store:         store,
 		podLister:     kubeClient.GetActualClient().KubeInformer().Core().V1().Pods().Lister(),
 		serviceLister: kubeClient.GetActualClient().KubeInformer().Core().V1().Services().Lister(),
+
+		routeClient: kubeClient.GetActualClient().OsRoute(),
+		routeLister: kubeClient.GetActualClient().OsRouteInformer().Route().V1().Routes().Lister(),
 	}
 
 	return r
@@ -129,7 +118,7 @@ func getHost(route v1.Route) string {
 func (r *routeController) deleteRoute(route *v1.Route) error {
 	var immediate int64
 	host := getHost(*route)
-	err := r.routerClient.Routes(route.Namespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
+	err := r.routeClient.RouteV1().Routes(route.Namespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
 	if err != nil {
 		return errors.Wrapf(err, "error deleting route %s/%s for the host %s",
 			route.ObjectMeta.Name,
@@ -207,7 +196,8 @@ func (r *routeController) createRoute(
 	IORLog.Debugf("creating route for hostname %s", originalHost)
 
 	nr, err := r.
-		routerClient.
+		routeClient.
+		RouteV1().
 		Routes(serviceNamespace).
 		Create(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.CreateOptions{})
 	if err != nil {
@@ -234,7 +224,8 @@ func (r *routeController) updateRoute(
 	IORLog.Debugf("updating route for hostname %s", originalHost)
 
 	nr, err := r.
-		routerClient.
+		routeClient.
+		RouteV1().
 		Routes(serviceNamespace).
 		Update(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.UpdateOptions{})
 	if err != nil {
@@ -252,12 +243,12 @@ func (r *routeController) updateRoute(
 	return nr, nil
 }
 
-func (r *routeController) findRoutes(metadata config.Meta) (*v1.RouteList, error) {
+func (r *routeController) findRoutes(metadata config.Meta) ([]*v1.Route, error) {
 	defaultLabelSet := getDefaultRouteLabelMap(metadata.Name, metadata.Namespace)
 
 	labels := labels.SelectorFromSet(defaultLabelSet)
 
-	return r.routerClient.Routes(metadata.Namespace).List(context.TODO(), metav1.ListOptions{LabelSelector: labels.String()})
+	return r.routeLister.List(labels)
 }
 
 // findService tries to find a service that matches with the given gateway selector
@@ -342,7 +333,7 @@ func hostHash(name string) string {
 	return hex.EncodeToString(hash[:8])
 }
 
-func (r *routeController) reconcileGateway(config *config.Config, routes *v1.RouteList) error {
+func (r *routeController) reconcileGateway(config *config.Config, routes []*v1.Route) error {
 	gateway, ok := config.Spec.(*networking.Gateway)
 
 	if !ok {
@@ -359,9 +350,9 @@ func (r *routeController) reconcileGateway(config *config.Config, routes *v1.Rou
 		return errors.Wrapf(err, "gateway %s/%s does not specify a valid service", config.Namespace, config.Name)
 	}
 
-	routeMap := make(map[string]v1.Route)
+	routeMap := make(map[string]*v1.Route)
 
-	for _, v := range routes.Items {
+	for _, v := range routes {
 		routeMap[v.Name] = v
 	}
 
@@ -391,8 +382,8 @@ func (r *routeController) reconcileGateway(config *config.Config, routes *v1.Rou
 	}
 
 	for k, v := range routeMap {
-		IORLog.Debugf("clean up route %s for host %s", k, getHost(v))
-		if err := r.deleteRoute(&v); err != nil {
+		IORLog.Debugf("clean up route %s for host %s", k, getHost(*v))
+		if err := r.deleteRoute(v); err != nil {
 			result = multierror.Append(result, err)
 		}
 	}
@@ -423,7 +414,7 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 
 	config := r.store.Get(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), curr.Name, curr.Namespace)
 
-	var routes *v1.RouteList
+	var routes []*v1.Route
 
 	routes, err = r.findRoutes(curr.Meta)
 
@@ -437,8 +428,8 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 
 	var result *multierror.Error
 
-	for _, route := range routes.Items {
-		if err := r.deleteRoute(&route); err != nil {
+	for _, route := range routes {
+		if err := r.deleteRoute(route); err != nil {
 			result = multierror.Append(result, err)
 		}
 	}
