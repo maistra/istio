@@ -70,7 +70,7 @@ func runClients(
 	kubeClient KubeClient,
 	stop <-chan struct{},
 ) {
-	go store.Run(stop)
+	store.Run(stop)
 	kubeClient.GetActualClient().RunAndWait(stop)
 }
 
@@ -268,7 +268,7 @@ func TestCreate(t *testing.T) {
 
 				// Remove the gateway and expect all routes get removed
 				deleteGateway(t, k8sClient.GetActualClient().Istio(), c.ns, gatewayName)
-				_ = getRoutes(t, routerClient, c.ns, 0, 10*time.Second)
+				_ = getRoutes(t, routerClient, c.ns, 0, time.Second)
 			}
 		})
 	}
@@ -386,12 +386,12 @@ func TestEdit(t *testing.T) {
 	createIngressGateway(t, k8sClient.GetActualClient(), controlPlane, map[string]string{"istio": "ingressgateway"})
 	createGateway(t, store, controlPlane, "gw", []string{"abc.com"}, map[string]string{"istio": "ingressgateway"}, false, nil)
 
-	list := getRoutes(t, routerClient, controlPlane, 1, 5*time.Second)
+	list := getRoutes(t, routerClient, controlPlane, 1, time.Second)
 
 	for i, c := range cases {
 		t.Run(c.testName, func(t *testing.T) {
 			editGateway(t, store, c.ns, "gw", c.hosts, c.gwSelector, c.tls, fmt.Sprintf("%d", i+2))
-			list = getRoutes(t, routerClient, controlPlane, c.expectedRoutes, 5*time.Second)
+			list = getRoutes(t, routerClient, controlPlane, c.expectedRoutes, time.Second)
 
 			validateRoutes(t, c.hosts, list, "gw", c.tls)
 		})
