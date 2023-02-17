@@ -81,14 +81,13 @@ func initClients(
 	model.ConfigStoreController,
 	KubeClient,
 	routeclient.Interface,
-	*routeController,
 ) {
 	store, iorKubeClient, routerClient, r := newClients(t, nil)
 
 	r.Run(stop)
 	runClients(store, iorKubeClient, stop)
 
-	return store, iorKubeClient, routerClient, r
+	return store, iorKubeClient, routerClient
 }
 
 func TestCreate(t *testing.T) {
@@ -249,7 +248,7 @@ func TestCreate(t *testing.T) {
 	controlPlaneNs := "istio-system"
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	store, k8sClient, routerClient, _ := initClients(t, stop)
+	store, k8sClient, routerClient := initClients(t, stop)
 
 	k8sClient.GetActualClient().OsRouteInformer().SetNamespaces([]string{controlPlaneNs})
 
@@ -379,7 +378,7 @@ func TestEdit(t *testing.T) {
 
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	store, k8sClient, routerClient, _ := initClients(t, stop)
+	store, k8sClient, routerClient := initClients(t, stop)
 
 	controlPlane := "istio-system"
 	createIngressGateway(t, k8sClient.GetActualClient(), controlPlane, map[string]string{"istio": "ingressgateway"})
@@ -402,7 +401,7 @@ func TestConcurrency(t *testing.T) {
 	IORLog.SetOutputLevel(log.DebugLevel)
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	store, k8sClient, routerClient, _ := initClients(t, stop)
+	store, k8sClient, routerClient := initClients(t, stop)
 
 	qty := 10
 	runs := 10
