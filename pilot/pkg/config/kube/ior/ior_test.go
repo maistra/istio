@@ -70,7 +70,7 @@ func runClients(
 	kubeClient KubeClient,
 	stop <-chan struct{},
 ) {
-	store.Run(stop)
+	go store.Run(stop)
 	kubeClient.GetActualClient().RunAndWait(stop)
 }
 
@@ -85,6 +85,7 @@ func initClients(
 ) {
 	store, iorKubeClient, routerClient, r := newClients(t, nil)
 
+	r.Run(stop)
 	runClients(store, iorKubeClient, stop)
 
 	return store, iorKubeClient, routerClient, r
@@ -248,8 +249,7 @@ func TestCreate(t *testing.T) {
 	controlPlaneNs := "istio-system"
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	store, k8sClient, routerClient, r := initClients(t, stop)
-	r.Run(stop)
+	store, k8sClient, routerClient, _ := initClients(t, stop)
 
 	k8sClient.GetActualClient().OsRouteInformer().SetNamespaces([]string{controlPlaneNs})
 
@@ -379,8 +379,7 @@ func TestEdit(t *testing.T) {
 
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	store, k8sClient, routerClient, r := initClients(t, stop)
-	r.Run(stop)
+	store, k8sClient, routerClient, _ := initClients(t, stop)
 
 	controlPlane := "istio-system"
 	createIngressGateway(t, k8sClient.GetActualClient(), controlPlane, map[string]string{"istio": "ingressgateway"})
@@ -403,8 +402,7 @@ func TestConcurrency(t *testing.T) {
 	IORLog.SetOutputLevel(log.DebugLevel)
 	stop := make(chan struct{})
 	defer func() { close(stop) }()
-	store, k8sClient, routerClient, r := initClients(t, stop)
-	r.Run(stop)
+	store, k8sClient, routerClient, _ := initClients(t, stop)
 
 	qty := 10
 	runs := 10
@@ -450,8 +448,8 @@ func TestStatelessness(t *testing.T) {
 	defer func() { close(stop) }()
 	iorStop := make(chan struct{})
 	store, kubeClient, routerClient, r := newClients(t, nil)
-	runClients(store, kubeClient, stop)
 	r.Run(iorStop)
+	runClients(store, kubeClient, stop)
 
 	createIngressGateway(t, kubeClient.GetActualClient(), watchedNamespace, map[string]string{"istio": "ingressgateway"})
 	createGateway(t, store, initialState.ns, initialState.name, initialState.hosts, map[string]string{"istio": "ingressgateway"}, initialState.tls, nil)
