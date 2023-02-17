@@ -143,7 +143,6 @@ func NewDeploymentController(client kube.Client) *DeploymentController {
 	gw.Informer().AddEventHandler(controllers.ObjectHandler(dc.queue.AddObject))
 	if gwcInformer != nil {
 		gwcInformer.Informer().AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
-			o.GetName()
 			gws, _ := dc.gatewayLister.List(klabels.Everything())
 			for _, g := range gws {
 				if string(g.Spec.GatewayClassName) == o.GetName() {
