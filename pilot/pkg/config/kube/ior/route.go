@@ -78,8 +78,8 @@ func newRoute(
 		podLister:     kubeClient.GetActualClient().KubeInformer().Core().V1().Pods().Lister(),
 		serviceLister: kubeClient.GetActualClient().KubeInformer().Core().V1().Services().Lister(),
 
-		routeClient: kubeClient.GetActualClient().OsRoute(),
-		routeLister: kubeClient.GetActualClient().OsRouteInformer().Route().V1().Routes().Lister(),
+		routeClient: kubeClient.GetActualClient().Route(),
+		routeLister: kubeClient.GetActualClient().RouteInformer().Route().V1().Routes().Lister(),
 	}
 
 	return r

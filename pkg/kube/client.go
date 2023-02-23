@@ -32,10 +32,10 @@ import (
 	gatewayapiinformer "github.com/maistra/xns-informer/pkg/generated/gatewayapi"
 	istioinformer "github.com/maistra/xns-informer/pkg/generated/istio"
 	kubeinformer "github.com/maistra/xns-informer/pkg/generated/kube"
-	osrouteinformer "github.com/maistra/xns-informer/pkg/generated/openshift/route"
+	routeinformer "github.com/maistra/xns-informer/pkg/generated/openshift/route"
 	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
-	osrouteclient "github.com/openshift/client-go/route/clientset/versioned"
-	osroutefake "github.com/openshift/client-go/route/clientset/versioned/fake"
+	routeclient "github.com/openshift/client-go/route/clientset/versioned"
+	routefake "github.com/openshift/client-go/route/clientset/versioned/fake"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/credentials"
@@ -128,7 +128,7 @@ type Client interface {
 	// Istio returns the Istio kube client.
 	Istio() istioclient.Interface
 
-	OsRoute() osrouteclient.Interface
+	Route() routeclient.Interface
 
 	// GatewayAPI returns the gateway-api kube client.
 	GatewayAPI() gatewayapiclient.Interface
@@ -145,7 +145,7 @@ type Client interface {
 	// IstioInformer returns an informer for the istio client
 	IstioInformer() istioinformer.SharedInformerFactory
 
-	OsRouteInformer() osrouteinformer.SharedInformerFactory
+	RouteInformer() routeinformer.SharedInformerFactory
 
 	// GatewayAPIInformer returns an informer for the gateway-api client
 	GatewayAPIInformer() gatewayapiinformer.SharedInformerFactory
@@ -270,8 +270,8 @@ func NewFakeClient(objects ...runtime.Object) CLIClient {
 	c.istio = istiofake.NewSimpleClientset()
 	c.istioInformer = istioinformer.NewSharedInformerFactoryWithOptions(c.istio, resyncInterval)
 
-	c.osRoute = osroutefake.NewSimpleClientset()
-	c.osRouteInformer = osrouteinformer.NewSharedInformerFactory(c.osRoute, resyncInterval)
+	c.route = routefake.NewSimpleClientset()
+	c.routeInformer = routeinformer.NewSharedInformerFactory(c.route, resyncInterval)
 
 	c.gatewayapi = gatewayapifake.NewSimpleClientset()
 	c.gatewayapiInformer = gatewayapiinformer.NewSharedInformerFactory(c.gatewayapi, resyncInterval)
@@ -362,8 +362,8 @@ type client struct {
 	istio         istioclient.Interface
 	istioInformer istioinformer.SharedInformerFactory
 
-	osRoute         osrouteclient.Interface
-	osRouteInformer osrouteinformer.SharedInformerFactory
+	route         routeclient.Interface
+	routeInformer routeinformer.SharedInformerFactory
 
 	gatewayapi         gatewayapiclient.Interface
 	gatewayapiInformer gatewayapiinformer.SharedInformerFactory
@@ -451,12 +451,12 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 		resyncInterval,
 	)
 
-	c.osRoute, err = osrouteclient.NewForConfig(c.config)
+	c.route, err = routeclient.NewForConfig(c.config)
 	if err != nil {
 		return nil, err
 	}
-	c.osRouteInformer = osrouteinformer.NewSharedInformerFactoryWithOptions(
-		c.osRoute,
+	c.routeInformer = routeinformer.NewSharedInformerFactoryWithOptions(
+		c.route,
 		resyncInterval,
 	)
 
@@ -541,8 +541,8 @@ func (c *client) Istio() istioclient.Interface {
 	return c.istio
 }
 
-func (c *client) OsRoute() osrouteclient.Interface {
-	return c.osRoute
+func (c *client) Route() routeclient.Interface {
+	return c.route
 }
 
 func (c *client) GatewayAPI() gatewayapiclient.Interface {
@@ -565,8 +565,8 @@ func (c *client) IstioInformer() istioinformer.SharedInformerFactory {
 	return c.istioInformer
 }
 
-func (c *client) OsRouteInformer() osrouteinformer.SharedInformerFactory {
-	return c.osRouteInformer
+func (c *client) RouteInformer() routeinformer.SharedInformerFactory {
+	return c.routeInformer
 }
 
 func (c *client) GatewayAPIInformer() gatewayapiinformer.SharedInformerFactory {
@@ -589,7 +589,7 @@ func (c *client) AddMemberRoll(namespace, memberRollName string) (err error) {
 
 	c.memberRoll.Register(c.kubeInformer, "kubernetes-informers")
 	c.memberRoll.Register(c.istioInformer, "istio-informers")
-	c.memberRoll.Register(c.osRouteInformer, "openshift-route-informers")
+	c.memberRoll.Register(c.routeInformer, "openshift-route-informers")
 	c.memberRoll.Register(c.dynamicInformer, "dynamic-informers")
 	if features.EnableGatewayAPI {
 		c.memberRoll.Register(c.gatewayapiInformer, "service-apis-informers")
@@ -620,7 +620,7 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		fastWaitForCacheSyncDynamic(stop, c.dynamicInformer)
 		fastWaitForCacheSyncDynamic(stop, c.metadataInformer)
 		fastWaitForCacheSync(stop, c.istioInformer)
-		fastWaitForCacheSync(stop, c.osRouteInformer)
+		fastWaitForCacheSync(stop, c.routeInformer)
 		if features.EnableGatewayAPI {
 			fastWaitForCacheSync(stop, c.gatewayapiInformer)
 		}
@@ -641,7 +641,7 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
 		c.istioInformer.WaitForCacheSync(stop)
-		c.osRouteInformer.WaitForCacheSync(stop)
+		c.routeInformer.WaitForCacheSync(stop)
 		if features.EnableGatewayAPI {
 			c.gatewayapiInformer.WaitForCacheSync(stop)
 		}
@@ -654,7 +654,7 @@ func (c *client) startInformer(stop <-chan struct{}) {
 	c.dynamicInformer.Start(stop)
 	c.metadataInformer.Start(stop)
 	c.istioInformer.Start(stop)
-	c.osRouteInformer.Start(stop)
+	c.routeInformer.Start(stop)
 	if features.EnableGatewayAPI {
 		c.gatewayapiInformer.Start(stop)
 	}

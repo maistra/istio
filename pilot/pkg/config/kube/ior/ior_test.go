@@ -250,7 +250,7 @@ func TestCreate(t *testing.T) {
 	defer func() { close(stop) }()
 	store, k8sClient, routerClient := initClients(t, stop)
 
-	k8sClient.GetActualClient().OsRouteInformer().SetNamespaces([]string{controlPlaneNs})
+	k8sClient.GetActualClient().RouteInformer().SetNamespaces([]string{controlPlaneNs})
 
 	createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
 
