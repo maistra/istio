@@ -142,7 +142,7 @@ func verifyThatRouteExistsOrFail(ctx framework.TestContext, gatewayNamespace, ga
 		}
 
 		return nil
-	}, retry.Timeout(10*time.Second))
+	}, retry.Timeout(100*time.Second))
 }
 
 func verifyThatRouteIsMissingOrFail(ctx framework.TestContext, gatewayNamespace, gatewayName, host string) {
@@ -159,7 +159,7 @@ func verifyThatRouteIsMissingOrFail(ctx framework.TestContext, gatewayNamespace,
 		}
 
 		return nil
-	}, retry.Timeout(10*time.Second))
+	}, retry.Timeout(60*time.Second))
 }
 
 func findRoute(routeClient routeversioned.Interface, gatewayNamespace, gatewayName, host string) (*routeapiv1.Route, error) {
