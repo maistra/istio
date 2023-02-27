@@ -246,9 +246,11 @@ func (r *routeController) updateRoute(
 }
 
 func (r *routeController) findRoutes(metadata config.Meta) ([]*v1.Route, error) {
-	defaultLabelSet := getDefaultRouteLabelMap(metadata.Name, metadata.Namespace)
-
-	return r.routeLister.List(labels.SelectorFromSet(defaultLabelSet))
+	return r.routeLister.List(
+		labels.SelectorFromSet(
+			getDefaultRouteLabelMap(metadata.Name, metadata.Namespace),
+		),
+	)
 }
 
 // findService tries to find a service that matches with the given gateway selector
