@@ -26,6 +26,7 @@ import (
 	"time"
 
 	routeapiv1 "github.com/openshift/api/route/v1"
+	routeversioned "github.com/openshift/client-go/route/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"istio.io/istio/pkg/test/framework"
@@ -35,17 +36,17 @@ import (
 	"istio.io/istio/tests/integration/servicemesh/maistra"
 )
 
-const gatewayName = "common-gateway"
-
 func TestSMMR(t *testing.T) {
 	framework.NewTest(t).
 		Run(func(ctx framework.TestContext) {
+			const gatewayName = "common-gateway"
+
 			namespaceGateway := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "gateway", Inject: true}).Name()
 			namespaceA := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "a", Inject: true}).Name()
 			namespaceB := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "b", Inject: true}).Name()
-			applyGatewayOrFail(ctx, namespaceGateway, "a", "b")
-			applyVirtualServiceOrFail(ctx, namespaceA, namespaceGateway, "a")
-			applyVirtualServiceOrFail(ctx, namespaceB, namespaceGateway, "b")
+			applyGatewayOrFail(ctx, namespaceGateway, gatewayName, "a", "b")
+			applyVirtualServiceOrFail(ctx, namespaceA, namespaceGateway, gatewayName, "a")
+			applyVirtualServiceOrFail(ctx, namespaceB, namespaceGateway, gatewayName, "b")
 
 			ctx.NewSubTest("JoiningMesh").Run(func(t framework.TestContext) {
 				if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA); err != nil {
@@ -69,6 +70,24 @@ func TestSMMR(t *testing.T) {
 					t.Fatalf("failed to enable IOR: %s", err)
 				}
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
+				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
+			})
+
+			ctx.NewSubTest("RouteUpdate").Run(func(t framework.TestContext) {
+				namespaceC := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "c", Inject: true}).Name()
+				applyVirtualServiceOrFail(ctx, namespaceC, namespaceGateway, gatewayName, "c")
+
+				applyGatewayOrFail(t, namespaceGateway, gatewayName, "a", "b", "c")
+
+				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
+				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
+				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "c.maistra.io")
+
+				applyGatewayOrFail(t, namespaceGateway, gatewayName, "a", "b")
+
+				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
+				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
+				verifyThatRouteIsMissingOrFail(t, namespaceGateway, gatewayName, "c.maistra.io")
 			})
 		})
 }
@@ -109,31 +128,55 @@ func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expecte
 	}, retry.Timeout(10*time.Second))
 }
 
-func verifyThatRouteExistsOrFail(ctx framework.TestContext, expectedGwNs, expectedGwName, expectedHost string) {
-	routerClient := ctx.AllClusters().Default().OsRoute()
-	var err error
-	var routes *routeapiv1.RouteList
+func verifyThatRouteExistsOrFail(ctx framework.TestContext, gatewayNamespace, gatewayName, host string) {
+	routeClient := ctx.AllClusters().Default().Route()
+
 	retry.UntilSuccessOrFail(ctx, func() error {
-		routes, err = routerClient.RouteV1().Routes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		route, err := findRoute(routeClient, gatewayNamespace, gatewayName, host)
 		if err != nil {
-			return fmt.Errorf("failed to get Routes: %s", err)
+			return fmt.Errorf("failed to get Routes: %v", err)
 		}
-		if len(routes.Items) == 0 {
-			return fmt.Errorf("no Routes found")
+
+		if route == nil {
+			return fmt.Errorf("no Route found")
 		}
+
 		return nil
 	}, retry.Timeout(10*time.Second))
+}
 
-	found := false
-	for _, route := range routes.Items {
-		if route.Spec.Host == expectedHost && strings.HasPrefix(route.Name, fmt.Sprintf("%s-%s-", expectedGwNs, expectedGwName)) {
-			found = true
-			break
+func verifyThatRouteIsMissingOrFail(ctx framework.TestContext, gatewayNamespace, gatewayName, host string) {
+	routeClient := ctx.AllClusters().Default().Route()
+
+	retry.UntilSuccessOrFail(ctx, func() error {
+		route, err := findRoute(routeClient, gatewayNamespace, gatewayName, host)
+		if err != nil {
+			ctx.Fatalf("failed to get Routes: %v", err)
+		}
+
+		if route != nil {
+			ctx.Fatal("found unexpected Route")
+		}
+
+		return nil
+	}, retry.Timeout(10*time.Second))
+}
+
+func findRoute(routeClient routeversioned.Interface, gatewayNamespace, gatewayName, host string) (*routeapiv1.Route, error) {
+	routes, err := routeClient.RouteV1().Routes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Routes: %s", err)
+	}
+
+	if len(routes.Items) != 0 {
+		for _, route := range routes.Items {
+			if route.Spec.Host == host && strings.HasPrefix(route.Name, fmt.Sprintf("%s-%s-", gatewayNamespace, gatewayName)) {
+				return &route, nil
+			}
 		}
 	}
-	if !found {
-		ctx.Fatalf("failed to find Route for host %s", expectedHost)
-	}
+
+	return nil, nil
 }
 
 type RouteConfig struct {
@@ -173,7 +216,7 @@ func getPodName(ctx framework.TestContext, namespace, appName string) (string, e
 	return pods.Items[0].Name, nil
 }
 
-func applyGatewayOrFail(ctx framework.TestContext, ns string, hosts ...string) {
+func applyGatewayOrFail(ctx framework.TestContext, namespace, name string, hosts ...string) {
 	gwYAML := fmt.Sprintf(`
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
@@ -188,17 +231,17 @@ spec:
       name: http
       protocol: HTTP
     hosts:
-`, gatewayName)
+`, name)
 	for _, host := range hosts {
 		gwYAML += fmt.Sprintf("    - %s.maistra.io\n", host)
 	}
 	// retry because of flaky validation webhook
 	retry.UntilSuccessOrFail(ctx, func() error {
-		return ctx.ConfigIstio().YAML(ns, gwYAML).Apply()
+		return ctx.ConfigIstio().YAML(namespace, gwYAML).Apply()
 	}, retry.Timeout(30*time.Second))
 }
 
-func applyVirtualServiceOrFail(ctx framework.TestContext, ns, gatewayNs, virtualServiceName string) {
+func applyVirtualServiceOrFail(ctx framework.TestContext, ns, gatewayNs, gatewayName, virtualServiceName string) {
 	vsYAML := fmt.Sprintf(`
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService

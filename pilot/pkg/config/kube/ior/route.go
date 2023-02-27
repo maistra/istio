@@ -219,14 +219,17 @@ func (r *routeController) updateRoute(
 	originalHost string,
 	tls *networking.ServerTLSSettings,
 	serviceNamespace string, serviceName string,
+	route *v1.Route,
 ) (*v1.Route, error) {
 	IORLog.Debugf("updating route for hostname %s", originalHost)
+
+	buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName).DeepCopyInto(route.DeepCopy())
 
 	nr, err := r.
 		routeClient.
 		RouteV1().
 		Routes(serviceNamespace).
-		Update(context.TODO(), buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName), metav1.UpdateOptions{})
+		Update(context.TODO(), route, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error updating a route for the host %s from gateway: %s/%s",
 			originalHost,
@@ -245,20 +248,20 @@ func (r *routeController) updateRoute(
 func (r *routeController) findRoutes(metadata config.Meta) ([]*v1.Route, error) {
 	defaultLabelSet := getDefaultRouteLabelMap(metadata.Name, metadata.Namespace)
 
-	labels := labels.SelectorFromSet(defaultLabelSet)
-
-	return r.routeLister.List(labels)
+	return r.routeLister.List(labels.SelectorFromSet(defaultLabelSet))
 }
 
 // findService tries to find a service that matches with the given gateway selector
 // Returns the namespace and service name that is a match, or an error
-func (r *routeController) findService(gateway *networking.Gateway) (string, string, error) {
+func (r *routeController) findService(gateway *networking.Gateway) (model.NamespacedName, error) {
 	gwSelector := labels.SelectorFromSet(gateway.Selector)
+
+	emptyNamespacedName := model.NamespacedName{}
 
 	// Get the list of pods that match the gateway selector
 	pods, err := r.podLister.List(gwSelector)
 	if err != nil {
-		return "", "", errors.Wrapf(err, "could not get the list of pods with labels %s", gwSelector.String())
+		return emptyNamespacedName, errors.Wrapf(err, "could not get the list of pods with labels %s", gwSelector.String())
 	}
 
 	IORLog.Debugf("found %d pod(s) with %s gateway selector", len(pods), gwSelector)
@@ -268,7 +271,7 @@ func (r *routeController) findService(gateway *networking.Gateway) (string, stri
 	for _, pod := range pods {
 		services, err := r.serviceLister.Services(pod.Namespace).List(labels.Everything())
 		if err != nil {
-			return "", "", errors.Wrapf(err, "could not get all the services in namespace %s", pod.Namespace)
+			return emptyNamespacedName, errors.Wrapf(err, "could not get all the services in namespace %s", pod.Namespace)
 		}
 		IORLog.Debugf("found %d service(s) under %s namespace", len(services), pod.Namespace)
 		podLabels := labels.Set(pod.ObjectMeta.Labels)
@@ -278,13 +281,13 @@ func (r *routeController) findService(gateway *networking.Gateway) (string, stri
 
 			IORLog.Debugf("matching service selector %s against %s", svcSelector.String(), podLabels)
 			if svcSelector.Matches(podLabels) {
-				return pod.Namespace, service.Name, nil
+				return model.NamespacedName{Namespace: pod.Namespace, Name: service.Name}, nil
 			}
 
 		}
 	}
 
-	return "", "", fmt.Errorf("could not find a service that matches the gateway selector '%s'", gwSelector.String())
+	return emptyNamespacedName, fmt.Errorf("could not find a service that matches the gateway selector '%s'", gwSelector.String())
 }
 
 func getRouteName(namespace, name, host string) string {
@@ -339,15 +342,17 @@ func (r *routeController) reconcileGateway(config *config.Config, routes []*v1.R
 		return fmt.Errorf("could not decode spec as Gateway from %v", config)
 	}
 
-	var serviceNamespace string
-	var serviceName string
 	var err error
+	var namespacedName model.NamespacedName
 
-	serviceNamespace, serviceName, err = r.findService(gateway)
+	namespacedName, err = r.findService(gateway)
 
 	if err != nil {
 		return errors.Wrapf(err, "gateway %s/%s does not specify a valid service", config.Namespace, config.Name)
 	}
+
+	serviceNamespace := namespacedName.Namespace
+	serviceName := namespacedName.Name
 
 	routeMap := make(map[string]*v1.Route)
 
@@ -363,10 +368,10 @@ func (r *routeController) reconcileGateway(config *config.Config, routes []*v1.R
 
 			name := getRouteName(config.Namespace, config.Name, host)
 
-			_, found := routeMap[name]
+			route, found := routeMap[name]
 
 			if found {
-				_, err = r.updateRoute(config.Meta, host, server.Tls, serviceNamespace, serviceName)
+				_, err = r.updateRoute(config.Meta, host, server.Tls, serviceNamespace, serviceName, route)
 
 				// We always want to remove the route to avoid getting deleted.
 				delete(routeMap, name)
