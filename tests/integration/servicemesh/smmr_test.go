@@ -44,7 +44,7 @@ func TestSMMR(t *testing.T) {
 			namespaceGateway := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "gateway", Inject: true}).Name()
 			namespaceA := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "a", Inject: true}).Name()
 			namespaceB := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "b", Inject: true}).Name()
-			applyGatewayOrFail(ctx, namespaceGateway, gatewayName, "a", "b")
+			applyGatewayOrFail(ctx, namespaceGateway, gatewayName, labelSetA, "a", "b")
 			applyVirtualServiceOrFail(ctx, namespaceA, namespaceGateway, gatewayName, "a")
 			applyVirtualServiceOrFail(ctx, namespaceB, namespaceGateway, gatewayName, "b")
 
@@ -73,21 +73,44 @@ func TestSMMR(t *testing.T) {
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
 			})
 
-			ctx.NewSubTest("RouteUpdate").Run(func(t framework.TestContext) {
+			ctx.NewSubTest("RouteChange").Run(func(t framework.TestContext) {
 				namespaceC := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "c", Inject: true}).Name()
 				applyVirtualServiceOrFail(ctx, namespaceC, namespaceGateway, gatewayName, "c")
 
-				applyGatewayOrFail(t, namespaceGateway, gatewayName, "a", "b", "c")
+				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetA, "a", "b", "c")
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "c.maistra.io")
 
-				applyGatewayOrFail(t, namespaceGateway, gatewayName, "a", "b")
+				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetA, "a", "b")
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
 				verifyThatRouteIsMissingOrFail(t, namespaceGateway, gatewayName, "c.maistra.io")
+			})
+
+			ctx.NewSubTest("RouteLabelUpdate").Run(func(t framework.TestContext) {
+				routeClient := t.AllClusters().Default().Route()
+
+				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetB, "a")
+
+				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
+
+				retry.UntilSuccessOrFail(t, func() error {
+					route, err := findRoute(routeClient, namespaceGateway, gatewayName, "a.maistra.io")
+					if err != nil {
+						return fmt.Errorf("failed to find route: %s", err)
+					}
+
+					labels := route.GetObjectMeta().GetLabels()
+					val, ok := labels["b"]
+
+					if ok && val == "b" {
+						return nil
+					}
+					return fmt.Errorf("expected to find 'b' in the labels, but got %s", labels)
+				}, retry.Timeout(30*time.Second))
 			})
 		})
 }
@@ -216,12 +239,22 @@ func getPodName(ctx framework.TestContext, namespace, appName string) (string, e
 	return pods.Items[0].Name, nil
 }
 
-func applyGatewayOrFail(ctx framework.TestContext, namespace, name string, hosts ...string) {
+const labelSetA string = `
+    a: "a"
+`
+
+const labelSetB string = `
+    b: "b"
+`
+
+func applyGatewayOrFail(ctx framework.TestContext, namespace, name, labels string, hosts ...string) {
 	gwYAML := fmt.Sprintf(`
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
   name: %s
+  labels:
+%s
 spec:
   selector:
     istio: ingressgateway
@@ -231,7 +264,7 @@ spec:
       name: http
       protocol: HTTP
     hosts:
-`, name)
+`, name, labels)
 	for _, host := range hosts {
 		gwYAML += fmt.Sprintf("    - %s.maistra.io\n", host)
 	}

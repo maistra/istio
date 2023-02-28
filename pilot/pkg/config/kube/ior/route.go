@@ -223,13 +223,15 @@ func (r *routeController) updateRoute(
 ) (*v1.Route, error) {
 	IORLog.Debugf("updating route for hostname %s", originalHost)
 
-	buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName).DeepCopyInto(route.DeepCopy())
+	curr := route.DeepCopy()
+
+	buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName).DeepCopyInto(curr)
 
 	nr, err := r.
 		routeClient.
 		RouteV1().
 		Routes(serviceNamespace).
-		Update(context.TODO(), route, metav1.UpdateOptions{})
+		Update(context.TODO(), curr, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error updating a route for the host %s from gateway: %s/%s",
 			originalHost,
