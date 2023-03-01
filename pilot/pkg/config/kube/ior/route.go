@@ -223,9 +223,9 @@ func (r *routeController) updateRoute(
 ) (*v1.Route, error) {
 	IORLog.Debugf("updating route for hostname %s", originalHost)
 
-	curr := route.DeepCopy()
+	curr := buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName)
 
-	buildRoute(metadata, originalHost, tls, serviceNamespace, serviceName).DeepCopyInto(curr)
+	curr.ResourceVersion = route.ResourceVersion
 
 	nr, err := r.
 		routeClient.
@@ -257,15 +257,13 @@ func (r *routeController) findRoutes(metadata config.Meta) ([]*v1.Route, error) 
 
 // findService tries to find a service that matches with the given gateway selector
 // Returns the namespace and service name that is a match, or an error
-func (r *routeController) findService(gateway *networking.Gateway) (model.NamespacedName, error) {
+func (r *routeController) findService(gateway *networking.Gateway) (*model.NamespacedName, error) {
 	gwSelector := labels.SelectorFromSet(gateway.Selector)
-
-	emptyNamespacedName := model.NamespacedName{}
 
 	// Get the list of pods that match the gateway selector
 	pods, err := r.podLister.List(gwSelector)
 	if err != nil {
-		return emptyNamespacedName, errors.Wrapf(err, "could not get the list of pods with labels %s", gwSelector.String())
+		return nil, errors.Wrapf(err, "could not get the list of pods with labels %s", gwSelector.String())
 	}
 
 	IORLog.Debugf("found %d pod(s) with %s gateway selector", len(pods), gwSelector)
@@ -275,7 +273,7 @@ func (r *routeController) findService(gateway *networking.Gateway) (model.Namesp
 	for _, pod := range pods {
 		services, err := r.serviceLister.Services(pod.Namespace).List(labels.Everything())
 		if err != nil {
-			return emptyNamespacedName, errors.Wrapf(err, "could not get all the services in namespace %s", pod.Namespace)
+			return nil, errors.Wrapf(err, "could not get all the services in namespace %s", pod.Namespace)
 		}
 		IORLog.Debugf("found %d service(s) under %s namespace", len(services), pod.Namespace)
 		podLabels := labels.Set(pod.ObjectMeta.Labels)
@@ -285,13 +283,13 @@ func (r *routeController) findService(gateway *networking.Gateway) (model.Namesp
 
 			IORLog.Debugf("matching service selector %s against %s", svcSelector.String(), podLabels)
 			if svcSelector.Matches(podLabels) {
-				return model.NamespacedName{Namespace: pod.Namespace, Name: service.Name}, nil
+				return &model.NamespacedName{Namespace: pod.Namespace, Name: service.Name}, nil
 			}
 
 		}
 	}
 
-	return emptyNamespacedName, fmt.Errorf("could not find a service that matches the gateway selector '%s'", gwSelector.String())
+	return nil, fmt.Errorf("could not find a service that matches the gateway selector '%s'", gwSelector.String())
 }
 
 func getRouteName(namespace, name, host string) string {
@@ -347,7 +345,7 @@ func (r *routeController) reconcileGateway(config *config.Config, routes []*v1.R
 	}
 
 	var err error
-	var namespacedName model.NamespacedName
+	var namespacedName *model.NamespacedName
 
 	namespacedName, err = r.findService(gateway)
 

@@ -74,8 +74,8 @@ func TestSMMR(t *testing.T) {
 			})
 
 			ctx.NewSubTest("RouteChange").Run(func(t framework.TestContext) {
-				namespaceC := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "c", Inject: true}).Name()
-				applyVirtualServiceOrFail(ctx, namespaceC, namespaceGateway, gatewayName, "c")
+				namespaceC := namespace.NewOrFail(t, t, namespace.Config{Prefix: "c", Inject: true}).Name()
+				applyVirtualServiceOrFail(t, namespaceC, namespaceGateway, gatewayName, "c")
 
 				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetA, "a", "b", "c")
 
@@ -99,7 +99,7 @@ func TestSMMR(t *testing.T) {
 
 				retry.UntilSuccessOrFail(t, func() error {
 					route, err := findRoute(routeClient, namespaceGateway, gatewayName, "a.maistra.io")
-					if err != nil {
+					if err != nil || route == nil {
 						return fmt.Errorf("failed to find route: %s", err)
 					}
 
@@ -109,8 +109,9 @@ func TestSMMR(t *testing.T) {
 					if ok && val == "b" {
 						return nil
 					}
+
 					return fmt.Errorf("expected to find 'b' in the labels, but got %s", labels)
-				}, retry.Timeout(30*time.Second))
+				}, retry.BackoffDelay(500*time.Millisecond))
 			})
 		})
 }
@@ -165,7 +166,7 @@ func verifyThatRouteExistsOrFail(ctx framework.TestContext, gatewayNamespace, ga
 		}
 
 		return nil
-	}, retry.Timeout(300*time.Second))
+	}, retry.BackoffDelay(500*time.Millisecond))
 }
 
 func verifyThatRouteIsMissingOrFail(ctx framework.TestContext, gatewayNamespace, gatewayName, host string) {
@@ -182,7 +183,7 @@ func verifyThatRouteIsMissingOrFail(ctx framework.TestContext, gatewayNamespace,
 		}
 
 		return nil
-	}, retry.Timeout(300*time.Second))
+	}, retry.BackoffDelay(500*time.Millisecond))
 }
 
 func findRoute(routeClient routeversioned.Interface, gatewayNamespace, gatewayName, host string) (*routeapiv1.Route, error) {
