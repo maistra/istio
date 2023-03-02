@@ -17,10 +17,6 @@ LABEL maintainer="Istio Feedback <istio-feedback@redhat.com>"
 ENV container="oci"
 ENV ISTIO_VERSION="${ISTIO_VERSION}"
 
-RUN dnf update -y && \
-  dnf install -y podman-docker util-linux && \
-  dnf clean all
-
 ARG TARGETARCH
 COPY ${TARGETARCH:-amd64}/pilot-discovery /usr/local/bin/pilot-discovery
 
