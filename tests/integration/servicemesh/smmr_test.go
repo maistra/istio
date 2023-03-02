@@ -85,6 +85,8 @@ func TestSMMR(t *testing.T) {
 
 				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetA, "a", "b")
 
+				time.Sleep(30 * time.Second)
+
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
 				verifyThatRouteIsMissingOrFail(t, namespaceGateway, gatewayName, "c.maistra.io")
