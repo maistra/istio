@@ -4,7 +4,6 @@ metadata:
   name: fed-import
   namespace: mesh2-system
 spec:
-  version: v2.2
   runtime:
     defaults:
       container:

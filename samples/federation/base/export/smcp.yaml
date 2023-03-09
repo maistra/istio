@@ -4,7 +4,6 @@ metadata:
   name: fed-export
   namespace: mesh1-system
 spec:
-  version: v2.2
   runtime:
     defaults:
       container:
