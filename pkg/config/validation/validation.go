@@ -372,15 +372,25 @@ func ValidateHTTPHeaderOperationName(name string) error {
 	return nil
 }
 
+// Copy from https://github.com/bufbuild/protoc-gen-validate/blob/a65858624dd654f2fb306d6af60f737132986f44/module/checker.go#L18
+var httpHeaderValueRegexp = regexp.MustCompile("^[^\u0000-\u0008\u000A-\u001F\u007F]*$")
+
 // ValidateHTTPHeaderValue validates a header value for Envoy
 // Valid: "foo", "%HOSTNAME%", "100%%", "prefix %HOSTNAME% suffix"
-// Invalid: "abc%123"
+// Invalid: "abc%123", "%START_TIME%%"
 // We don't try to check that what is inside the %% is one of Envoy recognized values, we just prevent invalid config.
 // See: https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers.html#custom-request-response-headers
 func ValidateHTTPHeaderValue(value string) error {
-	if strings.Count(value, "%")%2 != 0 {
-		return errors.New("single % not allowed.  Escape by doubling to %% or encase Envoy variable name in pair of %")
+	if !httpHeaderValueRegexp.MatchString(value) {
+		return fmt.Errorf("header value configuration %s is invalid", value)
 	}
+
+	if err := validateHeaderValue(value); err != nil {
+		return fmt.Errorf("header value configuration: %w", err)
+	}
+
+	// TODO: find a better way to validate fileds supported in custom header, e.g %ENVIRONMENT(X):Z%
+
 	return nil
 }
 
@@ -1709,6 +1719,10 @@ func ValidateMeshConfig(mesh *meshconfig.MeshConfig) (Warning, error) {
 		scope.Warnf("found invalid extension provider (can be ignored if the given extension provider is not used): %v", err)
 	}
 
+	v = appendValidation(v, ValidateMeshTLSConfig(mesh))
+
+	v = appendValidation(v, ValidateMeshTLSDefaults(mesh))
+
 	return v.Unwrap()
 }
 
@@ -1720,6 +1734,39 @@ func validateTrustDomainConfig(config *meshconfig.MeshConfig) (errs error) {
 		if err := ValidateTrustDomain(tda); err != nil {
 			errs = multierror.Append(errs, fmt.Errorf("trustDomainAliases[%d], domain `%s` : %v", i, tda, err))
 		}
+	}
+	return
+}
+
+func ValidateMeshTLSConfig(mesh *meshconfig.MeshConfig) (errs error) {
+	if meshMTLS := mesh.MeshMTLS; meshMTLS != nil {
+		if meshMTLS.EcdhCurves != nil {
+			errs = multierror.Append(errs, errors.New("mesh TLS does not support ECDH curves configuration"))
+		}
+	}
+	return errs
+}
+
+func ValidateMeshTLSDefaults(mesh *meshconfig.MeshConfig) (v Validation) {
+	unrecognizedECDHCurves := sets.New[string]()
+	validECDHCurves := sets.New[string]()
+	duplicateECDHCurves := sets.New[string]()
+	if tlsDefaults := mesh.TlsDefaults; tlsDefaults != nil {
+		for _, cs := range tlsDefaults.EcdhCurves {
+			if !security.IsValidECDHCurve(cs) {
+				unrecognizedECDHCurves.Insert(cs)
+			} else if validECDHCurves.InsertContains(cs) {
+				duplicateECDHCurves.Insert(cs)
+			}
+		}
+	}
+
+	if len(unrecognizedECDHCurves) > 0 {
+		v = appendWarningf(v, "detected unrecognized ECDH curves: %v", sets.SortedList(unrecognizedECDHCurves))
+	}
+
+	if len(duplicateECDHCurves) > 0 {
+		v = appendWarningf(v, "detected duplicate ECDH curves: %v", sets.SortedList(duplicateECDHCurves))
 	}
 	return
 }
@@ -3799,7 +3846,7 @@ func validateTelemetryMetrics(metrics []*telemetry.Metrics) (v Validation) {
 				switch to.Operation {
 				case telemetry.MetricsOverrides_TagOverride_UPSERT:
 					if to.Value == "" {
-						v = appendErrorf(v, "tagOverrides.value must be set set when operation is UPSERT")
+						v = appendErrorf(v, "tagOverrides.value must be set when operation is UPSERT")
 					}
 				case telemetry.MetricsOverrides_TagOverride_REMOVE:
 					if to.Value != "" {

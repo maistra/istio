@@ -15,6 +15,7 @@
 package validation
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -414,9 +415,15 @@ func TestValidateMeshConfig(t *testing.T) {
 				},
 			},
 		},
+		MeshMTLS: &meshconfig.MeshConfig_TLSConfig{
+			EcdhCurves: []string{"P-256"},
+		},
+		TlsDefaults: &meshconfig.MeshConfig_TLSConfig{
+			EcdhCurves: []string{"P-256", "P-256", "invalid"},
+		},
 	}
 
-	_, err := ValidateMeshConfig(invalid)
+	warning, err := ValidateMeshConfig(invalid)
 	if err == nil {
 		t.Errorf("expected an error on invalid proxy mesh config: %v", invalid)
 	} else {
@@ -434,6 +441,7 @@ func TestValidateMeshConfig(t *testing.T) {
 			"trustDomainAliases[0]",
 			"trustDomainAliases[1]",
 			"trustDomainAliases[2]",
+			"mesh TLS does not support ECDH curves configuration",
 		}
 		switch err := err.(type) {
 		case *multierror.Error:
@@ -444,6 +452,29 @@ func TestValidateMeshConfig(t *testing.T) {
 				for i := 0; i < len(wantErrors); i++ {
 					if !strings.HasPrefix(err.Errors[i].Error(), wantErrors[i]) {
 						t.Errorf("expected error %q at index %d but found %q", wantErrors[i], i, err.Errors[i])
+					}
+				}
+			}
+		default:
+			t.Errorf("expected a multi error as output")
+		}
+	}
+	if warning == nil {
+		t.Errorf("expected a warning on invalid proxy mesh config: %v", invalid)
+	} else {
+		wantWarnings := []string{
+			"detected unrecognized ECDH curves",
+			"detected duplicate ECDH curves",
+		}
+		switch warn := warning.(type) {
+		case *multierror.Error:
+			// each field must cause an error in the field
+			if len(warn.Errors) != len(wantWarnings) {
+				t.Errorf("expected %d warnings but found %v", len(wantWarnings), warn)
+			} else {
+				for i := 0; i < len(wantWarnings); i++ {
+					if !strings.HasPrefix(warn.Errors[i].Error(), wantWarnings[i]) {
+						t.Errorf("expected warning %q at index %d but found %q", wantWarnings[i], i, warn.Errors[i])
 					}
 				}
 			}
@@ -8006,7 +8037,7 @@ func TestValidateTelemetry(t *testing.T) {
 					},
 				}},
 			},
-			"must be set set when operation is UPSERT", "",
+			"must be set when operation is UPSERT", "",
 		},
 		{
 			"good metrics operation",
@@ -8287,4 +8318,54 @@ func TestRecurseMissingTypedConfig(t *testing.T) {
 	assert.Equal(t, recurseMissingTypedConfig(good.ProtoReflect()), []string{}, "typed config set")
 	assert.Equal(t, recurseMissingTypedConfig(ecds.ProtoReflect()), []string{}, "config discovery set")
 	assert.Equal(t, recurseMissingTypedConfig(bad.ProtoReflect()), []string{wellknown.TCPProxy}, "typed config not set")
+}
+
+func TestValidateHTTPHeaderValue(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected error
+	}{
+		{
+			input:    "foo",
+			expected: nil,
+		},
+		{
+			input:    "%HOSTNAME%",
+			expected: nil,
+		},
+		{
+			input:    "100%%",
+			expected: nil,
+		},
+		{
+			input:    "prefix %HOSTNAME% suffix",
+			expected: nil,
+		},
+		{
+			input:    "%DOWNSTREAM_PEER_CERT_V_END(%b %d %H:%M:%S %Y %Z)%",
+			expected: nil,
+		},
+		{
+			input: "%DYNAMIC_METADATA(com.test.my_filter)%",
+		},
+		{
+			input:    "%START_TIME%%",
+			expected: errors.New("header value configuration %START_TIME%% is invalid"),
+		},
+		{
+			input:    "abc%123",
+			expected: errors.New("header value configuration abc%123 is invalid"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			got := ValidateHTTPHeaderValue(tc.input)
+			if tc.expected == nil {
+				assert.NoError(t, got)
+			} else {
+				assert.Error(t, got)
+			}
+		})
+	}
 }

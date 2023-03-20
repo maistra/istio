@@ -15,6 +15,8 @@
 package controller
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
@@ -24,7 +26,9 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	kubelib "istio.io/istio/pkg/kube"
 	filter "istio.io/istio/pkg/kube/namespace"
+	"istio.io/istio/pkg/queue"
 	"istio.io/istio/pkg/test"
+	"istio.io/istio/pkg/test/util/assert"
 )
 
 const (
@@ -40,12 +44,14 @@ type FakeXdsUpdater struct {
 var _ model.XDSUpdater = &FakeXdsUpdater{}
 
 func (fx *FakeXdsUpdater) ConfigUpdate(req *model.PushRequest) {
-	var id string
+	names := []string{}
 	if req != nil && len(req.ConfigsUpdated) > 0 {
 		for key := range req.ConfigsUpdated {
-			id = key.Name
+			names = append(names, key.Name)
 		}
 	}
+	sort.Strings(names)
+	id := strings.Join(names, ",")
 	select {
 	case fx.Events <- FakeXdsEvent{Type: "xds", ID: id}:
 	default:
@@ -115,31 +121,17 @@ func (fx *FakeXdsUpdater) RemoveShard(shardKey model.ShardKey) {
 }
 
 func (fx *FakeXdsUpdater) WaitOrFail(t test.Failer, et string) *FakeXdsEvent {
-	return fx.WaitForDurationOrFail(t, et, 5*time.Second)
-}
-
-func (fx *FakeXdsUpdater) WaitForDurationOrFail(t test.Failer, et string, d time.Duration) *FakeXdsEvent {
-	ev := fx.WaitForDuration(et, d)
-	if ev == nil {
-		t.Fatalf("Timeout creating %q after %s", et, d)
-	}
-	return ev
-}
-
-func (fx *FakeXdsUpdater) Wait(et string) *FakeXdsEvent {
-	return fx.WaitForDuration(et, 5*time.Second)
-}
-
-func (fx *FakeXdsUpdater) WaitForDuration(et string, d time.Duration) *FakeXdsEvent {
+	t.Helper()
 	for {
 		select {
 		case e := <-fx.Events:
 			if e.Type == et {
 				return &e
 			}
+			log.Infof("skipping event %q want %q", e.Type, et)
 			continue
-		case <-time.After(d):
-			return nil
+		case <-time.After(time.Second * 5):
+			t.Fatalf("timed out waiting for %v", et)
 		}
 	}
 }
@@ -152,6 +144,23 @@ func (fx *FakeXdsUpdater) Clear() {
 		case <-fx.Events:
 		default:
 			wait = false
+		}
+	}
+}
+
+// AssertEmpty ensures there are no events in the channel
+func (fx *FakeXdsUpdater) AssertEmpty(t test.Failer, dur time.Duration) {
+	if dur == 0 {
+		select {
+		case e := <-fx.Events:
+			t.Fatalf("got unexpected event %+v", e)
+		default:
+		}
+	} else {
+		select {
+		case e := <-fx.Events:
+			t.Fatalf("got unexpected event %+v", e)
+		case <-time.After(dur):
 		}
 	}
 }
@@ -169,6 +178,7 @@ type FakeControllerOptions struct {
 	DiscoveryNamespacesFilter filter.DiscoveryNamespacesFilter
 	Stop                      chan struct{}
 	SkipRun                   bool
+	ConfigController          model.ConfigStoreController
 }
 
 type FakeController struct {
@@ -204,12 +214,22 @@ func NewFakeControllerWithOptions(t test.Failer, opts FakeControllerOptions) (*F
 		ClusterID:                 opts.ClusterID,
 		DiscoveryNamespacesFilter: opts.DiscoveryNamespacesFilter,
 		MeshServiceController:     meshServiceController,
+		ConfigController:          opts.ConfigController,
 	}
 	c := NewController(opts.Client, options)
 	meshServiceController.AddRegistry(c)
 
 	if opts.ServiceHandler != nil {
 		c.AppendServiceHandler(opts.ServiceHandler)
+	}
+
+	t.Cleanup(func() {
+		c.client.Shutdown()
+	})
+	if !opts.SkipRun {
+		t.Cleanup(func() {
+			assert.NoError(t, queue.WaitForClose(c.queue, time.Second*5))
+		})
 	}
 	c.stop = opts.Stop
 	if c.stop == nil {

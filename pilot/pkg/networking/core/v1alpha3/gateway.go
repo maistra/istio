@@ -503,12 +503,10 @@ func (configgen *ConfigGeneratorImpl) buildGatewayHTTPRouteConfig(node *model.Pr
 
 	routeCfg := &route.RouteConfiguration{
 		// Retain the routeName as its used by EnvoyFilter patching logic
-		Name:             routeName,
-		VirtualHosts:     virtualHosts,
-		ValidateClusters: proto.BoolFalse,
-	}
-	if GatewayIgnorePort(node) {
-		routeCfg.IgnorePortInHostMatching = true
+		Name:                     routeName,
+		VirtualHosts:             virtualHosts,
+		ValidateClusters:         proto.BoolFalse,
+		IgnorePortInHostMatching: !node.IsProxylessGrpc(),
 	}
 
 	return routeCfg
@@ -630,7 +628,7 @@ func (configgen *ConfigGeneratorImpl) createGatewayHTTPFilterChainOpts(node *mod
 		// and that no two non-HTTPS servers can be on same port or share port names.
 		// Validation is done per gateway and also during merging
 		sniHosts:   node.MergedGateway.TLSServerInfo[server].SNIHosts,
-		tlsContext: buildGatewayListenerTLSContext(server, node, transportProtocol),
+		tlsContext: buildGatewayListenerTLSContext(push.Mesh, server, node, transportProtocol),
 		httpOpts: &httpListenerOpts{
 			rds:               routeName,
 			useRemoteAddress:  true,
@@ -714,7 +712,7 @@ func buildGatewayConnectionManager(proxyConfig *meshconfig.ProxyConfig, node *mo
 //
 // Note that ISTIO_MUTUAL TLS mode and ingressSds should not be used simultaneously on the same ingress gateway.
 func buildGatewayListenerTLSContext(
-	server *networking.Server, proxy *model.Proxy, transportProtocol istionetworking.TransportProtocol,
+	mesh *meshconfig.MeshConfig, server *networking.Server, proxy *model.Proxy, transportProtocol istionetworking.TransportProtocol,
 ) *tls.DownstreamTlsContext {
 	// Server.TLS cannot be nil or passthrough. But as a safety guard, return nil
 	if server.Tls == nil || gateway.IsPassThroughServer(server) {
@@ -722,7 +720,7 @@ func buildGatewayListenerTLSContext(
 	}
 
 	server.Tls.CipherSuites = security.FilterCipherSuites(server.Tls.CipherSuites)
-	return BuildListenerTLSContext(server.Tls, proxy, transportProtocol, gateway.IsTCPServerWithTLSTermination(server))
+	return BuildListenerTLSContext(server.Tls, proxy, mesh, transportProtocol, gateway.IsTCPServerWithTLSTermination(server))
 }
 
 func convertTLSProtocol(in networking.ServerTLSSettings_TLSProtocol) tls.TlsParameters_TlsProtocol {
@@ -762,7 +760,7 @@ func (configgen *ConfigGeneratorImpl) createGatewayTCPFilterChainOpts(
 			return []*filterChainOpts{
 				{
 					sniHosts:       node.MergedGateway.TLSServerInfo[server].SNIHosts,
-					tlsContext:     buildGatewayListenerTLSContext(server, node, istionetworking.TransportProtocolTCP),
+					tlsContext:     buildGatewayListenerTLSContext(push.Mesh, server, node, istionetworking.TransportProtocolTCP),
 					networkFilters: filters,
 				},
 			}
@@ -1053,7 +1051,7 @@ func isGatewayMatch(gateway string, gatewayNames []string) bool {
 
 func buildGatewayVirtualHostDomains(node *model.Proxy, hostname string, port int) []string {
 	domains := []string{hostname}
-	if features.StripHostPort || hostname == "*" || GatewayIgnorePort(node) {
+	if features.StripHostPort || hostname == "*" || !node.IsProxylessGrpc() {
 		return domains
 	}
 

@@ -43,7 +43,7 @@ import (
 	"istio.io/istio/pilot/pkg/util/protoconv"
 	v3 "istio.io/istio/pilot/pkg/xds/v3"
 	"istio.io/istio/pkg/config"
-	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/resource"
 	"istio.io/istio/pkg/config/xds"
 	"istio.io/istio/pkg/network"
 	"istio.io/istio/pkg/security"
@@ -333,12 +333,12 @@ func (s *DiscoveryServer) cachez(w http.ResponseWriter, req *http.Request) {
 	}
 	snapshot := s.Cache.Snapshot()
 	resources := make(map[string][]string, len(snapshot)) // Key is typeUrl and value is resource names.
-	for key, resource := range snapshot {
+	for _, resource := range snapshot {
 		if resource == nil {
 			continue
 		}
 		resourceType := resource.Resource.TypeUrl
-		resources[resourceType] = append(resources[resourceType], resource.Name+"/"+key)
+		resources[resourceType] = append(resources[resourceType], resource.Name)
 	}
 	writeJSON(w, resources, req)
 }
@@ -379,11 +379,13 @@ func (s *DiscoveryServer) endpointz(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, resp, req)
 }
 
+const DistributionTrackingDisabledMessage = "Pilot Version tracking is disabled. It may be enabled by setting the " +
+	"PILOT_ENABLE_CONFIG_DISTRIBUTION_TRACKING environment variable to true."
+
 func (s *DiscoveryServer) distributedVersions(w http.ResponseWriter, req *http.Request) {
 	if !features.EnableDistributionTracking {
 		w.WriteHeader(http.StatusConflict)
-		_, _ = fmt.Fprint(w, "Pilot Version tracking is disabled.  Please set the "+
-			"PILOT_ENABLE_CONFIG_DISTRIBUTION_TRACKING environment variable to true to enable.")
+		_, _ = fmt.Fprint(w, DistributionTrackingDisabledMessage)
 		return
 	}
 	if resourceID := req.URL.Query().Get("resource"); resourceID != "" {
@@ -461,8 +463,8 @@ func (s *DiscoveryServer) configz(w http.ResponseWriter, req *http.Request) {
 	if s.Env == nil || s.Env.ConfigStore == nil {
 		return
 	}
-	s.Env.ConfigStore.Schemas().ForEach(func(schema collection.Schema) bool {
-		cfg, _ := s.Env.ConfigStore.List(schema.Resource().GroupVersionKind(), "")
+	s.Env.ConfigStore.Schemas().ForEach(func(schema resource.Schema) bool {
+		cfg := s.Env.ConfigStore.List(schema.GroupVersionKind(), "")
 		for _, c := range cfg {
 			configs = append(configs, kubernetesConfig{c})
 		}
@@ -486,8 +488,8 @@ func (s *DiscoveryServer) resourcez(w http.ResponseWriter, req *http.Request) {
 	schemas := make([]config.GroupVersionKind, 0)
 
 	if s.Env != nil && s.Env.ConfigStore != nil {
-		s.Env.Schemas().ForEach(func(schema collection.Schema) bool {
-			schemas = append(schemas, schema.Resource().GroupVersionKind())
+		s.Env.Schemas().ForEach(func(schema resource.Schema) bool {
+			schemas = append(schemas, schema.GroupVersionKind())
 			return false
 		})
 	}
@@ -619,6 +621,18 @@ func (s *DiscoveryServer) ConfigDump(w http.ResponseWriter, req *http.Request) {
 	}
 	if ts := s.getResourceTypes(req); len(ts) != 0 {
 		resources := s.getConfigDumpByResourceType(con, nil, ts)
+		configDump := &admin.ConfigDump{}
+		for _, resource := range resources {
+			for _, rr := range resource {
+				configDump.Configs = append(configDump.Configs, rr.Resource)
+			}
+		}
+		writeJSON(w, configDump, req)
+		return
+	}
+
+	if con.proxy.IsZTunnel() {
+		resources := s.getConfigDumpByResourceType(con, nil, []string{v3.WorkloadType})
 		configDump := &admin.ConfigDump{}
 		for _, resource := range resources {
 			for _, rr := range resource {

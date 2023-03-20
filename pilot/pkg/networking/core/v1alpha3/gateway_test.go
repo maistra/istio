@@ -56,6 +56,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 		server            *networking.Server
 		result            *auth.DownstreamTlsContext
 		transportProtocol istionetworking.TransportProtocol
+		mesh              *meshconfig.MeshConfig
 	}{
 		{
 			name: "mesh SDS enabled, tls mode ISTIO_MUTUAL",
@@ -679,6 +680,175 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 			},
 		},
 		{
+			name: "ecdh curves specified in mesh config with tls SIMPLE",
+			server: &networking.Server{
+				Hosts: []string{"httpbin.example.com", "bookinfo.example.com"},
+				Port: &networking.Port{
+					Protocol: string(protocol.HTTPS),
+				},
+				Tls: &networking.ServerTLSSettings{
+					Mode:              networking.ServerTLSSettings_SIMPLE,
+					ServerCertificate: "server-cert.crt",
+					PrivateKey:        "private-key.key",
+				},
+			},
+			mesh: &meshconfig.MeshConfig{
+				TlsDefaults: &meshconfig.MeshConfig_TLSConfig{
+					EcdhCurves: []string{"P-256"},
+				},
+			},
+			result: &auth.DownstreamTlsContext{
+				CommonTlsContext: &auth.CommonTlsContext{
+					AlpnProtocols: util.ALPNHttp,
+					TlsParams: &auth.TlsParameters{
+						EcdhCurves: []string{"P-256"},
+					},
+					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
+						{
+							Name: "file-cert:server-cert.crt~private-key.key",
+							SdsConfig: &core.ConfigSource{
+								ResourceApiVersion: core.ApiVersion_V3,
+								ConfigSourceSpecifier: &core.ConfigSource_ApiConfigSource{
+									ApiConfigSource: &core.ApiConfigSource{
+										ApiType:                   core.ApiConfigSource_GRPC,
+										SetNodeOnFirstMessageOnly: true,
+										TransportApiVersion:       core.ApiVersion_V3,
+										GrpcServices: []*core.GrpcService{
+											{
+												TargetSpecifier: &core.GrpcService_EnvoyGrpc_{
+													EnvoyGrpc: &core.GrpcService_EnvoyGrpc{ClusterName: model.SDSClusterName},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				RequireClientCertificate: proto.BoolFalse,
+			},
+		},
+		{
+			name: "ecdh curves specified in mesh config with, tls mode ISTIO_MUTUAL",
+			server: &networking.Server{
+				Hosts: []string{"httpbin.example.com"},
+				Port: &networking.Port{
+					Protocol: string(protocol.HTTPS),
+				},
+				Tls: &networking.ServerTLSSettings{
+					Mode: networking.ServerTLSSettings_ISTIO_MUTUAL,
+				},
+			},
+			mesh: &meshconfig.MeshConfig{
+				TlsDefaults: &meshconfig.MeshConfig_TLSConfig{
+					EcdhCurves: []string{"P-256"},
+				},
+			},
+			result: &auth.DownstreamTlsContext{
+				CommonTlsContext: &auth.CommonTlsContext{
+					AlpnProtocols: util.ALPNHttp,
+					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
+						{
+							Name: "default",
+							SdsConfig: &core.ConfigSource{
+								InitialFetchTimeout: durationpb.New(time.Second * 0),
+								ResourceApiVersion:  core.ApiVersion_V3,
+								ConfigSourceSpecifier: &core.ConfigSource_ApiConfigSource{
+									ApiConfigSource: &core.ApiConfigSource{
+										ApiType:                   core.ApiConfigSource_GRPC,
+										SetNodeOnFirstMessageOnly: true,
+										TransportApiVersion:       core.ApiVersion_V3,
+										GrpcServices: []*core.GrpcService{
+											{
+												TargetSpecifier: &core.GrpcService_EnvoyGrpc_{
+													EnvoyGrpc: &core.GrpcService_EnvoyGrpc{ClusterName: model.SDSClusterName},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ValidationContextType: &auth.CommonTlsContext_CombinedValidationContext{
+						CombinedValidationContext: &auth.CommonTlsContext_CombinedCertificateValidationContext{
+							DefaultValidationContext: &auth.CertificateValidationContext{},
+							ValidationContextSdsSecretConfig: &auth.SdsSecretConfig{
+								Name: "ROOTCA",
+								SdsConfig: &core.ConfigSource{
+									InitialFetchTimeout: durationpb.New(time.Second * 0),
+									ResourceApiVersion:  core.ApiVersion_V3,
+									ConfigSourceSpecifier: &core.ConfigSource_ApiConfigSource{
+										ApiConfigSource: &core.ApiConfigSource{
+											ApiType:                   core.ApiConfigSource_GRPC,
+											SetNodeOnFirstMessageOnly: true,
+											TransportApiVersion:       core.ApiVersion_V3,
+											GrpcServices: []*core.GrpcService{
+												{
+													TargetSpecifier: &core.GrpcService_EnvoyGrpc_{
+														EnvoyGrpc: &core.GrpcService_EnvoyGrpc{ClusterName: model.SDSClusterName},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				RequireClientCertificate: proto.BoolTrue,
+			},
+		},
+		{
+			name: "ecdh curves specified in mesh config with tls MUTUAL",
+			server: &networking.Server{
+				Hosts: []string{"httpbin.example.com", "bookinfo.example.com"},
+				Port: &networking.Port{
+					Protocol: string(protocol.HTTPS),
+				},
+				Tls: &networking.ServerTLSSettings{
+					Mode:              networking.ServerTLSSettings_MUTUAL,
+					CredentialName:    "ingress-sds-resource-name",
+					ServerCertificate: "server-cert.crt",
+					PrivateKey:        "private-key.key",
+					SubjectAltNames:   []string{"subject.name.a.com", "subject.name.b.com"},
+				},
+			},
+			mesh: &meshconfig.MeshConfig{
+				TlsDefaults: &meshconfig.MeshConfig_TLSConfig{
+					EcdhCurves: []string{"P-256", "P-384"},
+				},
+			},
+			result: &auth.DownstreamTlsContext{
+				CommonTlsContext: &auth.CommonTlsContext{
+					TlsParams: &auth.TlsParameters{
+						EcdhCurves: []string{"P-256", "P-384"},
+					},
+					AlpnProtocols: util.ALPNHttp,
+					TlsCertificateSdsSecretConfigs: []*auth.SdsSecretConfig{
+						{
+							Name:      "kubernetes://ingress-sds-resource-name",
+							SdsConfig: model.SDSAdsConfig,
+						},
+					},
+					ValidationContextType: &auth.CommonTlsContext_CombinedValidationContext{
+						CombinedValidationContext: &auth.CommonTlsContext_CombinedCertificateValidationContext{
+							DefaultValidationContext: &auth.CertificateValidationContext{
+								MatchSubjectAltNames: util.StringToExactMatch([]string{"subject.name.a.com", "subject.name.b.com"}),
+							},
+							ValidationContextSdsSecretConfig: &auth.SdsSecretConfig{
+								Name:      "kubernetes://ingress-sds-resource-name-cacert",
+								SdsConfig: model.SDSAdsConfig,
+							},
+						},
+					},
+				},
+				RequireClientCertificate: proto.BoolTrue,
+			},
+		},
+		{
 			// tcp server is non-istio mtls, no istio-peer-exchange in the alpns
 			name: "tcp server with terminating (non-istio)mutual tls",
 			server: &networking.Server{
@@ -848,7 +1018,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := buildGatewayListenerTLSContext(tc.server, &pilot_model.Proxy{
+			ret := buildGatewayListenerTLSContext(tc.mesh, tc.server, &pilot_model.Proxy{
 				Metadata: &pilot_model.NodeMetadata{},
 			}, tc.transportProtocol)
 			if diff := cmp.Diff(tc.result, ret, protocmp.Transform()); diff != "" {
@@ -859,6 +1029,7 @@ func TestBuildGatewayListenerTlsContext(t *testing.T) {
 }
 
 func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
+	cg := NewConfigGenTest(t, TestOptions{})
 	var stripPortMode *hcm.HttpConnectionManager_StripAnyHostPort
 	testCases := []struct {
 		name              string
@@ -1509,7 +1680,7 @@ func TestCreateGatewayHTTPFilterChainOpts(t *testing.T) {
 				tc.server: {SNIHosts: pilot_model.GetSNIHostsForServer(tc.server)},
 			}}
 			ret := cgi.createGatewayHTTPFilterChainOpts(tc.node, tc.server.Port, tc.server,
-				tc.routeName, tc.proxyConfig, tc.transportProtocol, nil)
+				tc.routeName, tc.proxyConfig, tc.transportProtocol, cg.PushContext())
 			if diff := cmp.Diff(tc.result.tlsContext, ret.tlsContext, protocmp.Transform()); diff != "" {
 				t.Errorf("got diff in tls context: %v", diff)
 			}
@@ -1729,7 +1900,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 		virtualServices                   []config.Config
 		gateways                          []config.Config
 		routeName                         string
-		expectedVirtualHostsLegacy        map[string][]string
 		expectedVirtualHosts              map[string][]string
 		expectedVirtualHostsHostPortStrip map[string][]string
 		expectedHTTPRoutes                map[string]int
@@ -1740,11 +1910,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{},
 			gateways:        []config.Config{httpGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"blackhole:80": {
-					"*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"blackhole:80": {
 					"*",
@@ -1762,11 +1927,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService},
 			gateways:        []config.Config{httpRedirectGatewayWithoutVS},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1784,11 +1944,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService},
 			gateways:        []config.Config{httpRedirectGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1805,11 +1960,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService, virtualServiceCopy},
 			gateways:        []config.Config{httpRedirectGateway, httpGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1826,11 +1976,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService, virtualServiceCopy},
 			gateways:        []config.Config{httpGateway, httpRedirectGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1847,11 +1992,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService, virtualServiceCopy},
 			gateways:        []config.Config{httpGateway, httpRedirectGatewayWithoutVS},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1868,11 +2008,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService, virtualServiceCopy},
 			gateways:        []config.Config{httpRedirectGatewayWithoutVS, httpGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1889,11 +2024,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService},
 			gateways:        []config.Config{httpGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1909,11 +2039,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService, virtualServiceCopy},
 			gateways:        []config.Config{httpGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1929,11 +2054,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualService, virtualServiceWildcard},
 			gateways:        []config.Config{httpGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {
-					"example.org", "example.org:*",
-				},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {
 					"example.org",
@@ -1949,9 +2069,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualServiceWildcard},
 			gateways:        []config.Config{httpGatewayWildcard},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"*.org:80": {"*.org", "*.org:80"},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"*.org:80": {"*.org"},
 			},
@@ -1965,9 +2082,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualServiceHTTPS},
 			gateways:        []config.Config{httpsGateway},
 			routeName:       "https.443.https.gateway-https.default",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:443": {"example.org", "example.org:*"},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:443": {"example.org"},
 			},
@@ -1981,9 +2095,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualServiceHTTPS},
 			gateways:        []config.Config{httpsGateway},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {"example.org", "example.org:*"},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {"example.org"},
 			},
@@ -1999,9 +2110,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualServiceHTTPS},
 			gateways:        []config.Config{httpsGatewayRedirect},
 			routeName:       "https.443.https.gateway-https.default",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:443": {"example.org", "example.org:*"},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:443": {"example.org"},
 			},
@@ -2016,9 +2124,6 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 			virtualServices: []config.Config{virtualServiceHTTPS},
 			gateways:        []config.Config{httpsGatewayRedirect},
 			routeName:       "http.80",
-			expectedVirtualHostsLegacy: map[string][]string{
-				"example.org:80": {"example.org", "example.org:*"},
-			},
 			expectedVirtualHosts: map[string][]string{
 				"example.org:80": {"example.org"},
 			},
@@ -2062,11 +2167,7 @@ func TestGatewayHTTPRouteConfig(t *testing.T) {
 
 					if features.StripHostPort {
 						if !reflect.DeepEqual(tt.expectedVirtualHostsHostPortStrip, vh) {
-							t.Errorf("got unexpected virtual hosts. Expected: %v, Got: %v", tt.expectedVirtualHostsHostPortStrip, vh)
-						}
-					} else if version == "1.14.0" {
-						if !reflect.DeepEqual(tt.expectedVirtualHostsLegacy, vh) {
-							t.Errorf("got unexpected virtual hosts. Expected: %v, Got: %v", tt.expectedVirtualHosts, vh)
+							t.Errorf("got unexpected virtual hosts with strip port. Expected: %v, Got: %v", tt.expectedVirtualHostsHostPortStrip, vh)
 						}
 					} else {
 						if !reflect.DeepEqual(tt.expectedVirtualHosts, vh) {
@@ -2420,6 +2521,227 @@ func TestBuildGatewayListeners(t *testing.T) {
 				},
 			},
 			[]string{"0.0.0.0_443", "0.0.0.0_9443"},
+		},
+		{
+			"gateway with multiple TCP/HTTPS servers with bind",
+			&pilot_model.Proxy{},
+			[]config.Config{
+				{
+					Meta: config.Meta{Name: "gateway1", Namespace: "testns", GroupVersionKind: gvk.Gateway},
+					Spec: &networking.Gateway{
+						Servers: []*networking.Server{
+							{
+								Port:  &networking.Port{Name: "tcp", Number: 8000, Protocol: "TCP"},
+								Hosts: []string{"*"},
+								Bind:  "10.0.0.1",
+							},
+						},
+					},
+				},
+				{
+					Meta: config.Meta{Name: "gateway2", Namespace: "testns", GroupVersionKind: gvk.Gateway},
+					Spec: &networking.Gateway{
+						Servers: []*networking.Server{
+							{
+								Port:  &networking.Port{Name: "tcp", Number: 8000, Protocol: "TCP"},
+								Hosts: []string{"*"},
+								Bind:  "10.0.0.2",
+							},
+						},
+					},
+				},
+				{
+					Meta: config.Meta{Name: "gateway3", Namespace: "testns", GroupVersionKind: gvk.Gateway},
+					Spec: &networking.Gateway{
+						Servers: []*networking.Server{
+							{
+								Port:  &networking.Port{Name: "https", Number: 8000, Protocol: "HTTPS"},
+								Hosts: []string{"*"},
+								Bind:  "10.0.0.3",
+								Tls:   &networking.ServerTLSSettings{CredentialName: "test", Mode: networking.ServerTLSSettings_SIMPLE},
+							},
+						},
+					},
+				},
+			},
+			[]config.Config{
+				{
+					Meta: config.Meta{Name: uuid.NewString(), Namespace: uuid.NewString(), GroupVersionKind: gvk.VirtualService},
+					Spec: &networking.VirtualService{
+						Gateways: []string{"testns/gateway1"},
+						Hosts:    []string{"*"},
+						Tcp: []*networking.TCPRoute{
+							{
+								Match: []*networking.L4MatchAttributes{
+									{
+										Port: 8000,
+									},
+								},
+								Route: []*networking.RouteDestination{
+									{
+										Destination: &networking.Destination{
+											Host: "foo.com",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Meta: config.Meta{Name: uuid.NewString(), Namespace: uuid.NewString(), GroupVersionKind: gvk.VirtualService},
+					Spec: &networking.VirtualService{
+						Gateways: []string{"testns/gateway2"},
+						Hosts:    []string{"*"},
+						Tcp: []*networking.TCPRoute{
+							{
+								Match: []*networking.L4MatchAttributes{
+									{
+										Port: 8000,
+									},
+								},
+								Route: []*networking.RouteDestination{
+									{
+										Destination: &networking.Destination{
+											Host: "foo.com",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Meta: config.Meta{Name: uuid.NewString(), Namespace: uuid.NewString(), GroupVersionKind: gvk.VirtualService},
+					Spec: &networking.VirtualService{
+						Gateways: []string{"testns/gateway3"},
+						Hosts:    []string{"*"},
+						Http: []*networking.HTTPRoute{
+							{
+								Route: []*networking.HTTPRouteDestination{
+									{
+										Destination: &networking.Destination{
+											Host: "grpc.example.org",
+											Port: &networking.PortSelector{
+												Number: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			[]string{"10.0.0.1_8000", "10.0.0.2_8000", "10.0.0.3_8000"},
+		},
+		{
+			"gateway with HTTPS/GRPC servers with bind",
+			&pilot_model.Proxy{},
+			[]config.Config{
+				{
+					Meta: config.Meta{Name: "gateway1", Namespace: "testns", GroupVersionKind: gvk.Gateway},
+					Spec: &networking.Gateway{
+						Servers: []*networking.Server{
+							{
+								Port:  &networking.Port{Name: "https", Number: 443, Protocol: "HTTPS"},
+								Hosts: []string{"*"},
+								Bind:  "10.0.0.1",
+								Tls:   &networking.ServerTLSSettings{CredentialName: "test", Mode: networking.ServerTLSSettings_SIMPLE},
+							},
+						},
+					},
+				},
+				{
+					Meta: config.Meta{Name: "gateway2", Namespace: "testns", GroupVersionKind: gvk.Gateway},
+					Spec: &networking.Gateway{
+						Servers: []*networking.Server{
+							{
+								Port:  &networking.Port{Name: "grpc", Number: 443, Protocol: "GRPC"},
+								Bind:  "10.0.0.2",
+								Hosts: []string{"*"},
+							},
+						},
+					},
+				},
+				{
+					Meta: config.Meta{Name: "gateway3", Namespace: "testns", GroupVersionKind: gvk.Gateway},
+					Spec: &networking.Gateway{
+						Servers: []*networking.Server{
+							{
+								Port:  &networking.Port{Name: "grpc", Number: 443, Protocol: "GRPC"},
+								Hosts: []string{"grpc.example.org"},
+							},
+						},
+					},
+				},
+			},
+			[]config.Config{
+				{
+					Meta: config.Meta{Name: uuid.NewString(), Namespace: uuid.NewString(), GroupVersionKind: gvk.VirtualService},
+					Spec: &networking.VirtualService{
+						Gateways: []string{"testns/gateway1"},
+						Hosts:    []string{"*"},
+						Http: []*networking.HTTPRoute{
+							{
+								Route: []*networking.HTTPRouteDestination{
+									{
+										Destination: &networking.Destination{
+											Host: "example.org",
+											Port: &networking.PortSelector{
+												Number: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Meta: config.Meta{Name: uuid.NewString(), Namespace: uuid.NewString(), GroupVersionKind: gvk.VirtualService},
+					Spec: &networking.VirtualService{
+						Gateways: []string{"testns/gateway2"},
+						Hosts:    []string{"*"},
+						Http: []*networking.HTTPRoute{
+							{
+								Route: []*networking.HTTPRouteDestination{
+									{
+										Destination: &networking.Destination{
+											Host: "grpc.example.org",
+											Port: &networking.PortSelector{
+												Number: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Meta: config.Meta{Name: uuid.NewString(), Namespace: uuid.NewString(), GroupVersionKind: gvk.VirtualService},
+					Spec: &networking.VirtualService{
+						Gateways: []string{"testns/gateway3"},
+						Hosts:    []string{"grpc.example.org"},
+						Http: []*networking.HTTPRoute{
+							{
+								Route: []*networking.HTTPRouteDestination{
+									{
+										Destination: &networking.Destination{
+											Host: "grpc.example.org",
+											Port: &networking.PortSelector{
+												Number: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			[]string{"10.0.0.1_443", "10.0.0.2_443", "0.0.0.0_443"},
 		},
 		{
 			"gateway with multiple HTTPS servers with bind and same host",

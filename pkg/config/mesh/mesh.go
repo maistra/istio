@@ -45,7 +45,6 @@ func DefaultProxyConfig() *meshconfig.ProxyConfig {
 		DrainDuration:            durationpb.New(45 * time.Second),
 		TerminationDrainDuration: durationpb.New(5 * time.Second),
 		ProxyAdminPort:           15000,
-		Concurrency:              &wrappers.Int32Value{Value: 2},
 		ControlPlaneAuthPolicy:   meshconfig.AuthenticationPolicy_MUTUAL_TLS,
 		DiscoveryAddress:         "istiod.istio-system.svc:15012",
 		Tracing: &meshconfig.Tracing{
@@ -88,16 +87,17 @@ func DefaultMeshConfig() *meshconfig.MeshConfig {
 		IngressClass:                "istio",
 		TrustDomain:                 constants.DefaultClusterLocalDomain,
 		TrustDomainAliases:          []string{},
-		EnableAutoMtls:              &wrappers.BoolValue{Value: true},
+		EnableAutoMtls:              wrappers.Bool(true),
 		OutboundTrafficPolicy:       &meshconfig.MeshConfig_OutboundTrafficPolicy{Mode: meshconfig.MeshConfig_OutboundTrafficPolicy_ALLOW_ANY},
 		LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{
-			Enabled: &wrappers.BoolValue{Value: true},
+			Enabled: wrappers.Bool(true),
 		},
 		Certificates:  []*meshconfig.Certificate{},
 		DefaultConfig: proxyConfig,
 
 		RootNamespace:                  constants.IstioSystemNamespace,
 		ProxyListenPort:                15001,
+		ProxyInboundListenPort:         15006,
 		ConnectTimeout:                 durationpb.New(10 * time.Second),
 		DefaultServiceExportTo:         []string{"*"},
 		DefaultVirtualServiceExportTo:  []string{"*"},
@@ -110,7 +110,8 @@ func DefaultMeshConfig() *meshconfig.MeshConfig {
 		DnsRefreshRate:  durationpb.New(60 * time.Second),
 		ServiceSettings: make([]*meshconfig.MeshConfig_ServiceSettings, 0),
 
-		DefaultProviders: &meshconfig.MeshConfig_DefaultProviders{},
+		EnablePrometheusMerge: wrappers.Bool(true),
+		DefaultProviders:      &meshconfig.MeshConfig_DefaultProviders{},
 		ExtensionProviders: []*meshconfig.MeshConfig_ExtensionProvider{
 			{
 				Name: "prometheus",

@@ -424,11 +424,7 @@ func (c *Controller) periodicWorkloadEntryCleanup(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-ticker.C:
-			wles, err := c.store.List(gvk.WorkloadEntry, metav1.NamespaceAll)
-			if err != nil {
-				log.Warnf("error listing WorkloadEntry for cleanup: %v", err)
-				continue
-			}
+			wles := c.store.List(gvk.WorkloadEntry, metav1.NamespaceAll)
 			for _, wle := range wles {
 				wle := wle
 				if c.shouldCleanupEntry(wle) {
@@ -612,5 +608,11 @@ func workloadEntryFromGroup(name string, proxy *model.Proxy, groupCfg *config.Co
 }
 
 func makeProxyKey(proxy *model.Proxy) string {
-	return string(proxy.Metadata.Network) + proxy.IPAddresses[0]
+	key := strings.Join([]string{
+		string(proxy.Metadata.Network),
+		proxy.IPAddresses[0],
+		proxy.Metadata.AutoRegisterGroup,
+		proxy.Metadata.Namespace,
+	}, "~")
+	return key
 }

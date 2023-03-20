@@ -37,14 +37,16 @@ import (
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/pkg/autoregistration"
 	"istio.io/istio/pilot/pkg/config/kube/gateway"
-	"istio.io/istio/pilot/pkg/config/kube/ingress"
+	ingress "istio.io/istio/pilot/pkg/config/kube/ingress"
+	"istio.io/istio/pilot/pkg/config/memory"
 	kubesecrets "istio.io/istio/pilot/pkg/credentials/kube"
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pilot/pkg/networking/apigen"
 	"istio.io/istio/pilot/pkg/networking/core/v1alpha3"
 	"istio.io/istio/pilot/pkg/serviceregistry"
 	kube "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
-	"istio.io/istio/pilot/pkg/serviceregistry/memory"
+	memregistry "istio.io/istio/pilot/pkg/serviceregistry/memory"
 	v3 "istio.io/istio/pilot/pkg/xds/v3"
 	"istio.io/istio/pilot/test/xdstest"
 	"istio.io/istio/pkg/adsc"
@@ -52,6 +54,7 @@ import (
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/collections"
+	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/schema/kind"
 	"istio.io/istio/pkg/keepalive"
 	kubelib "istio.io/istio/pkg/kube"
@@ -87,7 +90,7 @@ type FakeOptions struct {
 	NetworksWatcher mesh.NetworksWatcher
 
 	// Callback to modify the server before it is started
-	DiscoveryServerModifier func(s *DiscoveryServer, m *memory.ServiceDiscovery)
+	DiscoveryServerModifier func(s *DiscoveryServer, m *memregistry.ServiceDiscovery)
 	// Callback to modify the kube client before it is started
 	KubeClientModifier func(c kubelib.Client)
 
@@ -115,12 +118,10 @@ type FakeDiscoveryServer struct {
 	kubeClient   kubelib.Client
 	KubeRegistry *kube.FakeController
 	XdsUpdater   model.XDSUpdater
-	MemRegistry  *memory.ServiceDiscovery
+	MemRegistry  *memregistry.ServiceDiscovery
 }
 
 func NewFakeDiscoveryServer(t test.Failer, opts FakeOptions) *FakeDiscoveryServer {
-	stop := test.NewStop(t)
-
 	m := opts.MeshConfig
 	if m == nil {
 		m = mesh.DefaultMeshConfig()
@@ -128,6 +129,7 @@ func NewFakeDiscoveryServer(t test.Failer, opts FakeOptions) *FakeDiscoveryServe
 
 	// Init with a dummy environment, since we have a circular dependency with the env creation.
 	s := NewDiscoveryServer(model.NewEnvironment(), "pilot-123", "", map[string]string{})
+	s.InitGenerators(s.Env, "istio-system", nil)
 	t.Cleanup(func() {
 		s.JwtKeyResolver.Close()
 		s.pushQueue.ShutDown()
@@ -166,38 +168,49 @@ func NewFakeDiscoveryServer(t test.Failer, opts FakeOptions) *FakeDiscoveryServe
 		}
 	}
 	creds := kubesecrets.NewMulticluster(opts.DefaultClusterName)
+	s.Generators[v3.SecretType] = NewSecretGen(creds, s.Cache, opts.DefaultClusterName, nil)
+	s.Generators[v3.ExtensionConfigurationType].(*EcdsGenerator).SetCredController(creds)
+
+	configController := memory.NewSyncController(memory.MakeSkipValidation(collections.PilotGatewayAPI))
 	for k8sCluster, objs := range k8sObjects {
 		client := kubelib.NewFakeClientWithVersion(opts.KubernetesVersion, objs...)
 		if opts.KubeClientModifier != nil {
 			opts.KubeClientModifier(client)
 		}
+		k8sConfig := configController
+		if k8sCluster != opts.DefaultClusterName {
+			k8sConfig = nil
+		}
 		k8s, _ := kube.NewFakeControllerWithOptions(t, kube.FakeControllerOptions{
-			ServiceHandler:  serviceHandler,
-			Client:          client,
-			ClusterID:       k8sCluster,
-			DomainSuffix:    "cluster.local",
-			XDSUpdater:      xdsUpdater,
-			NetworksWatcher: opts.NetworksWatcher,
-			Mode:            opts.KubernetesEndpointMode,
-			Stop:            stop,
-			SkipRun:         true,
+			ServiceHandler:   serviceHandler,
+			Client:           client,
+			ClusterID:        k8sCluster,
+			DomainSuffix:     "cluster.local",
+			XDSUpdater:       xdsUpdater,
+			NetworksWatcher:  opts.NetworksWatcher,
+			Mode:             opts.KubernetesEndpointMode,
+			SkipRun:          true,
+			ConfigController: k8sConfig,
+			MeshWatcher:      mesh.NewFixedWatcher(m),
 		})
+		stop := test.NewStop(t)
 		// start default client informers after creating ingress/secret controllers
 		if defaultKubeClient == nil || k8sCluster == opts.DefaultClusterName {
 			defaultKubeClient = client
+			if opts.DisableSecretAuthorization {
+				disableAuthorizationForSecret(defaultKubeClient.Kube().(*fake.Clientset))
+			}
 			defaultKubeController = k8s
 		} else {
 			client.RunAndWait(stop)
 		}
 		registries = append(registries, k8s)
-		if err := creds.ClusterAdded(&multicluster.Cluster{ID: k8sCluster, Client: client}, nil); err != nil {
+		if err := creds.ClusterAdded(&multicluster.Cluster{ID: k8sCluster, Client: client}, stop); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if opts.DisableSecretAuthorization {
-		disableAuthorizationForSecret(defaultKubeClient.Kube().(*fake.Clientset))
-	}
+	stop := test.NewStop(t)
 	ingr := ingress.NewController(defaultKubeClient, mesh.NewFixedWatcher(m), kube.Options{
 		DomainSuffix: "cluster.local",
 	})
@@ -208,7 +221,8 @@ func NewFakeDiscoveryServer(t test.Failer, opts FakeOptions) *FakeDiscoveryServe
 		Configs:             opts.Configs,
 		ConfigString:        opts.ConfigString,
 		ConfigTemplateInput: opts.ConfigTemplateInput,
-		MeshConfig:          opts.MeshConfig,
+		ConfigController:    configController,
+		MeshConfig:          m,
 		NetworksWatcher:     opts.NetworksWatcher,
 		ServiceRegistries:   registries,
 		PushContextLock:     &s.updateMutex,
@@ -223,7 +237,7 @@ func NewFakeDiscoveryServer(t test.Failer, opts FakeOptions) *FakeDiscoveryServe
 			return gwc
 		},
 		SkipRun:   true,
-		ClusterID: defaultKubeController.Cluster(),
+		ClusterID: opts.DefaultClusterName,
 		Services:  opts.Services,
 		Gateways:  opts.Gateways,
 	})
@@ -231,12 +245,10 @@ func NewFakeDiscoveryServer(t test.Failer, opts FakeOptions) *FakeDiscoveryServe
 	s.updateMutex.Lock()
 	s.Env = cg.Env()
 	s.Env.GatewayAPIController = gwc
-	s.InitGenerators(s.Env, "istio-system", nil)
-	s.Generators[v3.SecretType] = NewSecretGen(creds, s.Cache, opts.DefaultClusterName, nil)
-	s.Generators[v3.ExtensionConfigurationType].(*EcdsGenerator).SetCredController(creds)
 	if err := s.Env.InitNetworksManager(s); err != nil {
 		t.Fatal(err)
 	}
+	s.Generators["api"] = apigen.NewGenerator(s.Env.ConfigStore)
 	// Disable debounce to reduce test times
 	s.debounceOptions.debounceAfter = opts.DebounceTime
 	memRegistry := cg.MemRegistry
@@ -248,7 +260,7 @@ func NewFakeDiscoveryServer(t test.Failer, opts FakeOptions) *FakeDiscoveryServe
 	configHandler := func(_, curr config.Config, event model.Event) {
 		pushReq := &model.PushRequest{
 			Full:           true,
-			ConfigsUpdated: sets.New(model.ConfigKey{Kind: kind.FromGvk(curr.GroupVersionKind), Name: curr.Name, Namespace: curr.Namespace}),
+			ConfigsUpdated: sets.New(model.ConfigKey{Kind: kind.MustFromGVK(curr.GroupVersionKind), Name: curr.Name, Namespace: curr.Namespace}),
 			Reason:         []model.TriggerReason{model.ConfigUpdate},
 		}
 		s.ConfigUpdate(pushReq)
@@ -259,16 +271,14 @@ func NewFakeDiscoveryServer(t test.Failer, opts FakeOptions) *FakeDiscoveryServe
 	}
 	for _, schema := range schemas {
 		// This resource type was handled in external/servicediscovery.go, no need to rehandle here.
-		if schema.Resource().GroupVersionKind() == collections.IstioNetworkingV1Alpha3Serviceentries.
-			Resource().GroupVersionKind() {
+		if schema.GroupVersionKind() == gvk.ServiceEntry {
 			continue
 		}
-		if schema.Resource().GroupVersionKind() == collections.IstioNetworkingV1Alpha3Workloadentries.
-			Resource().GroupVersionKind() {
+		if schema.GroupVersionKind() == gvk.WorkloadEntry {
 			continue
 		}
 
-		cg.Store().RegisterEventHandler(schema.Resource().GroupVersionKind(), configHandler)
+		cg.Store().RegisterEventHandler(schema.GroupVersionKind(), configHandler)
 	}
 	for _, registry := range registries {
 		k8s, ok := registry.(*kube.FakeController)
@@ -388,9 +398,9 @@ func (f *FakeDiscoveryServer) ConnectDeltaADS() *DeltaAdsTest {
 }
 
 func APIWatches() []string {
-	watches := []string{collections.IstioMeshV1Alpha1MeshConfig.Resource().GroupVersionKind().String()}
+	watches := []string{gvk.MeshConfig.String()}
 	for _, sch := range collections.Pilot.All() {
-		watches = append(watches, sch.Resource().GroupVersionKind().String())
+		watches = append(watches, sch.GroupVersionKind().String())
 	}
 	return watches
 }
