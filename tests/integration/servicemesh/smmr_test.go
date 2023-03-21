@@ -69,15 +69,10 @@ func TestSMMR(t *testing.T) {
 				if err := maistra.EnableIOR(t); err != nil {
 					t.Fatalf("failed to enable IOR: %s", err)
 				}
+				defer cleanUpIOR(ctx)
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
-
-				if err := maistra.DisableIOR(t); err != nil {
-					t.Fatalf("failed to disable IOR: %s", err)
-				}
-
-				ensureRoutesCleared(t)
 			})
 
 			ctx.NewSubTest("RouteChange").Run(func(t framework.TestContext) {
@@ -89,6 +84,7 @@ func TestSMMR(t *testing.T) {
 				if err := maistra.EnableIOR(t); err != nil {
 					t.Fatalf("failed to enable IOR: %s", err)
 				}
+				defer cleanUpIOR(ctx)
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
@@ -99,18 +95,13 @@ func TestSMMR(t *testing.T) {
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
 				verifyThatRouteIsMissingOrFail(t, namespaceGateway, gatewayName, "c.maistra.io")
-
-				if err := maistra.DisableIOR(t); err != nil {
-					t.Fatalf("failed to disable IOR: %s", err)
-				}
-
-				ensureRoutesCleared(t)
 			})
 
 			ctx.NewSubTest("RouteLabelUpdate").Run(func(t framework.TestContext) {
 				if err := maistra.EnableIOR(t); err != nil {
 					t.Fatalf("failed to enable IOR: %s", err)
 				}
+				defer cleanUpIOR(ctx)
 
 				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetB, "a")
 
@@ -132,12 +123,6 @@ func TestSMMR(t *testing.T) {
 
 					return fmt.Errorf("expected to find 'b' in the labels, but got %s", labels)
 				}, retry.BackoffDelay(500*time.Millisecond))
-
-				if err := maistra.DisableIOR(t); err != nil {
-					t.Fatalf("failed to disable IOR: %s", err)
-				}
-
-				ensureRoutesCleared(t)
 			})
 		})
 }
@@ -267,6 +252,14 @@ func clearRoutes(routeClient routeversioned.Interface) error {
 	}
 
 	return nil
+}
+
+func cleanUpIOR(ctx framework.TestContext) {
+	if err := maistra.DisableIOR(ctx); err != nil {
+		ctx.Fatalf("failed to disable IOR: %s", err)
+	}
+
+	ensureRoutesCleared(ctx)
 }
 
 type RouteConfig struct {
