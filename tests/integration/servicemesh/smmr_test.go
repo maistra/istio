@@ -69,8 +69,15 @@ func TestSMMR(t *testing.T) {
 				if err := maistra.EnableIOR(t); err != nil {
 					t.Fatalf("failed to enable IOR: %s", err)
 				}
+
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
+
+				if err := maistra.DisableIOR(t); err != nil {
+					t.Fatalf("failed to disable IOR: %s", err)
+				}
+
+				ensureRoutesCleared(t)
 			})
 
 			ctx.NewSubTest("RouteChange").Run(func(t framework.TestContext) {
@@ -78,6 +85,10 @@ func TestSMMR(t *testing.T) {
 				applyVirtualServiceOrFail(t, namespaceC, namespaceGateway, gatewayName, "c")
 
 				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetA, "a", "b", "c")
+
+				if err := maistra.EnableIOR(t); err != nil {
+					t.Fatalf("failed to enable IOR: %s", err)
+				}
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
@@ -88,15 +99,24 @@ func TestSMMR(t *testing.T) {
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
 				verifyThatRouteIsMissingOrFail(t, namespaceGateway, gatewayName, "c.maistra.io")
+
+				if err := maistra.DisableIOR(t); err != nil {
+					t.Fatalf("failed to disable IOR: %s", err)
+				}
+
+				ensureRoutesCleared(t)
 			})
 
 			ctx.NewSubTest("RouteLabelUpdate").Run(func(t framework.TestContext) {
-				routeClient := t.AllClusters().Default().Route()
+				if err := maistra.EnableIOR(t); err != nil {
+					t.Fatalf("failed to enable IOR: %s", err)
+				}
 
 				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetB, "a")
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 
+				routeClient := t.AllClusters().Default().Route()
 				retry.UntilSuccessOrFail(t, func() error {
 					route, err := findRoute(routeClient, namespaceGateway, gatewayName, "a.maistra.io")
 					if err != nil || route == nil {
@@ -112,6 +132,12 @@ func TestSMMR(t *testing.T) {
 
 					return fmt.Errorf("expected to find 'b' in the labels, but got %s", labels)
 				}, retry.BackoffDelay(500*time.Millisecond))
+
+				if err := maistra.DisableIOR(t); err != nil {
+					t.Fatalf("failed to disable IOR: %s", err)
+				}
+
+				ensureRoutesCleared(t)
 			})
 		})
 }
@@ -203,6 +229,46 @@ func findRoute(routeClient routeversioned.Interface, gatewayNamespace, gatewayNa
 	return nil, nil
 }
 
+func ensureRoutesCleared(ctx framework.TestContext) {
+	routeClient := ctx.AllClusters().Default().Route()
+
+	if err := clearRoutes(routeClient); err != nil {
+		ctx.Fatalf("failed to clear all routes: %s", err)
+	}
+
+	retry.UntilSuccessOrFail(ctx, func() error {
+		routes, err := routeClient.RouteV1().Routes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get Routes: %s", err)
+		}
+
+		if count := len(routes.Items); count != 0 {
+			return fmt.Errorf("found unexpected routes %d", count)
+		}
+
+		return nil
+	}, retry.BackoffDelay(500*time.Millisecond))
+}
+
+func clearRoutes(routeClient routeversioned.Interface) error {
+	routes, err := routeClient.RouteV1().Routes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	if len(routes.Items) != 0 {
+		for _, route := range routes.Items {
+			err = routeClient.RouteV1().Routes(route.Namespace).Delete(context.TODO(), route.Name, metav1.DeleteOptions{})
+
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 type RouteConfig struct {
 	Name         string         `json:"name"`
 	VirtualHosts []*VirtualHost `json:"virtualHosts"`
@@ -240,7 +306,7 @@ func getPodName(ctx framework.TestContext, namespace, appName string) (string, e
 	return pods.Items[0].Name, nil
 }
 
-const labelSetA string = `
+const labelSetA string = ` 
     a: "a"
 `
 
