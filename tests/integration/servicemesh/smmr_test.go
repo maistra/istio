@@ -222,7 +222,7 @@ func ensureRoutesCleared(ctx framework.TestContext) {
 	}
 
 	retry.UntilSuccessOrFail(ctx, func() error {
-		routes, err := routeClient.RouteV1().Routes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		routes, err := routeClient.RouteV1().Routes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{LabelSelector: "maistra.io/generated-by=ior"})
 		if err != nil {
 			return fmt.Errorf("failed to get Routes: %s", err)
 		}
@@ -236,7 +236,10 @@ func ensureRoutesCleared(ctx framework.TestContext) {
 }
 
 func clearRoutes(routeClient routeversioned.Interface) error {
-	routes, err := routeClient.RouteV1().Routes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+	routes, err := routeClient.
+		RouteV1().
+		Routes(metav1.NamespaceAll).
+		List(context.TODO(), metav1.ListOptions{LabelSelector: "maistra.io/generated-by=ior"})
 	if err != nil {
 		return err
 	}
