@@ -85,8 +85,6 @@ func TestSMMR(t *testing.T) {
 
 				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetA, "a", "b")
 
-				time.Sleep(30 * time.Second)
-
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
 				verifyThatRouteIsMissingOrFail(t, namespaceGateway, gatewayName, "c.maistra.io")
@@ -177,11 +175,11 @@ func verifyThatRouteIsMissingOrFail(ctx framework.TestContext, gatewayNamespace,
 	retry.UntilSuccessOrFail(ctx, func() error {
 		route, err := findRoute(routeClient, gatewayNamespace, gatewayName, host)
 		if err != nil {
-			ctx.Fatalf("failed to get Routes: %v", err)
+			return fmt.Errorf("failed to get Routes: %v", err)
 		}
 
 		if route != nil {
-			ctx.Fatal("found unexpected Route")
+			return fmt.Errorf("found unexpected Route")
 		}
 
 		return nil
