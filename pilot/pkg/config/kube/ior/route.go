@@ -63,11 +63,8 @@ type routeController struct {
 	routeLister routeListerV1.RouteLister
 }
 
-// newRoute returns a new instance of Route object
-func newRoute(
-	kubeClient KubeClient,
-	store model.ConfigStoreController,
-) *routeController {
+// newRouteController returns a new instance of Route object
+func newRouteController(kubeClient KubeClient, store model.ConfigStoreController) *routeController {
 	for !kubeClient.IsRouteSupported() {
 		IORLog.Infof("routes are not supported in this cluster; waiting for Route resource to become available...")
 		time.Sleep(10 * time.Second)

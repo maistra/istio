@@ -23,13 +23,8 @@ import (
 // IORLog is IOR-scoped log
 var IORLog = log.RegisterScope("ior", "IOR logging", 0)
 
-func Run(
-	kubeClient kube.Client,
-	store model.ConfigStoreController,
-	stop <-chan struct{},
-) {
+func Run(kubeClient kube.Client, store model.ConfigStoreController, stop <-chan struct{}) {
 	IORLog.Info("setting up IOR")
-	r := newRoute(NewKubeClient(kubeClient), store)
-
+	r := newRouteController(NewKubeClient(kubeClient), store)
 	r.Run(stop)
 }

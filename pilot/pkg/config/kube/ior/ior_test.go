@@ -60,7 +60,7 @@ func newClients(
 		t.Fatal(err)
 	}
 
-	r := newRoute(iorKubeClient, store)
+	r := newRouteController(iorKubeClient, store)
 
 	return store.(*crdclient.Client), iorKubeClient, r.routeClient, r
 }
@@ -458,7 +458,7 @@ func TestStatelessness(t *testing.T) {
 
 	close(iorStop)
 
-	backupIOR := newRoute(kubeClient, store)
+	backupIOR := newRouteController(kubeClient, store)
 	backupIOR.Run(stop)
 
 	store.SyncAll()
