@@ -129,6 +129,21 @@ func EnableIOR(ctx resource.Context) error {
 	return nil
 }
 
+func DisableIOR(ctx resource.Context) error {
+	kubeClient := ctx.Clusters().Default().Kube()
+	istiod, err := waitForIstiod(kubeClient, 0)
+	if err != nil {
+		return err
+	}
+	if err := patchIstiodArgs(kubeClient, disableIOR); err != nil {
+		return err
+	}
+	if _, err := waitForIstiod(kubeClient, istiod.Generation); err != nil {
+		return err
+	}
+	return nil
+}
+
 func ApplyServiceMeshMemberRoll(ctx framework.TestContext, memberNamespaces ...string) error {
 	memberRollYAML := `
 apiVersion: maistra.io/v1
@@ -309,6 +324,17 @@ const enableIOR = `[
 		"value": {
 			"name": "ENABLE_IOR",
 			"value": "true"
+		}
+	}
+]`
+
+const disableIOR = `[
+	{
+		"op": "replace",
+		"path": "/spec/template/spec/containers/0/env/1",
+		"value": {
+			"name": "ENABLE_IOR",
+			"value": "false"
 		}
 	}
 ]`
