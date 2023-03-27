@@ -17,6 +17,7 @@ package dependencies
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -70,7 +71,7 @@ type RealDependencies struct {
 	CNIMode          bool
 }
 
-func (r *RealDependencies) execute(cmd string, ignoreErrors bool, args ...string) error {
+func (r *RealDependencies) execute(cmd string, ignoreErrors bool, stdin io.Reader, args ...string) error {
 	if r.CNIMode {
 		originalCmd := cmd
 		cmd = constants.NSENTER
@@ -82,6 +83,7 @@ func (r *RealDependencies) execute(cmd string, ignoreErrors bool, args ...string
 	stderr := &bytes.Buffer{}
 	externalCommand.Stdout = stdout
 	externalCommand.Stderr = stderr
+	externalCommand.Stdin = stdin
 
 	// Grab all viper config and propagate it as environment variables to the child process
 	repl := strings.NewReplacer("-", "_")
@@ -106,7 +108,7 @@ func (r *RealDependencies) execute(cmd string, ignoreErrors bool, args ...string
 	return err
 }
 
-func (r *RealDependencies) executeXTables(cmd string, ignoreErrors bool, args ...string) error {
+func (r *RealDependencies) executeXTables(cmd string, ignoreErrors bool, stdin io.ReadSeeker, args ...string) error {
 	if r.CNIMode {
 		originalCmd := cmd
 		cmd = constants.NSENTER
@@ -127,6 +129,12 @@ func (r *RealDependencies) executeXTables(cmd string, ignoreErrors bool, args ..
 		stderr = &bytes.Buffer{}
 		externalCommand.Stdout = stdout
 		externalCommand.Stderr = stderr
+		externalCommand.Stdin = stdin
+		if stdin != nil {
+			if _, err := stdin.Seek(0, io.SeekStart); err != nil {
+				return err
+			}
+		}
 		err = externalCommand.Run()
 		exitCode, ok := exitCode(err)
 		if !ok {
@@ -228,12 +236,12 @@ func exitCode(err error) (int, bool) {
 }
 
 // RunOrFail runs a command and exits with an error message, if it fails
-func (r *RealDependencies) RunOrFail(cmd string, args ...string) {
+func (r *RealDependencies) RunOrFail(cmd string, stdin io.ReadSeeker, args ...string) {
 	var err error
 	if XTablesCmds.Contains(cmd) {
-		err = r.executeXTables(cmd, false, args...)
+		err = r.executeXTables(cmd, false, stdin, args...)
 	} else {
-		err = r.execute(cmd, false, args...)
+		err = r.execute(cmd, false, stdin, args...)
 	}
 	if err != nil {
 		log.Errorf("Failed to execute: %s %s, %v", cmd, strings.Join(args, " "), err)
@@ -242,20 +250,20 @@ func (r *RealDependencies) RunOrFail(cmd string, args ...string) {
 }
 
 // Run runs a command
-func (r *RealDependencies) Run(cmd string, args ...string) (err error) {
+func (r *RealDependencies) Run(cmd string, stdin io.ReadSeeker, args ...string) (err error) {
 	if XTablesCmds.Contains(cmd) {
-		err = r.executeXTables(cmd, false, args...)
+		err = r.executeXTables(cmd, false, stdin, args...)
 	} else {
-		err = r.execute(cmd, false, args...)
+		err = r.execute(cmd, false, stdin, args...)
 	}
 	return err
 }
 
 // RunQuietlyAndIgnore runs a command quietly and ignores errors
-func (r *RealDependencies) RunQuietlyAndIgnore(cmd string, args ...string) {
+func (r *RealDependencies) RunQuietlyAndIgnore(cmd string, stdin io.ReadSeeker, args ...string) {
 	if XTablesCmds.Contains(cmd) {
-		_ = r.executeXTables(cmd, true, args...)
+		_ = r.executeXTables(cmd, true, stdin, args...)
 	} else {
-		_ = r.execute(cmd, true, args...)
+		_ = r.execute(cmd, true, stdin, args...)
 	}
 }

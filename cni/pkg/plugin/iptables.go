@@ -21,12 +21,9 @@ import (
 
 	"istio.io/istio/tools/istio-iptables/pkg/cmd"
 	"istio.io/istio/tools/istio-iptables/pkg/constants"
-	"istio.io/pkg/env"
+	"istio.io/istio/tools/istio-iptables/pkg/dependencies"
 	"istio.io/pkg/log"
 )
-
-var dryRunFilePath = env.RegisterStringVar("DRY_RUN_FILE_PATH", "",
-	"If provided, CNI will dry run iptables rule apply, and print the applied rules to the given file.")
 
 type iptables struct{}
 
@@ -51,7 +48,7 @@ func (ipt *iptables) Program(podName, netns string, rdrct *Redirect) error {
 	viper.Set(constants.OutboundPorts, rdrct.includeOutboundPorts)
 	viper.Set(constants.ServiceExcludeCidr, rdrct.excludeIPCidrs)
 	viper.Set(constants.KubeVirtInterfaces, rdrct.kubevirtInterfaces)
-	drf := dryRunFilePath.Get()
+	drf := dependencies.DryRunFilePath.Get()
 	viper.Set(constants.DryRun, drf != "")
 	viper.Set(constants.OutputPath, drf)
 	viper.Set(constants.RedirectDNS, rdrct.dnsRedirect)
