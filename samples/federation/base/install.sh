@@ -103,17 +103,17 @@ sed -e "s:{{MESH1_ADDRESS}}:$MESH1_ADDRESS:g" -e "s:{{MESH1_DISCOVERY_PORT}}:$ME
 oc2 apply -f import/importedserviceset.yaml
 
 log "Installing bookinfo in mesh1"
-oc1 -n mesh1-bookinfo apply -f ../../../../../samples/bookinfo/platform/kube/bookinfo.yaml
-oc1 -n mesh1-bookinfo apply -f ../../../../../samples/bookinfo/platform/kube/bookinfo-ratings-v2.yaml
-oc1 -n mesh1-bookinfo apply -f ../../../../../samples/bookinfo/platform/kube/bookinfo-db.yaml
-oc1 -n mesh1-bookinfo apply -f ../../../../../samples/bookinfo/networking/destination-rule-all.yaml
+oc1 -n mesh1-bookinfo apply -f ../../bookinfo/platform/kube/bookinfo.yaml
+oc1 -n mesh1-bookinfo apply -f ../../bookinfo/platform/kube/bookinfo-ratings-v2.yaml
+oc1 -n mesh1-bookinfo apply -f ../../bookinfo/platform/kube/bookinfo-db.yaml
+oc1 -n mesh1-bookinfo apply -f ../../bookinfo/networking/destination-rule-all.yaml
 
 log "Installing bookinfo in mesh2"
-oc2 -n mesh2-bookinfo apply -f ../../../../../samples/bookinfo/platform/kube/bookinfo.yaml
-oc2 -n mesh2-bookinfo apply -f ../../../../../samples/bookinfo/platform/kube/bookinfo-ratings-v2.yaml
-oc2 -n mesh2-bookinfo apply -f ../../../../../samples/bookinfo/networking/bookinfo-gateway.yaml
-oc2 -n mesh2-bookinfo apply -f ../../../../../samples/bookinfo/networking/destination-rule-all.yaml
-oc2 -n mesh2-bookinfo apply -f ../../../../../samples/bookinfo/networking/virtual-service-reviews-v3.yaml
+oc2 -n mesh2-bookinfo apply -f ../../bookinfo/platform/kube/bookinfo.yaml
+oc2 -n mesh2-bookinfo apply -f ../../bookinfo/platform/kube/bookinfo-ratings-v2.yaml
+oc2 -n mesh2-bookinfo apply -f ../../bookinfo/networking/bookinfo-gateway.yaml
+oc2 -n mesh2-bookinfo apply -f ../../bookinfo/networking/destination-rule-all.yaml
+oc2 -n mesh2-bookinfo apply -f ../../bookinfo/networking/virtual-service-reviews-v3.yaml
 
 log "Installing mongodb k8s Service for mesh2"
 oc2 apply -f import/mongodb-service.yaml
