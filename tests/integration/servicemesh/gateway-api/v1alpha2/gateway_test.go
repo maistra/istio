@@ -26,12 +26,13 @@
 package v1beta1
 
 import (
+	"testing"
+
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/echo/common/deployment"
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/tests/integration/servicemesh/gateway-api/common"
 	"istio.io/istio/tests/integration/servicemesh/maistra"
-	"testing"
 )
 
 var (
