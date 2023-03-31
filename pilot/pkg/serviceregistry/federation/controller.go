@@ -479,14 +479,6 @@ func (c *Controller) getImportNameForService(exportedService *model.Service) *fe
 
 func (c *Controller) updateGateways(serviceList *federationmodel.ServiceListMessage) {
 	c.gatewayStore = c.gatewayForNetworkAddress()
-	if serviceList != nil {
-		for _, gateway := range serviceList.NetworkGatewayEndpoints {
-			c.gatewayStore = append(c.gatewayStore, model.NetworkGateway{
-				Addr: gateway.Hostname,
-				Port: uint32(gateway.Port),
-			})
-		}
-	}
 	c.egressGateways, c.egressSAs = c.getEgressServiceAddrs()
 }
 
