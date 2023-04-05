@@ -144,13 +144,12 @@ func (nc *NamespaceController) startCaBundleWatcher(stop <-chan struct{}) {
 	for {
 		select {
 		case <-watchCh:
-			var namespaceList []*v1.Namespace
 			if nc.usesMemberRollController {
 				for _, ns := range nc.namespaces.List() {
 					nc.syncNamespaceByName(ns)
 				}
 			} else {
-				namespaceList, _ = nc.namespaceLister.List(labels.Everything())
+				namespaceList, _ := nc.namespaceLister.List(labels.Everything())
 				for _, ns := range namespaceList {
 					nc.namespaceChange(ns)
 				}
