@@ -477,7 +477,7 @@ func (c *Controller) getImportNameForService(exportedService *model.Service) *fe
 	return c.importNameMapper.NameForService(exportedService)
 }
 
-func (c *Controller) updateGateways(serviceList *federationmodel.ServiceListMessage) {
+func (c *Controller) updateGateways() {
 	c.gatewayStore = c.gatewayForNetworkAddress()
 	c.egressGateways, c.egressSAs = c.getEgressServiceAddrs()
 }
@@ -1080,7 +1080,7 @@ func (c *Controller) resync() uint64 {
 		c.logger.Warnf("resync failed: %s", err)
 		return 0
 	}
-	c.updateGateways(svcList)
+	c.updateGateways()
 	if svcList != nil {
 		c.convertServices(svcList)
 		c.statusHandler.FullSyncComplete()
