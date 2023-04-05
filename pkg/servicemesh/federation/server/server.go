@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/mitchellh/hashstructure/v2"
 	"k8s.io/apimachinery/pkg/util/errors"
 	v1 "maistra.io/api/federation/v1"
 
@@ -78,8 +77,6 @@ type Server struct {
 	// us to know what the workload identifiers were so we could manage the
 	// routing config for each mesh.  This may or may not be possible.
 	network string
-
-	currentGatewayEndpoints []*federationmodel.ServiceEndpoint
 }
 
 var _ FederationManager = (*Server)(nil)
@@ -132,15 +129,14 @@ func (s *Server) AddPeer(mesh *v1.ServiceMeshPeer, exports *v1.ExportedServiceSe
 		return fmt.Errorf("exporter already exists for federation %s", mesh.Name)
 	}
 	meshServer := &meshServer{
-		GatewayEndpointsProvider: s,
-		logger:                   s.logger.WithLabels("mesh", mesh.Name),
-		env:                      s.env,
-		mesh:                     mesh,
-		exportConfig:             exportConfig,
-		statusHandler:            statusHandler,
-		configStore:              s.configStore,
-		ingressService:           s.ingressServiceName(mesh),
-		currentServices:          make(map[federationmodel.ServiceKey]*federationmodel.ServiceMessage),
+		logger:          s.logger.WithLabels("mesh", mesh.Name),
+		env:             s.env,
+		mesh:            mesh,
+		exportConfig:    exportConfig,
+		statusHandler:   statusHandler,
+		configStore:     s.configStore,
+		ingressService:  s.ingressServiceName(mesh),
+		currentServices: make(map[federationmodel.ServiceKey]*federationmodel.ServiceMessage),
 	}
 	if _, loaded := s.meshes.LoadOrStore(mesh.Name, meshServer); !loaded {
 		meshServer.resync()
@@ -234,66 +230,21 @@ func (s *Server) Run(stopCh <-chan struct{}) {
 	_ = s.httpServer.Shutdown(context.TODO())
 }
 
-func (s *Server) GetGatewayEndpoints() []*federationmodel.ServiceEndpoint {
-	s.Lock()
-	defer s.Unlock()
-	return append([]*federationmodel.ServiceEndpoint(nil), s.currentGatewayEndpoints...)
-}
-
-func (s *Server) resyncNetworkGateways() (bool, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	gatewayEndpoints := []*federationmodel.ServiceEndpoint{}
-	for _, gateway := range s.env.NetworkGateways() {
-		gatewayEndpoints = append(gatewayEndpoints, &federationmodel.ServiceEndpoint{
-			Port:     int(gateway.Port),
-			Hostname: gateway.Addr,
-		})
-	}
-
-	newGatewayChecksum, err := hashstructure.Hash(gatewayEndpoints, hashstructure.FormatV2, &hashstructure.HashOptions{SlicesAsSets: true})
-	if err != nil {
-		return false, err
-	}
-
-	oldGatewayChecksum, err := hashstructure.Hash(s.currentGatewayEndpoints, hashstructure.FormatV2, &hashstructure.HashOptions{SlicesAsSets: true})
-	if err != nil {
-		return false, err
-	}
-	if oldGatewayChecksum != newGatewayChecksum {
-		s.currentGatewayEndpoints = gatewayEndpoints
-		return true, nil
-	}
-	return false, nil
-}
-
 func (s *Server) UpdateService(svc *model.Service, event model.Event) {
 	// this might be a NetworkGateway
 	if svc != nil {
-		networkGatewaysChanged, _ := s.resyncNetworkGateways()
-		if networkGatewaysChanged {
-			s.meshes.Range(func(_, value interface{}) bool {
-				value.(*meshServer).resync()
-				return true
+		s.meshes.Range(func(_, value interface{}) bool {
+			value.(*meshServer).pushWatchEvent(&federationmodel.WatchEvent{
+				Action:  federationmodel.ActionUpdate,
+				Service: nil,
 			})
-			s.meshes.Range(func(_, value interface{}) bool {
-				value.(*meshServer).pushWatchEvent(&federationmodel.WatchEvent{
-					Action:  federationmodel.ActionUpdate,
-					Service: nil,
-				})
-				return true
-			})
-		}
+			return true
+		})
 	}
 	s.meshes.Range(func(_, value interface{}) bool {
 		value.(*meshServer).serviceUpdated(svc, event)
 		return true
 	})
-}
-
-type GatewayEndpointsProvider interface {
-	GetGatewayEndpoints() []*federationmodel.ServiceEndpoint
 }
 
 func serviceKeyForService(svc *model.Service) federationmodel.ServiceKey {
@@ -305,7 +256,6 @@ func serviceKeyForService(svc *model.Service) federationmodel.ServiceKey {
 }
 
 type meshServer struct {
-	GatewayEndpointsProvider
 	sync.RWMutex
 
 	logger *log.Scope
@@ -365,9 +315,8 @@ func (s *meshServer) getServiceMessage(svc *model.Service, exportedName *federat
 // s has to be Lock()ed
 func (s *meshServer) getServiceListMessage() *federationmodel.ServiceListMessage {
 	ret := &federationmodel.ServiceListMessage{
-		NetworkGatewayEndpoints: s.GetGatewayEndpoints(),
+		Services: []*federationmodel.ServiceMessage{},
 	}
-	ret.Services = []*federationmodel.ServiceMessage{}
 	for _, svcMessage := range s.currentServices {
 		ret.Services = append(ret.Services, svcMessage)
 	}

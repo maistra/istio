@@ -622,7 +622,7 @@ func (c *Controller) GetService(hostname host.Name) *model.Service {
 func (c *Controller) NetworkGateways() []model.NetworkGateway {
 	c.storeLock.RLock()
 	defer c.storeLock.RUnlock()
-	return c.gatewayStore
+	return nil
 }
 
 func (c *Controller) MCSServices() []model.MCSServiceInfo {
