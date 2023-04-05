@@ -579,7 +579,6 @@ func TestServiceList(t *testing.T) {
 			stopCh := make(chan struct{})
 			go s.Run(stopCh)
 			defer close(stopCh)
-			s.resyncNetworkGateways()
 			s.AddPeer(federation, tc.serviceExports, &common.FakeStatusHandler{})
 			for _, e := range tc.serviceEvents {
 				s.UpdateService(e.svc, e.event)
@@ -957,7 +956,6 @@ func TestWatch(t *testing.T) {
 			stopCh := make(chan struct{})
 			go s.Run(stopCh)
 			defer close(stopCh)
-			s.resyncNetworkGateways()
 			s.AddPeer(federation, tc.serviceExports, &common.FakeStatusHandler{})
 			req, err := http.NewRequest("GET", "https://"+s.Addr()+"/v1/watch/"+tc.remoteName, nil)
 			if err != nil {
