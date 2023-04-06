@@ -168,7 +168,7 @@ func TestVersionManagement(t *testing.T) {
 			Name:      "gw",
 			Namespace: "default",
 		},
-		Spec: v1beta1.GatewaySpec{GatewayClassName: DefaultClassName},
+		Spec: v1beta1.GatewaySpec{GatewayClassName: v1beta1.ObjectName(DefaultClassName)},
 	}
 	gws.Create(ctx, defaultGateway, metav1.CreateOptions{})
 	assert.Equal(t, assert.ChannelHasItem(t, writes), buildPatch(ControllerVersion))
