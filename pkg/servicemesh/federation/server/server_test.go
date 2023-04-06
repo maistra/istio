@@ -242,12 +242,6 @@ func TestServiceList(t *testing.T) {
 				},
 			},
 			expectedMessage: federationmodel.ServiceListMessage{
-				NetworkGatewayEndpoints: []*federationmodel.ServiceEndpoint{
-					{
-						Port:     8080,
-						Hostname: "127.0.0.1",
-					},
-				},
 				Services: []*federationmodel.ServiceMessage{
 					{
 						ServiceKey: federationmodel.ServiceKey{
@@ -329,12 +323,6 @@ func TestServiceList(t *testing.T) {
 				},
 			},
 			expectedMessage: federationmodel.ServiceListMessage{
-				NetworkGatewayEndpoints: []*federationmodel.ServiceEndpoint{
-					{
-						Port:     8080,
-						Hostname: "127.0.0.1",
-					},
-				},
 				Services: []*federationmodel.ServiceMessage{
 					{
 						ServiceKey: federationmodel.ServiceKey{
@@ -891,12 +879,7 @@ func TestWatch(t *testing.T) {
 					},
 				},
 			},
-			expectedWatchEvents: []*federationmodel.WatchEvent{
-				{
-					Action:  federationmodel.ActionUpdate,
-					Service: nil,
-				},
-			},
+			expectedWatchEvents: nil,
 		},
 		{
 			name:           "service export removed",

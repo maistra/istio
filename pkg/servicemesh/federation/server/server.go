@@ -231,16 +231,6 @@ func (s *Server) Run(stopCh <-chan struct{}) {
 }
 
 func (s *Server) UpdateService(svc *model.Service, event model.Event) {
-	// this might be a NetworkGateway
-	if svc != nil {
-		s.meshes.Range(func(_, value interface{}) bool {
-			value.(*meshServer).pushWatchEvent(&federationmodel.WatchEvent{
-				Action:  federationmodel.ActionUpdate,
-				Service: nil,
-			})
-			return true
-		})
-	}
 	s.meshes.Range(func(_, value interface{}) bool {
 		value.(*meshServer).serviceUpdated(svc, event)
 		return true
