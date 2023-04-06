@@ -477,16 +477,8 @@ func (c *Controller) getImportNameForService(exportedService *model.Service) *fe
 	return c.importNameMapper.NameForService(exportedService)
 }
 
-func (c *Controller) updateGateways(serviceList *federationmodel.ServiceListMessage) {
+func (c *Controller) updateGateways() {
 	c.gatewayStore = c.gatewayForNetworkAddress()
-	if serviceList != nil {
-		for _, gateway := range serviceList.NetworkGatewayEndpoints {
-			c.gatewayStore = append(c.gatewayStore, model.NetworkGateway{
-				Addr: gateway.Hostname,
-				Port: uint32(gateway.Port),
-			})
-		}
-	}
 	c.egressGateways, c.egressSAs = c.getEgressServiceAddrs()
 }
 
@@ -630,7 +622,7 @@ func (c *Controller) GetService(hostname host.Name) *model.Service {
 func (c *Controller) NetworkGateways() []model.NetworkGateway {
 	c.storeLock.RLock()
 	defer c.storeLock.RUnlock()
-	return c.gatewayStore
+	return nil
 }
 
 func (c *Controller) MCSServices() []model.MCSServiceInfo {
@@ -1088,7 +1080,7 @@ func (c *Controller) resync() uint64 {
 		c.logger.Warnf("resync failed: %s", err)
 		return 0
 	}
-	c.updateGateways(svcList)
+	c.updateGateways()
 	if svcList != nil {
 		c.convertServices(svcList)
 		c.statusHandler.FullSyncComplete()
