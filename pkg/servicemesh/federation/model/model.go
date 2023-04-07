@@ -23,9 +23,8 @@ type ServiceKey struct {
 }
 
 type ServiceListMessage struct {
-	Checksum                uint64             `json:"checksum" hash:"ignore"`
-	NetworkGatewayEndpoints []*ServiceEndpoint `json:"networkGatewayEndpoints,omitempty" hash:"set"`
-	Services                []*ServiceMessage  `json:"services,omitempty" hash:"set"`
+	Checksum uint64            `json:"checksum" hash:"ignore"`
+	Services []*ServiceMessage `json:"services,omitempty" hash:"set"`
 }
 
 type ServiceMessage struct {
