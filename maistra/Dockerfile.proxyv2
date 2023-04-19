@@ -1,14 +1,14 @@
 FROM quay.io/centos/centos:stream8
 
 ARG MAISTRA_VERSION
-ARG ISTIO_VERSION
 ARG proxy_version
+ARG istio_version
 ARG SIDECAR=envoy
 
 LABEL com.redhat.component="openshift-istio-proxy-ubi8-container"
 LABEL name="openshift-service-mesh/istio-proxy-ubi8"
 LABEL version="${MAISTRA_VERSION}"
-LABEL istio_version="${ISTIO_VERSION}"
+LABEL istio_version="$istio_version"
 LABEL summary="Maistra Proxy OpenShift container image"
 LABEL description="Maistra Proxy OpenShift container image"
 LABEL io.k8s.display-name="Maistra Proxy"
@@ -37,7 +37,7 @@ COPY ${TARGETARCH:-amd64}/${SIDECAR} /usr/local/bin/${SIDECAR}
 # Environment variable indicating the exact proxy sha - for debugging or version-specific configs 
 ENV ISTIO_META_ISTIO_PROXY_SHA $proxy_version
 # Environment variable indicating the exact build, for debugging
-ENV ISTIO_META_ISTIO_VERSION ${ISTIO_VERSION}
+ENV ISTIO_META_ISTIO_VERSION $istio_version
 
 ARG TARGETARCH
 COPY ${TARGETARCH:-amd64}/pilot-agent /usr/local/bin/pilot-agent
