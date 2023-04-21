@@ -14,7 +14,7 @@ MAISTRA_PRE_BUILD ?= time ($(MAISTRA_PRE_BUILD_SCRIPT))
 MAISTRA_POST_BUILD ?= time (HUB=$(HUB) TAG=$(TAG) BASE_DISTRIBUTION=$(BASE_DISTRIBUTION) $(MAISTRA_POST_BUILD_SCRIPT) $(ISTIO_COMPONENT))
 
 .PHONY: maistra-image.pilot
-maistra-image.pilot: VERSION=$(MAISTRA_VERSION)
+maistra-image.pilot: MAISTRA_VERSION=$(MAISTRA_VERSION)
 maistra-image.pilot: ISTIO_COMPONENT=$(subst maistra-image.,,$@)
 maistra-image.pilot: 
 	$(MAISTRA_PRE_BUILD)
@@ -22,7 +22,7 @@ maistra-image.pilot:
 	$(MAISTRA_POST_BUILD)
 
 .PHONY: maistra-image.proxyv2
-maistra-image.proxyv2: VERSION=$(MAISTRA_VERSION)
+maistra-image.proxyv2: MAISTRA_VERSION=$(MAISTRA_VERSION)
 maistra-image.proxyv2: ISTIO_COMPONENT=$(subst maistra-image.,,$@)
 maistra-image.proxyv2: 
 	$(MAISTRA_PRE_BUILD)
@@ -30,7 +30,7 @@ maistra-image.proxyv2:
 	$(MAISTRA_POST_BUILD)
 
 .PHONY: maistra-image.istio-cni
-maistra-image.istio-cni: VERSION=$(MAISTRA_VERSION)
+maistra-image.istio-cni: MAISTRA_VERSION=$(MAISTRA_VERSION)
 maistra-image.istio-cni: ISTIO_COMPONENT=$(subst maistra-image.,,$@)
 maistra-image.istio-cni: 
 	$(MAISTRA_PRE_BUILD)
