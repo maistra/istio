@@ -25,6 +25,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/pkg/env"
 	"istio.io/pkg/log"
@@ -147,7 +148,8 @@ func newTemplate(templateFilePath string) (*template.Template, error) {
 	}
 
 	funcMap := template.FuncMap{
-		"toJSON": toJSON,
+		"toJSON":       toJSON,
+		"hboneEnabled": func() bool { return features.EnableHBONE },
 	}
 	return template.New("bootstrap").Funcs(funcMap).Funcs(sprig.GenericFuncMap()).Parse(string(cfgTmpl))
 }

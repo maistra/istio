@@ -34,6 +34,7 @@
       ]
   },
   "bootstrap_extensions": [
+    {{- if .hboneEnabled }}
     {
       "name": "envoy.bootstrap.internal_listener",
       "typed_config": {
@@ -41,6 +42,7 @@
         "type_url": "type.googleapis.com/envoy.extensions.bootstrap.internal_listener.v3.InternalListener"
       }
     }
+    {{- end }}
   ],
   "stats_config": {
     "use_all_default_tags": false,
