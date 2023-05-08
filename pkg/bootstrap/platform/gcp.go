@@ -376,10 +376,26 @@ func createMetadataSupplier(property string, fn func() (string, error)) metadata
 }
 
 func isMetadataEndpointAccessible() bool {
-	_, err := net.DialTimeout("tcp", "metadata.google.internal:80", 5*time.Second)
+	// From the Go package, but private so copied here
+	const metadataHostEnv = "GCE_METADATA_HOST"
+	const metadataIP = "169.254.169.254"
+	host := os.Getenv(metadataHostEnv)
+	if host == "" {
+		host = metadataIP
+	}
+	_, err := net.DialTimeout("tcp", defaultPort(host, "80"), 5*time.Second)
 	if err != nil {
 		log.Warnf("cannot reach the Google Instance metadata endpoint %v", err)
 		return false
 	}
 	return true
+}
+
+// defaultPort appends the default port, if a port is not already present
+func defaultPort(hostMaybePort, dp string) string {
+	_, _, err := net.SplitHostPort(hostMaybePort)
+	if err != nil {
+		return net.JoinHostPort(hostMaybePort, dp)
+	}
+	return hostMaybePort
 }
