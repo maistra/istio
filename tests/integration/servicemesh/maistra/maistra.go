@@ -92,8 +92,12 @@ func ApplyGatewayAPICRDs() resource.SetupFn {
 func Install(opts InstallationOptions) resource.SetupFn {
 	return func(ctx resource.Context) error {
 		kubeClient := ctx.Clusters().Default().Kube()
-		istiod, err := waitForIstiod(kubeClient, 0)
-		if err != nil {
+		if err := kubeClient.RbacV1().ClusterRoleBindings().DeleteCollection(
+			context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "app=istio-reader"}); err != nil {
+			return err
+		}
+		if err := kubeClient.RbacV1().ClusterRoleBindings().DeleteCollection(
+			context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "app=istiod"}); err != nil {
 			return err
 		}
 		if err := ctx.Clusters().Default().ApplyYAMLFiles(
@@ -102,6 +106,10 @@ func Install(opts InstallationOptions) resource.SetupFn {
 			return err
 		}
 		if err := applyRolesToMemberNamespaces(ctx.Clusters().Default(), "istio-system"); err != nil {
+			return err
+		}
+		istiod, err := waitForIstiod(kubeClient, 0)
+		if err != nil {
 			return err
 		}
 		if err := patchIstiodArgs(kubeClient, generateMaistraArguments(opts)); err != nil {
