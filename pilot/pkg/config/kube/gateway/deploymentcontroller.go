@@ -25,6 +25,8 @@ import (
 	"time"
 
 	maistrav1beta1 "github.com/maistra/xns-informer/pkg/generated/gatewayapi/apis/v1beta1"
+	appsxnsinformersv1 "github.com/maistra/xns-informer/pkg/generated/kube/apps/v1"
+	xnsinformers "github.com/maistra/xns-informer/pkg/informers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,6 +87,7 @@ type DeploymentController struct {
 	gatewayLister      lister.GatewayLister
 	gatewayClassLister lister.GatewayClassLister
 	defaultLabels      map[string]string
+	namespaces         xnsinformers.NamespaceSet
 }
 
 // Patcher is a function that abstracts patching logic. This is largely because client-go fakes do not handle patching
@@ -129,13 +132,23 @@ func NewDeploymentController(client kube.Client) *DeploymentController {
 	client.KubeInformer().Core().V1().Services().Informer().
 		AddEventHandler(handler)
 
+	if client.GetMemberRoll() != nil {
+		dc.namespaces = xnsinformers.NewNamespaceSet()
+		client.GetMemberRoll().Register(dc.namespaces, "gateway-deployment-controller")
+	}
+
+	filterByManagedLabel := func(options *metav1.ListOptions) {
+		options.LabelSelector = ManagedByControllerLabel + "=" + ManagedByControllerValue
+	}
 	// For Deployments, this is the only controller watching. We can filter to just the deployments we care about
 	deployInformer := client.KubeInformer().InformerFor(&appsv1.Deployment{}, func(k kubernetes.Interface, resync time.Duration) cache.SharedIndexInformer {
+		if client.GetMemberRoll() != nil {
+			return appsxnsinformersv1.NewFilteredDeploymentInformer(
+				k, dc.namespaces, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, filterByManagedLabel,
+			)
+		}
 		return appsinformersv1.NewFilteredDeploymentInformer(
-			k, metav1.NamespaceAll, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-			func(options *metav1.ListOptions) {
-				options.LabelSelector = ManagedByControllerLabel + "=" + ManagedByControllerValue
-			},
+			k, metav1.NamespaceAll, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, filterByManagedLabel,
 		)
 	})
 	_ = deployInformer.SetTransform(kube.StripUnusedFields)
