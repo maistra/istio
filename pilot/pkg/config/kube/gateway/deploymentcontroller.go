@@ -137,21 +137,18 @@ func NewDeploymentController(client kube.Client) *DeploymentController {
 		client.GetMemberRoll().Register(dc.namespaces, "gateway-deployment-controller")
 	}
 
+	filterByManagedLabel := func(options *metav1.ListOptions) {
+		options.LabelSelector = ManagedByControllerLabel + "=" + ManagedByControllerValue
+	}
 	// For Deployments, this is the only controller watching. We can filter to just the deployments we care about
 	deployInformer := client.KubeInformer().InformerFor(&appsv1.Deployment{}, func(k kubernetes.Interface, resync time.Duration) cache.SharedIndexInformer {
 		if client.GetMemberRoll() != nil {
 			return appsxnsinformersv1.NewFilteredDeploymentInformer(
-				k, dc.namespaces, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-				func(options *metav1.ListOptions) {
-					options.LabelSelector = ManagedByControllerLabel + "=" + ManagedByControllerValue
-				},
+				k, dc.namespaces, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, filterByManagedLabel,
 			)
 		}
 		return appsinformersv1.NewFilteredDeploymentInformer(
-			k, metav1.NamespaceAll, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-			func(options *metav1.ListOptions) {
-				options.LabelSelector = ManagedByControllerLabel + "=" + ManagedByControllerValue
-			},
+			k, metav1.NamespaceAll, resync, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, filterByManagedLabel,
 		)
 	})
 	_ = deployInformer.SetTransform(kube.StripUnusedFields)
