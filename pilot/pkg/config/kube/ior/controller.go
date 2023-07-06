@@ -395,13 +395,12 @@ func (r *routeController) reconcileGateway(config *config.Config, routes []*v1.R
 }
 
 func (r *routeController) processEvent(old, curr *config.Config, event model.Event) error {
-	debugMessage := ""
 	if IORLog.GetOutputLevel() >= log.DebugLevel {
-		debugMessage += fmt.Sprintf("event %v arrived:\n", event)
+		debugMessage := fmt.Sprintf("event %v arrived:\n", event)
 		debugMessage += fmt.Sprintf("\told object: %v\n", old)
 		debugMessage += fmt.Sprintf("\tnew object: %v\n", curr)
 
-		defer IORLog.Debug(debugMessage)
+		IORLog.Debug(debugMessage)
 	}
 
 	isManaged, err := isManagedByIOR(*curr)
@@ -422,9 +421,7 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 		return errors.Wrapf(err, "error finding routes matching gateway %s/%s", curr.Name, curr.Namespace)
 	}
 
-	if IORLog.GetOutputLevel() >= log.DebugLevel {
-		debugMessage += fmt.Sprintf("\troute objects: %v", routes)
-	}
+	IORLog.Debugf("Processing %s/%s's route objects: %v", curr.Name, curr.Namespace, routes)
 
 	if event != model.EventDelete {
 		return r.reconcileGateway(curr, routes)
