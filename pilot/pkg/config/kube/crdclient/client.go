@@ -46,6 +46,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	gatewayapiclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
+	routeclient "github.com/openshift/client-go/route/clientset/versioned"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
@@ -83,6 +84,8 @@ type Client struct {
 
 	// The istio/client-go client we will use to access objects
 	istioClient istioclient.Interface
+
+	routeClient routeclient.Interface
 
 	// The gateway-api client we will use to access objects
 	gatewayAPIClient gatewayapiclient.Interface
@@ -169,6 +172,7 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 		handlers:         map[config.GroupVersionKind][]model.EventHandler{},
 		client:           client,
 		istioClient:      client.Istio(),
+		routeClient:      client.Route(),
 		gatewayAPIClient: client.GatewayAPI(),
 		beginSync:        atomic.NewBool(false),
 		initialSync:      atomic.NewBool(false),
@@ -545,6 +549,9 @@ func handleCRDAdd(cl *Client, name string, stop <-chan struct{}) {
 	case gvk.CustomResourceDefinition.Group:
 		ifactory = cl.client.ExtInformer()
 		i, err = cl.client.ExtInformer().ForResource(gvr)
+	case cl.routeClient.RouteV1().RESTClient().APIVersion().Group:
+		ifactory = cl.client.RouteInformer()
+		i, err = cl.client.RouteInformer().ForResource(gvr)
 	default:
 		ifactory = cl.client.IstioInformer()
 		i, err = cl.client.IstioInformer().ForResource(gvr)
