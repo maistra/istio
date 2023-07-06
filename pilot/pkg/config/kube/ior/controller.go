@@ -395,14 +395,13 @@ func (r *routeController) reconcileGateway(config *config.Config, routes []*v1.R
 }
 
 func (r *routeController) processEvent(old, curr *config.Config, event model.Event) error {
+	debugMessage := ""
 	if IORLog.GetOutputLevel() >= log.DebugLevel {
-		debugMessage := fmt.Sprintf("event %v arrived:", event)
-		if event == model.EventUpdate {
-			debugMessage += fmt.Sprintf("\told object: %v", old)
-		}
-		debugMessage += fmt.Sprintf("\tnew object: %v", curr)
+		debugMessage += fmt.Sprintf("event %v arrived:\n", event)
+		debugMessage += fmt.Sprintf("\told object: %v\n", old)
+		debugMessage += fmt.Sprintf("\tnew object: %v\n", curr)
 
-		IORLog.Debug(debugMessage)
+		defer IORLog.Debug(debugMessage)
 	}
 
 	isManaged, err := isManagedByIOR(*curr)
@@ -415,8 +414,6 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 		return nil
 	}
 
-	config := r.store.Get(collections.IstioNetworkingV1Alpha3Gateways.Resource().GroupVersionKind(), curr.Name, curr.Namespace)
-
 	var routes []*v1.Route
 
 	routes, err = r.findRoutes(curr.Meta)
@@ -425,13 +422,18 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 		return errors.Wrapf(err, "error finding routes matching gateway %s/%s", curr.Name, curr.Namespace)
 	}
 
-	if config != nil {
+	if IORLog.GetOutputLevel() >= log.DebugLevel {
+		debugMessage += fmt.Sprintf("\troute objects: %v", routes)
+	}
+
+	if event != model.EventDelete {
 		return r.reconcileGateway(curr, routes)
 	}
 
 	var result *multierror.Error
 
 	for _, route := range routes {
+		IORLog.Debugf("Under %s/%s Gateway, deleting Route %v", curr.Name, curr.Namespace, route)
 		if err := r.deleteRoute(route); err != nil {
 			result = multierror.Append(result, err)
 		}
