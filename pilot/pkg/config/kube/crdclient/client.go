@@ -333,7 +333,7 @@ func (cl *Client) Get(typ config.GroupVersionKind, name, namespace string) *conf
 	obj, err := h.lister(namespace).Get(name)
 	if err != nil {
 		// TODO we should be returning errors not logging
-		cl.logger.Warnf("couldn't find %s/%s in informer index", namespace, name)
+		cl.logger.Warnf("couldn't find %s/%s in informer index %v", namespace, name, err)
 		return nil
 	}
 
