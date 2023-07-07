@@ -118,7 +118,14 @@ func New(client kube.Client, opts Option) (model.ConfigStoreController, error) {
 	if features.EnableGatewayAPI {
 		schemas = collections.PilotGatewayAPI
 	}
-	return NewForSchemas(client, opts, schemas)
+	store, err := NewForSchemas(client, opts, schemas)
+	if err != nil {
+		return store, err
+	}
+
+	handleCRDAdd(store.(*Client), "routes.route.openshift.io", nil)
+
+	return store, nil
 }
 
 var crdWatches = map[config.GroupVersionKind]*waiter{
