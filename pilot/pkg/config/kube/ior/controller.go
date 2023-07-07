@@ -423,6 +423,15 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 
 	IORLog.Debugf("Processing %s/%s's route objects: %v", curr.Name, curr.Namespace, routes)
 
+	if IORLog.GetOutputLevel() >= log.DebugLevel {
+		allRoutes, err := r.routeLister.List(labels.Everything())
+		if err != nil {
+			IORLog.Debugf("Failed to list all routes, due to %s", err)
+		}
+
+		IORLog.Debugf("Found all %d routes.\n\t route objects:%v", len(allRoutes), allRoutes)
+	}
+
 	if event != model.EventDelete {
 		return r.reconcileGateway(curr, routes)
 	}
