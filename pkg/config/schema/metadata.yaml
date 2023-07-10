@@ -184,6 +184,11 @@ collections:
     name: "k8s/gateway_api/v1alpha2/referencegrants"
     group: "gateway.networking.k8s.io"
 
+  - name: "openshift/route.openshift.io/v1/routes"
+    kind: "Route"
+    group: "route.openshift.io"
+    pilot: true
+
 # Configuration for resource types.
 resources:
   # Kubernetes specific configuration.
@@ -503,3 +508,11 @@ resources:
     description: ""
     statusProto: "istio.meta.v1alpha1.IstioStatus"
     statusProtoPackage: "istio.io/api/meta/v1alpha1"
+
+  - kind: "Route"
+    plural: "routes"
+    group: "route.openshift.io"
+    version: "v1"
+    proto: "github.com.openshift.api.route.v1.Route"
+    protoPackage: "github.com/openshift/api/route/v1"
+    
