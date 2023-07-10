@@ -304,7 +304,9 @@ func (cl *Client) SyncAll() {
 	cl.beginSync.Store(true)
 	wg := sync.WaitGroup{}
 	for _, h := range cl.allKinds() {
-		handlers := cl.handlers[h.schema.Resource().GroupVersionKind()]
+		gvk := h.schema.Resource().GroupVersionKind()
+		handlers := cl.handlers[gvk]
+		cl.logger.Infof("CRD Client processing %s with %d handlers", gvk, len(handlers))
 		if len(handlers) == 0 {
 			continue
 		}
@@ -313,6 +315,7 @@ func (cl *Client) SyncAll() {
 		go func() {
 			defer wg.Done()
 			objects := h.informer.GetIndexer().List()
+			cl.logger.Infof("CRD Client processing %s with %d objects", gvk, len(objects))
 			for _, object := range objects {
 				currItem, ok := object.(runtime.Object)
 				if !ok {
@@ -320,6 +323,7 @@ func (cl *Client) SyncAll() {
 					continue
 				}
 				currConfig := TranslateObject(currItem, h.schema.Resource().GroupVersionKind(), h.client.domainSuffix)
+				cl.logger.Infof("CRD Client processed %s config %s/%s", currConfig.GroupVersionKind, currConfig.Name, currConfig.Namespace)
 				for _, f := range handlers {
 					f(config.Config{}, currConfig, model.EventAdd)
 				}
