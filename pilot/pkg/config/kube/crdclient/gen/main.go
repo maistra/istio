@@ -54,8 +54,9 @@ type ConfigData struct {
 }
 
 var (
-	GatewayAPITypes = collections.PilotGatewayAPI.Remove(collections.Pilot.All()...)
-	NonIstioTypes   = collections.All.Remove(collections.Pilot.All()...)
+	GatewayAPITypes    = collections.PilotGatewayAPI.Remove(collections.Pilot.All()...)
+	NonIstioTypes      = collections.All.Remove(collections.Pilot.All()...)
+	OpenshiftRouteType = collections.OpenshiftRouteOpenshiftIoV1Routes
 )
 
 // MakeConfigData prepare data for code generation for the given schema.
@@ -79,6 +80,9 @@ func MakeConfigData(schema collection.Schema) ConfigData {
 	} else if _, f := NonIstioTypes.Find(schema.Name().String()); f {
 		out.ClientType += "Spec"
 		out.Readonly = true
+	} else if OpenshiftRouteType.Name().String() == schema.Name().String() {
+		out.Client = "rc"
+		out.ClientType += "Spec"
 	}
 	if o, f := clientGoTypeOverrides[out.Kind]; f {
 		out.ClientType = o
@@ -138,7 +142,7 @@ var (
 		"k8s.io/api/apps/v1":                                       "appsv1",
 		"k8s.io/api/core/v1":                                       "corev1",
 		"k8s.io/api/extensions/v1beta1":                            "extensionsv1beta1",
-		"github.com/openshift/api/route/v1":                        "routev1",
+		"github.com/openshift/api/route/v1":                        "RouteV1",
 	}
 	// Translates a plural type name to the type path in client-go
 	// TODO: can we automatically derive this? I don't think we can, its internal to the kubegen

@@ -9,6 +9,7 @@ package collections
 import (
 	"reflect"
 
+	githubcomopenshiftapiroutev1 "github.com/openshift/api/route/v1"
 	k8sioapiadmissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	k8sioapiappsv1 "k8s.io/api/apps/v1"
 	k8sioapicorev1 "k8s.io/api/core/v1"
@@ -669,6 +670,24 @@ var (
 		}.MustBuild(),
 	}.MustBuild()
 
+	// OpenshiftRouteOpenshiftIoV1Routes describes the collection
+	// openshift/route.openshift.io/v1/routes
+	OpenshiftRouteOpenshiftIoV1Routes = collection.Builder{
+		Name:         "openshift/route.openshift.io/v1/routes",
+		VariableName: "OpenshiftRouteOpenshiftIoV1Routes",
+		Resource: resource.Builder{
+			Group:   "route.openshift.io",
+			Kind:    "Route",
+			Plural:  "routes",
+			Version: "v1",
+			Proto:   "github.com.openshift.api.route.v1.RouteSpec", StatusProto: "github.com.openshift.api.route.v1.RouteStatus",
+			ReflectType: reflect.TypeOf(&githubcomopenshiftapiroutev1.RouteSpec{}).Elem(), StatusType: reflect.TypeOf(&githubcomopenshiftapiroutev1.RouteStatus{}).Elem(),
+			ProtoPackage: "github.com/openshift/api/route/v1", StatusPackage: "github.com/openshift/api/route/v1",
+			ClusterScoped: false,
+			ValidateProto: validation.EmptyValidate,
+		}.MustBuild(),
+	}.MustBuild()
+
 	// All contains all collections in the system.
 	All = collection.NewSchemasBuilder().
 		MustAdd(IstioExtensionsV1Alpha1Wasmplugins).
@@ -705,6 +724,7 @@ var (
 		MustAdd(K8SGatewayApiV1Beta1Gatewayclasses).
 		MustAdd(K8SGatewayApiV1Beta1Gateways).
 		MustAdd(K8SGatewayApiV1Beta1Httproutes).
+		MustAdd(OpenshiftRouteOpenshiftIoV1Routes).
 		Build()
 
 	// Istio contains only Istio collections.
@@ -781,6 +801,7 @@ var (
 		MustAdd(IstioSecurityV1Beta1Peerauthentications).
 		MustAdd(IstioSecurityV1Beta1Requestauthentications).
 		MustAdd(IstioTelemetryV1Alpha1Telemetries).
+		MustAdd(OpenshiftRouteOpenshiftIoV1Routes).
 		Build()
 
 	// PilotGatewayAPI contains only collections used by Pilot, including experimental Service Api.
@@ -806,6 +827,7 @@ var (
 			MustAdd(K8SGatewayApiV1Beta1Gatewayclasses).
 			MustAdd(K8SGatewayApiV1Beta1Gateways).
 			MustAdd(K8SGatewayApiV1Beta1Httproutes).
+			MustAdd(OpenshiftRouteOpenshiftIoV1Routes).
 			Build()
 
 	// Deprecated contains only collections used by that will soon be used by nothing.

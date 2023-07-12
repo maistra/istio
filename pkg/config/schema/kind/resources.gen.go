@@ -31,6 +31,7 @@ const (
 	ReferenceGrant
 	ReferencePolicy
 	RequestAuthentication
+	Route
 	Secret
 	Service
 	ServiceEntry
@@ -92,6 +93,8 @@ func (k Kind) String() string {
 		return "ReferencePolicy"
 	case RequestAuthentication:
 		return "RequestAuthentication"
+	case Route:
+		return "Route"
 	case Secret:
 		return "Secret"
 	case Service:
@@ -188,6 +191,9 @@ func FromGvk(gvk config.GroupVersionKind) Kind {
 	}
 	if gvk.Kind == "RequestAuthentication" && gvk.Group == "security.istio.io" && gvk.Version == "v1beta1" {
 		return RequestAuthentication
+	}
+	if gvk.Kind == "Route" && gvk.Group == "route.openshift.io" && gvk.Version == "v1" {
+		return Route
 	}
 	if gvk.Kind == "Secret" && gvk.Group == "" && gvk.Version == "v1" {
 		return Secret

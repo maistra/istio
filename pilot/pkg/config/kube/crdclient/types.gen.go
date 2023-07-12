@@ -25,6 +25,8 @@ import (
 	"context"
 	"fmt"
 
+	routev1 "github.com/openshift/api/route/v1"
+	routeversionedclient "github.com/openshift/client-go/route/clientset/versioned"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -53,7 +55,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 )
 
-func create(ic versionedclient.Interface, sc gatewayapiclient.Interface, cfg config.Config, objMeta metav1.ObjectMeta) (metav1.Object, error) {
+func create(ic versionedclient.Interface, sc gatewayapiclient.Interface, rc routeversionedclient.Interface, cfg config.Config, objMeta metav1.ObjectMeta) (metav1.Object, error) {
 	switch cfg.GroupVersionKind {
 	case collections.IstioExtensionsV1Alpha1Wasmplugins.Resource().GroupVersionKind():
 		return ic.ExtensionsV1alpha1().WasmPlugins(cfg.Namespace).Create(context.TODO(), &clientextensionsv1alpha1.WasmPlugin{
@@ -160,12 +162,17 @@ func create(ic versionedclient.Interface, sc gatewayapiclient.Interface, cfg con
 			ObjectMeta: objMeta,
 			Spec:       *(cfg.Spec.(*gatewayv1beta1.HTTPRouteSpec)),
 		}, metav1.CreateOptions{})
+	case collections.OpenshiftRouteOpenshiftIoV1Routes.Resource().GroupVersionKind():
+		return rc.RouteV1().Routes(cfg.Namespace).Create(context.TODO(), &routev1.Route{
+			ObjectMeta: objMeta,
+			Spec:       *(cfg.Spec.(*routev1.RouteSpec)),
+		}, metav1.CreateOptions{})
 	default:
 		return nil, fmt.Errorf("unsupported type: %v", cfg.GroupVersionKind)
 	}
 }
 
-func update(ic versionedclient.Interface, sc gatewayapiclient.Interface, cfg config.Config, objMeta metav1.ObjectMeta) (metav1.Object, error) {
+func update(ic versionedclient.Interface, sc gatewayapiclient.Interface, rc routeversionedclient.Interface, cfg config.Config, objMeta metav1.ObjectMeta) (metav1.Object, error) {
 	switch cfg.GroupVersionKind {
 	case collections.IstioExtensionsV1Alpha1Wasmplugins.Resource().GroupVersionKind():
 		return ic.ExtensionsV1alpha1().WasmPlugins(cfg.Namespace).Update(context.TODO(), &clientextensionsv1alpha1.WasmPlugin{
@@ -272,12 +279,17 @@ func update(ic versionedclient.Interface, sc gatewayapiclient.Interface, cfg con
 			ObjectMeta: objMeta,
 			Spec:       *(cfg.Spec.(*gatewayv1beta1.HTTPRouteSpec)),
 		}, metav1.UpdateOptions{})
+	case collections.OpenshiftRouteOpenshiftIoV1Routes.Resource().GroupVersionKind():
+		return rc.RouteV1().Routes(cfg.Namespace).Update(context.TODO(), &routev1.Route{
+			ObjectMeta: objMeta,
+			Spec:       *(cfg.Spec.(*routev1.RouteSpec)),
+		}, metav1.UpdateOptions{})
 	default:
 		return nil, fmt.Errorf("unsupported type: %v", cfg.GroupVersionKind)
 	}
 }
 
-func updateStatus(ic versionedclient.Interface, sc gatewayapiclient.Interface, cfg config.Config, objMeta metav1.ObjectMeta) (metav1.Object, error) {
+func updateStatus(ic versionedclient.Interface, sc gatewayapiclient.Interface, rc routeversionedclient.Interface, cfg config.Config, objMeta metav1.ObjectMeta) (metav1.Object, error) {
 	switch cfg.GroupVersionKind {
 
 	case collections.IstioExtensionsV1Alpha1Wasmplugins.Resource().GroupVersionKind():
@@ -393,12 +405,18 @@ func updateStatus(ic versionedclient.Interface, sc gatewayapiclient.Interface, c
 			ObjectMeta: objMeta,
 			Status:     *(cfg.Status.(*gatewayv1beta1.HTTPRouteStatus)),
 		}, metav1.UpdateOptions{})
+
+	case collections.OpenshiftRouteOpenshiftIoV1Routes.Resource().GroupVersionKind():
+		return rc.RouteV1().Routes(cfg.Namespace).UpdateStatus(context.TODO(), &routev1.Route{
+			ObjectMeta: objMeta,
+			Status:     *(cfg.Status.(*routev1.RouteStatus)),
+		}, metav1.UpdateOptions{})
 	default:
 		return nil, fmt.Errorf("unsupported type: %v", cfg.GroupVersionKind)
 	}
 }
 
-func patch(ic versionedclient.Interface, sc gatewayapiclient.Interface, orig config.Config, origMeta metav1.ObjectMeta, mod config.Config, modMeta metav1.ObjectMeta, typ types.PatchType) (metav1.Object, error) {
+func patch(ic versionedclient.Interface, sc gatewayapiclient.Interface, rc routeversionedclient.Interface, orig config.Config, origMeta metav1.ObjectMeta, mod config.Config, modMeta metav1.ObjectMeta, typ types.PatchType) (metav1.Object, error) {
 	if orig.GroupVersionKind != mod.GroupVersionKind {
 		return nil, fmt.Errorf("gvk mismatch: %v, modified: %v", orig.GroupVersionKind, mod.GroupVersionKind)
 	}
@@ -719,12 +737,27 @@ func patch(ic versionedclient.Interface, sc gatewayapiclient.Interface, orig con
 		}
 		return sc.GatewayV1beta1().HTTPRoutes(orig.Namespace).
 			Patch(context.TODO(), orig.Name, typ, patchBytes, metav1.PatchOptions{FieldManager: "pilot-discovery"})
+	case collections.OpenshiftRouteOpenshiftIoV1Routes.Resource().GroupVersionKind():
+		oldRes := &routev1.Route{
+			ObjectMeta: origMeta,
+			Spec:       *(orig.Spec.(*routev1.RouteSpec)),
+		}
+		modRes := &routev1.Route{
+			ObjectMeta: modMeta,
+			Spec:       *(mod.Spec.(*routev1.RouteSpec)),
+		}
+		patchBytes, err := genPatchBytes(oldRes, modRes, typ)
+		if err != nil {
+			return nil, err
+		}
+		return rc.RouteV1().Routes(orig.Namespace).
+			Patch(context.TODO(), orig.Name, typ, patchBytes, metav1.PatchOptions{FieldManager: "pilot-discovery"})
 	default:
 		return nil, fmt.Errorf("unsupported type: %v", orig.GroupVersionKind)
 	}
 }
 
-func delete(ic versionedclient.Interface, sc gatewayapiclient.Interface, typ config.GroupVersionKind, name, namespace string, resourceVersion *string) error {
+func delete(ic versionedclient.Interface, sc gatewayapiclient.Interface, rc routeversionedclient.Interface, typ config.GroupVersionKind, name, namespace string, resourceVersion *string) error {
 	var deleteOptions metav1.DeleteOptions
 	if resourceVersion != nil {
 		deleteOptions.Preconditions = &metav1.Preconditions{ResourceVersion: resourceVersion}
@@ -772,6 +805,8 @@ func delete(ic versionedclient.Interface, sc gatewayapiclient.Interface, typ con
 		return sc.GatewayV1beta1().Gateways(namespace).Delete(context.TODO(), name, deleteOptions)
 	case collections.K8SGatewayApiV1Beta1Httproutes.Resource().GroupVersionKind():
 		return sc.GatewayV1beta1().HTTPRoutes(namespace).Delete(context.TODO(), name, deleteOptions)
+	case collections.OpenshiftRouteOpenshiftIoV1Routes.Resource().GroupVersionKind():
+		return rc.RouteV1().Routes(namespace).Delete(context.TODO(), name, deleteOptions)
 	default:
 		return fmt.Errorf("unsupported type: %v", typ)
 	}
@@ -1161,6 +1196,25 @@ var translationMap = map[config.GroupVersionKind]func(r runtime.Object) config.C
 		return config.Config{
 			Meta: config.Meta{
 				GroupVersionKind:  collections.K8SGatewayApiV1Beta1Httproutes.Resource().GroupVersionKind(),
+				Name:              obj.Name,
+				Namespace:         obj.Namespace,
+				Labels:            obj.Labels,
+				Annotations:       obj.Annotations,
+				ResourceVersion:   obj.ResourceVersion,
+				CreationTimestamp: obj.CreationTimestamp.Time,
+				OwnerReferences:   obj.OwnerReferences,
+				UID:               string(obj.UID),
+				Generation:        obj.Generation,
+			},
+			Spec:   &obj.Spec,
+			Status: &obj.Status,
+		}
+	},
+	collections.OpenshiftRouteOpenshiftIoV1Routes.Resource().GroupVersionKind(): func(r runtime.Object) config.Config {
+		obj := r.(*routev1.Route)
+		return config.Config{
+			Meta: config.Meta{
+				GroupVersionKind:  collections.OpenshiftRouteOpenshiftIoV1Routes.Resource().GroupVersionKind(),
 				Name:              obj.Name,
 				Namespace:         obj.Namespace,
 				Labels:            obj.Labels,

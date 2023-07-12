@@ -31,6 +31,7 @@ import (
 
 	jsonmerge "github.com/evanphx/json-patch/v5"
 	"github.com/hashicorp/go-multierror"
+	routeclient "github.com/openshift/client-go/route/clientset/versioned"
 	"go.uber.org/atomic"
 	"gomodules.xyz/jsonpatch/v3"
 	crd "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -46,7 +47,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	gatewayapiclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
-	routeclient "github.com/openshift/client-go/route/clientset/versioned"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
@@ -123,7 +123,9 @@ func New(client kube.Client, opts Option) (model.ConfigStoreController, error) {
 		return store, err
 	}
 
-	handleCRDAdd(store.(*Client), "routes.route.openshift.io", nil)
+	r := collections.OpenshiftRouteOpenshiftIoV1Routes.Resource()
+
+	handleCRDAdd(store.(*Client), fmt.Sprintf("%s.%s", r.Plural(), r.Group()), nil)
 
 	return store, nil
 }
@@ -270,6 +272,7 @@ func (cl *Client) Run(stop <-chan struct{}) {
 					cl.logger.Errorf("wrong type %T: %v", obj, obj)
 					return
 				}
+				cl.logger.Infof("Adding CRD %s", crd.Name)
 				handleCRDAdd(cl, crd.Name, stop)
 			},
 			UpdateFunc: nil,
@@ -283,6 +286,7 @@ func (cl *Client) Run(stop <-chan struct{}) {
 
 func (cl *Client) informerSynced() bool {
 	for _, ctl := range cl.allKinds() {
+		cl.logger.Infof("controller %q has synced...", ctl.schema.Resource().GroupVersionKind())
 		if !ctl.informer.HasSynced() {
 			cl.logger.Infof("controller %q is syncing...", ctl.schema.Resource().GroupVersionKind())
 			return false
@@ -365,7 +369,7 @@ func (cl *Client) Create(cfg config.Config) (string, error) {
 		return "", fmt.Errorf("nil spec for %v/%v", cfg.Name, cfg.Namespace)
 	}
 
-	meta, err := create(cl.istioClient, cl.gatewayAPIClient, cfg, getObjectMetadata(cfg))
+	meta, err := create(cl.istioClient, cl.gatewayAPIClient, cl.routeClient, cfg, getObjectMetadata(cfg))
 	if err != nil {
 		return "", err
 	}
@@ -378,7 +382,7 @@ func (cl *Client) Update(cfg config.Config) (string, error) {
 		return "", fmt.Errorf("nil spec for %v/%v", cfg.Name, cfg.Namespace)
 	}
 
-	meta, err := update(cl.istioClient, cl.gatewayAPIClient, cfg, getObjectMetadata(cfg))
+	meta, err := update(cl.istioClient, cl.gatewayAPIClient, cl.routeClient, cfg, getObjectMetadata(cfg))
 	if err != nil {
 		return "", err
 	}
@@ -390,7 +394,7 @@ func (cl *Client) UpdateStatus(cfg config.Config) (string, error) {
 		return "", fmt.Errorf("nil status for %v/%v on updateStatus()", cfg.Name, cfg.Namespace)
 	}
 
-	meta, err := updateStatus(cl.istioClient, cl.gatewayAPIClient, cfg, getObjectMetadata(cfg))
+	meta, err := updateStatus(cl.istioClient, cl.gatewayAPIClient, cl.routeClient, cfg, getObjectMetadata(cfg))
 	if err != nil {
 		return "", err
 	}
@@ -402,7 +406,7 @@ func (cl *Client) UpdateStatus(cfg config.Config) (string, error) {
 func (cl *Client) Patch(orig config.Config, patchFn config.PatchFunc) (string, error) {
 	modified, patchType := patchFn(orig.DeepCopy())
 
-	meta, err := patch(cl.istioClient, cl.gatewayAPIClient, orig, getObjectMetadata(orig), modified, getObjectMetadata(modified), patchType)
+	meta, err := patch(cl.istioClient, cl.gatewayAPIClient, cl.routeClient, orig, getObjectMetadata(orig), modified, getObjectMetadata(modified), patchType)
 	if err != nil {
 		return "", err
 	}
@@ -412,7 +416,7 @@ func (cl *Client) Patch(orig config.Config, patchFn config.PatchFunc) (string, e
 // Delete implements store interface
 // `resourceVersion` must be matched before deletion is carried out. If not possible, a 409 Conflict status will be
 func (cl *Client) Delete(typ config.GroupVersionKind, name, namespace string, resourceVersion *string) error {
-	return delete(cl.istioClient, cl.gatewayAPIClient, typ, name, namespace, resourceVersion)
+	return delete(cl.istioClient, cl.gatewayAPIClient, cl.routeClient, typ, name, namespace, resourceVersion)
 }
 
 // List implements store interface
@@ -560,7 +564,7 @@ func handleCRDAdd(cl *Client, name string, stop <-chan struct{}) {
 	case gvk.CustomResourceDefinition.Group:
 		ifactory = cl.client.ExtInformer()
 		i, err = cl.client.ExtInformer().ForResource(gvr)
-	case cl.routeClient.RouteV1().RESTClient().APIVersion().Group:
+	case gvk.Route.Group:
 		ifactory = cl.client.RouteInformer()
 		i, err = cl.client.RouteInformer().ForResource(gvr)
 	default:

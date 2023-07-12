@@ -31,6 +31,7 @@ var (
 	ReferenceGrant               = config.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1alpha2", Kind: "ReferenceGrant"}
 	ReferencePolicy              = config.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1alpha2", Kind: "ReferencePolicy"}
 	RequestAuthentication        = config.GroupVersionKind{Group: "security.istio.io", Version: "v1beta1", Kind: "RequestAuthentication"}
+	Route                        = config.GroupVersionKind{Group: "route.openshift.io", Version: "v1", Kind: "Route"}
 	Secret                       = config.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
 	Service                      = config.GroupVersionKind{Group: "", Version: "v1", Kind: "Service"}
 	ServiceEntry                 = config.GroupVersionKind{Group: "networking.istio.io", Version: "v1alpha3", Kind: "ServiceEntry"}

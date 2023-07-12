@@ -513,6 +513,8 @@ resources:
     plural: "routes"
     group: "route.openshift.io"
     version: "v1"
-    proto: "github.com.openshift.api.route.v1.Route"
+    proto: "github.com.openshift.api.route.v1.RouteSpec"
     protoPackage: "github.com/openshift/api/route/v1"
+    statusProtoPackage: "github.com/openshift/api/route/v1"
+    statusProto: "github.com.openshift.api.route.v1.RouteStatus"
     
