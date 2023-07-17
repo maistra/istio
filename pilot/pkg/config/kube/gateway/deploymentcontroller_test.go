@@ -46,13 +46,13 @@ import (
 	"istio.io/istio/pkg/kube/inject"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/kclient/clienttest"
+	istiolog "istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/revisions"
 	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/file"
 	"istio.io/istio/pkg/test/util/retry"
-	istiolog "istio.io/pkg/log"
 )
 
 func TestConfigureIstioGateway(t *testing.T) {
@@ -217,13 +217,11 @@ func TestConfigureIstioGateway(t *testing.T) {
 			stop := test.NewStop(t)
 			client.RunAndWait(stop)
 			kube.WaitForCacheSync("test", stop, deployments.HasSynced)
+			env := model.NewEnvironment()
+			env.PushContext().ProxyConfigs = tt.pcs
 			d := &DeploymentController{
-				client: client,
-				env: &model.Environment{
-					PushContext: &model.PushContext{
-						ProxyConfigs: tt.pcs,
-					},
-				},
+				client:       client,
+				env:          env,
 				deployments:  deployments,
 				clusterID:    cluster.ID(features.ClusterName),
 				injectConfig: testInjectionConfig(t),

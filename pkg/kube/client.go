@@ -48,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	kubeVersion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/client-go/discovery"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/dynamic"
@@ -80,12 +81,13 @@ import (
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/kube/informerfactory"
+	"istio.io/istio/pkg/kube/kubetypes"
 	"istio.io/istio/pkg/kube/mcs"
 	"istio.io/istio/pkg/lazy"
+	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/sleep"
 	"istio.io/istio/pkg/test/util/yml"
-	"istio.io/pkg/log"
-	"istio.io/pkg/version"
+	"istio.io/istio/pkg/version"
 )
 
 const (
@@ -121,6 +123,9 @@ type Client interface {
 
 	// Informers returns an informer factory
 	Informers() informerfactory.InformerFactory
+
+	// CrdWatcher returns the CRD watcher for this client
+	CrdWatcher() kubetypes.CrdWatcher
 
 	// RunAndWait starts all informers and waits for their caches to sync.
 	// Warning: this must be called AFTER .Informer() is called, which will register the informer.
@@ -218,6 +223,7 @@ var (
 func NewFakeClient(objects ...runtime.Object) CLIClient {
 	c := &client{
 		informerWatchesPending: atomic.NewInt32(0),
+		clusterID:              "fake",
 	}
 	c.kube = fake.NewSimpleClientset(objects...)
 
@@ -225,12 +231,7 @@ func NewFakeClient(objects ...runtime.Object) CLIClient {
 	s := FakeIstioScheme
 
 	c.metadata = metadatafake.NewSimpleMetadataClient(s)
-	// Support some galley tests using basicmetadata
-	// If you are adding something to this list, consider other options like adding to the scheme.
-	gvrToListKind := map[schema.GroupVersionResource]string{
-		{Group: "testdata.istio.io", Version: "v1alpha1", Resource: "Kind1s"}: "Kind1List",
-	}
-	c.dynamic = dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s, gvrToListKind)
+	c.dynamic = dynamicfake.NewSimpleDynamicClient(s)
 	c.istio = istiofake.NewSimpleClientset()
 	c.gatewayapi = gatewayapifake.NewSimpleClientset()
 	c.extSet = extfake.NewSimpleClientset()
@@ -259,6 +260,20 @@ func NewFakeClient(objects ...runtime.Object) CLIClient {
 			return true, watch, nil
 		}
 	}
+	// https://github.com/kubernetes/client-go/issues/439
+	createReactor := func(action clienttesting.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(clienttesting.CreateAction).GetObject()
+		meta, ok := ret.(metav1.Object)
+		if !ok {
+			return
+		}
+
+		if meta.GetName() == "" && meta.GetGenerateName() != "" {
+			meta.SetName(names.SimpleNameGenerator.GenerateName(meta.GetGenerateName()))
+		}
+
+		return
+	}
 	for _, fc := range []fakeClient{
 		c.kube.(*fake.Clientset),
 		c.istio.(*istiofake.Clientset),
@@ -268,11 +283,16 @@ func NewFakeClient(objects ...runtime.Object) CLIClient {
 	} {
 		fc.PrependReactor("list", "*", listReactor)
 		fc.PrependWatchReactor("*", watchReactor(fc.Tracker()))
+		fc.PrependReactor("create", "*", createReactor)
 	}
 
 	c.fastSync = true
 
 	c.version = lazy.NewWithRetry(c.kube.Discovery().ServerVersion)
+
+	if NewCrdWatcher != nil {
+		c.crdWatcher = NewCrdWatcher(c)
+	}
 
 	return c
 }
@@ -319,12 +339,14 @@ type client struct {
 
 	portManager PortManager
 
+	crdWatcher kubetypes.CrdWatcher
+
 	// http is a client for HTTP requests
 	http *http.Client
 }
 
 // newClientInternal creates a Kubernetes client from the given factory.
-func newClientInternal(clientFactory *clientFactory, revision string) (*client, error) {
+func newClientInternal(clientFactory *clientFactory, revision string, cluster cluster.ID) (*client, error) {
 	var c client
 	var err error
 
@@ -335,6 +357,7 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 		return nil, err
 	}
 
+	c.clusterID = cluster
 	c.revision = revision
 
 	c.restClient, err = clientFactory.RESTClient()
@@ -402,6 +425,17 @@ func newClientInternal(clientFactory *clientFactory, revision string) (*client, 
 	return &c, nil
 }
 
+// EnableCrdWatcher enables the CRD watcher on the client.
+func EnableCrdWatcher(c Client) Client {
+	if NewCrdWatcher == nil {
+		panic("NewCrdWatcher is unset. Likely the crd watcher library is not imported anywhere")
+	}
+	c.(*client).crdWatcher = NewCrdWatcher(c)
+	return c
+}
+
+var NewCrdWatcher func(Client) kubetypes.CrdWatcher
+
 // NewDefaultClient returns a default client, using standard Kubernetes config resolution to determine
 // the cluster to access.
 func NewDefaultClient() (Client, error) {
@@ -413,12 +447,12 @@ func NewDefaultClient() (Client, error) {
 // This is appropriate for use in CLI libraries because it exposes functionality unsafe for in-cluster controllers,
 // and uses standard CLI (kubectl) caching.
 func NewCLIClient(clientConfig clientcmd.ClientConfig, revision string) (CLIClient, error) {
-	return newClientInternal(newClientFactory(clientConfig, true), revision)
+	return newClientInternal(newClientFactory(clientConfig, true), revision, "")
 }
 
 // NewClient creates a Kubernetes client from the given rest config.
 func NewClient(clientConfig clientcmd.ClientConfig, cluster cluster.ID) (Client, error) {
-	return newClientInternal(newClientFactory(clientConfig, false), "")
+	return newClientInternal(newClientFactory(clientConfig, false), "", cluster)
 }
 
 func (c *client) RESTConfig() *rest.Config {
@@ -457,12 +491,18 @@ func (c *client) Informers() informerfactory.InformerFactory {
 	return c.informerFactory
 }
 
+func (c *client) CrdWatcher() kubetypes.CrdWatcher {
+	return c.crdWatcher
+}
+
 // RunAndWait starts all informers and waits for their caches to sync.
 // Warning: this must be called AFTER .Informer() is called, which will register the informer.
 func (c *client) RunAndWait(stop <-chan struct{}) {
 	c.Run(stop)
-
 	if c.fastSync {
+		if c.crdWatcher != nil {
+			c.WaitForCacheSync("crd watcher", stop, c.crdWatcher.HasSynced)
+		}
 		// WaitForCacheSync will virtually never be synced on the first call, as its called immediately after Start()
 		// This triggers a 100ms delay per call, which is often called 2-3 times in a test, delaying tests.
 		// Instead, we add an aggressive sync polling
@@ -479,6 +519,9 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 			return false, nil
 		})
 	} else {
+		if c.crdWatcher != nil {
+			c.WaitForCacheSync("crd watcher", stop, c.crdWatcher.HasSynced)
+		}
 		c.informerFactory.WaitForCacheSync(stop)
 	}
 }
@@ -489,7 +532,15 @@ func (c *client) Shutdown() {
 
 func (c *client) Run(stop <-chan struct{}) {
 	c.informerFactory.Start(stop)
-	c.started.Store(true)
+	if c.crdWatcher != nil {
+		c.crdWatcher.Run(stop)
+	}
+	alreadyStarted := c.started.Swap(true)
+	if alreadyStarted {
+		log.Debugf("cluster %q kube client started again", c.clusterID)
+	} else {
+		log.Infof("cluster %q kube client started", c.clusterID)
+	}
 }
 
 func (c *client) GetKubernetesVersion() (*kubeVersion.Info, error) {

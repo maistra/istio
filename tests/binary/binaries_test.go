@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"istio.io/istio/pkg/util/sets"
-	"istio.io/pkg/version"
+	"istio.io/istio/pkg/version"
 )
 
 var (
@@ -113,7 +113,7 @@ func TestBinarySizes(t *testing.T) {
 		"bug-report":      {60, 85},
 		"client":          {20, 30},
 		"server":          {20, 30},
-		"envoy":           {60, 110},
+		"envoy":           {60, 115},
 		"ztunnel":         {15, 25},
 	}
 

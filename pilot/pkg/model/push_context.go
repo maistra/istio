@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"go.uber.org/atomic"
-	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/types"
 
 	extensions "istio.io/api/extensions/v1alpha1"
@@ -40,10 +39,12 @@ import (
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/schema/kind"
 	"istio.io/istio/pkg/config/visibility"
+	"istio.io/istio/pkg/monitoring"
+	"istio.io/istio/pkg/network"
+	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
-	"istio.io/pkg/monitoring"
 )
 
 // Metrics is an interface for capturing metrics on a per-node basis.
@@ -366,7 +367,7 @@ type PushRequest struct {
 	// to avoid unbounded cardinality in metrics. If this is not set, it may be automatically filled in later.
 	// There should only be multiple reasons if the push request is the result of two distinct triggers, rather than
 	// classifying a single trigger as having multiple reasons.
-	Reason []TriggerReason
+	Reason ReasonStats
 
 	// Delta defines the resources that were added or removed as part of this push request.
 	// This is set only on requests from the client which change the set of resources they (un)subscribe from.
@@ -383,6 +384,53 @@ type ResourceDelta struct {
 
 func (rd ResourceDelta) IsEmpty() bool {
 	return len(rd.Subscribed) == 0 && len(rd.Unsubscribed) == 0
+}
+
+type ReasonStats map[TriggerReason]int
+
+func NewReasonStats(reasons ...TriggerReason) ReasonStats {
+	ret := make(ReasonStats)
+	for _, reason := range reasons {
+		ret.Add(reason)
+	}
+	return ret
+}
+
+func (r ReasonStats) Add(reason TriggerReason) {
+	r[reason]++
+}
+
+func (r ReasonStats) Merge(other ReasonStats) {
+	for reason, count := range other {
+		r[reason] += count
+	}
+}
+
+func (r ReasonStats) CopyMerge(other ReasonStats) ReasonStats {
+	if len(r) == 0 {
+		return other
+	}
+	if len(other) == 0 {
+		return r
+	}
+
+	merged := make(ReasonStats, len(r)+len(other))
+	merged.Merge(r)
+	merged.Merge(other)
+
+	return merged
+}
+
+func (r ReasonStats) Count() int {
+	var ret int
+	for _, count := range r {
+		ret += count
+	}
+	return ret
+}
+
+func (r ReasonStats) Has(reason TriggerReason) bool {
+	return r[reason] > 0
 }
 
 type TriggerReason string
@@ -434,7 +482,12 @@ func (pr *PushRequest) Merge(other *PushRequest) *PushRequest {
 	// Keep the first (older) start time
 
 	// Merge the two reasons. Note that we shouldn't deduplicate here, or we would under count
-	pr.Reason = append(pr.Reason, other.Reason...)
+	if len(other.Reason) > 0 {
+		if pr.Reason == nil {
+			pr.Reason = make(map[TriggerReason]int)
+		}
+		pr.Reason.Merge(other.Reason)
+	}
 
 	// If either is full we need a full push
 	pr.Full = pr.Full || other.Full
@@ -449,7 +502,7 @@ func (pr *PushRequest) Merge(other *PushRequest) *PushRequest {
 		pr.ConfigsUpdated = nil
 	} else {
 		for conf := range other.ConfigsUpdated {
-			pr.ConfigsUpdated[conf] = struct{}{}
+			pr.ConfigsUpdated.Insert(conf)
 		}
 	}
 
@@ -467,11 +520,11 @@ func (pr *PushRequest) CopyMerge(other *PushRequest) *PushRequest {
 		return pr
 	}
 
-	var reason []TriggerReason
+	var reason ReasonStats
 	if len(pr.Reason)+len(other.Reason) > 0 {
-		reason = make([]TriggerReason, 0, len(pr.Reason)+len(other.Reason))
-		reason = append(reason, pr.Reason...)
-		reason = append(reason, other.Reason...)
+		reason = make(ReasonStats)
+		reason.Merge(pr.Reason)
+		reason.Merge(other.Reason)
 	}
 	merged := &PushRequest{
 		// Keep the first (older) start time
@@ -490,28 +543,19 @@ func (pr *PushRequest) CopyMerge(other *PushRequest) *PushRequest {
 	// Do not merge when any one is empty
 	if len(pr.ConfigsUpdated) > 0 && len(other.ConfigsUpdated) > 0 {
 		merged.ConfigsUpdated = make(sets.Set[ConfigKey], len(pr.ConfigsUpdated)+len(other.ConfigsUpdated))
-		for conf := range pr.ConfigsUpdated {
-			merged.ConfigsUpdated[conf] = struct{}{}
-		}
-		for conf := range other.ConfigsUpdated {
-			merged.ConfigsUpdated[conf] = struct{}{}
-		}
+		merged.ConfigsUpdated.Merge(pr.ConfigsUpdated)
+		merged.ConfigsUpdated.Merge(other.ConfigsUpdated)
 	}
 
 	return merged
 }
 
 func (pr *PushRequest) IsRequest() bool {
-	return len(pr.Reason) == 1 && pr.Reason[0] == ProxyRequest
+	return len(pr.Reason) == 1 && pr.Reason.Has(ProxyRequest)
 }
 
 func (pr *PushRequest) IsProxyUpdate() bool {
-	for _, r := range pr.Reason {
-		if r == ProxyUpdate {
-			return true
-		}
-	}
-	return false
+	return pr.Reason.Has(ProxyUpdate)
 }
 
 func (pr *PushRequest) PushReason() string {
@@ -945,7 +989,18 @@ func (ps *PushContext) VirtualServicesForGateway(proxyNamespace, gateway string)
 		len(ps.virtualServiceIndex.publicByGateway[gateway]))
 	res = append(res, ps.virtualServiceIndex.privateByNamespaceAndGateway[name]...)
 	res = append(res, ps.virtualServiceIndex.exportedToNamespaceByGateway[name]...)
-	res = append(res, ps.virtualServiceIndex.publicByGateway[gateway]...)
+	// Favor same-namespace Gateway routes, to give the "consumer override" preference.
+	// We do 2 iterations here to avoid extra allocations.
+	for _, vs := range ps.virtualServiceIndex.publicByGateway[gateway] {
+		if UseGatewaySemantics(vs) && vs.Namespace == proxyNamespace {
+			res = append(res, vs)
+		}
+	}
+	for _, vs := range ps.virtualServiceIndex.publicByGateway[gateway] {
+		if !(UseGatewaySemantics(vs) && vs.Namespace == proxyNamespace) {
+			res = append(res, vs)
+		}
+	}
 
 	return res
 }
@@ -1558,6 +1613,9 @@ func (ps *PushContext) initVirtualServices(env *Environment) {
 				for host := range virtualServiceDestinations(rule) {
 					sets.InsertOrNew(ps.virtualServiceIndex.destinationsByGateway, gw, host)
 				}
+				if _, exists := ps.virtualServiceIndex.destinationsByGateway[gw]; !exists {
+					ps.virtualServiceIndex.destinationsByGateway[gw] = sets.Set[string]{}
+				}
 				addHostsFromMeshConfig(ps, ps.virtualServiceIndex.destinationsByGateway[gw])
 			}
 		}
@@ -1857,11 +1915,11 @@ func (ps *PushContext) WasmPluginsByListenerInfo(proxy *Proxy, info WasmPluginLi
 	// sort slices by priority
 	for i, slice := range matchedPlugins {
 		sort.SliceStable(slice, func(i, j int) bool {
-			iPriority := int64(math.MinInt64)
+			iPriority := int32(math.MinInt32)
 			if prio := slice[i].Priority; prio != nil {
 				iPriority = prio.Value
 			}
-			jPriority := int64(math.MinInt64)
+			jPriority := int32(math.MinInt32)
 			if prio := slice[j].Priority; prio != nil {
 				jPriority = prio.Value
 			}
@@ -2024,13 +2082,10 @@ func (ps *PushContext) mergeGateways(proxy *Proxy) *MergedGateway {
 		gw := cfg.Spec.(*networking.Gateway)
 		if gwsvcstr, f := cfg.Annotations[InternalGatewayServiceAnnotation]; f {
 			gwsvcs := strings.Split(gwsvcstr, ",")
-			known := map[host.Name]struct{}{}
-			for _, g := range gwsvcs {
-				known[host.Name(g)] = struct{}{}
-			}
+			known := sets.New[string](gwsvcs...)
 			matchingInstances := make([]*ServiceInstance, 0, len(proxy.ServiceInstances))
 			for _, si := range proxy.ServiceInstances {
-				if _, f := known[si.Service.Hostname]; f && si.Service.Attributes.Namespace == cfg.Namespace {
+				if _, f := known[string(si.Service.Hostname)]; f && si.Service.Attributes.Namespace == cfg.Namespace {
 					matchingInstances = append(matchingInstances, si)
 				}
 			}
@@ -2162,10 +2217,14 @@ func (ps *PushContext) ServiceAccounts(hostname host.Name, namespace string, por
 	}]
 }
 
-func (ps *PushContext) SupportsTunnel(ip string) bool {
-	infos, _ := ps.ambientIndex.PodInformation(sets.New(types.NamespacedName{Name: ip}))
-	for _, p := range infos {
-		if p.Protocol == workloadapi.Protocol_HTTP {
+// SupportsTunnel checks if a given IP address supports tunneling.
+// This currently only accepts workload IPs as arguments; services will always return "false".
+func (ps *PushContext) SupportsTunnel(n network.ID, ip string) bool {
+	// There should be a 1:1 relationship between IP and Workload but the interface doesn't allow this lookup.
+	// We should get 0 or 1 workloads, so just return the first.
+	infos, _ := ps.ambientIndex.AddressInformation(sets.New(n.String() + "/" + ip))
+	for _, wl := range ExtractWorkloadsFromAddresses(infos) {
+		if wl.TunnelProtocol == workloadapi.TunnelProtocol_HBONE {
 			return true
 		}
 	}

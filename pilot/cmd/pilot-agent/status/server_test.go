@@ -44,10 +44,10 @@ import (
 	"istio.io/istio/pilot/cmd/pilot-agent/status/ready"
 	"istio.io/istio/pilot/cmd/pilot-agent/status/testserver"
 	"istio.io/istio/pkg/kube/apimirror"
+	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/retry"
-	"istio.io/pkg/log"
 )
 
 type handler struct {
@@ -346,12 +346,17 @@ my_metric{app="bar"} 0
 			if err != nil {
 				t.Fatal(err)
 			}
+			registry, err := initializeMonitoring()
+			if err != nil {
+				t.Fatal(err)
+			}
 			server := &Server{
 				prometheus: &PrometheusScrapeConfiguration{
 					Port: strings.Split(app.URL, ":")[2],
 				},
 				envoyStatsPort: envoyPort,
 				http:           &http.Client{},
+				registry:       registry,
 			}
 			req := &http.Request{}
 			server.handleStats(rec, req)
@@ -488,10 +493,15 @@ my_other_metric{} 0
 			if err != nil {
 				t.Fatal(err)
 			}
+			registry, err := initializeMonitoring()
+			if err != nil {
+				t.Fatal(err)
+			}
 			server := &Server{
 				prometheus: &PrometheusScrapeConfiguration{
 					Port: strings.Split(app.URL, ":")[2],
 				},
+				registry:       registry,
 				envoyStatsPort: envoyPort,
 				http:           &http.Client{},
 			}
@@ -554,10 +564,15 @@ func TestStatsError(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
+			registry, err := initializeMonitoring()
+			if err != nil {
+				t.Fatal(err)
+			}
 			server := &Server{
 				prometheus: &PrometheusScrapeConfiguration{
 					Port: strconv.Itoa(tt.app),
 				},
+				registry:       registry,
 				envoyStatsPort: tt.envoy,
 				http:           &http.Client{},
 			}
@@ -582,17 +597,21 @@ jmx_config_reload_success_total 0.0
 jmx_config_reload_success_created 1.623984612719E9
 `
 	appOpenMetrics := appText + "# EOF"
-	envoy := `# TYPE my_metric counter
+
+	envoy := strings.Builder{}
+	envoy.Grow(size << 10 * 100)
+	envoy.WriteString(`# TYPE my_metric counter
 my_metric{} 0
 # TYPE my_other_metric counter
 my_other_metric{} 0
-`
-	for i := 0; len(envoy)+len(appText) < size<<10; i++ {
-		envoy = envoy + "#TYPE my_other_metric_" + strconv.Itoa(i) + " counter\nmy_other_metric_" + strconv.Itoa(i) + " 0\n"
+`)
+	for i := 0; envoy.Len()+len(appText) < size<<10; i++ {
+		envoy.WriteString("#TYPE my_other_metric_" + strconv.Itoa(i) + " counter\nmy_other_metric_" + strconv.Itoa(i) + " 0\n")
 	}
+	eb := []byte(envoy.String())
 
 	envoyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := w.Write([]byte(envoy)); err != nil {
+		if _, err := w.Write(eb); err != nil {
 			t.Fatalf("write failed: %v", err)
 		}
 	}))
@@ -615,13 +634,19 @@ my_other_metric{} 0
 	if err != nil {
 		t.Fatal(err)
 	}
+	registry, err := initializeMonitoring()
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := &Server{
+		registry: registry,
 		prometheus: &PrometheusScrapeConfiguration{
 			Port: strings.Split(app.URL, ":")[2],
 		},
 		envoyStatsPort: envoyPort,
 		http:           &http.Client{},
 	}
+	t.ResetTimer()
 	return server
 }
 
@@ -886,9 +911,6 @@ func TestAppProbe(t *testing.T) {
 		}
 		if c := tc.config["/"+tc.probePath]; c != nil {
 			if hc := c.HTTPGet; hc != nil {
-				if hc.Host != "" {
-					req.Host = hc.Host
-				}
 				for _, h := range hc.HTTPHeaders {
 					req.Header[h.Name] = append(req.Header[h.Name], h.Value)
 				}
