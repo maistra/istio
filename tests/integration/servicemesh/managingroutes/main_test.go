@@ -15,15 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package servicemesh
+package managingroutes
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/istioctl"
 	"istio.io/istio/pkg/test/framework/components/namespace"
@@ -31,7 +33,34 @@ import (
 	"istio.io/istio/tests/integration/servicemesh/maistra"
 )
 
-func TestSMMR(t *testing.T) {
+var (
+	istioNamespace namespace.Instance
+
+	gatewayTmpl    = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/managingroutes/testdata/gateway.tmpl.yaml")
+	virtualSvcTmpl = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/managingroutes/testdata/virtual-service.tmpl.yaml")
+)
+
+func TestMain(m *testing.M) {
+	// do not change order of setup functions
+	// nolint: staticcheck
+	framework.
+		NewSuite(m).
+		RequireMaxClusters(1).
+		Setup(maistra.ApplyServiceMeshCRDs).
+		Setup(namespace.Setup(&istioNamespace, namespace.Config{Prefix: "istio-system"})).
+		Setup(maistra.Install(namespace.Future(&istioNamespace))).
+		// We cannot apply restricted RBAC before the control plane installation, because the operator always applies
+		// the default RBAC, so we have to remove it and apply after the installation.
+		Setup(maistra.RemoveDefaultRBAC).
+		Setup(maistra.ApplyRestrictedRBAC(namespace.Future(&istioNamespace))).
+		// We cannot disable webhooks in maistra.Install(), because then we would need maistra/istio-operator
+		// to properly patch CA bundles in the webhooks. To avoid that problem we restart Istio with disabled webhooks
+		// and without roles for managing webhooks once they are already created and patched.
+		Setup(maistra.DisableWebhooksAndRestart(namespace.Future(&istioNamespace))).
+		Run()
+}
+
+func TestManagingGateways(t *testing.T) {
 	framework.NewTest(t).
 		Run(func(ctx framework.TestContext) {
 			namespaceGateway := namespace.NewOrFail(ctx, ctx, namespace.Config{Prefix: "gateway", Inject: true}).Name()
@@ -41,33 +70,33 @@ func TestSMMR(t *testing.T) {
 			applyVirtualServiceOrFail(ctx, namespaceA, namespaceGateway, "a")
 			applyVirtualServiceOrFail(ctx, namespaceB, namespaceGateway, "b")
 
-			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA); err != nil {
+			if err := maistra.ApplyServiceMeshMemberRoll(ctx, istioNamespace, namespaceGateway, namespaceA); err != nil {
 				ctx.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
 			}
-			verifyThatIngressHasVirtualHostForMember(ctx, "a")
+			verifyThatIngressHasVirtualHostForMember(ctx, istioNamespace.Name(), "a")
 
-			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceA, namespaceB); err != nil {
+			if err := maistra.ApplyServiceMeshMemberRoll(ctx, istioNamespace, namespaceGateway, namespaceA, namespaceB); err != nil {
 				ctx.Fatalf("failed to add member to ServiceMeshMemberRoll: %s", err)
 			}
-			verifyThatIngressHasVirtualHostForMember(ctx, "a", "b")
+			verifyThatIngressHasVirtualHostForMember(ctx, istioNamespace.Name(), "a", "b")
 
-			if err := maistra.ApplyServiceMeshMemberRoll(ctx, namespaceGateway, namespaceB); err != nil {
+			if err := maistra.ApplyServiceMeshMemberRoll(ctx, istioNamespace, namespaceGateway, namespaceB); err != nil {
 				ctx.Fatalf("failed to create ServiceMeshMemberRoll: %s", err)
 			}
-			verifyThatIngressHasVirtualHostForMember(ctx, "b")
+			verifyThatIngressHasVirtualHostForMember(ctx, istioNamespace.Name(), "b")
 		})
 }
 
-func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, expectedMembers ...string) {
+func verifyThatIngressHasVirtualHostForMember(ctx framework.TestContext, istioNamespace string, expectedMembers ...string) {
 	expectedGatewayRouteName := "http.8080"
 	expectedVirtualHostsNum := len(expectedMembers)
 
 	retry.UntilSuccessOrFail(ctx, func() error {
-		podName, err := getPodName(ctx, "istio-system", "istio-ingressgateway")
+		podName, err := getPodName(ctx, istioNamespace, "istio-ingressgateway")
 		if err != nil {
 			return err
 		}
-		routes, err := getRoutesFromProxy(ctx, podName, "istio-system", expectedGatewayRouteName)
+		routes, err := getRoutesFromProxy(ctx, podName, istioNamespace, expectedGatewayRouteName)
 		if err != nil {
 			return fmt.Errorf("failed to get routes from proxy %s: %s", podName, err)
 		}
@@ -132,50 +161,19 @@ func getPodName(ctx framework.TestContext, namespace, appName string) (string, e
 }
 
 func applyGatewayOrFail(ctx framework.TestContext, ns string, hosts ...string) {
-	gwYAML := `
-apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
-metadata:
-  name: common-gateway
-spec:
-  selector:
-    istio: ingressgateway
-  servers:
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    hosts:
-`
-	for _, host := range hosts {
-		gwYAML += fmt.Sprintf("    - %s.maistra.io\n", host)
-	}
 	// retry because of flaky validation webhook
 	retry.UntilSuccessOrFail(ctx, func() error {
-		return ctx.ConfigIstio().YAML(ns, gwYAML).Apply()
+		return ctx.ConfigIstio().EvalFile(ns, map[string][]string{"hosts": hosts}, gatewayTmpl).Apply()
 	}, retry.Timeout(3*time.Second))
 }
 
 func applyVirtualServiceOrFail(ctx framework.TestContext, ns, gatewayNs, virtualServiceName string) {
-	vsYAML := fmt.Sprintf(`
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: %s
-spec:
-  hosts:
-  - "%s.maistra.io"
-  gateways:
-  - %s/common-gateway
-  http:
-  - route:
-    - destination:
-        host: localhost
-        port:
-          number: 8080
-`, virtualServiceName, virtualServiceName, gatewayNs)
+	values := map[string]string{
+		"name":      virtualServiceName,
+		"gatewayNs": gatewayNs,
+	}
 	// retry because of flaky validation webhook
 	retry.UntilSuccessOrFail(ctx, func() error {
-		return ctx.ConfigIstio().YAML(ns, vsYAML).Apply()
+		return ctx.ConfigIstio().EvalFile(ns, values, virtualSvcTmpl).Apply()
 	}, retry.Timeout(3*time.Second))
 }
