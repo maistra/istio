@@ -21,10 +21,10 @@ package maistra
 import (
 	"context"
 	"fmt"
+	"istio.io/istio/pkg/test/framework/components/echo"
 	"path/filepath"
 	"time"
 
-	v1 "k8s.io/api/apps/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,8 +39,19 @@ import (
 	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/framework"
 	"istio.io/istio/pkg/test/framework/components/cluster"
+	"istio.io/istio/pkg/test/framework/components/istio"
+	"istio.io/istio/pkg/test/framework/components/namespace"
 	"istio.io/istio/pkg/test/framework/resource"
+	"istio.io/istio/pkg/test/framework/resource/config"
+	"istio.io/istio/pkg/test/framework/resource/config/apply"
 	"istio.io/istio/pkg/test/util/retry"
+)
+
+var (
+	clusterRoles = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/clusterrole.yaml")
+	roles        = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/role.yaml")
+	roleBindings = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/rolebinding.yaml")
+	smmrTmpl     = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/smmr.tmpl.yaml")
 )
 
 func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
@@ -70,9 +81,57 @@ func ApplyServiceMeshCRDs(ctx resource.Context) (err error) {
 	return err
 }
 
-func Install(ctx resource.Context) error {
+func Install(istioNs namespace.Getter) resource.SetupFn {
+	return istio.Setup(nil, func(ctx resource.Context, cfg *istio.Config) {
+		ctx.Settings().SkipWorkloadClasses = append(ctx.Settings().SkipWorkloadClasses, echo.Delta, echo.Headless, echo.TProxy, echo.VM, echo.External)
+		ctx.Settings().SkipDelta = true
+		ctx.Settings().SkipTProxy = true
+		ctx.Settings().SkipVM = true
+
+		cfg.SystemNamespace = istioNs.Get().Name()
+		cfg.Values["global.istioNamespace"] = istioNs.Get().Name()
+		cfg.ControlPlaneValues = fmt.Sprintf(`
+namespace: %[1]s
+revision: %[2]s
+meshConfig:
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY
+components:
+  pilot:
+    k8s:
+      overlays:
+      - apiVersion: apps/v1
+        kind: Deployment
+        name: istiod-%[2]s
+        patches:
+        - path: spec.template.spec.containers.[name:discovery].args[-1]
+          value: "--memberRollName=default"
+        - path: spec.template.spec.containers.[name:discovery].args[-1]
+          value: "--enableCRDScan=false"
+        - path: spec.template.spec.containers.[name:discovery].args[-1]
+          value: "--enableNodeAccess=false"
+        - path: spec.template.spec.containers.[name:discovery].args[-1]
+          value: "--enableIngressClassName=false"
+values:
+  global:
+    istioNamespace: %[1]s
+  pilot:
+    env:
+      PILOT_ENABLE_GATEWAY_API: false
+      PILOT_ENABLE_GATEWAY_API_STATUS: false
+      PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER: false
+      PRIORITIZED_LEADER_ELECTION: false
+`, istioNs.Get().Name(), istioNs.Get().Prefix())
+	})
+}
+
+func RemoveDefaultRBAC(ctx resource.Context) error {
 	kubeClient := ctx.Clusters().Default().Kube()
 	if err := kubeClient.RbacV1().ClusterRoleBindings().DeleteCollection(
+		context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "app=istio-reader"}); err != nil {
+		return err
+	}
+	if err := kubeClient.RbacV1().ClusterRoles().DeleteCollection(
 		context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "app=istio-reader"}); err != nil {
 		return err
 	}
@@ -80,112 +139,69 @@ func Install(ctx resource.Context) error {
 		context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "app=istiod"}); err != nil {
 		return err
 	}
-	if err := ctx.Clusters().Default().ApplyYAMLFiles("", filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/clusterrole.yaml")); err != nil {
-		return err
-	}
-	if err := applyRolesToMemberNamespaces(ctx.Clusters().Default(), "istio-system"); err != nil {
-		return err
-	}
-	istiod, err := waitForIstiod(kubeClient, 0)
-	if err != nil {
-		return err
-	}
-	if err := patchIstiodArgs(kubeClient); err != nil {
-		return err
-	}
-	if _, err := waitForIstiod(kubeClient, istiod.Generation); err != nil {
+	if err := kubeClient.RbacV1().ClusterRoles().DeleteCollection(
+		context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "app=istiod"}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func waitForIstiod(kubeClient kubernetes.Interface, lastSeenGeneration int64) (*v1.Deployment, error) {
-	var istiod *v1.Deployment
+func ApplyRestrictedRBAC(istioNs namespace.Getter) resource.SetupFn {
+	return func(ctx resource.Context) error {
+		values := map[string]string{
+			"istioNamespace": istioNs.Get().Name(),
+			"revision":       istioNs.Get().Prefix(),
+		}
+		if err := ctx.ConfigIstio().EvalFile(istioNs.Get().Name(), values, clusterRoles).Apply(); err != nil {
+			return err
+		}
+		if err := applyRolesToMemberNamespaces(ctx.ConfigIstio(), values, istioNs.Get().Name()); err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func DisableWebhooksAndRestart(istioNs namespace.Getter) resource.SetupFn {
+	return func(ctx resource.Context) error {
+		kubeClient := ctx.Clusters().Default().Kube()
+		var lastSeenGeneration int64
+		if err := waitForIstiod(kubeClient, istioNs.Get(), &lastSeenGeneration); err != nil {
+			return err
+		}
+		if err := patchIstiodArgs(kubeClient, istioNs.Get()); err != nil {
+			return err
+		}
+		if err := waitForIstiod(kubeClient, istioNs.Get(), &lastSeenGeneration); err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func waitForIstiod(kubeClient kubernetes.Interface, istioNs namespace.Instance, lastSeenGeneration *int64) error {
 	err := retry.UntilSuccess(func() error {
-		var err error
-		istiod, err = kubeClient.AppsV1().Deployments("istio-system").Get(context.TODO(), "istiod", metav1.GetOptions{})
+		istiod, err := kubeClient.AppsV1().Deployments(istioNs.Name()).Get(context.TODO(), "istiod-"+istioNs.Prefix(), metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to get istiod deployment: %v", err)
 		}
 		if istiod.Status.ReadyReplicas != istiod.Status.Replicas {
 			return fmt.Errorf("istiod deployment is not ready - %d of %d pods are ready", istiod.Status.ReadyReplicas, istiod.Status.Replicas)
 		}
-		if lastSeenGeneration != 0 && istiod.Status.ObservedGeneration == lastSeenGeneration {
+		if *lastSeenGeneration != 0 && istiod.Status.ObservedGeneration == *lastSeenGeneration {
 			return fmt.Errorf("istiod deployment is not ready - Generation has not been updated")
 		}
+		*lastSeenGeneration = istiod.Status.ObservedGeneration
 		return nil
 	}, retry.Timeout(30*time.Second), retry.Delay(time.Second))
-	if err != nil {
-		return nil, err
-	}
-	return istiod, nil
+	return err
 }
 
-func patchIstiodArgs(kubeClient kubernetes.Interface) error {
+func patchIstiodArgs(kubeClient kubernetes.Interface, istioNs namespace.Instance) error {
 	patch := `[
 	{
 		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/1",
-		"value": "--memberRollName=default"
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/2",
-		"value": "--enableCRDScan=false"
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/3",
-		"value": "--enableNodeAccess=false"
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/args/4",
-		"value": "--enableIngressClassName=false"
-	},
-	{
-		"op": "add",
 		"path": "/spec/template/spec/containers/0/env/1",
-		"value": {
-			"name": "PILOT_ENABLE_GATEWAY_API",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/2",
-		"value": {
-			"name": "PILOT_ENABLE_ALPHA_GATEWAY_API",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/3",
-		"value": {
-			"name": "PILOT_ENABLE_GATEWAY_API_STATUS",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/4",
-		"value": {
-			"name": "PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/5",
-		"value": {
-			"name": "PRIORITIZED_LEADER_ELECTION",
-			"value": "false"
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/6",
 		"value": {
 			"name": "INJECTION_WEBHOOK_CONFIG_NAME",
 			"value": ""
@@ -193,7 +209,7 @@ func patchIstiodArgs(kubeClient kubernetes.Interface) error {
 	},
 	{
 		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/7",
+		"path": "/spec/template/spec/containers/0/env/2",
 		"value": {
 			"name": "VALIDATION_WEBHOOK_CONFIG_NAME",
 			"value": ""
@@ -201,8 +217,8 @@ func patchIstiodArgs(kubeClient kubernetes.Interface) error {
 	}
 ]`
 	return retry.UntilSuccess(func() error {
-		_, err := kubeClient.AppsV1().Deployments("istio-system").
-			Patch(context.TODO(), "istiod", types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
+		_, err := kubeClient.AppsV1().Deployments(istioNs.Name()).
+			Patch(context.TODO(), "istiod-"+istioNs.Prefix(), types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to patch istiod deployment: %v", err)
 		}
@@ -210,20 +226,10 @@ func patchIstiodArgs(kubeClient kubernetes.Interface) error {
 	}, retry.Timeout(10*time.Second), retry.Delay(time.Second))
 }
 
-func ApplyServiceMeshMemberRoll(ctx framework.TestContext, memberNamespaces ...string) error {
-	memberRollYAML := `
-apiVersion: maistra.io/v1
-kind: ServiceMeshMemberRoll
-metadata:
-  name: default
-spec:
-  members:
-`
-	for _, ns := range memberNamespaces {
-		memberRollYAML += fmt.Sprintf("  - %s\n", ns)
-	}
+func ApplyServiceMeshMemberRoll(ctx framework.TestContext, istioNs namespace.Instance, memberNamespaces ...string) error {
+	smmrValues := map[string][]string{"members": memberNamespaces}
 	if err := retry.UntilSuccess(func() error {
-		if err := ctx.ConfigIstio().YAML("istio-system", memberRollYAML).Apply(); err != nil {
+		if err := ctx.ConfigIstio().EvalFile(istioNs.Name(), smmrValues, smmrTmpl).Apply(apply.NoCleanup); err != nil {
 			return fmt.Errorf("failed to apply SMMR resource: %s", err)
 		}
 		return nil
@@ -231,25 +237,29 @@ spec:
 		return err
 	}
 
-	if err := applyRolesToMemberNamespaces(ctx.Clusters().Default(), memberNamespaces...); err != nil {
+	roleValues := map[string]string{
+		"istioNamespace": istioNs.Name(),
+		"revision":       istioNs.Prefix(),
+	}
+	if err := applyRolesToMemberNamespaces(ctx.ConfigIstio(), roleValues, memberNamespaces...); err != nil {
 		return err
 	}
-	return updateServiceMeshMemberRollStatus(ctx.Clusters().Default(), memberNamespaces...)
+	return updateServiceMeshMemberRollStatus(ctx.Clusters().Default(), istioNs.Name(), memberNamespaces...)
 }
 
-func updateServiceMeshMemberRollStatus(c cluster.Cluster, memberNamespaces ...string) error {
+func updateServiceMeshMemberRollStatus(c cluster.Cluster, istioNamespace string, memberNamespaces ...string) error {
 	client, err := maistrav1.NewForConfig(c.RESTConfig())
 	if err != nil {
 		return fmt.Errorf("failed to create client for maistra resources: %s", err)
 	}
 
 	return retry.UntilSuccess(func() error {
-		smmr, err := client.ServiceMeshMemberRolls("istio-system").Get(context.TODO(), "default", metav1.GetOptions{})
+		smmr, err := client.ServiceMeshMemberRolls(istioNamespace).Get(context.TODO(), "default", metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to get SMMR default: %s", err)
 		}
 		smmr.Status.ConfiguredMembers = memberNamespaces
-		_, err = client.ServiceMeshMemberRolls("istio-system").UpdateStatus(context.TODO(), smmr, metav1.UpdateOptions{})
+		_, err = client.ServiceMeshMemberRolls(istioNamespace).UpdateStatus(context.TODO(), smmr, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to update SMMR default: %s", err)
 		}
@@ -257,13 +267,10 @@ func updateServiceMeshMemberRollStatus(c cluster.Cluster, memberNamespaces ...st
 	}, retry.Timeout(10*time.Second))
 }
 
-func applyRolesToMemberNamespaces(c cluster.Cluster, namespaces ...string) error {
+func applyRolesToMemberNamespaces(c config.Factory, values map[string]string, namespaces ...string) error {
 	for _, ns := range namespaces {
-		if err := c.ApplyYAMLFiles(
-			ns,
-			filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/role.yaml"),
-			filepath.Join(env.IstioSrc, "tests/integration/servicemesh/maistra/testdata/rolebinding.yaml")); err != nil {
-			return fmt.Errorf("failed to apply Roles and RoleBindings: %s", err)
+		if err := c.EvalFile(ns, values, roles, roleBindings).Apply(apply.NoCleanup); err != nil {
+			return fmt.Errorf("failed to apply Roles: %s", err)
 		}
 	}
 	return nil
