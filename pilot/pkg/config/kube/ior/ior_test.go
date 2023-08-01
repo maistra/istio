@@ -46,7 +46,7 @@ func newClients(
 	*crdclient.Client,
 	KubeClient,
 	routeclient.Interface,
-	*routeController,
+	*RouteController,
 ) {
 	t.Helper()
 
@@ -72,6 +72,7 @@ func runClients(
 ) {
 	go store.Run(stop)
 	kubeClient.GetActualClient().RunAndWait(stop)
+	kubeClient.GetActualClient().RunAndWaitRouteInformer(stop)
 }
 
 func initClients(

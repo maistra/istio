@@ -23,7 +23,7 @@ import (
 // IORLog is IOR-scoped log
 var IORLog = log.RegisterScope("ior", "IOR logging", 0)
 
-func New(kubeClient kube.Client, store model.ConfigStoreController) *routeController {
+func New(kubeClient kube.Client, store model.ConfigStoreController) *RouteController {
 	IORLog.Info("Creating new IOR controller")
 
 	return newRouteController(NewKubeClient(kubeClient), store)
