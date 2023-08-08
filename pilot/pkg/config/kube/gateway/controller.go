@@ -309,13 +309,15 @@ func (c *Controller) Run(stop <-chan struct{}) {
 		return
 	}
 	c.started.Store(true)
-	go func() {
-		if crdclient.WaitForCRD(gvk.GatewayClass, stop) {
-			gcc := NewClassController(c.client)
-			c.client.RunAndWait(stop)
-			gcc.Run(stop)
-		}
-	}()
+	if features.EnableGatewayAPIGatewayClassController {
+		go func() {
+			if crdclient.WaitForCRD(gvk.GatewayClass, stop) {
+				gcc := NewClassController(c.client)
+				c.client.RunAndWait(stop)
+				gcc.Run(stop)
+			}
+		}()
+	}
 	kube.WaitForCacheSync(stop, c.namespaceInformer.HasSynced)
 }
 
