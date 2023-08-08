@@ -301,13 +301,15 @@ func (c *Controller) Run(stop <-chan struct{}) {
 	if c.namespaces == nil {
 		return
 	}
-	go func() {
-		if c.waitForCRD(gvk.GatewayClass, stop) {
-			gcc := NewClassController(c.client)
-			c.client.RunAndWait(stop)
-			gcc.Run(stop)
-		}
-	}()
+	if features.EnableGatewayAPIGatewayClassController {
+		go func() {
+			if c.waitForCRD(gvk.GatewayClass, stop) {
+				gcc := NewClassController(c.client)
+				c.client.RunAndWait(stop)
+				gcc.Run(stop)
+			}
+		}()
+	}
 }
 
 func (c *Controller) HasSynced() bool {
