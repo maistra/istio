@@ -184,7 +184,7 @@ func (s *DiscoveryServer) AddDebugHandlers(mux, internalMux *http.ServeMux, enab
 	s.addDebugHandler(mux, internalMux, "/debug/config_distribution", "Version status of all Envoys connected to this Pilot instance", s.distributedVersions)
 
 	s.addDebugHandler(mux, internalMux, "/debug/registryz", "Debug support for registry", s.registryz)
-	s.addDebugHandler(mux, internalMux, "/debug/endpointz", "Debug support for endpoints", s.endpointz)
+	s.addDebugHandler(mux, internalMux, "/debug/endpointz", "Obsolete, use endpointShardz", s.endpointShardz)
 	s.addDebugHandler(mux, internalMux, "/debug/endpointShardz", "Info about the endpoint shards", s.endpointShardz)
 	s.addDebugHandler(mux, internalMux, "/debug/cachez", "Info about the internal XDS caches", s.cachez)
 	s.addDebugHandler(mux, internalMux, "/debug/cachez?sizes=true", "Info about the size of the internal XDS caches", s.cachez)
@@ -269,14 +269,14 @@ func (s *DiscoveryServer) Syncz(w http.ResponseWriter, req *http.Request) {
 	namespace := req.URL.Query().Get("namespace")
 
 	syncz := make([]SyncStatus, 0)
-	for _, con := range s.Clients() {
+	for _, con := range s.SortedClients() {
 		node := con.proxy
-		if node != nil && (namespace == "" || node.Metadata.Namespace == namespace) {
+		if node != nil && (namespace == "" || node.GetNamespace() == namespace) {
 			syncz = append(syncz, SyncStatus{
 				ProxyID:              node.ID,
 				ProxyType:            node.Type,
-				ClusterID:            node.Metadata.ClusterID.String(),
-				IstioVersion:         node.Metadata.IstioVersion,
+				ClusterID:            node.GetClusterID().String(),
+				IstioVersion:         node.GetIstioVersion(),
 				ClusterSent:          con.NonceSent(v3.ClusterType),
 				ClusterAcked:         con.NonceAcked(v3.ClusterType),
 				ListenerSent:         con.NonceSent(v3.ListenerType),
@@ -347,42 +347,6 @@ func (s *DiscoveryServer) cachez(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, resources, req)
 }
 
-type endpointzResponse struct {
-	Service   string                   `json:"svc"`
-	Endpoints []*model.ServiceInstance `json:"ep"`
-}
-
-// Endpoint debugging
-func (s *DiscoveryServer) endpointz(w http.ResponseWriter, req *http.Request) {
-	if _, f := req.URL.Query()["brief"]; f {
-		svc := s.Env.ServiceDiscovery.Services()
-		for _, ss := range svc {
-			for _, p := range ss.Ports {
-				all := s.Env.ServiceDiscovery.InstancesByPort(ss, p.Port)
-				for _, svc := range all {
-					_, _ = fmt.Fprintf(w, "%s:%s %s:%d %v %s\n", ss.Hostname,
-						p.Name, svc.Endpoint.Address, svc.Endpoint.EndpointPort, svc.Endpoint.Labels,
-						svc.Endpoint.ServiceAccount)
-				}
-			}
-		}
-		return
-	}
-
-	svc := s.Env.ServiceDiscovery.Services()
-	resp := make([]endpointzResponse, 0)
-	for _, ss := range svc {
-		for _, p := range ss.Ports {
-			all := s.Env.ServiceDiscovery.InstancesByPort(ss, p.Port)
-			resp = append(resp, endpointzResponse{
-				Service:   fmt.Sprintf("%s:%s", ss.Hostname, p.Name),
-				Endpoints: all,
-			})
-		}
-	}
-	writeJSON(w, resp, req)
-}
-
 const DistributionTrackingDisabledMessage = "Pilot Version tracking is disabled. It may be enabled by setting the " +
 	"PILOT_ENABLE_CONFIG_DISTRIBUTION_TRACKING environment variable to true."
 
@@ -396,7 +360,7 @@ func (s *DiscoveryServer) distributedVersions(w http.ResponseWriter, req *http.R
 		proxyNamespace := req.URL.Query().Get("proxy_namespace")
 		knownVersions := make(map[string]string)
 		var results []SyncedVersions
-		for _, con := range s.Clients() {
+		for _, con := range s.SortedClients() {
 			// wrap this in independent scope so that panic's don't bypass Unlock...
 			con.proxy.RLock()
 
@@ -530,7 +494,7 @@ func (s *DiscoveryServer) telemetryz(w http.ResponseWriter, req *http.Request) {
 // It is mapped to /debug/connections.
 func (s *DiscoveryServer) connectionsHandler(w http.ResponseWriter, req *http.Request) {
 	adsClients := &AdsClients{}
-	connections := s.Clients()
+	connections := s.SortedClients()
 	adsClients.Total = len(connections)
 
 	for _, c := range connections {
@@ -562,7 +526,7 @@ func (s *DiscoveryServer) adsz(w http.ResponseWriter, req *http.Request) {
 	if con != nil {
 		connections = []*Connection{con}
 	} else {
-		connections = s.Clients()
+		connections = s.SortedClients()
 	}
 
 	adsClients := &AdsClients{}
@@ -588,9 +552,6 @@ func (s *DiscoveryServer) adsz(w http.ResponseWriter, req *http.Request) {
 		c.proxy.RUnlock()
 		adsClients.Connected = append(adsClients.Connected, adsClient)
 	}
-	sort.Slice(adsClients.Connected, func(i, j int) bool {
-		return adsClients.Connected[i].ConnectionID < adsClients.Connected[j].ConnectionID
-	})
 	writeJSON(w, adsClients, req)
 }
 
@@ -709,7 +670,7 @@ func (s *DiscoveryServer) getConfigDumpByResourceType(conn *Connection, req *mod
 				case v3.ExtensionConfigurationType:
 					tce := &core.TypedExtensionConfig{}
 					if err := rr.GetResource().UnmarshalTo(tce); err != nil {
-						istiolog.Warnf("failed to unmarshal extenstion: %v", err)
+						istiolog.Warnf("failed to unmarshal extension: %v", err)
 						continue
 					}
 
@@ -920,6 +881,7 @@ func (s *DiscoveryServer) pushStatusHandler(w http.ResponseWriter, req *http.Req
 type PushContextDebug struct {
 	AuthorizationPolicies *model.AuthorizationPolicies
 	NetworkGateways       []model.NetworkGateway
+	UnresolvedGateways    []model.NetworkGateway
 }
 
 // pushContextHandler dumps the current PushContext
@@ -932,6 +894,7 @@ func (s *DiscoveryServer) pushContextHandler(w http.ResponseWriter, req *http.Re
 	push.AuthorizationPolicies = pc.AuthzPolicies
 	if pc.NetworkManager() != nil {
 		push.NetworkGateways = pc.NetworkManager().AllGateways()
+		push.UnresolvedGateways = pc.NetworkManager().Unresolved.AllGateways()
 	}
 
 	writeJSON(w, push, req)
@@ -1076,11 +1039,11 @@ func (s *DiscoveryServer) getProxyConnection(proxyID string) *Connection {
 }
 
 func (s *DiscoveryServer) instancesz(w http.ResponseWriter, req *http.Request) {
-	instances := map[string][]*model.ServiceInstance{}
+	instances := map[string][]model.ServiceTarget{}
 	for _, con := range s.Clients() {
 		con.proxy.RLock()
 		if con.proxy != nil {
-			instances[con.proxy.ID] = con.proxy.ServiceInstances
+			instances[con.proxy.ID] = con.proxy.ServiceTargets
 		}
 		con.proxy.RUnlock()
 	}
