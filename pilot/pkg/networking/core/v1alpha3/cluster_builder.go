@@ -233,6 +233,7 @@ func (cb *ClusterBuilder) buildSubsetCluster(opts buildClusterOpts, destRule *co
 	// basis in buildDefaultCluster, so we can just insert without a copy.
 	subsetCluster.cluster.Metadata = util.AddConfigInfoMetadata(subsetCluster.cluster.Metadata, destRule.Meta)
 	util.AddSubsetToMetadata(subsetCluster.cluster.Metadata, subset.Name)
+	subsetCluster.cluster.Metadata = util.AddALPNOverrideToMetadata(subsetCluster.cluster.Metadata, opts.policy.GetTls().GetMode())
 	return subsetCluster.build()
 }
 
@@ -277,11 +278,7 @@ func (cb *ClusterBuilder) applyDestinationRule(mc *MutableCluster, clusterMode C
 
 	if destRule != nil {
 		mc.cluster.Metadata = util.AddConfigInfoMetadata(mc.cluster.Metadata, destRule.Meta)
-
-		// ALPN header rewrite starts Istio-managed mTLS. Skip if TLS mode is SIMPLE or MUTUAL
-		if trafficPolicy.GetTls() != nil {
-			mc.cluster.Metadata = configureALPNOverride(trafficPolicy.Tls.Mode, mc.cluster.Metadata)
-		}
+		mc.cluster.Metadata = util.AddALPNOverrideToMetadata(mc.cluster.Metadata, opts.policy.GetTls().GetMode())
 	}
 	subsetClusters := make([]*cluster.Cluster, 0)
 	for _, subset := range destinationRule.GetSubsets() {
