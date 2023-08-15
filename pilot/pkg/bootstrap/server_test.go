@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -248,7 +247,7 @@ func TestNewServerCertInit(t *testing.T) {
 			} else {
 				if len(c.expCert) != 0 {
 					if !checkCert(t, s, c.expCert, c.expKey) {
-						t.Errorf("Istiod certifiate does not match the expectation")
+						t.Errorf("Istiod certificate does not match the expectation")
 					}
 				} else {
 					if _, err := s.getIstiodCertificate(nil); err == nil {
@@ -317,7 +316,7 @@ func TestReloadIstiodCert(t *testing.T) {
 
 	// Validate that the certs are loaded.
 	if !checkCert(t, s, testcerts.ServerCert, testcerts.ServerKey) {
-		t.Errorf("Istiod certifiate does not match the expectation")
+		t.Errorf("Istiod certificate does not match the expectation")
 	}
 
 	// Update cert/key files.
@@ -374,14 +373,9 @@ func TestNewServer(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			configDir := t.TempDir()
 
-			var secureGRPCPort int
-			var err error
+			secureGRPCPort := ""
 			if c.enableSecureGRPC {
-				secureGRPCPort, err = findFreePort()
-				if err != nil {
-					t.Errorf("unable to find a free port: %v", err)
-					return
-				}
+				secureGRPCPort = ":0"
 			}
 
 			args := NewPilotArgs(func(p *PilotArgs) {
@@ -391,7 +385,7 @@ func TestNewServer(t *testing.T) {
 					HTTPAddr:       ":0",
 					MonitoringAddr: ":0",
 					GRPCAddr:       ":0",
-					SecureGRPCAddr: fmt.Sprintf(":%d", secureGRPCPort),
+					SecureGRPCAddr: secureGRPCPort,
 				}
 				p.RegistryOptions = RegistryOptions{
 					KubeOptions: kubecontroller.Options{
@@ -419,14 +413,7 @@ func TestNewServer(t *testing.T) {
 
 			g.Expect(s.environment.DomainSuffix).To(Equal(c.expectedDomain))
 
-			if c.enableSecureGRPC {
-				tcpAddr := s.secureGrpcAddress
-				_, port, err := net.SplitHostPort(tcpAddr)
-				if err != nil {
-					t.Errorf("invalid SecureGrpcListener addr %v", err)
-				}
-				g.Expect(port).To(Equal(strconv.Itoa(secureGRPCPort)))
-			}
+			assert.Equal(t, s.secureGrpcServer != nil, c.enableSecureGRPC)
 		})
 	}
 }
@@ -524,13 +511,6 @@ func TestIstiodCipherSuites(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			configDir := t.TempDir()
-
-			port, err := findFreePort()
-			if err != nil {
-				t.Errorf("unable to find a free port: %v", err)
-				return
-			}
-
 			args := NewPilotArgs(func(p *PilotArgs) {
 				p.Namespace = "istio-system"
 				p.ServerOptions = DiscoveryServerOptions{
@@ -538,7 +518,7 @@ func TestIstiodCipherSuites(t *testing.T) {
 					HTTPAddr:       ":0",
 					MonitoringAddr: ":0",
 					GRPCAddr:       ":0",
-					HTTPSAddr:      fmt.Sprintf(":%d", port),
+					HTTPSAddr:      ":0",
 					TLSOptions: TLSOptions{
 						CipherSuits: c.serverCipherSuites,
 					},
@@ -682,17 +662,4 @@ func checkCert(t *testing.T, s *Server, cert, key []byte) bool {
 		t.Fatalf("fail to load test certs.")
 	}
 	return bytes.Equal(actual.Certificate[0], expected.Certificate[0])
-}
-
-func findFreePort() (int, error) {
-	ln, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return 0, err
-	}
-	defer ln.Close()
-	tcpAddr, ok := ln.Addr().(*net.TCPAddr)
-	if !ok {
-		return 0, fmt.Errorf("invalid listen address: %q", ln.Addr().String())
-	}
-	return tcpAddr.Port, nil
 }
