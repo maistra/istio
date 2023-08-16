@@ -394,6 +394,9 @@ var (
 	EnableGatewayAPIDeploymentController = env.Register("PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER", true,
 		"If this is set to true, gateway-api resources will automatically provision in cluster deployment, services, etc").Get()
 
+	EnableGatewayAPIGatewayClassController = env.Register("PILOT_ENABLE_GATEWAY_API_GATEWAYCLASS_CONTROLLER", true,
+		"If this is set to true, istiod will ensure that the default GatewayClass always exists").Get()
+
 	GatewayAPIDefaultGatewayClass = env.Register("PILOT_GATEWAY_API_DEFAULT_GATEWAYCLASS", "istio",
 		"Name of the default GatewayClass").Get()
 
