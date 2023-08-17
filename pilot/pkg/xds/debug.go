@@ -320,7 +320,7 @@ func (s *DiscoveryServer) cachez(w http.ResponseWriter, req *http.Request) {
 	}
 	if req.Form.Get("sizes") != "" {
 		snapshot := s.Cache.Snapshot()
-		res := make(map[string]string, len(snapshot))
+		raw := make(map[string]int, len(snapshot))
 		totalSize := 0
 		for _, resource := range snapshot {
 			if resource == nil {
@@ -328,8 +328,12 @@ func (s *DiscoveryServer) cachez(w http.ResponseWriter, req *http.Request) {
 			}
 			resourceType := resource.Resource.TypeUrl
 			sz := len(resource.Resource.GetValue())
-			res[resourceType] += util.ByteCount(sz)
+			raw[resourceType] += sz
 			totalSize += sz
+		}
+		res := make(map[string]string, len(raw))
+		for k, v := range raw {
+			res[k] = util.ByteCount(v)
 		}
 		res["total"] = util.ByteCount(totalSize)
 		writeJSON(w, res, req)
@@ -484,10 +488,22 @@ type TelemetryDebug struct {
 }
 
 func (s *DiscoveryServer) telemetryz(w http.ResponseWriter, req *http.Request) {
-	info := TelemetryDebug{
-		Telemetries: s.globalPushContext().Telemetry,
+	proxyID, con := s.getDebugConnection(req)
+	if proxyID != "" && con == nil {
+		// We can't guarantee the Pilot we are connected to has a connection to the proxy we requested
+		// There isn't a great way around this, but for debugging purposes its suitable to have the caller retry.
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("Proxy not connected to this Pilot instance. It may be connected to another instance.\n"))
+		return
 	}
-	writeJSON(w, info, req)
+	if con == nil {
+		info := TelemetryDebug{
+			Telemetries: s.globalPushContext().Telemetry,
+		}
+		writeJSON(w, info, req)
+		return
+	}
+	writeJSON(w, s.globalPushContext().Telemetry.Debug(con.proxy), req)
 }
 
 // connectionsHandler implements interface for displaying current connections.
