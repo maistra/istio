@@ -25,7 +25,6 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	sa "k8s.io/apiserver/pkg/authentication/serviceaccount"
 	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 
@@ -80,15 +79,12 @@ func NewCredentialsController(kc kube.Client) *CredentialsController {
 	// This makes the assumption we will never care about Helm secrets or SA token secrets - two common
 	// large secrets in clusters.
 	// This is a best effort optimization only; the code would behave correctly if we watched all secrets.
-	fieldSelector := fields.AndSelectors(
-		fields.OneTermNotEqualSelector("type", "helm.sh/release.v1"),
-		fields.OneTermNotEqualSelector("type", string(v1.SecretTypeServiceAccountToken))).String()
-	secrets := kclient.NewFiltered[*v1.Secret](kc, kclient.Filter{
-		FieldSelector: fieldSelector,
-	})
-
+	// TODO: Shouldn't we use "github.com/maistra/xns-informer/pkg/generated/kube/core/v1".NewFilteredSecretInformer with
+	// fieldSelector := fields.AndSelectors(
+	//     fields.OneTermNotEqualSelector("type", "helm.sh/release.v1"),
+	//     fields.OneTermNotEqualSelector("type", string(v1.SecretTypeServiceAccountToken))).String()
 	return &CredentialsController{
-		secrets:            secrets,
+		secrets:            kclient.New[*v1.Secret](kc),
 		sar:                kc.Kube().AuthorizationV1().SubjectAccessReviews(),
 		authorizationCache: make(map[authorizationKey]authorizationResponse),
 	}

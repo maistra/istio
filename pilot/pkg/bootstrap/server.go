@@ -574,6 +574,13 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 		if err != nil {
 			return fmt.Errorf("failed creating kube client: %v", err)
 		}
+
+		memberRollName := args.RegistryOptions.KubeOptions.MemberRollName
+		if memberRollName != "" {
+			if err := s.kubeClient.AddMemberRollController(args.Namespace, memberRollName); err != nil {
+				return fmt.Errorf("failed creating member roll controller: %v", err)
+			}
+		}
 	}
 
 	return nil

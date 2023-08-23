@@ -175,7 +175,11 @@ func (s *Server) initK8SConfigStore(args *PilotArgs) error {
 					AddRunFunction(func(leaderStop <-chan struct{}) {
 						// We can only run this if the Gateway CRD is created
 						if configController.WaitForCRD(gvk.KubernetesGateway, leaderStop) {
-							tagWatcher := revisions.NewTagWatcher(s.kubeClient, args.Revision)
+							var tagWatcher revisions.TagWatcher
+							// TagWatcher requires permission for MutatingWebhook, so it can't be used in multi-tenant mode
+							if !s.kubeClient.IsMultiTenant() {
+								tagWatcher = revisions.NewTagWatcher(s.kubeClient, args.Revision)
+							}
 							controller := gateway.NewDeploymentController(s.kubeClient, s.clusterID, s.environment,
 								s.webhookInfo.getWebhookConfig, s.webhookInfo.addHandler, tagWatcher, args.Revision)
 							// Start informers again. This fixes the case where informers for namespace do not start,
@@ -184,7 +188,9 @@ func (s *Server) initK8SConfigStore(args *PilotArgs) error {
 							// basically lazy loading the informer, if we stop it when we lose the lock we will never
 							// recreate it again.
 							s.kubeClient.RunAndWait(stop)
-							go tagWatcher.Run(leaderStop)
+							if tagWatcher != nil {
+								go tagWatcher.Run(leaderStop)
+							}
 							controller.Run(leaderStop)
 						}
 					}).
@@ -294,8 +300,9 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 		go leaderelection.
 			NewLeaderElection(args.Namespace, args.PodName, leaderelection.AnalyzeController, args.Revision, s.kubeClient).
 			AddRunFunction(func(stop <-chan struct{}) {
-				cont, err := incluster.NewController(stop, s.RWConfigStore,
-					s.kubeClient, args.Revision, args.Namespace, s.statusManager, args.RegistryOptions.KubeOptions.DomainSuffix)
+				opts := args.RegistryOptions.KubeOptions
+				cont, err := incluster.NewController(
+					stop, s.RWConfigStore, s.kubeClient, args.Revision, args.Namespace, s.statusManager, opts.DomainSuffix, opts.EnableCRDScan)
 				if err != nil {
 					return
 				}
@@ -343,9 +350,10 @@ func (s *Server) initStatusController(args *PilotArgs, writeStatus bool) {
 
 func (s *Server) makeKubeConfigController(args *PilotArgs) (*crdclient.Client, error) {
 	opts := crdclient.Option{
-		Revision:     args.Revision,
-		DomainSuffix: args.RegistryOptions.KubeOptions.DomainSuffix,
-		Identifier:   "crd-controller",
+		Revision:      args.Revision,
+		DomainSuffix:  args.RegistryOptions.KubeOptions.DomainSuffix,
+		Identifier:    "crd-controller",
+		EnableCRDScan: args.RegistryOptions.KubeOptions.EnableCRDScan,
 	}
 	if args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter != nil {
 		opts.NamespacesFilter = args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter.Filter

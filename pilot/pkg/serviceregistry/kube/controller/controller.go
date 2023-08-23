@@ -114,6 +114,9 @@ type Options struct {
 
 	DomainSuffix string
 
+	// Name of the Maistra MemberRoll resource.
+	MemberRollName string
+
 	// ClusterID identifies the cluster which the controller communicate with.
 	ClusterID cluster.ID
 
@@ -150,6 +153,24 @@ type Options struct {
 
 	ConfigController model.ConfigStoreController
 	ConfigCluster    bool
+
+	// EnableCRDScan determines whether the controller will list all CRDs
+	// present in the cluster, and subsequently only create watches on those
+	// that are. If this is set to false, all CRDs defined in the schema must be
+	// present for istiod to function.
+	EnableCRDScan bool
+
+	// EnableNodeAccess determines whether the controller should attempt to
+	// watch and/or list Node objects. If this is set to false, some features
+	// will not be available, e.g. NodePort gateways and determining locality
+	// information based on Nodes.
+	EnableNodeAccess bool
+
+	// EnableIngressClassName determines whether the controller will support
+	// processing Kubernetes Ingress resources that use the new (as of 1.18)
+	// `ingressClassName` in their spec, or if it will only check the deprecated
+	// `kubernetes.io/ingress.class` annotation.
+	EnableIngressClassName bool
 }
 
 func (o *Options) GetFilter() namespace.DiscoveryFilter {
@@ -296,27 +317,30 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		configCluster:              options.ConfigCluster,
 	}
 
-	c.namespaces = kclient.New[*v1.Namespace](kubeClient)
-	if c.opts.SystemNamespace != "" {
-		registerHandlers[*v1.Namespace](
-			c,
-			c.namespaces,
-			"Namespaces",
-			func(old *v1.Namespace, cur *v1.Namespace, event model.Event) error {
-				if cur.Name == c.opts.SystemNamespace {
-					return c.onSystemNamespaceEvent(old, cur, event)
-				}
-				return nil
-			},
-			nil,
-		)
+	// Don't start the namespace informer if Maistra's MemberRoll is in use.
+	if options.MemberRollName == "" {
+		c.namespaces = kclient.New[*v1.Namespace](kubeClient)
+		if c.opts.SystemNamespace != "" {
+			registerHandlers[*v1.Namespace](
+				c,
+				c.namespaces,
+				"Namespaces",
+				func(old *v1.Namespace, cur *v1.Namespace, event model.Event) error {
+					if cur.Name == c.opts.SystemNamespace {
+						return c.onSystemNamespaceEvent(old, cur, event)
+					}
+					return nil
+				},
+				nil,
+			)
+		}
+		if c.opts.DiscoveryNamespacesFilter == nil {
+			c.opts.DiscoveryNamespacesFilter = namespace.NewDiscoveryNamespacesFilter(c.namespaces, options.MeshWatcher.Mesh().DiscoverySelectors)
+		}
+		c.initDiscoveryHandlers(options.MeshWatcher, c.opts.DiscoveryNamespacesFilter)
+	} else if c.opts.DiscoveryNamespacesFilter == nil {
+		c.opts.DiscoveryNamespacesFilter = namespace.NewMaistraDiscoveryNamespacesFilter(kubeClient.GetMemberRollController())
 	}
-
-	if c.opts.DiscoveryNamespacesFilter == nil {
-		c.opts.DiscoveryNamespacesFilter = namespace.NewDiscoveryNamespacesFilter(c.namespaces, options.MeshWatcher.Mesh().DiscoverySelectors)
-	}
-
-	c.initDiscoveryHandlers(options.MeshWatcher, c.opts.DiscoveryNamespacesFilter)
 
 	c.services = kclient.NewFiltered[*v1.Service](kubeClient, kclient.Filter{ObjectFilter: c.opts.DiscoveryNamespacesFilter.Filter})
 
@@ -332,9 +356,11 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		c.endpoints = newEndpointsController(c)
 	}
 
-	// This is for getting the node IPs of a selected set of nodes
-	c.nodes = kclient.NewFiltered[*v1.Node](kubeClient, kclient.Filter{ObjectTransform: kubelib.StripNodeUnusedFields})
-	registerHandlers[*v1.Node](c, c.nodes, "Nodes", c.onNodeEvent, nil)
+	if options.EnableNodeAccess {
+		// This is for getting the node IPs of a selected set of nodes
+		c.nodes = kclient.NewFiltered[*v1.Node](kubeClient, kclient.Filter{ObjectTransform: kubelib.StripNodeUnusedFields})
+		registerHandlers[*v1.Node](c, c.nodes, "Nodes", c.onNodeEvent, nil)
+	}
 
 	c.podsClient = kclient.NewFiltered[*v1.Pod](kubeClient, kclient.Filter{
 		ObjectFilter:    c.opts.DiscoveryNamespacesFilter.Filter,
@@ -635,11 +661,11 @@ func (c *Controller) HasSynced() bool {
 }
 
 func (c *Controller) informersSynced() bool {
-	if !c.namespaces.HasSynced() ||
+	if (c.namespaces != nil && !c.namespaces.HasSynced()) ||
 		!c.services.HasSynced() ||
 		!c.endpoints.HasSynced() ||
 		!c.pods.pods.HasSynced() ||
-		!c.nodes.HasSynced() ||
+		(c.nodes != nil && !c.nodes.HasSynced()) ||
 		(c.crdWatcher != nil && !c.crdWatcher.HasSynced()) {
 		return false
 	}
@@ -726,6 +752,19 @@ func (c *Controller) getPodLocality(pod *v1.Pod) string {
 	// if pod has `istio-locality` label, skip below ops
 	if len(pod.Labels[model.LocalityLabel]) > 0 {
 		return model.GetLocalityLabelOrDefault(pod.Labels[model.LocalityLabel], "")
+	}
+
+	if c.nodes == nil {
+		// Maistra compatibility. Try Node labels copied to Pod.
+		region := getLabelValue(pod.ObjectMeta, NodeRegionLabel, NodeRegionLabelGA)
+		zone := getLabelValue(pod.ObjectMeta, NodeZoneLabel, NodeZoneLabelGA)
+		subzone := getLabelValue(pod.ObjectMeta, label.TopologySubzone.Name, "")
+
+		if region == "" && zone == "" && subzone == "" {
+			return ""
+		}
+
+		return region + "/" + zone + "/" + subzone // Format: "%s/%s/%s"
 	}
 
 	// NodeName is set by the scheduler after the pod is created

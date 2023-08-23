@@ -94,6 +94,7 @@ type Option struct {
 	Revision         string
 	DomainSuffix     string
 	Identifier       string
+	EnableCRDScan    bool
 	NamespacesFilter func(obj interface{}) bool
 }
 
@@ -152,7 +153,6 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 		kinds:            map[config.GroupVersionKind]*cacheHandler{},
 		handlers:         map[config.GroupVersionKind][]model.EventHandler{},
 		client:           client,
-		crdWatcher:       crdwatcher.NewController(client),
 		logger:           scope.WithLabels("controller", opts.Identifier),
 		namespacesFilter: opts.NamespacesFilter,
 		crdWatches: map[config.GroupVersionKind]*waiter{
@@ -161,12 +161,17 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 		},
 	}
 
-	out.crdWatcher.AddCallBack(func(name string) {
-		handleCRDAdd(out, name)
-	})
-	known, err := knownCRDs(client.Ext())
-	if err != nil {
-		return nil, err
+	var known map[string]struct{}
+	if opts.EnableCRDScan {
+		out.crdWatcher = crdwatcher.NewController(client)
+		out.crdWatcher.AddCallBack(func(name string) {
+			handleCRDAdd(out, name)
+		})
+		var err error
+		known, err = knownCRDs(client.Ext())
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, s := range schemas.All() {
 		// From the spec: "Its name MUST be in the format <.spec.name>.<.spec.group>."
@@ -174,7 +179,9 @@ func NewForSchemas(client kube.Client, opts Option, schemas collection.Schemas) 
 		if s.IsBuiltin() {
 			handleCRDAdd(out, name)
 		} else {
-			if _, f := known[name]; f {
+			// If EnableCRDScan is false, then ignore whether the CRD is in the map
+			// and just try to add informers for all types.
+			if _, f := known[name]; f || !opts.EnableCRDScan {
 				handleCRDAdd(out, name)
 			} else {
 				out.logger.Warnf("Skipping CRD %v as it is not present", s.GroupVersionKind())
@@ -414,6 +421,11 @@ func handleCRDAdd(cl *Client, name string) {
 	}
 	resourceGVK := s.GroupVersionKind()
 	gvr := s.GroupVersionResource()
+
+	if cl.client.IsMultiTenant() && resourceGVK == gvk.GatewayClass {
+		scope.Infof("Skipping CRD %v as it is not compatible with maistra multi-tenancy", s.GroupVersionKind())
+		return
+	}
 
 	cl.kindsMu.Lock()
 	defer cl.kindsMu.Unlock()

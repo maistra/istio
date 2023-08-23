@@ -403,6 +403,11 @@ func createWleConfigStore(client kubelib.Client, revision string, opts Options) 
 	workloadEntriesSchemas := collection.NewSchemasBuilder().
 		MustAdd(collections.WorkloadEntry).
 		Build()
-	crdOpts := crdclient.Option{Revision: revision, DomainSuffix: opts.DomainSuffix, Identifier: "mc-workload-entry-controller"}
+	crdOpts := crdclient.Option{
+		Revision:      revision,
+		DomainSuffix:  opts.DomainSuffix,
+		Identifier:    "mc-workload-entry-controller",
+		EnableCRDScan: opts.EnableCRDScan,
+	}
 	return crdclient.NewForSchemas(client, crdOpts, workloadEntriesSchemas)
 }
