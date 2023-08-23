@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/ubi:9.2-489 as ubi9
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2-717 as ubi9
 
 ARG MAISTRA_VERSION
 ARG proxy_version
@@ -17,9 +17,9 @@ LABEL io.openshift.expose-services=""
 LABEL maintainer="Istio Feedback <istio-feedback@redhat.com>"
 
 # hadolint ignore=DL3039,DL3041
-RUN dnf -y upgrade --refresh --nobest && \
-    dnf -y install iptables iproute openssl && \
-    dnf -y clean all
+RUN microdnf -y upgrade --refresh --nobest && \
+    microdnf -y install iptables iproute openssl && \
+    microdnf -y clean all
 
 WORKDIR /
 

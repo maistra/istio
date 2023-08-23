@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/ubi:9.2-489 as ubi9
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.2-13 as ubi9
 
 ARG MAISTRA_VERSION
 ARG ISTIO_VERSION
