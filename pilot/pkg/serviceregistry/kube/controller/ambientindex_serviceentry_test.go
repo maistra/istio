@@ -35,7 +35,9 @@ func TestAmbientIndex_ServiceEntry(t *testing.T) {
 	s.addServiceEntry(t, "se.istio.io", []string{"240.240.23.45"}, "name1", testNS, nil)
 	s.assertWorkloads(t, "", workloadapi.WorkloadStatus_HEALTHY, "name1")
 	s.assertEvent(t, s.seIPXdsName("name1", "127.0.0.1"), "ns1/se.istio.io")
+	s.controller.ambientIndex.(*AmbientIndexImpl).mu.RLock()
 	assert.Equal(t, len(s.controller.ambientIndex.(*AmbientIndexImpl).byWorkloadEntry), 1)
+	s.controller.ambientIndex.(*AmbientIndexImpl).mu.RUnlock()
 	assert.Equal(t, s.lookup(s.addrXdsName("127.0.0.1")), []*model.AddressInfo{{
 		Address: &workloadapi.Address{
 			Type: &workloadapi.Address_Workload{
@@ -66,7 +68,9 @@ func TestAmbientIndex_ServiceEntry(t *testing.T) {
 	}})
 
 	s.deleteServiceEntry(t, "name1", testNS)
+	s.controller.ambientIndex.(*AmbientIndexImpl).mu.RLock()
 	assert.Equal(t, len(s.controller.ambientIndex.(*AmbientIndexImpl).byWorkloadEntry), 0)
+	s.controller.ambientIndex.(*AmbientIndexImpl).mu.RUnlock()
 	assert.Equal(t, s.lookup(s.addrXdsName("127.0.0.1")), nil)
 	s.clearEvents()
 
@@ -270,6 +274,7 @@ func TestAmbientIndex_ServiceEntry(t *testing.T) {
 
 	s.deleteServiceEntry(t, "name1", testNS)
 	s.assertWorkloads(t, "", workloadapi.WorkloadStatus_HEALTHY, "pod1", "pod2", "name1", "name2")
+	s.assertUniqueWorkloads(t)
 	// we should see an update for the workloads selected by the service entry
 	s.assertEvent(t, s.podXdsName("pod1"), s.wleXdsName("name0"), s.wleXdsName("name1"), "ns1/se.istio.io")
 	assert.Equal(t, s.lookup(s.addrXdsName("140.140.0.10")), []*model.AddressInfo{{

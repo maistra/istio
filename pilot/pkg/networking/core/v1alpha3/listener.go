@@ -600,6 +600,7 @@ func buildListenerFromEntry(builder *ListenerBuilder, le *outboundListenerEntry,
 				Name:       wellknown.HTTPConnectionManager,
 				ConfigType: &listener.Filter_TypedConfig{TypedConfig: protoconv.MessageToAny(hcm)},
 			}
+			chain.Filters = append(chain.Filters, opt.networkFilters...)
 			chain.Filters = append(chain.Filters, filter)
 		}
 
@@ -989,9 +990,9 @@ type filterChainOpts struct {
 	// TLS configuration for the filter
 	tlsContext *auth.DownstreamTlsContext
 
-	// Set if this is for HTTP. Cannot be set with networkFilters
+	// Set if this is for HTTP.
 	httpOpts *httpListenerOpts
-	// Set if this is for TCP chain. Cannot be set with httpOpts
+	// Set if this is for TCP chain.
 	networkFilters []*listener.Filter
 }
 
@@ -1004,7 +1005,7 @@ type gatewayListenerOpts struct {
 	bind       string
 	extraBind  []string
 
-	port              *model.Port
+	port              int
 	filterChainOpts   []*filterChainOpts
 	needPROXYProtocol bool
 }
@@ -1076,8 +1077,8 @@ func buildGatewayListener(opts gatewayListenerOpts, transport istionetworking.Tr
 
 		res = &listener.Listener{
 			// TODO: need to sanitize the opts.bind if its a UDS socket, as it could have colons, that envoy doesn't like
-			Name:                             getListenerName(opts.bind, opts.port.Port, istionetworking.TransportProtocolTCP),
-			Address:                          util.BuildAddress(opts.bind, uint32(opts.port.Port)),
+			Name:                             getListenerName(opts.bind, opts.port, istionetworking.TransportProtocolTCP),
+			Address:                          util.BuildAddress(opts.bind, uint32(opts.port)),
 			TrafficDirection:                 core.TrafficDirection_OUTBOUND,
 			ListenerFilters:                  listenerFilters,
 			FilterChains:                     filterChains,
@@ -1086,7 +1087,7 @@ func buildGatewayListener(opts gatewayListenerOpts, transport istionetworking.Tr
 		}
 		// add extra addresses for the listener
 		if features.EnableDualStack && len(opts.extraBind) > 0 {
-			res.AdditionalAddresses = util.BuildAdditionalAddresses(opts.extraBind, uint32(opts.port.Port))
+			res.AdditionalAddresses = util.BuildAdditionalAddresses(opts.extraBind, uint32(opts.port))
 		}
 
 		if opts.proxy.Type != model.Router {
@@ -1096,11 +1097,11 @@ func buildGatewayListener(opts gatewayListenerOpts, transport istionetworking.Tr
 		// TODO: switch on TransportProtocolQUIC is in too many places now. Once this is a bit
 		//       mature, refactor some of these to an interface so that they kick off the process
 		//       of building listener, filter chains, serializing etc based on transport protocol
-		listenerName := getListenerName(opts.bind, opts.port.Port, istionetworking.TransportProtocolQUIC)
+		listenerName := getListenerName(opts.bind, opts.port, istionetworking.TransportProtocolQUIC)
 		log.Debugf("buildGatewayListener: building UDP/QUIC listener %s", listenerName)
 		res = &listener.Listener{
 			Name:             listenerName,
-			Address:          util.BuildNetworkAddress(opts.bind, uint32(opts.port.Port), istionetworking.TransportProtocolQUIC),
+			Address:          util.BuildNetworkAddress(opts.bind, uint32(opts.port), istionetworking.TransportProtocolQUIC),
 			TrafficDirection: core.TrafficDirection_OUTBOUND,
 			FilterChains:     filterChains,
 			UdpListenerConfig: &listener.UdpListenerConfig{
@@ -1114,7 +1115,7 @@ func buildGatewayListener(opts gatewayListenerOpts, transport istionetworking.Tr
 		}
 		// add extra addresses for the listener
 		if features.EnableDualStack && len(opts.extraBind) > 0 {
-			res.AdditionalAddresses = util.BuildAdditionalAddresses(opts.extraBind, uint32(opts.port.Port))
+			res.AdditionalAddresses = util.BuildAdditionalAddresses(opts.extraBind, uint32(opts.port))
 		}
 	}
 
