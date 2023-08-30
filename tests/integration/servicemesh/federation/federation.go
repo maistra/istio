@@ -15,12 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package servicemesh
+package federation
 
 import (
 	"context"
-	"fmt"
-	"time"
+	"path/filepath"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,49 +29,15 @@ import (
 	"istio.io/istio/pkg/test/framework/components/cluster"
 	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/pkg/test/framework/resource"
-	kubetest "istio.io/istio/pkg/test/kube"
-	"istio.io/istio/pkg/test/util/retry"
 )
-
-const defaultTimeout = 5 * time.Minute
 
 var (
-	bookinfoManifests = []string{
-		env.IstioSrc + "/samples/bookinfo/platform/kube/bookinfo.yaml",
-		env.IstioSrc + "/samples/bookinfo/networking/bookinfo-gateway.yaml",
-	}
-	sleepManifest = env.IstioSrc + "/samples/sleep/sleep.yaml"
+	exportedServiceSetTmpl = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/federation/testdata/exported-service-set.tmpl.yaml")
+	importedServiceSetTmpl = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/federation/testdata/imported-service-set.tmpl.yaml")
+	serviceMeshPeerTmpl    = filepath.Join(env.IstioSrc, "tests/integration/servicemesh/federation/testdata/service-mesh-peer.tmpl.yaml")
 )
 
-func InstallBookinfo(ctx framework.TestContext, c cluster.Cluster, namespace string) {
-	if err := c.ApplyYAMLFiles(namespace, bookinfoManifests...); err != nil {
-		ctx.Fatal(err)
-	}
-	if err := retry.UntilSuccess(func() error {
-		if _, err := kubetest.CheckPodsAreReady(kubetest.NewPodFetch(c, namespace, "app=ratings")); err != nil {
-			return fmt.Errorf("ratings pod is not ready: %v", err)
-		}
-		return nil
-	}, retry.Timeout(defaultTimeout), retry.Delay(time.Second)); err != nil {
-		ctx.Fatal(err)
-	}
-}
-
-func InstallSleep(ctx framework.TestContext, c cluster.Cluster, namespace string) {
-	if err := c.ApplyYAMLFiles(namespace, sleepManifest); err != nil {
-		ctx.Fatal(err)
-	}
-	if err := retry.UntilSuccess(func() error {
-		if _, err := kubetest.CheckPodsAreReady(kubetest.NewPodFetch(c, namespace, "app=sleep")); err != nil {
-			return fmt.Errorf("sleep pod is not ready: %v", err)
-		}
-		return nil
-	}, retry.Timeout(defaultTimeout), retry.Delay(time.Second)); err != nil {
-		ctx.Fatal(err)
-	}
-}
-
-func setupConfig(_ resource.Context, cfg *istio.Config) {
+func SetupConfig(_ resource.Context, cfg *istio.Config) {
 	if cfg == nil {
 		return
 	}
@@ -155,94 +120,32 @@ func CreateServiceMeshPeersOrFail(ctx framework.TestContext) {
 			if err != nil {
 				ctx.Fatalf("failed to create config map %s: %s", configMap.ObjectMeta.Name, err)
 			}
-			ctx.ConfigKube(cluster).YAML("istio-system", fmt.Sprintf(`
-apiVersion: federation.maistra.io/v1
-kind: ServiceMeshPeer
-metadata:
-    name: %s
-spec:
-    remote:
-        addresses:
-        - %s
-    gateways:
-        ingress:
-            name: federation-ingress
-        egress:
-            name: federation-egress
-    security:
-        trustDomain: %s
-        clientID: %s
-        certificateChain:
-            kind: ConfigMap
-            name: %s
-`, remoteCluster, remoteIP, remoteCluster+".local", remoteCluster+".local/ns/istio-system/sa/federation-egress-service-account", caCertConfigMapName)).
-				ApplyOrFail(ctx)
+			ctx.ConfigKube(cluster).EvalFile("istio-system", map[string]string{
+				"RemoteClusterName": remoteCluster,
+				"RemoteClusterAddr": remoteIP,
+			}, serviceMeshPeerTmpl).ApplyOrFail(ctx)
 		}
 	}
 }
 
-func SetupExportsAndImportsOrFail(ctx framework.TestContext, exportFrom string) {
-	primary := ctx.Clusters().GetByName("primary")
-	ctx.ConfigKube(primary).YAML("istio-system", fmt.Sprintf(`
-apiVersion: federation.maistra.io/v1
-kind: ExportedServiceSet
-metadata:
-  name: cross-network-primary
-  namespace: istio-system
-spec:
-  exportRules:
-  - type: NameSelector
-    nameSelector:
-      namespace: %s
-      name: ratings
-      alias:
-        namespace: bookinfo
-        name: ratings
-	`, exportFrom)).ApplyOrFail(ctx)
-
-	secondary := ctx.Clusters().GetByName("cross-network-primary")
-	ctx.ConfigKube(secondary).YAML("istio-system", `
-apiVersion: federation.maistra.io/v1
-kind: ImportedServiceSet
-metadata:
-  name: primary
-  namespace: istio-system
-spec:
-  importRules:
-    - type: NameSelector
-      importAsLocal: false
-      nameSelector:
-        namespace: bookinfo
-`).ApplyOrFail(ctx)
+type NameSelector struct {
+	Namespace      string
+	Name           string
+	AliasNamespace string
+	AliasName      string
+	ImportAsLocal  bool
 }
 
-func checkConnectivity(ctx framework.TestContext, source cluster.Cluster, namespace string) {
-	var podName string
-	err := retry.UntilSuccess(func() error {
-		podList, err := source.PodsForSelector(context.TODO(), namespace, "app=sleep")
-		if err != nil {
-			return err
-		}
-		if len(podList.Items) < 1 {
-			return fmt.Errorf("no sleep pod found in namespace %s", namespace)
-		}
-		podName = podList.Items[0].Name
-		return nil
-	}, retry.Timeout(defaultTimeout), retry.Delay(time.Second))
-	if err != nil {
-		ctx.Fatal(err)
-	}
-	cmd := "curl http://ratings.bookinfo.svc.primary-imports.local:9080/ratings/123"
-	err = retry.UntilSuccess(func() error {
-		stdout, _, err := source.PodExec(podName, namespace, "sleep", cmd)
-		if err != nil {
-			return err
-		} else if stdout != `{"id":123,"ratings":{"Reviewer1":5,"Reviewer2":4}}` {
-			return fmt.Errorf("podexec output does not look right: %s", stdout)
-		}
-		return nil
-	}, retry.Timeout(defaultTimeout), retry.Delay(time.Second))
-	if err != nil {
-		ctx.Fatal(err)
-	}
+func ExportServiceOrFail(ctx framework.TestContext, from, to cluster.Cluster, selectors ...NameSelector) {
+	ctx.ConfigKube(from).EvalFile("istio-system", map[string]any{
+		"ExportTo":      to.Name(),
+		"NameSelectors": selectors,
+	}, exportedServiceSetTmpl).ApplyOrFail(ctx)
+}
+
+func ImportServiceOrFail(ctx framework.TestContext, to, from cluster.Cluster, selectors ...NameSelector) {
+	ctx.ConfigKube(to).EvalFile("istio-system", map[string]any{
+		"ImportFrom":    from.Name(),
+		"NameSelectors": selectors,
+	}, importedServiceSetTmpl).ApplyOrFail(ctx)
 }
