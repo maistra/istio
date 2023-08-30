@@ -222,12 +222,12 @@ func TestDiscovery(t *testing.T) {
 					}))
 				})
 
-			ctx.NewSubTest("export apps from primary cluster as local and import all to secondary").
+			ctx.NewSubTest("export a namespace from primary cluster and import services from that namespace as local to secondary").
 				Run(func(t framework.TestContext) {
 					federation.ExportServiceOrFail(ctx, primary, secondary, federation.NameSelector{
 						Namespace: ns1.Name(),
 					})
-					// importing as local requires name and namespace aliases
+					// importing as local requires namespace alias
 					federation.ImportServiceOrFail(ctx, secondary, primary, federation.NameSelector{
 						Namespace:      ns1.Name(),
 						Name:           "a",
@@ -235,6 +235,7 @@ func TestDiscovery(t *testing.T) {
 						AliasName:      "a",
 						ImportAsLocal:  true,
 					}, federation.NameSelector{
+						// namespace alias can be same as exported namespace
 						Namespace:      ns1.Name(),
 						Name:           "b",
 						AliasNamespace: ns1.Name(),
@@ -252,12 +253,57 @@ func TestDiscovery(t *testing.T) {
 					}))
 				})
 
-			ctx.NewSubTest("export apps from primary cluster as local and as remote, and import all to secondary").
+			ctx.NewSubTest("export a namespace from primary cluster and import as local to secondary").
 				Run(func(t framework.TestContext) {
 					federation.ExportServiceOrFail(ctx, primary, secondary, federation.NameSelector{
 						Namespace: ns1.Name(),
 					})
-					// importing as local requires name and namespace aliases
+					// importing as local requires namespace alias
+					federation.ImportServiceOrFail(ctx, secondary, primary, federation.NameSelector{
+						Namespace:      ns1.Name(),
+						AliasNamespace: ns1.Name(),
+						ImportAsLocal:  true,
+					})
+
+					c.CallOrFail(t, withDefaults(echo.CallOptions{
+						Address: fmt.Sprintf("a.%s.svc.cluster.local", ns1.Name()),
+						Check:   check.GRPCStatus(codes.OK),
+					}))
+					c.CallOrFail(t, withDefaults(echo.CallOptions{
+						Address: fmt.Sprintf("b.%s.svc.cluster.local", ns1.Name()),
+						Check:   check.GRPCStatus(codes.OK),
+					}))
+				})
+
+			ctx.NewSubTest("export a namespace from primary cluster and import as local with wildcard to secondary").
+				Run(func(t framework.TestContext) {
+					federation.ExportServiceOrFail(ctx, primary, secondary, federation.NameSelector{
+						Namespace: ns1.Name(),
+					})
+					// importing as local requires namespace alias
+					federation.ImportServiceOrFail(ctx, secondary, primary, federation.NameSelector{
+						Namespace:      ns1.Name(),
+						AliasNamespace: ns1.Name(),
+						AliasName:      "*",
+						ImportAsLocal:  true,
+					})
+
+					c.CallOrFail(t, withDefaults(echo.CallOptions{
+						Address: fmt.Sprintf("a.%s.svc.cluster.local", ns1.Name()),
+						Check:   check.GRPCStatus(codes.OK),
+					}))
+					c.CallOrFail(t, withDefaults(echo.CallOptions{
+						Address: fmt.Sprintf("b.%s.svc.cluster.local", ns1.Name()),
+						Check:   check.GRPCStatus(codes.OK),
+					}))
+				})
+
+			ctx.NewSubTest("export apps from primary cluster and import all to secondary as local and remote").
+				Run(func(t framework.TestContext) {
+					federation.ExportServiceOrFail(ctx, primary, secondary, federation.NameSelector{
+						Namespace: ns1.Name(),
+					})
+					// importing as local requires namespace alias
 					federation.ImportServiceOrFail(ctx, secondary, primary, federation.NameSelector{
 						Namespace:      ns1.Name(),
 						Name:           "a",
