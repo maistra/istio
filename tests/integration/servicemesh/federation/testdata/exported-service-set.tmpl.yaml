@@ -1,0 +1,25 @@
+apiVersion: federation.maistra.io/v1
+kind: ExportedServiceSet
+metadata:
+  name: {{ .ExportTo }}
+spec:
+  exportRules:
+{{- range $nameSelector := .NameSelectors }}
+  - type: NameSelector
+    nameSelector:
+    {{- if $nameSelector.Namespace }}
+      namespace: "{{ $nameSelector.Namespace }}"
+    {{- end }}
+    {{- if $nameSelector.Name }}
+      name: "{{ $nameSelector.Name }}"
+    {{- end }}
+    {{- if or $nameSelector.AliasNamespace $nameSelector.AliasName }}
+      alias:
+      {{- if $nameSelector.AliasNamespace }}
+        namespace: "{{ $nameSelector.AliasNamespace }}"
+      {{- end }}
+      {{- if $nameSelector.AliasName }}
+        name: "{{ $nameSelector.AliasName }}"
+      {{- end }}
+    {{- end }}
+{{- end }}
