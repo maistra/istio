@@ -192,7 +192,7 @@ func DisableWebhooksAndRestart(istioNs namespace.Getter) resource.SetupFn {
 		if err := waitForIstiod(kubeClient, istioNs.Get(), &lastSeenGeneration); err != nil {
 			return err
 		}
-		if err := patchIstiodArgs(kubeClient, istioNs.Get()); err != nil {
+		if err := patchIstiodArgs(kubeClient, istioNs.Get(), disableWebhookPatch); err != nil {
 			return err
 		}
 		if err := waitForIstiod(kubeClient, istioNs.Get(), &lastSeenGeneration); err != nil {
@@ -220,25 +220,7 @@ func waitForIstiod(kubeClient kubernetes.Interface, istioNs namespace.Instance, 
 	return err
 }
 
-func patchIstiodArgs(kubeClient kubernetes.Interface, istioNs namespace.Instance) error {
-	patch := `[
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/1",
-		"value": {
-			"name": "INJECTION_WEBHOOK_CONFIG_NAME",
-			"value": ""
-		}
-	},
-	{
-		"op": "add",
-		"path": "/spec/template/spec/containers/0/env/2",
-		"value": {
-			"name": "VALIDATION_WEBHOOK_CONFIG_NAME",
-			"value": ""
-		}
-	}
-]`
+func patchIstiodArgs(kubeClient kubernetes.Interface, istioNs namespace.Instance, patch string) error {
 	return retry.UntilSuccess(func() error {
 		_, err := kubeClient.AppsV1().Deployments(istioNs.Name()).
 			Patch(context.TODO(), "istiod-"+istioNs.Prefix(), types.JSONPatchType, []byte(patch), metav1.PatchOptions{})
@@ -270,6 +252,36 @@ func ApplyServiceMeshMemberRoll(ctx framework.TestContext, istioNs namespace.Ins
 	return updateServiceMeshMemberRollStatus(ctx.Clusters().Default(), istioNs.Name(), memberNamespaces...)
 }
 
+func EnableIOR(ctx resource.Context, ns namespace.Instance) error {
+	kubeClient := ctx.Clusters().Default().Kube()
+	var lastSeenGeneration int64
+	if err := waitForIstiod(kubeClient, ns, &lastSeenGeneration); err != nil {
+		return err
+	}
+	if err := patchIstiodArgs(kubeClient, ns, enableIORPatch); err != nil {
+		return err
+	}
+	if err := waitForIstiod(kubeClient, ns, &lastSeenGeneration); err != nil {
+		return err
+	}
+	return nil
+}
+
+func DisableIOR(ctx resource.Context, ns namespace.Instance) error {
+	kubeClient := ctx.Clusters().Default().Kube()
+	var lastSeenGeneration int64
+	if err := waitForIstiod(kubeClient, ns, &lastSeenGeneration); err != nil {
+		return err
+	}
+	if err := patchIstiodArgs(kubeClient, ns, disableIORPatch); err != nil {
+		return err
+	}
+	if err := waitForIstiod(kubeClient, ns, &lastSeenGeneration); err != nil {
+		return err
+	}
+	return nil
+}
+
 func updateServiceMeshMemberRollStatus(c cluster.Cluster, istioNamespace string, memberNamespaces ...string) error {
 	client, err := maistrav1.NewForConfig(c.RESTConfig())
 	if err != nil {
@@ -298,3 +310,44 @@ func applyRolesToMemberNamespaces(c config.Factory, values map[string]string, na
 	}
 	return nil
 }
+
+const disableWebhookPatch = `[
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/1",
+		"value": {
+			"name": "INJECTION_WEBHOOK_CONFIG_NAME",
+			"value": ""
+		}
+	},
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/2",
+		"value": {
+			"name": "VALIDATION_WEBHOOK_CONFIG_NAME",
+			"value": ""
+		}
+	}
+]`
+
+const enableIORPatch = `[
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/1",
+		"value": {
+			"name": "ENABLE_IOR",
+			"value": "true"
+		}
+	}
+]`
+
+const disableIORPatch = `[
+	{
+		"op": "add",
+		"path": "/spec/template/spec/containers/0/env/1",
+		"value": {
+			"name": "ENABLE_IOR",
+			"value": "false"
+		}
+	}
+]`

@@ -27,6 +27,7 @@ import (
 	"istio.io/istio/pilot/pkg/config/kube/crdclient"
 	"istio.io/istio/pilot/pkg/config/kube/gateway"
 	ingress "istio.io/istio/pilot/pkg/config/kube/ingress"
+	"istio.io/istio/pilot/pkg/config/kube/ior"
 	"istio.io/istio/pilot/pkg/config/memory"
 	configmonitor "istio.io/istio/pilot/pkg/config/monitor"
 	"istio.io/istio/pilot/pkg/features"
@@ -203,6 +204,16 @@ func (s *Server) initK8SConfigStore(args *PilotArgs) error {
 		if err := s.initInprocessAnalysisController(args); err != nil {
 			return err
 		}
+	}
+	if features.EnableIOR {
+		s.addTerminatingStartFunc(func(stop <-chan struct{}) error {
+			leaderelection.
+				NewLeaderElection(args.Namespace, args.PodName, leaderelection.IORController, args.Revision, s.kubeClient).
+				AddRunFunction(func(leaderStop <-chan struct{}) {
+					ior.Run(s.kubeClient, configController, leaderStop)
+				}).Run(stop)
+			return nil
+		})
 	}
 	s.RWConfigStore, err = configaggregate.MakeWriteableCache(s.ConfigStores, configController)
 	if err != nil {

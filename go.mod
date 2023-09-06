@@ -59,6 +59,7 @@ require (
 	github.com/moby/buildkit v0.11.5
 	github.com/onsi/gomega v1.27.6
 	github.com/openshift/api v0.0.0-20200929171550-c99a4deebbe5
+	github.com/openshift/client-go v0.0.0-20200929181438-91d71ef2122c
 	github.com/pires/go-proxyproto v0.7.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.14.0
@@ -211,7 +212,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.0-rc3 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/prometheus/prom2json v1.3.2 // indirect
 	github.com/prometheus/statsd_exporter v0.23.0 // indirect
