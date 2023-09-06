@@ -6,7 +6,7 @@ spec:
   hosts:
   - "{{ .name }}.maistra.io"
   gateways:
-  - {{ .gatewayNs }}/common-gateway
+  - {{ .gatewayNs }}/{{ .gatewayName }}
   http:
   - route:
     - destination:

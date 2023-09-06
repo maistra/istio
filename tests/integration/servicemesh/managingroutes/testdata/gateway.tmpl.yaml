@@ -1,7 +1,11 @@
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
-  name: common-gateway
+  name: {{ .name }}
+  labels:     
+  {{- range $k, $v := .labels }}
+    {{$k}}: {{$v}}
+  {{- end }}
 spec:
   selector:
     istio: ingressgateway

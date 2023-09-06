@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"reflect"
 
+	routeclient "github.com/openshift/client-go/route/clientset/versioned"
+	routeinformer "github.com/openshift/client-go/route/informers/externalversions"
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -103,6 +105,10 @@ func (c MockClient) Istio() istioclient.Interface {
 	panic("not used in mock")
 }
 
+func (c MockClient) Route() routeclient.Interface {
+	panic("not used in mock")
+}
+
 func (c MockClient) GatewayAPI() serviceapisclient.Interface {
 	panic("not used in mock")
 }
@@ -116,6 +122,10 @@ func (c MockClient) IstioInformer() istioinformer.SharedInformerFactory {
 }
 
 func (c MockClient) GatewayAPIInformer() serviceapisinformer.SharedInformerFactory {
+	panic("not used in mock")
+}
+
+func (c MockClient) RouteInformer() routeinformer.SharedInformerFactory {
 	panic("not used in mock")
 }
 
