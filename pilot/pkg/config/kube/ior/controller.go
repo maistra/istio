@@ -126,6 +126,21 @@ func (r *routeController) deleteRoute(route *v1.Route) error {
 	return nil
 }
 
+func filteredRouteAnnotation(routeAnnotation string) bool {
+	filteredPrefixes := [...]string{
+		ShouldManageRouteAnnotation,
+		"kubectl.kubernetes.io",
+		"argocd.argoproj.io",
+	}
+
+	for _, prefix := range filteredPrefixes {
+		if strings.HasPrefix(routeAnnotation, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func buildRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) *v1.Route {
 	actualHost, wildcard := getActualHost(originalHost, true)
 
@@ -144,7 +159,7 @@ func buildRoute(metadata config.Meta, originalHost string, tls *networking.Serve
 		originalHostAnnotation: originalHost,
 	}
 	for keyName, keyValue := range metadata.Annotations {
-		if !strings.HasPrefix(keyName, "kubectl.kubernetes.io") && keyName != ShouldManageRouteAnnotation {
+		if !filteredRouteAnnotation(keyName) {
 			annotationMap[keyName] = keyValue
 		}
 	}
