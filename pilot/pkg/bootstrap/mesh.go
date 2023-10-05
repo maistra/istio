@@ -119,7 +119,7 @@ func (s *Server) initMeshNetworks(args *PilotArgs, fileWatcher filewatcher.FileW
 
 func getMeshConfigMapName(revision string) string {
 	name := defaultMeshConfigMapName
-	if revision == "" || revision == "default" {
+	if revision == "" {
 		return name
 	}
 	return name + "-" + revision

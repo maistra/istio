@@ -112,7 +112,7 @@ func (s *Server) initSidecarInjector(args *PilotArgs) (*inject.Webhook, error) {
 
 func getInjectorConfigMapName(revision string) string {
 	name := defaultInjectorConfigMapName
-	if revision == "" || revision == "default" {
+	if revision == "" {
 		return name
 	}
 	return name + "-" + revision
