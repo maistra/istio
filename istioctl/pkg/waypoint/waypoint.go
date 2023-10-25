@@ -15,6 +15,7 @@
 package waypoint
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gateway "sigs.k8s.io/gateway-api/apis/v1beta1"
 	"sigs.k8s.io/yaml"
 
@@ -221,14 +223,11 @@ func Cmd(ctx cli.Context) *cobra.Command {
 				return nil
 			}
 			w := new(tabwriter.Writer).Init(writer, 0, 8, 5, ' ', 0)
-			slices.SortFunc(gws.Items, func(i, j gateway.Gateway) bool {
-				if i.Namespace <= j.Namespace {
-					return true
+			slices.SortFunc(gws.Items, func(i, j gateway.Gateway) int {
+				if r := cmp.Compare(i.Namespace, j.Namespace); r != 0 {
+					return r
 				}
-				if i.Namespace > j.Namespace {
-					return false
-				}
-				return i.Name < j.Name
+				return cmp.Compare(i.Name, j.Name)
 			})
 			filteredGws := make([]gateway.Gateway, 0)
 			for _, gw := range gws.Items {
@@ -250,7 +249,7 @@ func Cmd(ctx cli.Context) *cobra.Command {
 					rev = "default"
 				}
 				for _, cond := range gw.Status.Conditions {
-					if cond.Type == string(gateway.GatewayConditionProgrammed) {
+					if cond.Type == string(gatewayv1.GatewayConditionProgrammed) {
 						programmed = string(cond.Status)
 					}
 				}
