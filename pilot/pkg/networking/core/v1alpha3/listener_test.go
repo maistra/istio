@@ -36,6 +36,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	wrappers "google.golang.org/protobuf/types/known/wrapperspb"
 
+	extensions "istio.io/api/extensions/v1alpha1"
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/features"
@@ -279,6 +280,43 @@ func TestOutboundListenerConfig_WithSidecar(t *testing.T) {
 	}
 	services = append(services, service6)
 	testOutboundListenerConfigWithSidecar(t, services...)
+}
+
+func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
+	wasmPlugin := config.Config{
+		Meta: config.Meta{
+			Name:             "3scale-auth-plugin",
+			Namespace:        "not-default",
+			GroupVersionKind: gvk.WasmPlugin,
+		},
+		Spec: &extensions.WasmPlugin{
+			Url:   "oci://quay.io/3scale/threescale-wasm-auth:0.0.4",
+			Phase: extensions.PluginPhase_AUTHZ,
+		},
+	}
+	cg := NewConfigGenTest(t, TestOptions{
+		Services: []*model.Service{
+			buildService("test1.com", wildcardIP, protocol.HTTP, tnow),
+		},
+		ConfigPointers: []*config.Config{&wasmPlugin},
+	})
+	listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
+		buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
+	xdstest.ValidateListeners(t, listeners)
+
+	listenertest.VerifyListener(t, listeners[0], listenertest.ListenerTest{
+		FilterChains: []listenertest.FilterChainTest{{
+			TotalMatch: true,
+			HTTPFilters: []string{
+				"not-default.3scale-auth-plugin",
+				xdsfilters.MxFilterName,
+				xdsfilters.AlpnFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+		}},
+	})
 }
 
 func TestOutboundListenerConflict_HTTPWithCurrentTCP(t *testing.T) {
