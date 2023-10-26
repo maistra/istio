@@ -282,13 +282,15 @@ func TestOutboundListenerConfig_WithSidecar(t *testing.T) {
 	testOutboundListenerConfigWithSidecar(t, services...)
 }
 
-func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
+func TestListenersConfig_WithWasmPlugin(t *testing.T) {
 	testCases := []struct {
 		name                string
 		inboundOnlyFlag     bool
 		expectedHTTPFilters []string
+		trafficDirection    string
 	}{
 		{
+			name:            "wasm plugin, outbound, inbound_only disabled",
 			inboundOnlyFlag: false,
 			expectedHTTPFilters: []string{
 				"not-default.wasm-plugin",
@@ -298,9 +300,10 @@ func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
 				xdsfilters.Cors.Name,
 				xdsfilters.Router.Name,
 			},
-			name: "wasm plugin applied",
+			trafficDirection: "OUTBOUND",
 		},
 		{
+			name:            "wasm plugin, outbound, inbound_only enabled",
 			inboundOnlyFlag: true,
 			expectedHTTPFilters: []string{
 				xdsfilters.MxFilterName,
@@ -309,7 +312,31 @@ func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
 				xdsfilters.Cors.Name,
 				xdsfilters.Router.Name,
 			},
-			name: "wasm plugin skipped",
+			trafficDirection: "OUTBOUND",
+		},
+		{
+			name:            "wasm plugin, inbound listener, inbound_only flag disabled",
+			inboundOnlyFlag: false,
+			expectedHTTPFilters: []string{
+				"not-default.wasm-plugin",
+				xdsfilters.MxFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+			trafficDirection: "INBOUND",
+		},
+		{
+			name:            "wasm plugin, inbound listener, inbound_only flag enabled",
+			inboundOnlyFlag: true,
+			expectedHTTPFilters: []string{
+				"not-default.wasm-plugin",
+				xdsfilters.MxFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+			trafficDirection: "INBOUND",
 		},
 	}
 
@@ -321,26 +348,48 @@ func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
 		},
 		Spec: &extensions.WasmPlugin{},
 	}
-	cg := NewConfigGenTest(t, TestOptions{
+	configs := TestOptions{
 		Services:       []*model.Service{buildService("test1.com", wildcardIP, protocol.HTTP, tnow)},
 		ConfigPointers: []*config.Config{&wasmPlugin},
-	})
+	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
+		if tc.trafficDirection == "OUTBOUND" {
+			t.Run(tc.name, func(t *testing.T) {
+				test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
 
-			listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
-				buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
-			xdstest.ValidateListeners(t, listeners)
+				cg := NewConfigGenTest(t, configs)
+				listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
+					buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
+				xdstest.ValidateListeners(t, listeners)
 
-			listenertest.VerifyListener(t, listeners[0], listenertest.ListenerTest{
-				FilterChains: []listenertest.FilterChainTest{{
-					TotalMatch:  true,
-					HTTPFilters: tc.expectedHTTPFilters,
-				}},
+				if len(listeners) > 1 {
+					t.Errorf("expected to get 1 listener, got: %d", len(listeners))
+				}
+				listenertest.VerifyListener(t, listeners[0], listenertest.ListenerTest{
+					FilterChains: []listenertest.FilterChainTest{{
+						TotalMatch:  true,
+						HTTPFilters: tc.expectedHTTPFilters,
+					}},
+				})
 			})
-		})
+		} else {
+			t.Run(tc.name, func(t *testing.T) {
+				test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
+
+				listeners := buildListeners(t, configs, getProxy())
+				xdstest.ValidateListeners(t, listeners)
+
+				l := xdstest.ExtractListener(model.VirtualInboundListenerName, listeners)
+				listenertest.VerifyListener(t, l, listenertest.ListenerTest{
+					FilterChains: []listenertest.FilterChainTest{{
+						TotalMatch:  true,
+						Port:        8080,
+						HTTPFilters: tc.expectedHTTPFilters,
+					}},
+				})
+			})
+		}
 	}
 }
 
@@ -1389,69 +1438,6 @@ func testInboundListenerConfigWithGrpc(t *testing.T, proxy *model.Proxy, service
 				HTTPFilters: []string{wellknown.HTTPGRPCStats},
 			},
 		},
-	})
-}
-
-func TestInboundListenerConfig_WithWasmPlugin(t *testing.T) {
-	wasmPlugin := config.Config{
-		Meta: config.Meta{
-			Name:             "wasm-plugin",
-			Namespace:        "not-default",
-			GroupVersionKind: gvk.WasmPlugin,
-		},
-		Spec: &extensions.WasmPlugin{},
-	}
-	listeners := buildListeners(t, TestOptions{
-		Services: []*model.Service{buildService("test1.com", wildcardIP, protocol.HTTP, tnow)},
-		Configs:  []config.Config{wasmPlugin},
-	}, getProxy())
-	xdstest.ValidateListeners(t, listeners)
-
-	l := xdstest.ExtractListener(model.VirtualInboundListenerName, listeners)
-	listenertest.VerifyListener(t, l, listenertest.ListenerTest{
-		FilterChains: []listenertest.FilterChainTest{{
-			TotalMatch: true,
-			Port:       8080,
-			HTTPFilters: []string{
-				"not-default.wasm-plugin",
-				xdsfilters.MxFilterName,
-				xdsfilters.Fault.Name,
-				xdsfilters.Cors.Name,
-				xdsfilters.Router.Name,
-			},
-		}},
-	})
-}
-
-func TestInboundListenerConfig_WithWasmPlugin_InboundOnlyFlag(t *testing.T) {
-	test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, true)
-	wasmPlugin := config.Config{
-		Meta: config.Meta{
-			Name:             "wasm-plugin",
-			Namespace:        "not-default",
-			GroupVersionKind: gvk.WasmPlugin,
-		},
-		Spec: &extensions.WasmPlugin{},
-	}
-	listeners := buildListeners(t, TestOptions{
-		Services: []*model.Service{buildService("test1.com", wildcardIP, protocol.HTTP, tnow)},
-		Configs:  []config.Config{wasmPlugin},
-	}, getProxy())
-	xdstest.ValidateListeners(t, listeners)
-
-	l := xdstest.ExtractListener(model.VirtualInboundListenerName, listeners)
-	listenertest.VerifyListener(t, l, listenertest.ListenerTest{
-		FilterChains: []listenertest.FilterChainTest{{
-			TotalMatch: true,
-			Port:       8080,
-			HTTPFilters: []string{
-				"not-default.wasm-plugin",
-				xdsfilters.MxFilterName,
-				xdsfilters.Fault.Name,
-				xdsfilters.Cors.Name,
-				xdsfilters.Router.Name,
-			},
-		}},
 	})
 }
 
