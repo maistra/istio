@@ -285,14 +285,11 @@ func TestOutboundListenerConfig_WithSidecar(t *testing.T) {
 func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
 	wasmPlugin := config.Config{
 		Meta: config.Meta{
-			Name:             "3scale-auth-plugin",
+			Name:             "wasm-plugin",
 			Namespace:        "not-default",
 			GroupVersionKind: gvk.WasmPlugin,
 		},
-		Spec: &extensions.WasmPlugin{
-			Url:   "oci://quay.io/3scale/threescale-wasm-auth:0.0.4",
-			Phase: extensions.PluginPhase_AUTHZ,
-		},
+		Spec: &extensions.WasmPlugin{},
 	}
 	cg := NewConfigGenTest(t, TestOptions{
 		Services: []*model.Service{
@@ -308,7 +305,7 @@ func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
 		FilterChains: []listenertest.FilterChainTest{{
 			TotalMatch: true,
 			HTTPFilters: []string{
-				"not-default.3scale-auth-plugin",
+				"not-default.wasm-plugin",
 				xdsfilters.MxFilterName,
 				xdsfilters.AlpnFilterName,
 				xdsfilters.Fault.Name,
