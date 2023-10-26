@@ -283,28 +283,14 @@ func TestOutboundListenerConfig_WithSidecar(t *testing.T) {
 }
 
 func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
-	wasmPlugin := config.Config{
-		Meta: config.Meta{
-			Name:             "wasm-plugin",
-			Namespace:        "not-default",
-			GroupVersionKind: gvk.WasmPlugin,
-		},
-		Spec: &extensions.WasmPlugin{},
-	}
-	cg := NewConfigGenTest(t, TestOptions{
-		Services: []*model.Service{
-			buildService("test1.com", wildcardIP, protocol.HTTP, tnow),
-		},
-		ConfigPointers: []*config.Config{&wasmPlugin},
-	})
-	listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
-		buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
-	xdstest.ValidateListeners(t, listeners)
-
-	listenertest.VerifyListener(t, listeners[0], listenertest.ListenerTest{
-		FilterChains: []listenertest.FilterChainTest{{
-			TotalMatch: true,
-			HTTPFilters: []string{
+	testCases := []struct {
+		name                string
+		inboundOnlyFlag     bool
+		expectedHTTPFilters []string
+	}{
+		{
+			inboundOnlyFlag: false,
+			expectedHTTPFilters: []string{
 				"not-default.wasm-plugin",
 				xdsfilters.MxFilterName,
 				xdsfilters.AlpnFilterName,
@@ -312,12 +298,20 @@ func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
 				xdsfilters.Cors.Name,
 				xdsfilters.Router.Name,
 			},
-		}},
-	})
-}
-
-func TestOutboundListenerConfig_WithWasmPlugin_InboundOnlyFlag(t *testing.T) {
-	test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, true)
+			name: "wasm plugin applied",
+		},
+		{
+			inboundOnlyFlag: true,
+			expectedHTTPFilters: []string{
+				xdsfilters.MxFilterName,
+				xdsfilters.AlpnFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+			name: "wasm plugin skipped",
+		},
+	}
 
 	wasmPlugin := config.Config{
 		Meta: config.Meta{
@@ -328,27 +322,26 @@ func TestOutboundListenerConfig_WithWasmPlugin_InboundOnlyFlag(t *testing.T) {
 		Spec: &extensions.WasmPlugin{},
 	}
 	cg := NewConfigGenTest(t, TestOptions{
-		Services: []*model.Service{
-			buildService("test1.com", wildcardIP, protocol.HTTP, tnow),
-		},
+		Services:       []*model.Service{buildService("test1.com", wildcardIP, protocol.HTTP, tnow)},
 		ConfigPointers: []*config.Config{&wasmPlugin},
 	})
-	listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
-		buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
-	xdstest.ValidateListeners(t, listeners)
 
-	listenertest.VerifyListener(t, listeners[0], listenertest.ListenerTest{
-		FilterChains: []listenertest.FilterChainTest{{
-			TotalMatch: true,
-			HTTPFilters: []string{
-				xdsfilters.MxFilterName,
-				xdsfilters.AlpnFilterName,
-				xdsfilters.Fault.Name,
-				xdsfilters.Cors.Name,
-				xdsfilters.Router.Name,
-			},
-		}},
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
+
+			listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
+				buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
+			xdstest.ValidateListeners(t, listeners)
+
+			listenertest.VerifyListener(t, listeners[0], listenertest.ListenerTest{
+				FilterChains: []listenertest.FilterChainTest{{
+					TotalMatch:  true,
+					HTTPFilters: tc.expectedHTTPFilters,
+				}},
+			})
+		})
+	}
 }
 
 func TestOutboundListenerConflict_HTTPWithCurrentTCP(t *testing.T) {
