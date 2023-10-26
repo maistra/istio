@@ -287,6 +287,7 @@ func TestListenersConfig_WithWasmPlugin(t *testing.T) {
 		name                string
 		inboundOnlyFlag     bool
 		expectedHTTPFilters []string
+		listenerPort        uint32
 		trafficDirection    string
 	}{
 		{
@@ -324,6 +325,7 @@ func TestListenersConfig_WithWasmPlugin(t *testing.T) {
 				xdsfilters.Cors.Name,
 				xdsfilters.Router.Name,
 			},
+			listenerPort:     8080,
 			trafficDirection: "INBOUND",
 		},
 		{
@@ -336,6 +338,7 @@ func TestListenersConfig_WithWasmPlugin(t *testing.T) {
 				xdsfilters.Cors.Name,
 				xdsfilters.Router.Name,
 			},
+			listenerPort:     8080,
 			trafficDirection: "INBOUND",
 		},
 	}
@@ -354,42 +357,18 @@ func TestListenersConfig_WithWasmPlugin(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		if tc.trafficDirection == "OUTBOUND" {
-			t.Run(tc.name, func(t *testing.T) {
-				test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
+		t.Run(tc.name, func(t *testing.T) {
+			test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
 
-				cg := NewConfigGenTest(t, configs)
-				listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
-					buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
-				xdstest.ValidateListeners(t, listeners)
-
-				if len(listeners) > 1 {
-					t.Errorf("expected to get 1 listener, got: %d", len(listeners))
-				}
-				listenertest.VerifyListener(t, listeners[0], listenertest.ListenerTest{
-					FilterChains: []listenertest.FilterChainTest{{
-						TotalMatch:  true,
-						HTTPFilters: tc.expectedHTTPFilters,
-					}},
-				})
+			l := buildListenerForDirection(t, tc.trafficDirection, configs)
+			listenertest.VerifyListener(t, l, listenertest.ListenerTest{
+				FilterChains: []listenertest.FilterChainTest{{
+					TotalMatch:  true,
+					Port:        tc.listenerPort,
+					HTTPFilters: tc.expectedHTTPFilters,
+				}},
 			})
-		} else {
-			t.Run(tc.name, func(t *testing.T) {
-				test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
-
-				listeners := buildListeners(t, configs, getProxy())
-				xdstest.ValidateListeners(t, listeners)
-
-				l := xdstest.ExtractListener(model.VirtualInboundListenerName, listeners)
-				listenertest.VerifyListener(t, l, listenertest.ListenerTest{
-					FilterChains: []listenertest.FilterChainTest{{
-						TotalMatch:  true,
-						Port:        8080,
-						HTTPFilters: tc.expectedHTTPFilters,
-					}},
-				})
-			})
-		}
+		})
 	}
 }
 
@@ -2991,5 +2970,23 @@ func TestFilterChainMatchEqual(t *testing.T) {
 				t.Fatalf("Expected filter chain match to return %v, but got %v", tt.want, got)
 			}
 		})
+	}
+}
+
+func buildListenerForDirection(t *testing.T, trafficDirection string, testOpts TestOptions) *listener.Listener {
+	t.Helper()
+	if trafficDirection == "OUTBOUND" {
+		cg := NewConfigGenTest(t, testOpts)
+		listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
+			buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
+		xdstest.ValidateListeners(t, listeners)
+		if len(listeners) > 1 {
+			t.Errorf("expected to get 1 listener, got: %d", len(listeners))
+		}
+		return listeners[0]
+	} else {
+		listeners := buildListeners(t, testOpts, getProxy())
+		xdstest.ValidateListeners(t, listeners)
+		return xdstest.ExtractListener(model.VirtualInboundListenerName, listeners)
 	}
 }
