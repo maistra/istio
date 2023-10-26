@@ -316,6 +316,41 @@ func TestOutboundListenerConfig_WithWasmPlugin(t *testing.T) {
 	})
 }
 
+func TestOutboundListenerConfig_WithWasmPlugin_InboundOnlyFlag(t *testing.T) {
+	test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, true)
+
+	wasmPlugin := config.Config{
+		Meta: config.Meta{
+			Name:             "wasm-plugin",
+			Namespace:        "not-default",
+			GroupVersionKind: gvk.WasmPlugin,
+		},
+		Spec: &extensions.WasmPlugin{},
+	}
+	cg := NewConfigGenTest(t, TestOptions{
+		Services: []*model.Service{
+			buildService("test1.com", wildcardIP, protocol.HTTP, tnow),
+		},
+		ConfigPointers: []*config.Config{&wasmPlugin},
+	})
+	listeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
+		buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
+	xdstest.ValidateListeners(t, listeners)
+
+	listenertest.VerifyListener(t, listeners[0], listenertest.ListenerTest{
+		FilterChains: []listenertest.FilterChainTest{{
+			TotalMatch: true,
+			HTTPFilters: []string{
+				xdsfilters.MxFilterName,
+				xdsfilters.AlpnFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+		}},
+	})
+}
+
 func TestOutboundListenerConflict_HTTPWithCurrentTCP(t *testing.T) {
 	// The oldest service port is TCP.  We should encounter conflicts when attempting to add the HTTP ports. Purposely
 	// storing the services out of time order to test that it's being sorted properly.
@@ -1361,6 +1396,69 @@ func testInboundListenerConfigWithGrpc(t *testing.T, proxy *model.Proxy, service
 				HTTPFilters: []string{wellknown.HTTPGRPCStats},
 			},
 		},
+	})
+}
+
+func TestInboundListenerConfig_WithWasmPlugin(t *testing.T) {
+	wasmPlugin := config.Config{
+		Meta: config.Meta{
+			Name:             "wasm-plugin",
+			Namespace:        "not-default",
+			GroupVersionKind: gvk.WasmPlugin,
+		},
+		Spec: &extensions.WasmPlugin{},
+	}
+	listeners := buildListeners(t, TestOptions{
+		Services: []*model.Service{buildService("test1.com", wildcardIP, protocol.HTTP, tnow)},
+		Configs:  []config.Config{wasmPlugin},
+	}, getProxy())
+	xdstest.ValidateListeners(t, listeners)
+
+	l := xdstest.ExtractListener(model.VirtualInboundListenerName, listeners)
+	listenertest.VerifyListener(t, l, listenertest.ListenerTest{
+		FilterChains: []listenertest.FilterChainTest{{
+			TotalMatch: true,
+			Port:       8080,
+			HTTPFilters: []string{
+				"not-default.wasm-plugin",
+				xdsfilters.MxFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+		}},
+	})
+}
+
+func TestInboundListenerConfig_WithWasmPlugin_InboundOnlyFlag(t *testing.T) {
+	test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, true)
+	wasmPlugin := config.Config{
+		Meta: config.Meta{
+			Name:             "wasm-plugin",
+			Namespace:        "not-default",
+			GroupVersionKind: gvk.WasmPlugin,
+		},
+		Spec: &extensions.WasmPlugin{},
+	}
+	listeners := buildListeners(t, TestOptions{
+		Services: []*model.Service{buildService("test1.com", wildcardIP, protocol.HTTP, tnow)},
+		Configs:  []config.Config{wasmPlugin},
+	}, getProxy())
+	xdstest.ValidateListeners(t, listeners)
+
+	l := xdstest.ExtractListener(model.VirtualInboundListenerName, listeners)
+	listenertest.VerifyListener(t, l, listenertest.ListenerTest{
+		FilterChains: []listenertest.FilterChainTest{{
+			TotalMatch: true,
+			Port:       8080,
+			HTTPFilters: []string{
+				"not-default.wasm-plugin",
+				xdsfilters.MxFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+		}},
 	})
 }
 

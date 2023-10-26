@@ -1163,9 +1163,11 @@ func (lb *ListenerBuilder) buildHTTPConnectionManager(httpOpts *httpListenerOpts
 
 	routerFilterCtx, reqIDExtensionCtx := configureTracing(lb.push, lb.node, connectionManager, httpOpts.class)
 
+	var wasm map[extensions.PluginPhase][]*model.WasmPluginWrapper
+	if !(features.ApplyWasmPluginsToInboundOnly && httpOpts.class == istionetworking.ListenerClassSidecarOutbound) {
+		wasm = lb.push.WasmPlugins(lb.node)
+	}
 	filters := []*hcm.HttpFilter{}
-	// TODO(jewertow): push wasm plugins only if istionetworking.ListenerClassSidecarInbound, look at ALPN
-	wasm := lb.push.WasmPlugins(lb.node)
 	// TODO: how to deal with ext-authz? It will be in the ordering twice
 	filters = append(filters, lb.authzCustomBuilder.BuildHTTP(httpOpts.class)...)
 	filters = extension.PopAppend(filters, wasm, extensions.PluginPhase_AUTHN)
