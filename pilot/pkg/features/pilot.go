@@ -727,6 +727,10 @@ var (
 		"If enabled, will validate the identity of a workload matches the identity of the "+
 			"WorkloadEntry it is associating with for health checks and auto registration. "+
 			"This flag is added for backwards compatibility only and will be removed in future releases").Get()
+
+	ApplyWasmPluginsToInboundOnly = env.RegisterBoolVar("APPLY_WASM_PLUGINS_TO_INBOUND_ONLY", false,
+		"If enabled, WASM plugins will be only applied to inbound listeners. "+
+			"This flag is ignored when spec.match is defined in a WasmPlugin.").Get()
 )
 
 // EnableEndpointSliceController returns the value of the feature flag and whether it was actually specified.

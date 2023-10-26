@@ -36,8 +36,10 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	wrappers "google.golang.org/protobuf/types/known/wrapperspb"
 
+	extensions "istio.io/api/extensions/v1alpha1"
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	networking "istio.io/api/networking/v1alpha3"
+	"istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/networking/core/v1alpha3/listenertest"
@@ -304,6 +306,165 @@ func TestOutboundListenerConfig_WithSidecar(t *testing.T) {
 	}
 	services = append(services, service6)
 	testOutboundListenerConfigWithSidecar(t, services...)
+}
+
+func TestListenersConfig_WithWasmPlugin(t *testing.T) {
+	defaultOutboundFilters := []string{
+		xdsfilters.MxFilterName,
+		xdsfilters.AlpnFilterName,
+		xdsfilters.Fault.Name,
+		xdsfilters.Cors.Name,
+		xdsfilters.Router.Name,
+	}
+	outboundFiltersWithWasm := []string{
+		xdsfilters.MxFilterName,
+		"not-default.wasm-plugin",
+		xdsfilters.AlpnFilterName,
+		xdsfilters.Fault.Name,
+		xdsfilters.Cors.Name,
+		xdsfilters.Router.Name,
+	}
+	defaultInboundFilters := []string{
+		xdsfilters.MxFilterName,
+		xdsfilters.Fault.Name,
+		xdsfilters.Cors.Name,
+		xdsfilters.Router.Name,
+	}
+	inboundFiltersWithWasm := []string{
+		xdsfilters.MxFilterName,
+		"not-default.wasm-plugin",
+		xdsfilters.Fault.Name,
+		xdsfilters.Cors.Name,
+		xdsfilters.Router.Name,
+	}
+	testCases := []struct {
+		name                    string
+		inboundOnlyFlag         bool
+		wasmPluginMode          []*extensions.WasmPlugin_TrafficSelector
+		expectedInboundFilters  []string
+		expectedOutboundFilters []string
+	}{
+		{
+			name:                    "wasm plugin, inbound_only disabled, mode unspecified",
+			inboundOnlyFlag:         false,
+			wasmPluginMode:          nil,
+			expectedInboundFilters:  inboundFiltersWithWasm,
+			expectedOutboundFilters: outboundFiltersWithWasm,
+		},
+		{
+			name:                    "wasm plugin, inbound_only enabled, mode unspecified",
+			inboundOnlyFlag:         true,
+			wasmPluginMode:          nil,
+			expectedInboundFilters:  inboundFiltersWithWasm,
+			expectedOutboundFilters: defaultOutboundFilters,
+		},
+		{
+			name:                    "wasm plugin, inbound_only disabled, server mode",
+			inboundOnlyFlag:         false,
+			wasmPluginMode:          []*extensions.WasmPlugin_TrafficSelector{{Mode: v1beta1.WorkloadMode_SERVER}},
+			expectedInboundFilters:  inboundFiltersWithWasm,
+			expectedOutboundFilters: defaultOutboundFilters,
+		},
+		{
+			name:                    "wasm plugin, inbound_only enabled, server mode",
+			inboundOnlyFlag:         true,
+			wasmPluginMode:          []*extensions.WasmPlugin_TrafficSelector{{Mode: v1beta1.WorkloadMode_SERVER}},
+			expectedInboundFilters:  inboundFiltersWithWasm,
+			expectedOutboundFilters: defaultOutboundFilters,
+		},
+		{
+			name:                    "wasm plugin, inbound_only disabled, client mode",
+			inboundOnlyFlag:         false,
+			wasmPluginMode:          []*extensions.WasmPlugin_TrafficSelector{{Mode: v1beta1.WorkloadMode_CLIENT}},
+			expectedInboundFilters:  defaultInboundFilters,
+			expectedOutboundFilters: outboundFiltersWithWasm,
+		},
+		{
+			name:                    "wasm plugin, inbound_only enabled, client mode",
+			inboundOnlyFlag:         true,
+			wasmPluginMode:          []*extensions.WasmPlugin_TrafficSelector{{Mode: v1beta1.WorkloadMode_CLIENT}},
+			expectedInboundFilters:  defaultInboundFilters,
+			expectedOutboundFilters: outboundFiltersWithWasm,
+		},
+		{
+			name:                    "wasm plugin, inbound_only disabled, client and server mode",
+			inboundOnlyFlag:         false,
+			wasmPluginMode:          []*extensions.WasmPlugin_TrafficSelector{{Mode: v1beta1.WorkloadMode_CLIENT_AND_SERVER}},
+			expectedInboundFilters:  inboundFiltersWithWasm,
+			expectedOutboundFilters: outboundFiltersWithWasm,
+		},
+		{
+			name:                    "wasm plugin, inbound_only enabled, client and server mode",
+			inboundOnlyFlag:         true,
+			wasmPluginMode:          []*extensions.WasmPlugin_TrafficSelector{{Mode: v1beta1.WorkloadMode_CLIENT_AND_SERVER}},
+			expectedInboundFilters:  inboundFiltersWithWasm,
+			expectedOutboundFilters: outboundFiltersWithWasm,
+		},
+		{
+			name:                    "wasm plugin, inbound_only disabled, undefined mode",
+			inboundOnlyFlag:         false,
+			wasmPluginMode:          []*extensions.WasmPlugin_TrafficSelector{{Mode: v1beta1.WorkloadMode_UNDEFINED}},
+			expectedInboundFilters:  inboundFiltersWithWasm,
+			expectedOutboundFilters: outboundFiltersWithWasm,
+		},
+		{
+			name:                    "wasm plugin, inbound_only enabled, undefined mode",
+			inboundOnlyFlag:         true,
+			wasmPluginMode:          []*extensions.WasmPlugin_TrafficSelector{{Mode: v1beta1.WorkloadMode_UNDEFINED}},
+			expectedInboundFilters:  inboundFiltersWithWasm,
+			expectedOutboundFilters: outboundFiltersWithWasm,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			test.SetForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
+
+			wasmPlugin := config.Config{
+				Meta: config.Meta{
+					Name:             "wasm-plugin",
+					Namespace:        "not-default",
+					GroupVersionKind: gvk.WasmPlugin,
+				},
+				Spec: &extensions.WasmPlugin{
+					Match: tc.wasmPluginMode,
+				},
+			}
+			configs := TestOptions{
+				Services:       []*model.Service{buildService("test1.com", wildcardIPv4, protocol.HTTP, tnow)},
+				ConfigPointers: []*config.Config{&wasmPlugin},
+			}
+
+			// check inbound listener
+			inboundListeners := buildListeners(t, configs, getProxy())
+			xdstest.ValidateListeners(t, inboundListeners)
+			inbound := xdstest.ExtractListener(model.VirtualInboundListenerName, inboundListeners)
+
+			listenertest.VerifyListener(t, inbound, listenertest.ListenerTest{
+				FilterChains: []listenertest.FilterChainTest{{
+					TotalMatch:  true,
+					Port:        8080,
+					HTTPFilters: tc.expectedInboundFilters,
+				}},
+			})
+
+			// check outbound listener
+			cg := NewConfigGenTest(t, configs)
+			outboundListeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
+				buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
+			xdstest.ValidateListeners(t, outboundListeners)
+			if len(outboundListeners) > 1 {
+				t.Errorf("expected to get 1 listener, got: %d", len(outboundListeners))
+			}
+
+			listenertest.VerifyListener(t, outboundListeners[0], listenertest.ListenerTest{
+				FilterChains: []listenertest.FilterChainTest{{
+					TotalMatch:  true,
+					HTTPFilters: tc.expectedOutboundFilters,
+				}},
+			})
+		})
+	}
 }
 
 func TestOutboundListenerConflict_HTTPWithCurrentTCP(t *testing.T) {
