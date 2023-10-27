@@ -645,6 +645,9 @@ var (
 		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
 
 	EnableFederation = env.RegisterBoolVar("PILOT_ENABLE_FEDERATION", false, "").Get()
+
+	ApplyWasmPluginsToInboundOnly = env.RegisterBoolVar("APPLY_WASM_PLUGINS_TO_INBOUND_ONLY", false,
+		"If enabled, WASM plugins will be applied to inbound listeners.").Get()
 )
 
 // EnableEndpointSliceController returns the value of the feature flag and whether it was actually specified.

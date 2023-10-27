@@ -36,6 +36,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	wrappers "google.golang.org/protobuf/types/known/wrapperspb"
 
+	extensions "istio.io/api/extensions/v1alpha1"
 	meshconfig "istio.io/api/mesh/v1alpha1"
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/features"
@@ -279,6 +280,92 @@ func TestOutboundListenerConfig_WithSidecar(t *testing.T) {
 	}
 	services = append(services, service6)
 	testOutboundListenerConfigWithSidecar(t, services...)
+}
+
+func TestListenersConfig_WithWasmPlugin(t *testing.T) {
+	testCases := []struct {
+		name                string
+		inboundOnlyFlag     bool
+		expectedHTTPFilters []string
+	}{
+		{
+			name:            "wasm plugin, inbound_only disabled",
+			inboundOnlyFlag: false,
+			expectedHTTPFilters: []string{
+				"not-default.wasm-plugin",
+				xdsfilters.MxFilterName,
+				xdsfilters.AlpnFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+		},
+		{
+			name:            "wasm plugin, inbound_only enabled",
+			inboundOnlyFlag: true,
+			expectedHTTPFilters: []string{
+				xdsfilters.MxFilterName,
+				xdsfilters.AlpnFilterName,
+				xdsfilters.Fault.Name,
+				xdsfilters.Cors.Name,
+				xdsfilters.Router.Name,
+			},
+		},
+	}
+
+	wasmPlugin := config.Config{
+		Meta: config.Meta{
+			Name:             "wasm-plugin",
+			Namespace:        "not-default",
+			GroupVersionKind: gvk.WasmPlugin,
+		},
+		Spec: &extensions.WasmPlugin{},
+	}
+	configs := TestOptions{
+		Services:       []*model.Service{buildService("test1.com", wildcardIP, protocol.HTTP, tnow)},
+		ConfigPointers: []*config.Config{&wasmPlugin},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			test.SetBoolForTest(t, &features.ApplyWasmPluginsToInboundOnly, tc.inboundOnlyFlag)
+
+			// check inbound listener
+			inboundListeners := buildListeners(t, configs, getProxy())
+			xdstest.ValidateListeners(t, inboundListeners)
+			inbound := xdstest.ExtractListener(model.VirtualInboundListenerName, inboundListeners)
+
+			listenertest.VerifyListener(t, inbound, listenertest.ListenerTest{
+				FilterChains: []listenertest.FilterChainTest{{
+					TotalMatch: true,
+					Port:       8080,
+					HTTPFilters: []string{
+						"not-default.wasm-plugin",
+						xdsfilters.MxFilterName,
+						xdsfilters.Fault.Name,
+						xdsfilters.Cors.Name,
+						xdsfilters.Router.Name,
+					},
+				}},
+			})
+
+			// check outbound listener
+			cg := NewConfigGenTest(t, configs)
+			outboundListeners := NewListenerBuilder(getProxy(), cg.env.PushContext).
+				buildSidecarOutboundListeners(cg.SetupProxy(getProxy()), cg.env.PushContext)
+			xdstest.ValidateListeners(t, outboundListeners)
+			if len(outboundListeners) > 1 {
+				t.Errorf("expected to get 1 listener, got: %d", len(outboundListeners))
+			}
+
+			listenertest.VerifyListener(t, outboundListeners[0], listenertest.ListenerTest{
+				FilterChains: []listenertest.FilterChainTest{{
+					TotalMatch:  true,
+					HTTPFilters: tc.expectedHTTPFilters,
+				}},
+			})
+		})
+	}
 }
 
 func TestOutboundListenerConflict_HTTPWithCurrentTCP(t *testing.T) {
