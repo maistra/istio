@@ -28,6 +28,7 @@ import (
 
 	extensions "istio.io/api/extensions/v1alpha1"
 	typeapi "istio.io/api/type/v1beta1"
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model/credentials"
 	istionetworking "istio.io/istio/pilot/pkg/networking"
 	"istio.io/istio/pilot/pkg/util/protoconv"
@@ -75,6 +76,9 @@ type WasmPluginWrapper struct {
 }
 
 func (p *WasmPluginWrapper) MatchListener(proxyLabels map[string]string, li WasmPluginListenerInfo) bool {
+	if features.ApplyWasmPluginsToInboundOnly && p.Match == nil && li.Class == istionetworking.ListenerClassSidecarOutbound {
+		return false
+	}
 	workloadMatch := (p.Selector == nil || labels.Instance(p.Selector.MatchLabels).SubsetOf(proxyLabels))
 	return workloadMatch && matchTrafficSelectors(p.Match, li)
 }
