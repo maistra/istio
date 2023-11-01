@@ -298,6 +298,12 @@ func (d *DeploymentController) configureIstioGateway(log *istiolog.Scope, gw gat
 	}
 	log.Info("reconciling")
 
+	var ns *corev1.Namespace
+	if d.namespaces != nil {
+		ns = d.namespaces.Get(gw.Namespace, "")
+	}
+	proxyUID, proxyGID := GetProxyIDs(ns)
+
 	defaultName := getDefaultName(gw.Name, &gw.Spec)
 	input := TemplateInput{
 		Gateway:        &gw,
@@ -307,6 +313,8 @@ func (d *DeploymentController) configureIstioGateway(log *istiolog.Scope, gw gat
 		ClusterID:      d.clusterID.String(),
 		KubeVersion122: kube.IsAtLeastVersion(d.client, 22),
 		Revision:       d.revision,
+		ProxyUID:       proxyUID,
+		ProxyGID:       proxyGID,
 	}
 
 	if overwriteControllerVersion {
@@ -500,6 +508,8 @@ type TemplateInput struct {
 	ClusterID      string
 	KubeVersion122 bool
 	Revision       string
+	ProxyUID       int64
+	ProxyGID       int64
 }
 
 func extractServicePorts(gw gateway.Gateway) []corev1.ServicePort {

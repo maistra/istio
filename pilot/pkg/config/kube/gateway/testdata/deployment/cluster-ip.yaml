@@ -129,6 +129,16 @@ spec:
           periodSeconds: 15
           successThreshold: 1
           timeoutSeconds: 1
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsGroup: 1337
+          runAsNonRoot: true
+          runAsUser: 1337
         startupProbe:
           failureThreshold: 30
           httpGet:
