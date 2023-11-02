@@ -30,6 +30,9 @@ import (
 
 // TagWatcher keeps track of the current tags and can notify watchers
 // when the tags change.
+//
+// TagWatcher is not supported, because it watches MutatingWebhooks and relies on istio.io/rev label,
+// which can be duplicated in OSSM, so it cannot work until we use revisions in our implementation of multi-tenancy.
 type TagWatcher interface {
 	Run(stopCh <-chan struct{})
 	HasSynced() bool

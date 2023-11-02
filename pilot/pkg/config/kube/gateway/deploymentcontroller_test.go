@@ -46,7 +46,6 @@ import (
 	"istio.io/istio/pkg/kube/inject"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/kclient/clienttest"
-	"istio.io/istio/pkg/revisions"
 	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/env"
 	"istio.io/istio/pkg/test/util/assert"
@@ -256,9 +255,8 @@ func TestVersionManagement(t *testing.T) {
 			Name: "default",
 		},
 	})
-	tw := revisions.NewTagWatcher(c, "default")
 	env := &model.Environment{}
-	d := NewDeploymentController(c, "", env, testInjectionConfig(t), func(fn func()) {}, tw, "")
+	d := NewDeploymentController(c, "", env, testInjectionConfig(t), func(fn func()) {}, "")
 	reconciles := atomic.NewInt32(0)
 	wantReconcile := int32(0)
 	expectReconciled := func() {
@@ -282,7 +280,6 @@ func TestVersionManagement(t *testing.T) {
 	}
 	stop := test.NewStop(t)
 	gws := clienttest.Wrap(t, d.gateways)
-	go tw.Run(stop)
 	go d.Run(stop)
 	c.RunAndWait(stop)
 	kube.WaitForCacheSync(stop, d.queue.HasSynced)
