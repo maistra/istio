@@ -32,7 +32,6 @@ import (
 	gateway "sigs.k8s.io/gateway-api/apis/v1beta1"
 	"sigs.k8s.io/yaml"
 
-	"istio.io/api/label"
 	meshapi "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
@@ -45,7 +44,6 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/inject"
 	"istio.io/istio/pkg/kube/kclient"
-	"istio.io/istio/pkg/revisions"
 	"istio.io/istio/pkg/test/util/tmpl"
 	"istio.io/istio/pkg/test/util/yml"
 	"istio.io/istio/pkg/util/sets"
@@ -90,7 +88,6 @@ type DeploymentController struct {
 	services        kclient.Client[*corev1.Service]
 	serviceAccounts kclient.Client[*corev1.ServiceAccount]
 	namespaces      kclient.Client[*corev1.Namespace]
-	tagWatcher      revisions.TagWatcher
 	revision        string
 }
 
@@ -142,7 +139,7 @@ var knownControllers = func() sets.String {
 // NewDeploymentController constructs a DeploymentController and registers required informers.
 // The controller will not start until Run() is called.
 func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *model.Environment,
-	webhookConfig func() inject.WebhookConfig, injectionHandler func(fn func()), tw revisions.TagWatcher, revision string,
+	webhookConfig func() inject.WebhookConfig, injectionHandler func(fn func()), revision string,
 ) *DeploymentController {
 	dc := &DeploymentController{
 		client:    client,
@@ -203,8 +200,6 @@ func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *mode
 				}
 			}
 		}))
-		dc.tagWatcher = tw
-		dc.tagWatcher.AddHandler(dc.HandleTagChange)
 	}
 
 	// On injection template change, requeue all gateways
@@ -221,7 +216,7 @@ func (d *DeploymentController) Run(stop <-chan struct{}) {
 	syncFuncs := []cache.InformerSynced{d.deployments.HasSynced, d.services.HasSynced, d.serviceAccounts.HasSynced, d.gateways.HasSynced}
 	shutdownFuncs := []controllers.Shutdowner{d.deployments, d.services, d.serviceAccounts, d.gateways}
 	if !d.client.IsMultiTenant() {
-		syncFuncs = append(syncFuncs, d.namespaces.HasSynced, d.gatewayClasses.HasSynced, d.tagWatcher.HasSynced)
+		syncFuncs = append(syncFuncs, d.namespaces.HasSynced, d.gatewayClasses.HasSynced)
 		shutdownFuncs = append(shutdownFuncs, d.namespaces, d.gatewayClasses)
 	}
 	kube.WaitForCacheSync(stop, syncFuncs...)
@@ -256,25 +251,6 @@ func (d *DeploymentController) Reconcile(req types.NamespacedName) error {
 			return nil
 		}
 	}
-
-	if d.namespaces != nil {
-		// find the tag or revision indicated by the object
-		selectedTag, ok := gw.Labels[label.IoIstioRev.Name]
-		if !ok {
-			ns := d.namespaces.Get(gw.Namespace, "")
-			if ns == nil {
-				return nil
-			}
-			selectedTag = ns.Labels[label.IoIstioRev.Name]
-		}
-		if d.tagWatcher != nil {
-			myTags := d.tagWatcher.GetMyTags()
-			if !myTags.Contains(selectedTag) && !(selectedTag == "" && myTags.Contains("default")) {
-				return nil
-			}
-		}
-	}
-	// TODO: Here we could check if the tag is set and matches no known tags, and handle that if we are default.
 
 	// Matched class, reconcile it
 	return d.configureIstioGateway(log, *gw)
