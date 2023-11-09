@@ -159,9 +159,14 @@ func (c *ingressImpl) HTTPSAddress() (string, int) {
 // DiscoveryAddress returns the externally reachable discovery address (15012) of the component.
 func (c *ingressImpl) DiscoveryAddress() netip.AddrPort {
 	host, port := c.AddressForPort(discoveryPort)
+	// xuxa
 	ip, err := netip.ParseAddr(host)
 	if err != nil {
-		return netip.AddrPort{}
+		ips, err := net.DefaultResolver.LookupNetIP(context.TODO(), "ip", host)
+		if err != nil {
+			return netip.AddrPort{}
+		}
+		ip = ips[0]
 	}
 	return netip.AddrPortFrom(ip, uint16(port))
 }

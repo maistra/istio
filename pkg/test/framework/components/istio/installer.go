@@ -82,6 +82,9 @@ func (i *installer) Install(c cluster.Cluster, args installArgs) error {
 	if i.ctx.Settings().PeerMetadataDiscovery && len(args.ComponentName) == 0 {
 		iArgs.InFilenames = append(iArgs.InFilenames, filepath.Join(testenv.IstioSrc, IntegrationTestPeerMetadataDiscoveryDefaultsIOP))
 	}
+	// if i.ctx.Settings().OpenShift {
+	// 	iArgs.Set = append(iArgs.Set, "profile=openshift")
+	// }
 
 	rc, err := kube.DefaultRestConfig(kubeConfigFile, "", func(config *rest.Config) {
 		config.QPS = 50

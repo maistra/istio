@@ -211,6 +211,7 @@ func (i *istioImpl) RemoteDiscoveryAddressFor(cluster cluster.Cluster) (netip.Ad
 	var addr netip.AddrPort
 	primary := cluster.Primary()
 	if !primary.IsConfig() {
+		fmt.Printf("\nxuxa1 !primary.isConfig()\n")
 		// istiod is exposed via LoadBalancer since we won't have ingress outside of a cluster;a cluster that is;
 		// a control cluster, but not config cluster is supposed to simulate istiod outside of k8s or "external"
 		address, err := retry.UntilComplete(func() (any, bool, error) {
@@ -221,9 +222,11 @@ func (i *istioImpl) RemoteDiscoveryAddressFor(cluster cluster.Cluster) (netip.Ad
 			return netip.AddrPort{}, err
 		}
 		addr = address.(netip.AddrPort)
+		fmt.Printf("\nxuxa 1 - addr = %v\n", addr)
 	} else {
 		name := types.NamespacedName{Name: eastWestIngressServiceName, Namespace: i.cfg.SystemNamespace}
 		addr = i.CustomIngressFor(primary, name, eastWestIngressIstioLabel).DiscoveryAddress()
+		fmt.Printf("\nxuxa 2 - name=%s - addr=%v\n", name, addr)
 	}
 	if !addr.IsValid() {
 		return netip.AddrPort{}, fmt.Errorf("failed to get ingress IP for %s", primary.Name())
@@ -606,6 +609,10 @@ func commonInstallArgs(ctx resource.Context, cfg Config, c cluster.Cluster, defa
 			"values.global.imagePullPolicy=" + ctx.Settings().Image.PullPolicy,
 		},
 	}
+
+	// if ctx.Settings().OpenShift {
+	// 	args.AppendSet("profile", "openshift")
+	// }
 
 	if ctx.Environment().IsMultiNetwork() && c.NetworkName() != "" {
 		args.AppendSet("values.global.meshID", meshID)

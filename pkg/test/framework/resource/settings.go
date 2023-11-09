@@ -178,6 +178,9 @@ type Settings struct {
 	DisableDefaultExternalServiceConnectivity bool
 
 	PeerMetadataDiscovery bool
+
+	// OpenShift indicates the tests run in an OpenShift platform rather than in plain Kubernetes.
+	OpenShift bool
 }
 
 // SkipVMs changes the skip settings at runtime

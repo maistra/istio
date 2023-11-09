@@ -209,4 +209,7 @@ func init() {
 		"Deploy Istio with Dual Stack enabled.")
 
 	flag.StringVar(&settingsFromCommandLine.HelmRepo, "istio.test.helmRepo", settingsFromCommandLine.HelmRepo, "Helm repo to use to pull the charts.")
+
+	flag.BoolVar(&settingsFromCommandLine.OpenShift, "istio.test.openshift", settingsFromCommandLine.OpenShift,
+		"Indicate the tests run in an OpenShift platform rather than in plain Kubernetes.")
 }

@@ -72,17 +72,6 @@ spec:
       - name: {{ $.ImagePullSecretName }}
 {{- end }}
       containers:
-{{- if and
-  (ne ($subset.Annotations.GetByName "sidecar.istio.io/inject") "false")
-  (ne ($subset.Annotations.GetByName "inject.istio.io/templates") "grpc")
-  ($.OverlayIstioProxy)
-}}
-      - name: istio-proxy
-        image: auto
-        imagePullPolicy: {{ $.ImagePullPolicy }}
-        securityContext: # to allow core dumps
-          readOnlyRootFilesystem: false
-{{- end }}
 {{- if $.IncludeExtAuthz }}
       - name: ext-authz
         image: {{ $.ImageHub }}/ext-authz:{{ $.ImageTag }}
@@ -99,9 +88,6 @@ spec:
         image: {{ $.ImageHub }}/app:{{ $.ImageTag }}
 {{- end }}
         imagePullPolicy: {{ $.ImagePullPolicy }}
-        securityContext:
-          runAsUser: 1338
-          runAsGroup: 1338
         args:
 {{- if $appContainer.FallbackPort }}
           - --forwarding_address=0.0.0.0:{{ $appContainer.FallbackPort }}
