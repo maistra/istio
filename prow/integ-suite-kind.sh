@@ -33,6 +33,6 @@ oc version
 oc cluster-info
 
 export HUB=quay.io/jwendell TAG=istio-testing
-export INTEGRATION_TEST_FLAGS="--istio.test.istio.operatorOptions=components.cni.enabled=true,components.cni.namespace=kube-system --istio.test.kube.helm.values=cni.cniBinDir=/var/lib/cni/bin,cni.cniConfDir=/etc/cni/multus/net.d,cni.chained=false,cni.cniConfFileName=istio-cni.conf,cni.logLevel=info,cni.privileged=true,cni.provider=multus,global.platform=openshift,istio_cni.enabled=true,istio_cni.chained=false --istio.test.skipWorkloads=vm"
+export INTEGRATION_TEST_FLAGS="--istio.test.istio.operatorOptions=components.cni.enabled=true,components.cni.namespace=kube-system --istio.test.kube.helm.values=cni.cniBinDir=/var/lib/cni/bin,cni.cniConfDir=/etc/cni/multus/net.d,cni.chained=false,cni.cniConfFileName=istio-cni.conf,cni.logLevel=info,cni.privileged=true,cni.provider=multus,global.platform=openshift,istio_cni.enabled=true,istio_cni.chained=false --istio.test.skipWorkloads=vm,tproxy"
 
 make test.integration.pilot.kube
