@@ -708,6 +708,12 @@ var (
 	PersistOldestWinsHeuristicForVirtualServiceHostMatching = env.Register("PERSIST_OLDEST_FIRST_HEURISTIC_FOR_VIRTUAL_SERVICE_HOST_MATCHING", false,
 		"If enabled, istiod will persist the oldest first heuristic for subtly conflicting traffic policy selection"+
 			"(such as with overlapping wildcard hosts)").Get()
+
+	GatewayAPIDefaultGatewayClass = env.Register("PILOT_GATEWAY_API_DEFAULT_GATEWAYCLASS_NAME", "istio",
+		"Name of the default GatewayClass").Get()
+
+	ManagedGatewayController = env.Register("PILOT_GATEWAY_API_CONTROLLER_NAME", "istio.io/gateway-controller",
+		"Gateway API controller name. istiod will only reconcile Gateway API resources referencing a GatewayClass with this controller name").Get()
 )
 
 // UnsafeFeaturesEnabled returns true if any unsafe features are enabled.
