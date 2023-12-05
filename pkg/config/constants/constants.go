@@ -162,6 +162,7 @@ const (
 
 	WaypointServiceAccount = "istio.io/for-service-account"
 
+	DefaultGatewayClassName           = "istio"
 	ManagedGatewayLabel               = "gateway.istio.io/managed"
 	UnmanagedGatewayController        = "istio.io/unmanaged-gateway"
 	ManagedGatewayControllerLabel     = "istio.io-gateway-controller"

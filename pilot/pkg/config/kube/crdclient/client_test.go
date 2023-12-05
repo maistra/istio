@@ -27,6 +27,7 @@ import (
 	"istio.io/api/meta/v1alpha1"
 	"istio.io/api/networking/v1alpha3"
 	clientnetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collection"
@@ -100,23 +101,24 @@ func TestClientNoCRDs(t *testing.T) {
 	}, retry.Message("expected no items returned for unknown CRD"), retry.Timeout(time.Second*5), retry.Converge(5))
 }
 
+// Helper function that creates a NamespacesFilter that only allow objects in namespace "ns1"
+func filterOnlyAllowNS1(o Option) Option {
+	o.NamespacesFilter = func(obj interface{}) bool {
+		// When an object is deleted, obj could be a DeletionFinalStateUnknown marker item.
+		object := controllers.ExtractObject(obj)
+		if object == nil {
+			return false
+		}
+		ns := object.GetNamespace()
+		return ns == "ns1"
+	}
+	return o
+}
+
 // Ensure that the client can run without CRDs present, but then added later
 func TestClientDelayedCRDs(t *testing.T) {
-	// ns1 is allowed, ns2 is not
-	applyFilter := func(o Option) Option {
-		o.NamespacesFilter = func(obj interface{}) bool {
-			// When an object is deleted, obj could be a DeletionFinalStateUnknown marker item.
-			object := controllers.ExtractObject(obj)
-			if object == nil {
-				return false
-			}
-			ns := object.GetNamespace()
-			return ns == "ns1"
-		}
-		return o
-	}
 	schema := collection.NewSchemasBuilder().MustAdd(collections.Sidecar).Build()
-	store, fake := makeClient(t, schema, applyFilter)
+	store, fake := makeClient(t, schema, filterOnlyAllowNS1)
 	retry.UntilOrFail(t, store.HasSynced, retry.Timeout(time.Second))
 	r := collections.VirtualService
 
@@ -157,7 +159,7 @@ func TestClientDelayedCRDs(t *testing.T) {
 	}, retry.Timeout(time.Second*10), retry.Converge(5))
 }
 
-// CheckIstioConfigTypes validates that an empty store can do CRUD operators on all given types
+// TestClient validates that an empty store can do CRUD operators on all given types
 func TestClient(t *testing.T) {
 	store, _ := makeClient(t, collections.PilotGatewayAPI().Union(collections.Kube))
 	configName := "test"
@@ -428,4 +430,117 @@ func TestClientSync(t *testing.T) {
 	kube.WaitForCacheSync("test", stop, c.HasSynced)
 	// This MUST have been called by the time HasSynced returns true
 	assert.Equal(t, events.Load(), 1)
+}
+
+// Validates that when Gateway Controller mode is active, all Gateway API resources are being watched regardless of
+// their namespaces and other Istio resources are only watched in namespaces set in meshConfig.discoverySelector
+func TestGatewayControllerMode(t *testing.T) {
+	// Activate the Gateway Controller mode
+	test.SetForTest(t, &features.EnableGatewayControllerMode, true)
+
+	store, _ := makeClient(t, collections.PilotGatewayAPI(), filterOnlyAllowNS1)
+	retry.UntilOrFail(t, store.HasSynced, retry.Timeout(time.Second))
+
+	configNamespacePrefix := "test-ns"
+
+	// Create one resource for each non Gateway API resource, in several namespaces
+	for i, r := range collections.Pilot.All() {
+		name := r.Identifier()
+		t.Run("create_"+name, func(t *testing.T) {
+			configMeta := config.Meta{
+				GroupVersionKind: r.GroupVersionKind(),
+				Name:             name,
+			}
+			if !r.IsClusterScoped() {
+				configMeta.Namespace = fmt.Sprintf("%s-%d", configNamespacePrefix, i)
+			}
+			createResource(t, store, r, configMeta)
+		})
+	}
+
+	// Plus, create one resource in the allowed namespace "ns1"
+	r := collections.VirtualService
+	configMeta := config.Meta{
+		Name:             "name",
+		Namespace:        "ns1",
+		GroupVersionKind: r.GroupVersionKind(),
+	}
+	createResource(t, store, r, configMeta)
+
+	// Verify none of the resources are present in the store, except the one in namespace "ns1"
+	retry.UntilSuccessOrFail(t, func() error {
+		l := store.List(r.GroupVersionKind(), configMeta.Namespace)
+		if len(l) != 1 {
+			return fmt.Errorf("expected 1 item, got %v", l)
+		}
+		if l[0].Name != configMeta.Name {
+			return fmt.Errorf("expected `name`, got %v", l[0].Name)
+		}
+		return nil
+	}, retry.Timeout(time.Second*10), retry.Converge(10))
+
+	for i, r := range collections.Pilot.All() {
+		name := r.Identifier()
+		namespace := ""
+		if !r.IsClusterScoped() {
+			namespace = fmt.Sprintf("%s-%d", configNamespacePrefix, i)
+		}
+		t.Run("verify_"+name, func(t *testing.T) {
+			retry.UntilSuccessOrFail(t, func() error {
+				l := store.List(r.GroupVersionKind(), namespace)
+				if len(l) != 0 {
+					return fmt.Errorf("expected no items returned for non Gateway API CRDs, got %v", l)
+				}
+				return nil
+			}, retry.Timeout(time.Second*5), retry.Converge(10))
+
+			retry.UntilOrFail(t, func() bool {
+				return store.Get(r.GroupVersionKind(), name, namespace) == nil
+			}, retry.Message("expected no items returned for non Gateway API CRDs"), retry.Timeout(time.Second*5), retry.Converge(10))
+		})
+	}
+
+	// Now create some Gateway API objects. They should be visible regardless of the namespace they live
+	gwAPIResources := []resource.Schema{
+		collections.HTTPRoute,
+		collections.KubernetesGateway,
+		collections.ReferenceGrant,
+		collections.GatewayClass,
+	}
+	for i, r := range gwAPIResources {
+		name := r.Identifier()
+		t.Run("create_"+name, func(t *testing.T) {
+			configMeta := config.Meta{
+				GroupVersionKind: r.GroupVersionKind(),
+				Name:             name,
+			}
+			if !r.IsClusterScoped() {
+				configMeta.Namespace = fmt.Sprintf("%s-%d", configNamespacePrefix, i)
+			}
+			createResource(t, store, r, configMeta)
+		})
+
+	}
+
+	// Finally verify all Gateway API objects are present in the store
+	for i, r := range gwAPIResources {
+		name := r.Identifier()
+		namespace := ""
+		if !r.IsClusterScoped() {
+			namespace = fmt.Sprintf("%s-%d", configNamespacePrefix, i)
+		}
+		t.Run("verify_"+name, func(t *testing.T) {
+			retry.UntilSuccessOrFail(t, func() error {
+				l := store.List(r.GroupVersionKind(), namespace)
+				if len(l) != 1 {
+					return fmt.Errorf("expected 1 item returned for Gateway API CRDs, got %v", l)
+				}
+				return nil
+			}, retry.Timeout(time.Second*5), retry.Converge(10))
+
+			retry.UntilOrFail(t, func() bool {
+				return store.Get(r.GroupVersionKind(), name, namespace) != nil
+			}, retry.Message("expected 1 item returned for Gateway API CRDs"), retry.Timeout(time.Second*5), retry.Converge(10))
+		})
+	}
 }

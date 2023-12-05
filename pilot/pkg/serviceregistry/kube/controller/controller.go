@@ -259,9 +259,12 @@ func NewController(kubeClient kubelib.Client, options Options) *Controller {
 		)
 	}
 
-	// always init for each cluster, otherwise different ns labels in different cluster may not take effect,
-	// but we skip it for configCluster which has been initiated before
-	if !c.opts.ConfigCluster || c.opts.DiscoveryNamespacesFilter == nil {
+	// Always watch all namespaces when in Gateway API Controller mode
+	if features.EnableGatewayControllerMode {
+		c.opts.DiscoveryNamespacesFilter = namespace.NewDiscoveryNamespacesFilter(c.namespaces, []*metav1.LabelSelector{})
+	} else if !c.opts.ConfigCluster || c.opts.DiscoveryNamespacesFilter == nil {
+		// always init for each cluster, otherwise different ns labels in different cluster may not take effect,
+		// but we skip it for configCluster which has been initiated before
 		c.opts.DiscoveryNamespacesFilter = namespace.NewDiscoveryNamespacesFilter(c.namespaces, options.MeshWatcher.Mesh().DiscoverySelectors)
 	}
 	c.initDiscoveryHandlers(options.MeshWatcher, c.opts.DiscoveryNamespacesFilter)

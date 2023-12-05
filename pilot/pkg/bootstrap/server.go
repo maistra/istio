@@ -260,6 +260,13 @@ func NewServer(args *PilotArgs, initFuncs ...func(*Server)) (*Server, error) {
 	s.initMeshConfiguration(args, s.fileWatcher)
 	spiffe.SetTrustDomain(s.environment.Mesh().GetTrustDomain())
 
+	if features.EnableGatewayControllerMode {
+		log.Info("Gateway Controller mode activated. This istiod will reconcile Gateway API resources on all namespaces")
+
+		// Always use the namespace filter in Gateway API Controller mode
+		features.EnableEnhancedResourceScoping = true
+	}
+
 	s.initMeshNetworks(args, s.fileWatcher)
 	s.initMeshHandlers()
 	s.environment.Init()
@@ -1101,6 +1108,7 @@ func (s *Server) initControllers(args *PilotArgs) error {
 
 	if features.EnableEnhancedResourceScoping {
 		// setup namespace filter
+		log.Info("Enhanced Resource Scope mode activated. meshConfig.discoverySelectors will be used to limit the scope of Istio resources reconciliation")
 		args.RegistryOptions.KubeOptions.DiscoveryNamespacesFilter = s.multiclusterController.DiscoveryNamespacesFilter
 	}
 	if err := s.initConfigController(args); err != nil {

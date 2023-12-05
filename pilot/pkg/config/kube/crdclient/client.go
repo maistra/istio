@@ -83,7 +83,7 @@ type Client struct {
 	logger           *log.Scope
 
 	// namespacesFilter is only used to initiate filtered informer.
-	namespacesFilter func(obj interface{}) bool
+	namespacesFilter func(obj any) bool
 	filtersByGVK     map[config.GroupVersionKind]kubetypes.Filter
 }
 
@@ -91,7 +91,7 @@ type Option struct {
 	Revision         string
 	DomainSuffix     string
 	Identifier       string
-	NamespacesFilter func(obj interface{}) bool
+	NamespacesFilter func(obj any) bool
 	FiltersByGVK     map[config.GroupVersionKind]kubetypes.Filter
 }
 
@@ -344,17 +344,27 @@ func (cl *Client) addCRD(name string) {
 		cl.logger.Debugf("added resource that already exists: %v", resourceGVK)
 		return
 	}
+
 	filter := cl.filtersByGVK[resourceGVK]
-	objectFilter := filter.ObjectFilter
-	filter.ObjectFilter = func(t any) bool {
-		if objectFilter != nil && !objectFilter(t) {
-			return false
+
+	// Don't filter any Gateway API resource when in Gateway API Controller mode
+	if features.EnableGatewayControllerMode && resourceGVK.Group == collections.KubernetesGateway.Group() {
+		filter.ObjectFilter = func(t any) bool {
+			return true
 		}
-		if cl.namespacesFilter != nil && !cl.namespacesFilter(t) {
-			return false
+	} else {
+		objectFilter := filter.ObjectFilter
+		filter.ObjectFilter = func(t any) bool {
+			if objectFilter != nil && !objectFilter(t) {
+				return false
+			}
+			if cl.namespacesFilter != nil && !cl.namespacesFilter(t) {
+				return false
+			}
+			return config.LabelsInRevision(t.(controllers.Object).GetLabels(), cl.revision)
 		}
-		return config.LabelsInRevision(t.(controllers.Object).GetLabels(), cl.revision)
 	}
+
 	var kc kclient.Untyped
 	if s.IsBuiltin() {
 		kc = kclient.NewUntypedInformer(cl.client, gvr, filter)
