@@ -780,6 +780,14 @@ var (
 	MetricGracefulDeletionInterval = env.Register("METRIC_GRACEFUL_DELETION_INTERVAL", 5*time.Minute,
 		"Metric expiry graceful deletion interval. No-op if METRIC_ROTATION_INTERVAL is disabled.").Get()
 
+	ValidateWorkloadEntryIdentity = env.Register("ISTIO_WORKLOAD_ENTRY_VALIDATE_IDENTITY", true,
+		"If enabled, will validate the identity of a workload matches the identity of the "+
+			"WorkloadEntry it is associating with for health checks and auto registration. "+
+			"This flag is added for backwards compatibility only and will be removed in future releases").Get()
+	PersistOldestWinsHeuristicForVirtualServiceHostMatching = env.Register("PERSIST_OLDEST_FIRST_HEURISTIC_FOR_VIRTUAL_SERVICE_HOST_MATCHING", false,
+		"If enabled, istiod will persist the oldest first heuristic for subtly conflicting traffic policy selection"+
+			"(such as with overlapping wildcard hosts)").Get()
+
 	EnableIOR = env.RegisterBoolVar("ENABLE_IOR", false,
 		"Whether to enable IOR component, which provides integration between Istio Gateways and OpenShift Routes").Get()
 

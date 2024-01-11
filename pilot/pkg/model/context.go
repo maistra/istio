@@ -970,6 +970,10 @@ func (node *Proxy) IsIPv6() bool {
 	return node.ipMode == IPv6
 }
 
+func (node *Proxy) IsDual() bool {
+	return node.ipMode == Dual
+}
+
 // GetIPMode returns proxy's ipMode
 func (node *Proxy) GetIPMode() IPMode {
 	return node.ipMode
@@ -1182,8 +1186,15 @@ func (node *Proxy) IsUnprivileged() bool {
 
 // CanBindToPort returns true if the proxy can bind to a given port.
 func (node *Proxy) CanBindToPort(bindTo bool, port uint32) bool {
-	if bindTo && IsPrivilegedPort(port) && node.IsUnprivileged() {
-		return false
+	if bindTo {
+		if IsPrivilegedPort(port) && node.IsUnprivileged() {
+			return false
+		}
+		if node.Metadata != nil &&
+			(node.Metadata.EnvoyPrometheusPort == int(port) || node.Metadata.EnvoyStatusPort == int(port)) {
+			// can not bind to port that already bound by proxy static listener
+			return false
+		}
 	}
 	return true
 }
