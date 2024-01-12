@@ -43,6 +43,7 @@ import (
 	"istio.io/istio/pkg/config/labels"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/xds"
+	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/util/protomarshal"
 	"istio.io/istio/pkg/util/sets"
 )
@@ -202,7 +203,7 @@ type TracingConfig struct {
 type TracingSpec struct {
 	Provider                     *meshconfig.MeshConfig_ExtensionProvider
 	Disabled                     bool
-	RandomSamplingPercentage     float64
+	RandomSamplingPercentage     *float64
 	CustomTags                   map[string]*tpb.Tracing_CustomTag
 	UseRequestIDForTraceSampling bool
 }
@@ -345,7 +346,7 @@ func (t *Telemetries) Tracing(proxy *Proxy) *TracingConfig {
 		}
 		if m.RandomSamplingPercentage != nil {
 			for _, spec := range specs {
-				spec.RandomSamplingPercentage = m.RandomSamplingPercentage.GetValue()
+				spec.RandomSamplingPercentage = ptr.Of(m.RandomSamplingPercentage.GetValue())
 			}
 		}
 		if m.UseRequestIdForTraceSampling != nil {
@@ -515,7 +516,7 @@ func (t *Telemetries) telemetryFilters(proxy *Proxy, class networking.ListenerCl
 		if p == nil {
 			continue
 		}
-		_, logging := tml[k]
+		loggingCfg, logging := tml[k]
 		mertricCfg, metrics := tmm[k]
 
 		mertricCfg.RotationInterval = rotationInterval
@@ -524,7 +525,7 @@ func (t *Telemetries) telemetryFilters(proxy *Proxy, class networking.ListenerCl
 		cfg := telemetryFilterConfig{
 			Provider:      p,
 			metricsConfig: mertricCfg,
-			AccessLogging: logging,
+			AccessLogging: logging && !loggingCfg.Disabled,
 			Metrics:       metrics,
 			LogsFilter:    tml[p.Name].Filter,
 			NodeType:      proxy.Type,
@@ -660,6 +661,11 @@ func (t *Telemetries) fetchProvider(m string) *meshconfig.MeshConfig_ExtensionPr
 		}
 	}
 	return nil
+}
+
+func (t *Telemetries) Debug(proxy *Proxy) any {
+	at := t.applicableTelemetries(proxy)
+	return at
 }
 
 var allMetrics = func() []string {
@@ -869,7 +875,7 @@ func isAllMetrics(match *tpb.MetricSelector) bool {
 	case *tpb.MetricSelector_Metric:
 		return m.Metric == tpb.MetricSelector_ALL_METRICS
 	default:
-		return false
+		return true
 	}
 }
 
@@ -899,6 +905,11 @@ var waypointStatsConfig = protoconv.MessageToAny(&udpa.TypedStruct{
 		},
 	},
 })
+
+// telemetryFilterHandled contains the number of providers we handle below.
+// This is to ensure this stays in sync as new handlers are added
+// STOP. DO NOT UPDATE THIS WITHOUT UPDATING buildHTTPTelemetryFilter and buildTCPTelemetryFilter.
+const telemetryFilterHandled = 14
 
 func buildHTTPTelemetryFilter(class networking.ListenerClass, metricsCfg []telemetryFilterConfig) []*hcm.HttpFilter {
 	res := make([]*hcm.HttpFilter, 0, len(metricsCfg))

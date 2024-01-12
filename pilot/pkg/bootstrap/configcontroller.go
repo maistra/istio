@@ -309,14 +309,14 @@ func (s *Server) initInprocessAnalysisController(args *PilotArgs) error {
 	s.addStartFunc(func(stop <-chan struct{}) error {
 		go leaderelection.
 			NewLeaderElection(args.Namespace, args.PodName, leaderelection.AnalyzeController, args.Revision, s.kubeClient).
-			AddRunFunction(func(stop <-chan struct{}) {
+			AddRunFunction(func(leaderStop <-chan struct{}) {
 				opts := args.RegistryOptions.KubeOptions
-				cont, err := incluster.NewController(
-					stop, s.RWConfigStore, s.kubeClient, args.Revision, args.Namespace, s.statusManager, opts.DomainSuffix, opts.EnableCRDScan)
+				cont, err := incluster.NewController(leaderStop, s.RWConfigStore,
+					s.kubeClient, args.Revision, args.Namespace, s.statusManager, opts.DomainSuffix, opts.EnableCRDScan)
 				if err != nil {
 					return
 				}
-				cont.Run(stop)
+				cont.Run(leaderStop)
 			}).Run(stop)
 		return nil
 	})

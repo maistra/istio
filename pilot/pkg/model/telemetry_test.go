@@ -38,6 +38,7 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/gvk"
+	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/util/protomarshal"
 )
@@ -431,7 +432,7 @@ func TestTracing(t *testing.T) {
 			&TracingConfig{
 				ClientSpec: TracingSpec{
 					Provider:                 &meshconfig.MeshConfig_ExtensionProvider{Name: "envoy"},
-					RandomSamplingPercentage: 50.0,
+					RandomSamplingPercentage: ptr.Of(50.0),
 					CustomTags: map[string]*tpb.Tracing_CustomTag{
 						"foo": {},
 						"bar": {},
@@ -439,7 +440,7 @@ func TestTracing(t *testing.T) {
 					UseRequestIDForTraceSampling: false,
 				}, ServerSpec: TracingSpec{
 					Provider:                 &meshconfig.MeshConfig_ExtensionProvider{Name: "envoy"},
-					RandomSamplingPercentage: 50.0,
+					RandomSamplingPercentage: ptr.Of(50.0),
 					CustomTags: map[string]*tpb.Tracing_CustomTag{
 						"foo": {},
 						"bar": {},
@@ -455,16 +456,14 @@ func TestTracing(t *testing.T) {
 			[]string{"envoy"},
 			&TracingConfig{
 				ClientSpec: TracingSpec{
-					Provider:                 &meshconfig.MeshConfig_ExtensionProvider{Name: "envoy"},
-					RandomSamplingPercentage: 0.0,
+					Provider: &meshconfig.MeshConfig_ExtensionProvider{Name: "envoy"},
 					CustomTags: map[string]*tpb.Tracing_CustomTag{
 						"foo": {},
 						"baz": {},
 					},
 					UseRequestIDForTraceSampling: true,
 				}, ServerSpec: TracingSpec{
-					Provider:                 &meshconfig.MeshConfig_ExtensionProvider{Name: "envoy"},
-					RandomSamplingPercentage: 0.0,
+					Provider: &meshconfig.MeshConfig_ExtensionProvider{Name: "envoy"},
 					CustomTags: map[string]*tpb.Tracing_CustomTag{
 						"foo": {},
 						"baz": {},
@@ -484,7 +483,7 @@ func TestTracing(t *testing.T) {
 			&TracingConfig{
 				ClientSpec: TracingSpec{
 					Provider:                 &meshconfig.MeshConfig_ExtensionProvider{Name: "envoy"},
-					RandomSamplingPercentage: 80,
+					RandomSamplingPercentage: ptr.Of(80.0),
 					CustomTags: map[string]*tpb.Tracing_CustomTag{
 						"foo": {},
 						"baz": {},
@@ -493,7 +492,7 @@ func TestTracing(t *testing.T) {
 				},
 				ServerSpec: TracingSpec{
 					Provider:                 &meshconfig.MeshConfig_ExtensionProvider{Name: "envoy"},
-					RandomSamplingPercentage: 80,
+					RandomSamplingPercentage: ptr.Of(80.0),
 					CustomTags: map[string]*tpb.Tracing_CustomTag{
 						"foo": {},
 						"baz": {},
@@ -515,7 +514,7 @@ func TestTracing(t *testing.T) {
 							Stackdriver: &meshconfig.MeshConfig_ExtensionProvider_StackdriverProvider{},
 						},
 					},
-					RandomSamplingPercentage:     99.9,
+					RandomSamplingPercentage:     ptr.Of(99.9),
 					UseRequestIDForTraceSampling: true,
 				},
 				ServerSpec: TracingSpec{
@@ -669,6 +668,33 @@ func TestTelemetryFilters(t *testing.T) {
 			},
 		},
 	}
+	disabledAllMetricsImplicit := &tpb.Telemetry{
+		Metrics: []*tpb.Metrics{
+			{
+				Overrides: []*tpb.MetricsOverrides{{
+					Disabled: &wrappers.BoolValue{
+						Value: true,
+					},
+				}},
+
+				Providers: []*tpb.ProviderRef{{Name: "prometheus"}},
+			},
+		},
+	}
+	stackdriverDisabled := &tpb.Telemetry{
+		AccessLogging: []*tpb.AccessLogging{
+			{
+				Providers: []*tpb.ProviderRef{
+					{
+						Name: "stackdriver",
+					},
+				},
+				Disabled: &wrappers.BoolValue{
+					Value: true,
+				},
+			},
+		},
+	}
 
 	cfg := `{"metrics":[{"dimensions":{"add":"bar"},"name":"requests_total","tags_to_remove":["remove"]}]}`
 
@@ -693,6 +719,15 @@ func TestTelemetryFilters(t *testing.T) {
 		{
 			"disabled-prometheus",
 			[]config.Config{newTelemetry("istio-system", disbaledAllMetrics)},
+			sidecar,
+			networking.ListenerClassSidecarOutbound,
+			networking.ListenerProtocolHTTP,
+			nil,
+			map[string]string{},
+		},
+		{
+			"disabled-prometheus-implicit",
+			[]config.Config{newTelemetry("istio-system", disabledAllMetricsImplicit)},
 			sidecar,
 			networking.ListenerClassSidecarOutbound,
 			networking.ListenerProtocolHTTP,
@@ -909,6 +944,20 @@ func TestTelemetryFilters(t *testing.T) {
 			},
 			map[string]string{
 				"istio.stackdriver": `{"disable_host_header_fallback":true,"access_logging":"FULL","metric_expiry_duration":"3600s"}`,
+			},
+		},
+		{
+			"disable stackdriver",
+			[]config.Config{newTelemetry("istio-system", stackdriverDisabled)},
+			sidecar,
+			networking.ListenerClassSidecarInbound,
+			networking.ListenerProtocolHTTP,
+			&meshconfig.MeshConfig_DefaultProviders{
+				Metrics:       []string{"stackdriver"},
+				AccessLogging: []string{"stackdriver"},
+			},
+			map[string]string{
+				"istio.stackdriver": `{"disable_server_access_logging":true,"disable_host_header_fallback":true,"metric_expiry_duration":"3600s"}`,
 			},
 		},
 	}
