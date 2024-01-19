@@ -25,7 +25,6 @@ import (
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/config"
-	"istio.io/istio/pkg/config/constants"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/util/sets"
@@ -37,7 +36,7 @@ func createRouteStatus(gateways []routeParentReference, obj config.Config, curre
 	// gateway controllers that are exposing their status on the same route. We need to attempt to manage ours properly (including
 	// removing gateway references when they are removed), without mangling other Controller's status.
 	for _, r := range current {
-		if r.ControllerName != constants.ManagedGatewayController {
+		if r.ControllerName != ControllerName {
 			// We don't own this status, so keep it around
 			gws = append(gws, r)
 		}
@@ -149,7 +148,7 @@ func createRouteStatus(gateways []routeParentReference, obj config.Config, curre
 		}
 		gws = append(gws, k8s.RouteParentStatus{
 			ParentRef:      gw.OriginalReference,
-			ControllerName: constants.ManagedGatewayController,
+			ControllerName: ControllerName,
 			Conditions:     setConditions(obj.Generation, currentConditions, conds),
 		})
 	}

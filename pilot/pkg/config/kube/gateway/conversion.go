@@ -1254,7 +1254,7 @@ func getGatewayClasses(r KubernetesResources) map[string]k8s.GatewayController {
 	for _, obj := range r.GatewayClass {
 		gwc := obj.Spec.(*k8s.GatewayClassSpec)
 		allFound.Insert(obj.Name)
-		if gwc.ControllerName == constants.ManagedGatewayController || gwc.ControllerName == constants.ManagedGatewayMeshController {
+		if gwc.ControllerName == ControllerName || gwc.ControllerName == constants.ManagedGatewayMeshController {
 			res[obj.Name] = gwc.ControllerName
 
 			// Set status. If we created it, it may already be there. If not, set it again
@@ -1268,7 +1268,7 @@ func getGatewayClasses(r KubernetesResources) map[string]k8s.GatewayController {
 	if !allFound.Contains(string(DefaultClassName)) {
 		// Allow `istio` class without explicit GatewayClass. However, if it already exists then do not
 		// add it here, in case it points to a different controller.
-		res[string(DefaultClassName)] = constants.ManagedGatewayController
+		res[string(DefaultClassName)] = ControllerName
 	}
 	if features.EnableAmbientControllers && !allFound.Contains(constants.WaypointGatewayClassName) {
 		res[constants.WaypointGatewayClassName] = constants.ManagedGatewayMeshController
