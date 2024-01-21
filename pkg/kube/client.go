@@ -85,6 +85,7 @@ import (
 	"istio.io/istio/pkg/kube/mcs"
 	"istio.io/istio/pkg/lazy"
 	"istio.io/istio/pkg/log"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/sleep"
 	"istio.io/istio/pkg/test/util/yml"
 	"istio.io/istio/pkg/version"
@@ -141,6 +142,15 @@ type Client interface {
 
 	// ClusterID returns the cluster this client is connected to
 	ClusterID() cluster.ID
+
+	// SetNamespaces sets watched namespaces if no MemberRoll controller exists.
+	SetNamespaces(namespaces []string)
+
+	// AddMemberRollController creates a MemberRollController and adds it to the client.
+	AddMemberRollController(namespace, memberRollName string) error
+
+	// GetMemberRollController returns the member roll for the client, which may be nil.
+	GetMemberRollController() memberroll.MemberRollController
 }
 
 // CLIClient is an extended client with additional helpers/functionality for Istioctl and testing.
@@ -217,6 +227,8 @@ var (
 	_ Client    = &client{}
 	_ CLIClient = &client{}
 )
+
+const resyncInterval = 0
 
 // NewFakeClient creates a new, fake, client
 func NewFakeClient(objects ...runtime.Object) CLIClient {
@@ -328,6 +340,9 @@ type client struct {
 	gatewayapi gatewayapiclient.Interface
 
 	started atomic.Bool
+
+	memberRoll memberroll.MemberRollController
+
 	// If enabled, will wait for cache syncs with extremely short delay. This should be used only for tests
 	fastSync               bool
 	informerWatchesPending *atomic.Int32
@@ -497,10 +512,37 @@ func (c *client) CrdWatcher() kubetypes.CrdWatcher {
 	return c.crdWatcher
 }
 
+func (c *client) SetNamespaces(namespaces []string) {
+	// This is a no-op if a MemberRoll controller exists.
+	if c.memberRoll != nil {
+		return
+	}
+
+	c.informerFactory.SetNamespaces(namespaces)
+}
+
+func (c *client) AddMemberRollController(namespace, memberRollName string) (err error) {
+	c.memberRoll, err = memberroll.NewMemberRollController(c.config, namespace, memberRollName, resyncInterval)
+	if err != nil {
+		return err
+	}
+
+	c.informerFactory.InitNamespaces()
+	c.memberRoll.Register(c.informerFactory, "informers")
+	return nil
+}
+
+func (c *client) GetMemberRollController() memberroll.MemberRollController {
+	return c.memberRoll
+}
+
 // RunAndWait starts all informers and waits for their caches to sync.
 // Warning: this must be called AFTER .Informer() is called, which will register the informer.
 func (c *client) RunAndWait(stop <-chan struct{}) {
 	c.Run(stop)
+	if c.memberRoll != nil {
+		c.memberRoll.Start(stop)
+	}
 	if c.fastSync {
 		if c.crdWatcher != nil {
 			c.WaitForCacheSync("crd watcher", stop, c.crdWatcher.HasSynced)

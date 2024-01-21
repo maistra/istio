@@ -76,18 +76,18 @@ func GetInformerFilteredFromGVR(c ClientGetter, opts ktypes.InformerOptions, g s
 }
 
 func getInformerFilteredDynamic(c ClientGetter, opts ktypes.InformerOptions, g schema.GroupVersionResource) informerfactory.StartableInformer {
-	return c.Informers().InformerFor(g, opts, func() cache.SharedIndexInformer {
+	return c.Informers().InformerFor(g, opts, func(namespace string) cache.SharedIndexInformer {
 		inf := cache.NewSharedIndexInformerWithOptions(
 			&cache.ListWatch{
 				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 					options.FieldSelector = opts.FieldSelector
 					options.LabelSelector = opts.LabelSelector
-					return c.Dynamic().Resource(g).Namespace(opts.Namespace).List(context.Background(), options)
+					return c.Dynamic().Resource(g).Namespace(namespace).List(context.Background(), options)
 				},
 				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 					options.FieldSelector = opts.FieldSelector
 					options.LabelSelector = opts.LabelSelector
-					return c.Dynamic().Resource(g).Namespace(opts.Namespace).Watch(context.Background(), options)
+					return c.Dynamic().Resource(g).Namespace(namespace).Watch(context.Background(), options)
 				},
 			},
 			&unstructured.Unstructured{},
@@ -103,18 +103,18 @@ func getInformerFilteredDynamic(c ClientGetter, opts ktypes.InformerOptions, g s
 }
 
 func getInformerFilteredMetadata(c ClientGetter, opts ktypes.InformerOptions, g schema.GroupVersionResource) informerfactory.StartableInformer {
-	return c.Informers().InformerFor(g, opts, func() cache.SharedIndexInformer {
+	return c.Informers().InformerFor(g, opts, func(namespace string) cache.SharedIndexInformer {
 		inf := cache.NewSharedIndexInformerWithOptions(
 			&cache.ListWatch{
 				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 					options.FieldSelector = opts.FieldSelector
 					options.LabelSelector = opts.LabelSelector
-					return c.Metadata().Resource(g).Namespace(opts.Namespace).List(context.Background(), options)
+					return c.Metadata().Resource(g).Namespace(namespace).List(context.Background(), options)
 				},
 				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 					options.FieldSelector = opts.FieldSelector
 					options.LabelSelector = opts.LabelSelector
-					return c.Metadata().Resource(g).Namespace(opts.Namespace).Watch(context.Background(), options)
+					return c.Metadata().Resource(g).Namespace(namespace).Watch(context.Background(), options)
 				},
 			},
 			&metav1.PartialObjectMetadata{},
