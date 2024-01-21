@@ -548,6 +548,14 @@ func (s *Server) initKubeClient(args *PilotArgs) error {
 		if err != nil {
 			return fmt.Errorf("failed creating kube client: %v", err)
 		}
+
+		memberRollName := args.RegistryOptions.KubeOptions.MemberRollName
+		if memberRollName != "" {
+			if err := s.kubeClient.AddMemberRollController(args.Namespace, memberRollName); err != nil {
+				return fmt.Errorf("failed creating member roll controller: %v", err)
+			}
+		}
+
 		s.kubeClient = kubelib.EnableCrdWatcher(s.kubeClient)
 	}
 
@@ -945,7 +953,6 @@ func (s *Server) initIstiodCerts(args *PilotArgs, host string) error {
 			KeyFile:    tlsKeyPath,
 			CertFile:   tlsCertPath,
 		})
-
 		if err != nil {
 			// Not crashing istiod - This typically happens if certs are missing and in tests.
 			log.Errorf("error initializing certificate watches: %v", err)

@@ -191,7 +191,10 @@ func LocationPrioritizedComparison(currentLeaderRevision string, l *LeaderElecti
 	if currentLeaderRemote = strings.HasPrefix(currentLeaderRevision, remoteIstiodPrefix); currentLeaderRemote {
 		currentLeaderRevision = strings.TrimPrefix(currentLeaderRevision, remoteIstiodPrefix)
 	}
-	defaultRevision := l.defaultWatcher.GetDefault()
+	var defaultRevision string
+	if l.defaultWatcher != nil {
+		defaultRevision = l.defaultWatcher.GetDefault()
+	}
 	if l.revision != currentLeaderRevision && defaultRevision != "" && defaultRevision == l.revision {
 		// Always steal the lock if the new one is the default revision and the current one is not
 		return true

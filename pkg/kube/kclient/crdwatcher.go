@@ -52,16 +52,18 @@ func newCrdWatcher(client kube.Client) kubetypes.CrdWatcher {
 		callbacks: map[string][]func(){},
 	}
 
-	c.queue = controllers.NewQueue("crd watcher",
-		controllers.WithReconciler(c.Reconcile))
-	c.crds = NewMetadata(client, gvr.CustomResourceDefinition, Filter{})
-	c.crds.AddEventHandler(controllers.ObjectHandler(c.queue.AddObject))
+	if client.GetMemberRollController() == nil {
+		c.queue = controllers.NewQueue("crd watcher",
+			controllers.WithReconciler(c.Reconcile))
+		c.crds = NewMetadata(client, gvr.CustomResourceDefinition, Filter{})
+		c.crds.AddEventHandler(controllers.ObjectHandler(c.queue.AddObject))
+	}
 	return c
 }
 
 // HasSynced returns whether the underlying cache has synced and the callback has been called at least once.
 func (c *crdWatcher) HasSynced() bool {
-	return c.queue.HasSynced()
+	return c.crds == nil || c.queue.HasSynced()
 }
 
 // Run starts the controller. This must be called.
@@ -74,9 +76,11 @@ func (c *crdWatcher) Run(stop <-chan struct{}) {
 	}
 	c.stop = stop
 	c.mutex.Unlock()
-	kube.WaitForCacheSync("crd watcher", stop, c.crds.HasSynced)
-	c.queue.Run(stop)
-	c.crds.ShutdownHandlers()
+	if c.crds != nil {
+		kube.WaitForCacheSync("crd watcher", stop, c.crds.HasSynced)
+		c.queue.Run(stop)
+		c.crds.ShutdownHandlers()
+	}
 }
 
 // WaitForCRD waits until the request CRD exists, and returns true on success. A false return value
@@ -104,7 +108,7 @@ func (c *crdWatcher) KnownOrCallback(s schema.GroupVersionResource, f func(stop 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	// If we are already synced, return immediately if the CRD is present.
-	if c.crds.HasSynced() && c.known(s) {
+	if c.crds == nil || (c.crds.HasSynced() && c.known(s)) {
 		// Already known, return early
 		return true
 	}
