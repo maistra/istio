@@ -225,7 +225,11 @@ func (s *Server) initK8SConfigStore(args *PilotArgs) error {
 			leaderelection.
 				NewLeaderElection(args.Namespace, args.PodName, leaderelection.IORController, args.Revision, s.kubeClient).
 				AddRunFunction(func(leaderStop <-chan struct{}) {
-					ior.Run(s.kubeClient, configController, leaderStop)
+					controller := ior.New(s.kubeClient, configController)
+
+					s.kubeClient.RunAndWaitRouteInformer(leaderStop)
+
+					controller.Run(leaderStop)
 				}).Run(stop)
 			return nil
 		})

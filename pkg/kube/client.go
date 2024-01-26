@@ -156,6 +156,7 @@ type Client interface {
 	// RunAndWait starts all informers and waits for their caches to sync.
 	// Warning: this must be called AFTER .Informer() is called, which will register the informer.
 	RunAndWait(stop <-chan struct{})
+	RunAndWaitRouteInformer(stop <-chan struct{})
 	HasStarted() bool
 
 	// WaitForCacheSync waits for all cache functions to sync, as well as all informers started by the *fake* client.
@@ -602,6 +603,16 @@ func (c *client) GetMemberRoll() memberroll.MemberRollController {
 	return c.memberRoll
 }
 
+func (c *client) RunAndWaitRouteInformer(stop <-chan struct{}) {
+	c.routeInformer.Start(stop)
+
+	if c.fastSync {
+		fastWaitForCacheSync(stop, c.routeInformer)
+	} else {
+		c.routeInformer.WaitForCacheSync(stop)
+	}
+}
+
 // RunAndWait starts all informers and waits for their caches to sync.
 // Warning: this must be called AFTER .Informer() is called, which will register the informer.
 func (c *client) RunAndWait(stop <-chan struct{}) {
@@ -620,7 +631,6 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		fastWaitForCacheSyncDynamic(stop, c.dynamicInformer)
 		fastWaitForCacheSyncDynamic(stop, c.metadataInformer)
 		fastWaitForCacheSync(stop, c.istioInformer)
-		fastWaitForCacheSync(stop, c.routeInformer)
 		if features.EnableGatewayAPI {
 			fastWaitForCacheSync(stop, c.gatewayapiInformer)
 		}
@@ -641,7 +651,6 @@ func (c *client) RunAndWait(stop <-chan struct{}) {
 		c.dynamicInformer.WaitForCacheSync(stop)
 		c.metadataInformer.WaitForCacheSync(stop)
 		c.istioInformer.WaitForCacheSync(stop)
-		c.routeInformer.WaitForCacheSync(stop)
 		if features.EnableGatewayAPI {
 			c.gatewayapiInformer.WaitForCacheSync(stop)
 		}
@@ -654,7 +663,6 @@ func (c *client) startInformer(stop <-chan struct{}) {
 	c.dynamicInformer.Start(stop)
 	c.metadataInformer.Start(stop)
 	c.istioInformer.Start(stop)
-	c.routeInformer.Start(stop)
 	if features.EnableGatewayAPI {
 		c.gatewayapiInformer.Start(stop)
 	}
