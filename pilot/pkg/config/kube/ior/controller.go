@@ -52,8 +52,8 @@ const (
 	ShouldManageRouteAnnotation = maistraPrefix + "manageRoute"
 )
 
-// routeController manages the integration between Istio Gateways and OpenShift Routes
-type routeController struct {
+// RouteController manages the integration between Istio Gateways and OpenShift Routes
+type RouteController struct {
 	store model.ConfigStoreController
 
 	podLister     listerv1.PodLister
@@ -64,13 +64,13 @@ type routeController struct {
 }
 
 // newRouteController returns a new instance of Route object
-func newRouteController(kubeClient KubeClient, store model.ConfigStoreController) *routeController {
+func newRouteController(kubeClient KubeClient, store model.ConfigStoreController) *RouteController {
 	for !kubeClient.IsRouteSupported() {
 		IORLog.Infof("routes are not supported in this cluster; waiting for Route resource to become available...")
 		time.Sleep(10 * time.Second)
 	}
 
-	r := &routeController{
+	r := &RouteController{
 		store:         store,
 		podLister:     kubeClient.GetActualClient().KubeInformer().Core().V1().Pods().Lister(),
 		serviceLister: kubeClient.GetActualClient().KubeInformer().Core().V1().Services().Lister(),
@@ -111,7 +111,7 @@ func getHost(route v1.Route) string {
 	return route.Spec.Host
 }
 
-func (r *routeController) deleteRoute(route *v1.Route) error {
+func (r *RouteController) deleteRoute(route *v1.Route) error {
 	var immediate int64
 	host := getHost(*route)
 	err := r.routeClient.RouteV1().Routes(route.Namespace).Delete(context.TODO(), route.ObjectMeta.Name, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
@@ -183,7 +183,7 @@ func buildRoute(metadata config.Meta, originalHost string, tls *networking.Serve
 	}
 }
 
-func (r *routeController) createRoute(
+func (r *RouteController) createRoute(
 	metadata config.Meta,
 	originalHost string,
 	tls *networking.ServerTLSSettings,
@@ -211,7 +211,7 @@ func (r *routeController) createRoute(
 	return nr, nil
 }
 
-func (r *routeController) updateRoute(
+func (r *RouteController) updateRoute(
 	metadata config.Meta,
 	originalHost string,
 	tls *networking.ServerTLSSettings,
@@ -244,7 +244,7 @@ func (r *routeController) updateRoute(
 	return nr, nil
 }
 
-func (r *routeController) findRoutes(metadata config.Meta) ([]*v1.Route, error) {
+func (r *RouteController) findRoutes(metadata config.Meta) ([]*v1.Route, error) {
 	return r.routeLister.List(
 		labels.SelectorFromSet(
 			getDefaultRouteLabelMap(metadata.Name, metadata.Namespace),
@@ -254,7 +254,7 @@ func (r *routeController) findRoutes(metadata config.Meta) ([]*v1.Route, error) 
 
 // findService tries to find a service that matches with the given gateway selector
 // Returns the namespace and service name that is a match, or an error
-func (r *routeController) findService(gateway *networking.Gateway) (*model.NamespacedName, error) {
+func (r *RouteController) findService(gateway *networking.Gateway) (*model.NamespacedName, error) {
 	gwSelector := labels.SelectorFromSet(gateway.Selector)
 
 	// Get the list of pods that match the gateway selector
@@ -334,7 +334,7 @@ func hostHash(name string) string {
 	return hex.EncodeToString(hash[:8])
 }
 
-func (r *routeController) reconcileGateway(config *config.Config, routes []*v1.Route) error {
+func (r *RouteController) reconcileGateway(config *config.Config, routes []*v1.Route) error {
 	gateway, ok := config.Spec.(*networking.Gateway)
 
 	if !ok {
@@ -394,7 +394,7 @@ func (r *routeController) reconcileGateway(config *config.Config, routes []*v1.R
 	return result.ErrorOrNil()
 }
 
-func (r *routeController) processEvent(old, curr *config.Config, event model.Event) error {
+func (r *RouteController) processEvent(old, curr *config.Config, event model.Event) error {
 	if IORLog.GetOutputLevel() >= log.DebugLevel {
 		debugMessage := fmt.Sprintf("event %v arrived:", event)
 		if event == model.EventUpdate {
@@ -440,7 +440,7 @@ func (r *routeController) processEvent(old, curr *config.Config, event model.Eve
 	return result.ErrorOrNil()
 }
 
-func (r *routeController) Run(stop <-chan struct{}) {
+func (r *RouteController) Run(stop <-chan struct{}) {
 	var aliveLock sync.Mutex
 	alive := true
 
