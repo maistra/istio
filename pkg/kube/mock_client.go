@@ -153,6 +153,10 @@ func (c MockClient) MetadataInformer() metadatainformer.SharedInformerFactory {
 	panic("not used in mock")
 }
 
+func (c MockClient) RunAndWaitRouteInformer(stop <-chan struct{}) {
+	panic("not used in mock")
+}
+
 func (c MockClient) RunAndWait(stop <-chan struct{}) {
 	panic("not used in mock")
 }
