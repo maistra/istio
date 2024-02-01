@@ -48,6 +48,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/howardjohn/unshare-go v0.3.0
 	github.com/kr/pretty v0.3.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/jwx v1.2.28
@@ -104,8 +105,8 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.14.0
-	istio.io/api v1.19.0-alpha.1.0.20240130163429-1f5f63a120ef
-	istio.io/client-go v1.19.0-alpha.1.0.20240130163829-f398518b4496
+	istio.io/api v1.19.0-alpha.1.0.20240131204737-1b6aded78387
+	istio.io/client-go v1.19.0-alpha.1.0.20240131205137-ed78f0361294
 	k8s.io/api v0.29.1
 	k8s.io/apiextensions-apiserver v0.29.1
 	k8s.io/apimachinery v0.29.1
