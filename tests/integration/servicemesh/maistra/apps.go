@@ -37,7 +37,7 @@ func DeployEchos(apps *echo.Instances, appNamespaces map[string]namespace.Getter
 	return func(t resource.Context) error {
 		// apps are sorted by name to deterministically fetch expected app from the apps variable
 		var appNames []string
-		for name, _ := range appNamespaces {
+		for name := range appNamespaces {
 			appNames = append(appNames, name)
 		}
 		sort.Strings(appNames)

@@ -64,8 +64,8 @@ func TestMain(m *testing.M) {
 			namespace.Setup(&istioNs1, namespace.Config{Prefix: "istio-system-1"}),
 			namespace.Setup(&istioNs2, namespace.Config{Prefix: "istio-system-2"})).
 		SetupParallel(
-			maistra.Install(namespace.Future(&istioNs1)),
-			maistra.Install(namespace.Future(&istioNs2))).
+			maistra.Install(namespace.Future(&istioNs1), nil),
+			maistra.Install(namespace.Future(&istioNs2), nil)).
 		Setup(maistra.RemoveDefaultRBAC).
 		SetupParallel(
 			maistra.ApplyRestrictedRBAC(namespace.Future(&istioNs1)),

@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 		RequireMaxClusters(1).
 		Setup(maistra.ApplyServiceMeshCRDs).
 		Setup(namespace.Setup(&istioNamespace, namespace.Config{Prefix: "istio-system"})).
-		Setup(maistra.Install(namespace.Future(&istioNamespace))).
+		Setup(maistra.Install(namespace.Future(&istioNamespace), nil)).
 		// We cannot apply restricted RBAC before the control plane installation, because the operator always applies
 		// the default RBAC, so we have to remove it and apply after the installation.
 		Setup(maistra.RemoveDefaultRBAC).

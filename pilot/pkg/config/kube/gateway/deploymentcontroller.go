@@ -28,6 +28,7 @@ import (
 	klabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 	gateway "sigs.k8s.io/gateway-api/apis/v1beta1"
 	"sigs.k8s.io/yaml"
 
@@ -165,8 +166,6 @@ func getClassInfos() map[gateway.GatewayController]classInfo {
 func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *model.Environment,
 	webhookConfig func() inject.WebhookConfig, injectionHandler func(fn func()), tw revisions.TagWatcher, revision string,
 ) *DeploymentController {
-	gateways := kclient.New[*gateway.Gateway](client)
-	gatewayClasses := kclient.New[*gateway.GatewayClass](client)
 	dc := &DeploymentController{
 		client:    client,
 		clusterID: clusterID,
@@ -181,12 +180,10 @@ func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *mode
 			}, subresources...)
 			return err
 		},
-		gateways:       gateways,
-		gatewayClasses: gatewayClasses,
-		injectConfig:   webhookConfig,
-		tagWatcher:     tw,
-		revision:       revision,
+		injectConfig: webhookConfig,
+		revision:     revision,
 	}
+
 	dc.queue = controllers.NewQueue("gateway deployment",
 		controllers.WithReconciler(dc.Reconcile),
 		controllers.WithMaxAttempts(5))
@@ -208,23 +205,29 @@ func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *mode
 	dc.serviceAccounts.AddEventHandler(parentHandler)
 	dc.clients[gvr.ServiceAccount] = NewUntypedWrapper(dc.serviceAccounts)
 
-	dc.namespaces = kclient.New[*corev1.Namespace](client)
-	dc.namespaces.AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
-		// TODO: make this more intelligent, checking if something we care about has changed
-		// requeue this namespace
-		for _, gw := range dc.gateways.List(o.GetName(), klabels.Everything()) {
-			dc.queue.AddObject(gw)
-		}
-	}))
+	dc.gateways = kclient.New[*gateway.Gateway](client)
+	dc.gateways.AddEventHandler(controllers.ObjectHandler(dc.queue.AddObject))
 
-	gateways.AddEventHandler(controllers.ObjectHandler(dc.queue.AddObject))
-	gatewayClasses.AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
-		for _, g := range dc.gateways.List(metav1.NamespaceAll, klabels.Everything()) {
-			if string(g.Spec.GatewayClassName) == o.GetName() {
-				dc.queue.AddObject(g)
+	if !client.IsMultiTenant() {
+		dc.namespaces = kclient.New[*corev1.Namespace](client)
+		dc.namespaces.AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
+			// TODO: make this more intelligent, checking if something we care about has changed
+			// requeue this namespace
+			for _, gw := range dc.gateways.List(o.GetName(), klabels.Everything()) {
+				dc.queue.AddObject(gw)
 			}
-		}
-	}))
+		}))
+		dc.gatewayClasses = kclient.New[*gateway.GatewayClass](client)
+		dc.gatewayClasses.AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
+			for _, g := range dc.gateways.List(metav1.NamespaceAll, klabels.Everything()) {
+				if string(g.Spec.GatewayClassName) == o.GetName() {
+					dc.queue.AddObject(g)
+				}
+			}
+		}))
+		dc.tagWatcher = tw
+		dc.tagWatcher.AddHandler(dc.HandleTagChange)
+	}
 
 	// On injection template change, requeue all gateways
 	injectionHandler(func() {
@@ -233,25 +236,19 @@ func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *mode
 		}
 	})
 
-	dc.tagWatcher.AddHandler(dc.HandleTagChange)
-
 	return dc
 }
 
 func (d *DeploymentController) Run(stop <-chan struct{}) {
-	kube.WaitForCacheSync(
-		"deployment controller",
-		stop,
-		d.namespaces.HasSynced,
-		d.deployments.HasSynced,
-		d.services.HasSynced,
-		d.serviceAccounts.HasSynced,
-		d.gateways.HasSynced,
-		d.gatewayClasses.HasSynced,
-		d.tagWatcher.HasSynced,
-	)
+	syncFuncs := []cache.InformerSynced{d.deployments.HasSynced, d.services.HasSynced, d.serviceAccounts.HasSynced, d.gateways.HasSynced}
+	shutdownFuncs := []controllers.Shutdowner{d.deployments, d.services, d.serviceAccounts, d.gateways}
+	if !d.client.IsMultiTenant() {
+		syncFuncs = append(syncFuncs, d.namespaces.HasSynced, d.gatewayClasses.HasSynced, d.tagWatcher.HasSynced)
+		shutdownFuncs = append(shutdownFuncs, d.namespaces, d.gatewayClasses)
+	}
+	kube.WaitForCacheSync("deployment controller", stop, syncFuncs...)
 	d.queue.Run(stop)
-	controllers.ShutdownAll(d.namespaces, d.deployments, d.services, d.serviceAccounts, d.gateways, d.gatewayClasses)
+	controllers.ShutdownAll(shutdownFuncs...)
 }
 
 // Reconcile takes in the name of a Gateway and ensures the cluster is in the desired state
@@ -268,7 +265,11 @@ func (d *DeploymentController) Reconcile(req types.NamespacedName) error {
 	}
 
 	var controller gateway.GatewayController
-	if gc := d.gatewayClasses.Get(string(gw.Spec.GatewayClassName), ""); gc != nil {
+	var gc *gateway.GatewayClass
+	if d.gatewayClasses != nil {
+		gc = d.gatewayClasses.Get(string(gw.Spec.GatewayClassName), "")
+	}
+	if gc != nil {
 		controller = gc.Spec.ControllerName
 	} else {
 		if builtin, f := builtinClasses[gw.Spec.GatewayClassName]; f {
@@ -281,20 +282,22 @@ func (d *DeploymentController) Reconcile(req types.NamespacedName) error {
 		return nil
 	}
 
-	// find the tag or revision indicated by the object
-	selectedTag, ok := gw.Labels[label.IoIstioRev.Name]
-	if !ok {
-		ns := d.namespaces.Get(gw.Namespace, "")
-		if ns == nil {
+	if d.namespaces != nil {
+		// find the tag or revision indicated by the object
+		selectedTag, ok := gw.Labels[label.IoIstioRev.Name]
+		if !ok {
+			ns := d.namespaces.Get(gw.Namespace, "")
+			if ns == nil {
+				log.Debugf("gateway is not for this revision, skipping")
+				return nil
+			}
+			selectedTag = ns.Labels[label.IoIstioRev.Name]
+		}
+		myTags := d.tagWatcher.GetMyTags()
+		if !myTags.Contains(selectedTag) && !(selectedTag == "" && myTags.Contains("default")) {
 			log.Debugf("gateway is not for this revision, skipping")
 			return nil
 		}
-		selectedTag = ns.Labels[label.IoIstioRev.Name]
-	}
-	myTags := d.tagWatcher.GetMyTags()
-	if !myTags.Contains(selectedTag) && !(selectedTag == "" && myTags.Contains("default")) {
-		log.Debugf("gateway is not for this revision, skipping")
-		return nil
 	}
 	// TODO: Here we could check if the tag is set and matches no known tags, and handle that if we are default.
 
