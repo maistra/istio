@@ -43,6 +43,7 @@ import (
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
+	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/schema/resource"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
@@ -337,6 +338,11 @@ func (cl *Client) addCRD(name string) {
 	}
 	resourceGVK := s.GroupVersionKind()
 	gvr := s.GroupVersionResource()
+
+	if cl.client.IsMultiTenant() && resourceGVK == gvk.GatewayClass {
+		scope.Infof("Skipping CRD %v as it is not compatible with maistra multi-tenancy", s.GroupVersionKind())
+		return
+	}
 
 	cl.kindsMu.Lock()
 	defer cl.kindsMu.Unlock()
