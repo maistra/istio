@@ -127,9 +127,11 @@ func NewController(kubeclientset kube.Client, namespace string, clusterID cluste
 		secrets:             secrets,
 	}
 
-	namespaces := kclient.New[*corev1.Namespace](kubeclientset)
-	controller.namespaces = namespaces
-	controller.DiscoveryNamespacesFilter = filter.NewDiscoveryNamespacesFilter(namespaces, meshWatcher.Mesh().GetDiscoverySelectors())
+	if !kubeclientset.IsMultiTenant() {
+		namespaces := kclient.New[*corev1.Namespace](kubeclientset)
+		controller.namespaces = namespaces
+		controller.DiscoveryNamespacesFilter = filter.NewDiscoveryNamespacesFilter(namespaces, meshWatcher.Mesh().GetDiscoverySelectors())
+	}
 	// Queue does NOT retry. The only error that can occur is if the kubeconfig is
 	// malformed. This is a static analysis that cannot be resolved by retry. Actual
 	// connectivity issues would result in HasSynced returning false rather than an
@@ -148,12 +150,15 @@ func (c *Controller) AddHandler(h ClusterHandler) {
 
 // Run starts the controller until it receives a message over stopCh
 func (c *Controller) Run(stopCh <-chan struct{}) error {
-	// Normally, we let informers start after all controllers. However, in this case we need namespaces to start and sync
-	// first, so we have DiscoveryNamespacesFilter ready to go. This avoids processing objects that would be filtered during startup.
-	c.namespaces.Start(stopCh)
-	// Wait for namespace informer synced, which implies discovery filter is synced as well
-	if !kube.WaitForCacheSync("namespace", stopCh, c.namespaces.HasSynced) {
-		return fmt.Errorf("failed to sync namespaces")
+	if c.namespaces != nil {
+
+		// Normally, we let informers start after all controllers. However, in this case we need namespaces to start and sync
+		// first, so we have DiscoveryNamespacesFilter ready to go. This avoids processing objects that would be filtered during startup.
+		c.namespaces.Start(stopCh)
+		// Wait for namespace informer synced, which implies discovery filter is synced as well
+		if !kube.WaitForCacheSync("namespace", stopCh, c.namespaces.HasSynced) {
+			return fmt.Errorf("failed to sync namespaces")
+		}
 	}
 	// run handlers for the config cluster; do not store this *Cluster in the ClusterStore or give it a SyncTimeout
 	// this is done outside the goroutine, we should block other Run/startFuncs until this is registered

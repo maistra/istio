@@ -25,6 +25,7 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/log"
+	memberroll "istio.io/istio/pkg/servicemesh/controller"
 	"istio.io/istio/pkg/util/sets"
 )
 
@@ -265,4 +266,82 @@ func (d *discoveryNamespacesFilter) isSelected(labels labels.Set) bool {
 	}
 
 	return false
+}
+
+type maistraDiscoveryNamespacesFilter struct {
+	lock       sync.RWMutex
+	namespaces sets.String
+	handlers   []func(ns string, event model.Event)
+}
+
+func NewMaistraDiscoveryNamespacesFilter(mrc memberroll.MemberRollController) DiscoveryNamespacesFilter {
+	d := &maistraDiscoveryNamespacesFilter{}
+	mrc.Register(d, "MaistraDiscoveryNamespacesFilter")
+	return d
+}
+
+func (d *maistraDiscoveryNamespacesFilter) SetNamespaces(namespaces []string) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.namespaces = sets.New[string](namespaces...)
+}
+
+func (d *maistraDiscoveryNamespacesFilter) Filter(obj interface{}) bool {
+	// xns-informers make sure we only receive objects in member namespaces
+	return true
+}
+
+// FilterNamespace is not implemented, because Maistra does not filter namespaces;
+// this function should never be called if memberRollName is specified, so it's safe to call panic.
+func (d *maistraDiscoveryNamespacesFilter) FilterNamespace(nsMeta metav1.ObjectMeta) bool {
+	panic("Not implemented")
+}
+
+// SelectorsChanged is not implemented, because Maistra does not filter namespaces by selectors;
+// this function should never be called if memberRollName is specified, so it's safe to call panic.
+func (d *maistraDiscoveryNamespacesFilter) SelectorsChanged(discoverySelectors []*metav1.LabelSelector) {
+	panic("Not implemented")
+}
+
+// SyncNamespaces is not implemented, because this function should never be called if memberRollName is specified,
+// so it's safe to call panic.
+func (d *maistraDiscoveryNamespacesFilter) SyncNamespaces() error {
+	panic("Not implemented")
+}
+
+// NamespaceCreated is not implemented, because added namespaces are handled by serviceMeshMemberRollListener;
+// this function should never be called if memberRollName is specified, so it's safe to call panic.
+func (d *maistraDiscoveryNamespacesFilter) NamespaceCreated(_ metav1.ObjectMeta) (membershipChanged bool) {
+	panic("Not implemented")
+}
+
+// NamespaceUpdated is not implemented, because updated namespaces are handled by serviceMeshMemberRollListener;
+// this function should never be called if memberRollName is specified, so it's safe to call panic.
+func (d *maistraDiscoveryNamespacesFilter) NamespaceUpdated(_, _ metav1.ObjectMeta) (membershipChanged bool, namespaceAdded bool) {
+	panic("Not implemented")
+}
+
+// NamespaceDeleted is not implemented, because deleted namespaces are handled by serviceMeshMemberRollListener;
+// this function should never be called if memberRollName is specified, so it's safe to call panic.
+func (d *maistraDiscoveryNamespacesFilter) NamespaceDeleted(_ metav1.ObjectMeta) (membershipChanged bool) {
+	panic("Not implemented")
+}
+
+func (d *maistraDiscoveryNamespacesFilter) GetMembers() sets.String {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
+	members := sets.New[string]()
+	members.InsertAll(d.namespaces.UnsortedList()...)
+	return members
+}
+
+// AddHandler registers a handler on namespace, which will be triggered when namespace selected or deselected.
+// If the namespaces have been synced, trigger the new added handler.
+func (d *maistraDiscoveryNamespacesFilter) AddHandler(f func(ns string, event model.Event)) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	for ns := range d.namespaces {
+		f(ns, model.EventAdd)
+	}
+	d.handlers = append(d.handlers, f)
 }
