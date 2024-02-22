@@ -90,6 +90,8 @@ spec:
 func TestTrustDomainValidation(t *testing.T) {
 	framework.NewTest(t).Features("security.peer.trust-domain-validation").Run(
 		func(ctx framework.TestContext) {
+			// https://issues.redhat.com/browse/OSSM-5979
+			ctx.Skip("https://github.com/istio/istio/issues/1000000")
 			testNS := apps.EchoNamespace.Namespace
 
 			ctx.ConfigIstio().YAML(testNS.Name(), fmt.Sprintf(policy, testNS.Name())).ApplyOrFail(ctx)
