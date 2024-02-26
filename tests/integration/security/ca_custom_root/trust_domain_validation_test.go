@@ -151,7 +151,7 @@ func TestTrustDomainValidation(t *testing.T) {
 								}
 							}
 							if !allow {
-								opt.Check = check.ErrorContains("tls: unknown certificate")
+								opt.Check = check.ErrorContains("tls: handshake failure")
 							}
 							from.CallOrFail(t, opt)
 						})

@@ -41,6 +41,8 @@ func TestMain(m *testing.M) {
 	// nolint: staticcheck
 	var certs []csrctrl.SignerRootCert
 	framework.NewSuite(m).
+		// https://issues.redhat.com/browse/OSSM-5978
+		Skip("https://github.com/istio/istio/issues/1000000").
 		Label(label.CustomSetup).
 		RequireMinVersion(19).
 		Setup(func(ctx resource.Context) error {
