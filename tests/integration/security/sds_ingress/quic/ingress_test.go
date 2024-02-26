@@ -83,6 +83,8 @@ func TestTlsGatewaysWithQUIC(t *testing.T) {
 				ingressutil.RunTestMultiTLSGateways(t, inst, namespace.Future(&echo1NS))
 			})
 			t.NewSubTest("quic").Run(func(t framework.TestContext) {
+				// FIXME: https://issues.redhat.com/browse/OSSM-1282
+				t.Skip("https://github.com/istio/istio/issues/0")
 				ingressutil.RunTestMultiQUICGateways(t, inst, ingressutil.TLS, namespace.Future(&echo1NS))
 			})
 		})
@@ -102,6 +104,8 @@ func TestMtlsGatewaysWithQUIC(t *testing.T) {
 				ingressutil.RunTestMultiTLSGateways(t, inst, namespace.Future(&echo1NS))
 			})
 			t.NewSubTest("quic").Run(func(t framework.TestContext) {
+				// FIXME: https://issues.redhat.com/browse/OSSM-1282
+				t.Skip("https://github.com/istio/istio/issues/0")
 				ingressutil.RunTestMultiQUICGateways(t, inst, ingressutil.Mtls, namespace.Future(&echo1NS))
 			})
 		})

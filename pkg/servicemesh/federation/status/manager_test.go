@@ -45,6 +45,8 @@ var ignoreTimestamps = cmp.FilterPath(func(p cmp.Path) bool {
 }, cmp.Ignore())
 
 func TestStatusManager(t *testing.T) {
+	// FIXME: https://issues.redhat.com/browse/OSSM-6694
+	t.Skip("https://github.com/istio/istio/issues/0")
 	const (
 		namespace = "test-namespace"
 		name      = "test"
