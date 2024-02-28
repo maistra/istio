@@ -1305,7 +1305,7 @@ func (ps *PushContext) updateContext(
 
 	for conf := range pushReq.ConfigsUpdated {
 		switch conf.Kind {
-		case kind.ServiceEntry:
+		case kind.ServiceEntry, kind.DNSName:
 			servicesChanged = true
 		case kind.DestinationRule:
 			destinationRulesChanged = true
@@ -1447,6 +1447,7 @@ func (ps *PushContext) initServiceRegistry(env *Environment, configsUpdate sets.
 		shards, ok := env.EndpointIndex.ShardsForService(string(s.Hostname), s.Attributes.Namespace)
 		if ok {
 			instancesByPort := shards.CopyEndpoints(portMap)
+			// Iterate over the instances and add them to the service index to avoid overiding the existing port instances.
 			for port, instances := range instancesByPort {
 				ps.ServiceIndex.instancesByPort[svcKey][port] = instances
 			}
