@@ -25,7 +25,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/cli v25.0.1+incompatible
-	github.com/envoyproxy/go-control-plane v0.12.1-0.20240221204751-2259f2656a1f
+	github.com/envoyproxy/go-control-plane v0.12.1-0.20240229170157-f82c59662ea6
 	github.com/evanphx/json-patch/v5 v5.7.0
 	github.com/fatih/color v1.16.0
 	github.com/felixge/fgprof v0.9.3
@@ -118,7 +118,7 @@ require (
 	k8s.io/kubectl v0.29.1
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/controller-runtime v0.16.3
-	sigs.k8s.io/gateway-api v1.0.1-0.20240222012914-7a4c26cfe93e
+	sigs.k8s.io/gateway-api v1.0.1-0.20240301190905-f6102784e488
 	sigs.k8s.io/mcs-api v0.1.0
 	sigs.k8s.io/yaml v1.4.0
 )
