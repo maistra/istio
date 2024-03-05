@@ -188,8 +188,7 @@ type WebhookParameters struct {
 	// The istio.io/rev this injector is responsible for
 	Revision string
 
-	KubeClient kube.Client
-
+	// MultiCluster is used to access namespaces across clusters
 	MultiCluster multicluster.ComponentBuilder
 }
 
@@ -206,7 +205,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 		revision:   p.Revision,
 	}
 
-	if p.KubeClient != nil {
+	if p.MultiCluster != nil {
 		if platform.IsOpenShift() {
 			wh.namespaces = multicluster.BuildMultiClusterKclientComponent[*corev1.Namespace](p.MultiCluster, kubetypes.Filter{})
 		}
