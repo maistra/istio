@@ -1,3 +1,6 @@
+//go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris
+// +build aix darwin dragonfly freebsd linux netbsd openbsd solaris
+
 // Copyright Istio Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,20 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package echo
+package app
 
-// WorkloadClass is the class of workload in the echo instance
-type WorkloadClass = string
+import "golang.org/x/sys/unix"
 
-const (
-	Proxyless   WorkloadClass = "proxyless"
-	VM          WorkloadClass = "vm"
-	Sotw        WorkloadClass = "sotw"
-	TProxy      WorkloadClass = "tproxy"
-	Naked       WorkloadClass = "naked"
-	External    WorkloadClass = "external"
-	StatefulSet WorkloadClass = "statefulset"
-	Headless    WorkloadClass = "headless"
-	Captured    WorkloadClass = "captured"
-	Standard    WorkloadClass = "standard"
-)
+func raiseFileLimits() (uint64, error) {
+	rlimit := unix.Rlimit{}
+	if err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rlimit); err != nil {
+		return 0, err
+	}
+	rlimit.Cur = rlimit.Max
+	if err := unix.Setrlimit(unix.RLIMIT_NOFILE, &rlimit); err != nil {
+		return 0, err
+	}
+
+	return rlimit.Cur, nil
+}
