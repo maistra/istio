@@ -25,7 +25,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/cli v25.0.3+incompatible
-	github.com/envoyproxy/go-control-plane v0.12.1-0.20240229170157-f82c59662ea6
+	github.com/envoyproxy/go-control-plane v0.12.1-0.20240308164834-6064fa95bd86
 	github.com/evanphx/json-patch/v5 v5.9.0
 	github.com/fatih/color v1.16.0
 	github.com/felixge/fgprof v0.9.4
@@ -34,7 +34,7 @@ require (
 	github.com/go-jose/go-jose/v3 v3.0.3
 	github.com/go-logr/logr v1.4.1
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/protobuf v1.5.3
+	github.com/golang/protobuf v1.5.4
 	github.com/google/cel-go v0.17.7
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-containerregistry v0.19.0
@@ -51,7 +51,7 @@ require (
 	github.com/howardjohn/unshare-go v0.3.0
 	github.com/kr/pretty v0.3.1
 	github.com/kylelemons/godebug v1.1.0
-	github.com/lestrrat-go/jwx v1.2.28
+	github.com/lestrrat-go/jwx v1.2.29
 	github.com/mattn/go-isatty v0.0.20
 	github.com/miekg/dns v1.1.58
 	github.com/mitchellh/copystructure v1.2.0
