@@ -60,6 +60,7 @@ type Controller struct {
 	localNetwork      string
 	localClusterID    string
 	rm                common.ResourceManager
+	resyncPeriod      time.Duration
 	env               *model.Environment
 	federationManager server.FederationManager
 	statusManager     status.Manager
@@ -88,6 +89,7 @@ func NewController(opt Options) (*Controller, error) {
 		localClusterID:        opt.LocalClusterID,
 		localNetwork:          opt.LocalNetwork,
 		rm:                    opt.ResourceManager,
+		resyncPeriod:          opt.ResyncPeriod,
 		env:                   opt.Env,
 		sc:                    opt.ServiceController,
 		stopChannels:          make(map[cluster.ID]chan struct{}),
@@ -212,7 +214,7 @@ func (c *Controller) update(ctx context.Context, instance *v1.ServiceMeshPeer) e
 			ConfigStore:     c.ConfigStoreController,
 			StatusHandler:   statusHandler,
 			XDSUpdater:      c.xds,
-			ResyncPeriod:    time.Minute * 5,
+			ResyncPeriod:    c.resyncPeriod,
 			DomainSuffix:    c.env.DomainSuffix,
 			LocalClusterID:  c.localClusterID,
 			LocalNetwork:    c.localNetwork,

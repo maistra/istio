@@ -48,6 +48,15 @@ func SetupConfig(_ resource.Context, cfg *istio.Config) {
 	cfg.DifferentTrustDomains = true
 	cfg.ControlPlaneValues = `
 components:
+  pilot:
+    k8s:
+      overlays:
+      - apiVersion: apps/v1
+        kind: Deployment
+        name: istiod
+        patches:
+        - path: spec.template.spec.containers.[name:discovery].args[-1]
+          value: "--resync=3s"
   ingressGateways:
   - name: federation-ingress
     namespace: istio-system

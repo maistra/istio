@@ -134,6 +134,7 @@ func internalNew(opt Options, cs maistraclient.Interface) (*Federation, error) {
 	}
 	discoveryController, err := discovery.NewController(discovery.Options{
 		ResourceManager:   resourceManager,
+		ResyncPeriod:      opt.ResyncPeriod,
 		LocalClusterID:    opt.LocalClusterID,
 		LocalNetwork:      opt.LocalNetwork,
 		ServiceController: opt.ServiceController,
