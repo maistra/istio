@@ -52,7 +52,6 @@ var (
 		ServicePort: 7070,
 	}
 
-	// Timeout is 6 minutes long, because we have hardcoded resync period 5 minutes long in the federation discovery controller.
 	defaultRetry = echo.Retry{
 		Options: []retry.Option{
 			retry.Timeout(30 * time.Second),
