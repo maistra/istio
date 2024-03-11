@@ -141,6 +141,20 @@ func filteredRouteAnnotation(routeAnnotation string) bool {
 	return false
 }
 
+func filteredRouteLabel(routeLabel string) bool {
+	filteredPrefixes := [...]string{
+		maistraPrefix,
+		"argocd.argoproj.io",
+	}
+
+	for _, prefix := range filteredPrefixes {
+		if strings.HasPrefix(routeLabel, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func buildRoute(metadata config.Meta, originalHost string, tls *networking.ServerTLSSettings, serviceNamespace string, serviceName string) *v1.Route {
 	actualHost, wildcard := getActualHost(originalHost, true)
 
@@ -169,7 +183,7 @@ func buildRoute(metadata config.Meta, originalHost string, tls *networking.Serve
 	labelMap[gatewayResourceVersionLabel] = metadata.ResourceVersion
 
 	for keyName, keyValue := range metadata.Labels {
-		if !strings.HasPrefix(keyName, maistraPrefix) {
+		if !filteredRouteLabel(keyName) {
 			labelMap[keyName] = keyValue
 		}
 	}
