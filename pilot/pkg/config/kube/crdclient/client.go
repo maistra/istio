@@ -430,7 +430,10 @@ func handleCRDAdd(cl *Client, name string) {
 	resourceGVK := s.GroupVersionKind()
 	gvr := s.GroupVersionResource()
 
-	if cl.client.IsMultiTenant() && resourceGVK == gvk.GatewayClass {
+	if !features.EnableGatewayAPI && s.Group() == gvk.KubernetesGateway.Group {
+		scope.Infof("Skipping CRD %v as GatewayAPI support is not enabled", s.GroupVersionKind())
+		return
+	} else if cl.client.IsMultiTenant() && resourceGVK == gvk.GatewayClass {
 		scope.Infof("Skipping CRD %v as it is not compatible with maistra multi-tenancy", s.GroupVersionKind())
 		return
 	}
