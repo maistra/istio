@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	yamlDecoder "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
 	"istio.io/api/annotation"
@@ -44,6 +45,7 @@ import (
 	proxyConfig "istio.io/api/networking/v1beta1"
 	opconfig "istio.io/istio/operator/pkg/apis/istio/v1alpha1"
 	"istio.io/istio/pilot/pkg/features"
+	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/mesh"
 	common_features "istio.io/istio/pkg/features"
 	"istio.io/istio/pkg/log"
@@ -73,6 +75,9 @@ const (
 const (
 	// ProxyContainerName is used by e2e integration tests for fetching logs
 	ProxyContainerName = "istio-proxy"
+
+	// ProxyUIDAnnotation is an annotation that can be used to manually specify a proxy UID
+	ProxyUIDAnnotation = "sidecar.istio.io/proxyUID"
 
 	// ValidationContainerName is the name of the init container that validates
 	// if CNI has made the necessary changes to iptables
@@ -398,8 +403,13 @@ func RunTemplate(params InjectionParameters) (mergedPod *corev1.Pod, templatePod
 	if err != nil {
 		return nil, nil, err
 	}
+	var proxyUID, proxyGID int64
 
-	proxyUID, proxyGID := GetProxyIDs(params.namespace)
+	if params.namespace != nil {
+		proxyUID, proxyGID = GetProxyIDs(params.namespace)
+	} else {
+		proxyUID, proxyGID = GetProxyIDsFromPod(params.pod)
+	}
 
 	data := SidecarTemplateData{
 		TypeMeta:         params.typeMeta,
@@ -449,7 +459,6 @@ func RunTemplate(params InjectionParameters) (mergedPod *corev1.Pod, templatePod
 			return nil, nil, fmt.Errorf("failed parsing generated injected YAML (check Istio sidecar injector configuration): %v", err)
 		}
 	}
-
 	return mergedPod, templatePod, nil
 }
 
@@ -888,4 +897,62 @@ func GetProxyIDs(namespace *corev1.Namespace) (uid int64, gid int64) {
 	}
 
 	return
+}
+
+// GetProxyIDsFromPod returns the UID and GID to be used in the RunAsUser and RunAsGroup fields in the template
+// It relies on OpenShift injecting a valid UID into the pod template which we can then reuse.
+func GetProxyIDsFromPod(pod *corev1.Pod) (uid int64, gid int64) {
+	var proxyUID, proxyGID *int64
+	tproxyInterceptionMode := pod.Annotations != nil && pod.Annotations[annotation.SidecarInterceptionMode.Name] == string(model.InterceptionTproxy)
+	if tproxyInterceptionMode {
+		proxyUID = ptr.To(int64(0))
+		proxyGID = ptr.To(constants.DefaultProxyUIDInt)
+	} else {
+		var err error
+		proxyUID, err = getProxyUIDFromAnnotation(*pod)
+		if err != nil {
+			log.Infof("Could not get proxyUID from annotation: %v", err)
+		}
+		if proxyUID == nil {
+			if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsUser != nil {
+				proxyUID = ptr.To(*pod.Spec.SecurityContext.RunAsUser + 1)
+				// valid GID for fsGroup defaults to first int in UID range in OCP's restricted SCC
+				proxyGID = pod.Spec.SecurityContext.RunAsUser
+			}
+			for _, c := range pod.Spec.Containers {
+				if c.Name != ProxyContainerName && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
+					uid := *c.SecurityContext.RunAsUser + 1
+					if proxyUID == nil || uid > *proxyUID {
+						proxyUID = &uid
+					}
+					if proxyGID == nil {
+						proxyGID = c.SecurityContext.RunAsUser
+					}
+				}
+			}
+		}
+	}
+
+	// We need to set the UID/GID to something, or the injected manifest will fail to parse (this happens because
+	// {{ .ProxyUID/GID }} in the charts get resolved to "nil" (with quotes), which can't be parsed as a float).
+	if proxyUID == nil {
+		proxyUID = ptr.To(constants.DefaultProxyUIDInt)
+	}
+	if proxyGID == nil {
+		proxyGID = ptr.To(constants.DefaultProxyUIDInt)
+	}
+	return *proxyUID, *proxyGID
+}
+
+func getProxyUIDFromAnnotation(pod corev1.Pod) (*int64, error) {
+	if pod.Annotations != nil {
+		if annotationValue, found := pod.Annotations[ProxyUIDAnnotation]; found {
+			proxyUID, err := strconv.ParseInt(annotationValue, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			return &proxyUID, nil
+		}
+	}
+	return nil, nil
 }

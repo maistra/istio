@@ -203,7 +203,7 @@ func NewWebhook(p WebhookParameters) (*Webhook, error) {
 	}
 
 	if p.KubeClient != nil {
-		if platform.IsOpenShift() {
+		if platform.IsOpenShift() && !p.KubeClient.IsMultiTenant() {
 			wh.namespaces = kclient.New[*corev1.Namespace](p.KubeClient)
 		}
 	}
