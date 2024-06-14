@@ -17,7 +17,8 @@ LABEL maintainer="Istio Feedback <istio-feedback@redhat.com>"
 ENV container="oci"
 ENV ISTIO_VERSION="${ISTIO_VERSION}"
 
-RUN dnf update -y && dnf clean all
+RUN sed -i -e 's/mirrorlist/#mirrorlist/g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && \
+    dnf update -y && dnf clean all
 
 ARG TARGETARCH
 COPY ${TARGETARCH:-amd64}/istio-cni /opt/cni/bin/istio-cni

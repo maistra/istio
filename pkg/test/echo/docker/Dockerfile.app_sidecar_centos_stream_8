@@ -15,7 +15,8 @@ COPY sudoers /etc/sudoers
 # * hostname - used in the script istio-start.sh
 # * ps - for debugging purposes
 # hadolint ignore=DL3040,DL3041
-RUN dnf -y upgrade --refresh --nobest && \
+RUN sed -i -e 's/mirrorlist/#mirrorlist/g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && \
+    dnf -y upgrade --refresh --nobest && \
     dnf -y install iptables iproute openssl sudo hostname procps && \
     dnf -y clean all
 
