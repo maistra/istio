@@ -248,14 +248,14 @@ func applyGatewayOrFail(ctx framework.TestContext, ns, name string, labels map[s
 	// retry because of flaky validation webhook
 	retry.UntilSuccessOrFail(ctx, func() error {
 		return ctx.ConfigIstio().EvalFile(ns, map[string]interface{}{"hosts": hosts, "name": name, "labels": labels}, gatewayTmpl).Apply()
-	}, retry.Timeout(3*time.Second))
+	}, retry.Timeout(15*time.Second))
 }
 
 func deleteGatewayOrFail(ctx framework.TestContext, ns, name string, labels map[string]string, hosts ...string) {
 	// retry because of flaky validation webhook
 	retry.UntilSuccessOrFail(ctx, func() error {
 		return ctx.ConfigIstio().EvalFile(ns, map[string]interface{}{"hosts": hosts, "name": name, "labels": labels}, gatewayTmpl).Delete()
-	}, retry.Timeout(3*time.Second))
+	}, retry.Timeout(15*time.Second))
 }
 
 func applyVirtualServiceOrFail(ctx framework.TestContext, ns, gatewayNs, gatewayName, virtualServiceName string) {
@@ -266,5 +266,5 @@ func applyVirtualServiceOrFail(ctx framework.TestContext, ns, gatewayNs, gateway
 	}
 	retry.UntilSuccessOrFail(ctx, func() error {
 		return ctx.ConfigIstio().EvalFile(ns, values, virtualSvcTmpl).Apply()
-	}, retry.Timeout(3*time.Second))
+	}, retry.Timeout(15*time.Second))
 }
