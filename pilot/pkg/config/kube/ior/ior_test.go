@@ -255,6 +255,9 @@ func TestCreate(t *testing.T) {
 	defer func() { close(stop) }()
 	store, k8sClient, routerClient := initClients(t, stop)
 
+	// create unrelated service with an empty selector to confirm that IOR is not picking it up
+	createService(t, k8sClient.GetActualClient(), controlPlaneNs, "service-with-empty-selector", nil)
+
 	createIngressGateway(t, k8sClient.GetActualClient(), controlPlaneNs, map[string]string{"istio": "ingressgateway"})
 
 	for i, c := range cases {
@@ -322,6 +325,11 @@ func validateRoutes(t *testing.T, hosts []string, list *[]*routeapiv1.Route, gat
 		}
 		if strings.Contains(host, "*.") && !strings.Contains(route.Spec.Host, "wildcard.") {
 			t.Fatal("Route's host wrongly not set to wildcard.")
+		}
+
+		// check service
+		if route.Spec.To.Name != "gw-service" {
+			t.Fatalf("Route points to wrong service: %s", route.Spec.To.Name)
 		}
 
 		// TLS
@@ -530,16 +538,18 @@ func findRouteByHost(list *[]*routeapiv1.Route, host string) *routeapiv1.Route {
 
 func createIngressGateway(t *testing.T, client kube.Client, ns string, labels map[string]string) {
 	t.Helper()
-	createPod(t, client, ns, labels)
-	createService(t, client, ns, labels)
+	createPod(t, client, ns, "gw-pod", labels)
+	createService(t, client, ns, "gw-service", labels)
 }
 
-func createPod(t *testing.T, client kube.Client, ns string, labels map[string]string) {
+func createPod(t *testing.T, client kube.Client, ns, name string, labels map[string]string) {
 	t.Helper()
 
 	_, err := client.Kube().CoreV1().Pods(ns).Create(context.TODO(), &k8sioapicorev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels: labels,
+			Name:      name,
+			Namespace: ns,
+			Labels:    labels,
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
@@ -547,12 +557,16 @@ func createPod(t *testing.T, client kube.Client, ns string, labels map[string]st
 	}
 }
 
-func createService(t *testing.T, client kube.Client, ns string, labels map[string]string) {
+func createService(t *testing.T, client kube.Client, ns, name string, selector map[string]string) {
 	t.Helper()
 
 	_, err := client.Kube().CoreV1().Services(ns).Create(context.TODO(), &k8sioapicorev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
 		Spec: k8sioapicorev1.ServiceSpec{
-			Selector: labels,
+			Selector: selector,
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {

@@ -289,6 +289,11 @@ func (r *routeController) findService(gateway *networking.Gateway) (*types.Names
 		podLabels := labels.Set(pod.ObjectMeta.Labels)
 		// Look for a service whose selector matches the pod labels
 		for _, service := range services {
+			if len(service.Spec.Selector) == 0 {
+				// an empty label selector does not mean that the service should match all pods, but that the
+				// service endpoints are managed externally; IOR should therefore ignore this service
+				continue
+			}
 			svcSelector := labels.SelectorFromSet(service.Spec.Selector)
 
 			iorLog.Debugf("matching service selector %s against %s", svcSelector.String(), podLabels)
