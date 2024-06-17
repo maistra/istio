@@ -75,7 +75,7 @@ require (
 	github.com/prometheus/common v0.45.0
 	github.com/prometheus/procfs v0.12.0
 	github.com/prometheus/prometheus v0.48.0-rc.1
-	github.com/quic-go/quic-go v0.38.0
+	github.com/quic-go/quic-go v0.42.0
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/spf13/cobra v1.7.0
@@ -101,7 +101,7 @@ require (
 	golang.org/x/oauth2 v0.14.0
 	golang.org/x/sync v0.5.0
 	golang.org/x/sys v0.18.0
-	golang.org/x/time v0.3.0
+	golang.org/x/time v0.5.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	google.golang.org/api v0.149.0
 	google.golang.org/genproto v0.0.0-20231106174013-bbf56f31fb17
@@ -170,7 +170,6 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/pprof v0.0.0-20230926050212-f7f687d19a98 // indirect
@@ -217,7 +216,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
-	github.com/quic-go/qtls-go1-20 v0.3.2 // indirect
 	github.com/rivo/uniseg v0.4.3 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
@@ -236,6 +234,7 @@ require (
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
+	go.uber.org/mock v0.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/mod v0.13.0 // indirect
