@@ -308,6 +308,8 @@ message GlobalConfig {
   // Deprecated: replaced by the affinity k8s settings which allows architecture nodeAffinity configuration of this behavior.
   ArchConfig arch = 1 [deprecated=true];
 
+  string caCertConfigMapName = 72;
+
   // List of certSigners to allow "approve" action in the ClusterRole
   repeated string certSigners = 68;
 
@@ -477,7 +479,7 @@ message GlobalConfig {
   repeated string ipFamilies = 70;
  
   string ipFamilyPolicy = 71;
-  // The next available key is 72
+  // The next available key is 73
 }
 
 // Configuration for Security Token Service (STS) server.
