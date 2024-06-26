@@ -156,6 +156,10 @@ spec:
                 fieldPath: spec.serviceAccountName
           - name: KUBECONFIG
             value: /var/run/secrets/remote/config
+          {{- if .Values.global.caCertConfigMapName }}
+          - name: PILOT_CA_CERT_CONFIG_MAP_NAME
+            value: {{ .Values.global.caCertConfigMapName }}
+          {{- end }}
           {{- if .Values.pilot.env }}
           {{- range $key, $val := .Values.pilot.env }}
           - name: {{ $key }}
