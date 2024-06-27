@@ -102,7 +102,7 @@ func TestManagingGateways(t *testing.T) {
 					deleteGatewayOrFail(t, namespaceGateway, gatewayName, labelSetA, "a", "b")
 					ensureRoutesCleared(t)
 				})
-				applyGatewayOrFail(ctx, namespaceGateway, gatewayName, labelSetA, "a", "b")
+				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetA, "a", "b")
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
