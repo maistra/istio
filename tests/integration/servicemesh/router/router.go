@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"istio.io/istio/pkg/test/env"
@@ -31,12 +32,12 @@ import (
 
 func InstallOpenShiftRouter(ctx resource.Context) error {
 	c := ctx.Clusters().Default()
-	openshiftIngressNs := &corev1.Namespace{
+	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "openshift-ingress",
 		},
 	}
-	if _, err := c.Kube().CoreV1().Namespaces().Create(context.Background(), openshiftIngressNs, metav1.CreateOptions{}); err != nil {
+	if _, err := c.Kube().CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	if err := c.ApplyYAMLFiles("", filepath.Join(env.IstioSrc, "tests/integration/servicemesh/router/testdata/route_crd.yaml")); err != nil {
