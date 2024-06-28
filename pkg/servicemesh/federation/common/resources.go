@@ -103,7 +103,11 @@ func (rm *resourceManager) Start(stopCh <-chan struct{}) {
 func (rm *resourceManager) HasSynced() bool {
 	return rm.smpi.Informer().HasSynced() &&
 		rm.sei.Informer().HasSynced() &&
-		rm.sii.Informer().HasSynced()
+		rm.sii.Informer().HasSynced() &&
+		rm.cmi.HasSynced() &&
+		rm.esi.HasSynced() &&
+		rm.pi.HasSynced() &&
+		rm.si.HasSynced()
 }
 
 func (rm *resourceManager) WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool {

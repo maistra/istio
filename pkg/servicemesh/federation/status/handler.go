@@ -474,6 +474,8 @@ func (h *handler) Flush() error {
 		}
 	}
 
+	h.logger.Debugf("oldStatus=%+v", peer.Status)
+	h.logger.Debugf("newStatus=%+v", newStatus)
 	if reflect.DeepEqual(peer.Status, newStatus) { // TODO: peer.Status may be stale, causing us to skip the update when we shouldn't
 		h.logger.Debugf("no status updates for ServiceMeshPeer %s", h.mesh)
 		return nil

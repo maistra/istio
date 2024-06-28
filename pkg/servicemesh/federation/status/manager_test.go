@@ -694,14 +694,9 @@ func TestStatusManager(t *testing.T) {
 	log.Configure(logOpts)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newCrdWatcher := kube.NewCrdWatcher
-			kube.NewCrdWatcher = kube.NewFastCrdWatcher
 			kubeClient := kube.NewFakeClient(&corev1.Pod{
 				ObjectMeta: istiodName,
 			})
-			kube.NewCrdWatcher = newCrdWatcher
-			stop := make(chan struct{})
-			defer func() { close(stop) }()
 			cs := fake.NewSimpleClientset(
 				&v1.ExportedServiceSet{ObjectMeta: metav1.ObjectMeta{Name: tc.mesh.Name, Namespace: tc.mesh.Namespace}},
 				&v1.ImportedServiceSet{ObjectMeta: metav1.ObjectMeta{Name: tc.mesh.Name, Namespace: tc.mesh.Namespace}})
@@ -717,9 +712,11 @@ func TestStatusManager(t *testing.T) {
 			defer close(stopChan)
 			go kubeClient.RunAndWait(stopChan)
 			go rm.Start(stopChan)
+
 			cs.FederationV1().ServiceMeshPeers(namespace).Create(context.TODO(), &v1.ServiceMeshPeer{
 				ObjectMeta: meshName,
 			}, metav1.CreateOptions{})
+
 			leaderStarted := make(chan struct{})
 			le := leaderelection.NewLeaderElection(istiodName.Namespace, istiodName.Name, "test", "test", kubeClient)
 			manager := NewManager(types.NamespacedName{Name: istiodName.Name, Namespace: istiodName.Namespace}, rm, le)
@@ -734,10 +731,9 @@ func TestStatusManager(t *testing.T) {
 				close(stopChan)
 				t.Fatalf("timed out waiting for leader election")
 			}
-			for !rm.ExportsInformer().Informer().HasSynced() ||
-				!rm.ImportsInformer().Informer().HasSynced() ||
-				!rm.PeerInformer().Informer().HasSynced() {
-			}
+
+			retry.UntilOrFail(t, rm.HasSynced, retry.Delay(10*time.Millisecond), retry.Timeout(time.Minute))
+
 			manager.PeerAdded(tc.mesh)
 			if err := manager.PushStatus(); err != nil {
 				t.Fatalf("error updating initial status: %s", err)
@@ -821,6 +817,7 @@ func verifyImportStatus(t *testing.T, rm common.ResourceManager, name types.Name
 }
 
 func tryMultipleTimes(t *testing.T, fn func() error) {
+	t.Helper()
 	if err := retry.UntilSuccess(fn, retry.Timeout(10*time.Second), retry.Delay(10*time.Millisecond)); err != nil {
 		t.Error(err.Error())
 	}
