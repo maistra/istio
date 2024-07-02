@@ -112,6 +112,7 @@ func CreateServiceMeshPeersOrFail(ctx framework.TestContext) {
 		remoteCerts[cluster.Name()] = configMap.DeepCopy()
 	}
 	for _, cluster := range ctx.Clusters().Primaries() {
+		cluster := cluster // ensures that ctx.Cleanup() is performed on the correct cluster
 		for remoteCluster, remoteIP := range remoteIPs {
 			// skip local cluster
 			if remoteCluster == cluster.Name() {
