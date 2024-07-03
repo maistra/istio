@@ -205,7 +205,6 @@ var ValidCipherSuites = sets.New(
 	"AES256-GCM-SHA384",
 	"AES128-SHA",
 	"AES256-SHA",
-	"DES-CBC3-SHA",
 )
 
 // ValidECDHCurves contains a list of all ecdh curves supported in MeshConfig.TlsDefaults.ecdhCurves

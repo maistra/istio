@@ -62,8 +62,6 @@ const (
 	AES128_SHA256                 = "AES128-SHA256"                 //nolint
 	AES128_SHA                    = "AES128-SHA"                    //nolint
 	AES256_SHA                    = "AES256-SHA"                    //nolint
-	ECDHE_RSA_DES_CBC3_SHA        = "ECDHE-RSA-DES-CBC3-SHA"        //nolint
-	DES_CBC3_SHA                  = "DES-CBC3-SHA"                  //nolint
 )
 
 var SupportedGolangCiphers = []string{
@@ -106,8 +104,6 @@ var SupportedOpenSSLCiphers = []string{
 	AES128_SHA256,
 	AES128_SHA,
 	AES256_SHA,
-	ECDHE_RSA_DES_CBC3_SHA,
-	DES_CBC3_SHA,
 }
 
 // Map of go cipher suite names to OpenSSL cipher suite names
@@ -129,8 +125,6 @@ var opensslCipherSuiteMap = map[string]string{
 	TLS_RSA_WITH_AES_128_CBC_SHA256:               AES128_SHA256,
 	TLS_RSA_WITH_AES_128_CBC_SHA:                  AES128_SHA,
 	TLS_RSA_WITH_AES_256_CBC_SHA:                  AES256_SHA,
-	TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA:           ECDHE_RSA_DES_CBC3_SHA,
-	TLS_RSA_WITH_3DES_EDE_CBC_SHA:                 DES_CBC3_SHA,
 }
 
 // // Map of go cipher suite names to go cipher suite ids

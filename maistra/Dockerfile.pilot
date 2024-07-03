@@ -6,7 +6,7 @@ ARG ISTIO_VERSION
 LABEL com.redhat.component="openshift-istio-pilot-ubi8-container"
 LABEL name="openshift-service-mesh/pilot-ubi8"
 LABEL version="${MAISTRA_VERSION}"
-LABEL istio_version="${ISTIO_VERSION}"
+LABEL istio-version="${ISTIO_VERSION}"
 LABEL summary="Maistra Pilot OpenShift container image"
 LABEL description="Maistra Pilot OpenShift container image"
 LABEL io.k8s.display-name="Maistra Pilot"

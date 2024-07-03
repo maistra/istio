@@ -8,7 +8,7 @@ ARG SIDECAR=envoy
 LABEL com.redhat.component="openshift-istio-proxy-ubi8-container"
 LABEL name="openshift-service-mesh/istio-proxy-ubi8"
 LABEL version="${MAISTRA_VERSION}"
-LABEL istio_version="$istio_version"
+LABEL istio-version="$istio_version"
 LABEL summary="Maistra Proxy OpenShift container image"
 LABEL description="Maistra Proxy OpenShift container image"
 LABEL io.k8s.display-name="Maistra Proxy"
@@ -17,7 +17,8 @@ LABEL io.openshift.expose-services=""
 LABEL maintainer="Istio Feedback <istio-feedback@redhat.com>"
 
 # hadolint ignore=DL3039,DL3041
-RUN dnf -y upgrade --refresh --nobest && \
+RUN sed -i -e 's/mirrorlist/#mirrorlist/g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && \
+    dnf -y upgrade --refresh --nobest && \
     dnf -y install iptables iproute openssl && \
     dnf -y clean all
 
