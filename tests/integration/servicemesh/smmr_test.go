@@ -69,7 +69,7 @@ func TestSMMR(t *testing.T) {
 				if err := maistra.EnableIOR(t); err != nil {
 					t.Fatalf("failed to enable IOR: %s", err)
 				}
-				defer cleanUpIOR(ctx)
+				defer cleanUpIOR(t)
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
@@ -84,7 +84,7 @@ func TestSMMR(t *testing.T) {
 				if err := maistra.EnableIOR(t); err != nil {
 					t.Fatalf("failed to enable IOR: %s", err)
 				}
-				defer cleanUpIOR(ctx)
+				defer cleanUpIOR(t)
 
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "a.maistra.io")
 				verifyThatRouteExistsOrFail(t, namespaceGateway, gatewayName, "b.maistra.io")
@@ -101,7 +101,7 @@ func TestSMMR(t *testing.T) {
 				if err := maistra.EnableIOR(t); err != nil {
 					t.Fatalf("failed to enable IOR: %s", err)
 				}
-				defer cleanUpIOR(ctx)
+				defer cleanUpIOR(t)
 
 				applyGatewayOrFail(t, namespaceGateway, gatewayName, labelSetB, "a")
 

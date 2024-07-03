@@ -112,6 +112,7 @@ func CreateServiceMeshPeersOrFail(ctx framework.TestContext) {
 		remoteCerts[cluster.Name()] = configMap.DeepCopy()
 	}
 	for _, cluster := range ctx.Clusters().Primaries() {
+		cluster := cluster // ensures that ctx.Cleanup() is performed on the correct cluster
 		for remoteCluster, remoteIP := range remoteIPs {
 			// skip local cluster
 			if remoteCluster == cluster.Name() {
@@ -124,7 +125,9 @@ func CreateServiceMeshPeersOrFail(ctx framework.TestContext) {
 			}
 			_, err := cluster.Kube().CoreV1().ConfigMaps("istio-system").Create(context.TODO(), configMap, metav1.CreateOptions{})
 			ctx.Cleanup(func() {
-				cluster.Kube().CoreV1().ConfigMaps("istio-system").Delete(context.TODO(), caCertConfigMapName, metav1.DeleteOptions{})
+				if err := cluster.Kube().CoreV1().ConfigMaps("istio-system").Delete(context.TODO(), caCertConfigMapName, metav1.DeleteOptions{}); err != nil {
+					ctx.Fatalf("failed to delete config map %s: %s", caCertConfigMapName, err)
+				}
 			})
 			if err != nil {
 				ctx.Fatalf("failed to create config map %s: %s", configMap.ObjectMeta.Name, err)
