@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
       - name: ratings
-        image: quay.io/maistra/examples-bookinfo-ratings-v2:2.4.0
+        image: quay.io/maistra/examples-bookinfo-ratings-v2:2.6.0
         imagePullPolicy: IfNotPresent
         env:
           # ratings-v2 will use mongodb as the default db backend.

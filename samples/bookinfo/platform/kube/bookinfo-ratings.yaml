@@ -52,7 +52,7 @@ spec:
     spec:
       containers:
       - name: ratings
-        image: quay.io/maistra/examples-bookinfo-ratings-v1:2.4.0
+        image: quay.io/maistra/examples-bookinfo-ratings-v1:2.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9080

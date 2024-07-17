@@ -74,7 +74,7 @@ spec:
       serviceAccountName: bookinfo-details
       containers:
       - name: details
-        image: quay.io/maistra/examples-bookinfo-details-v1:2.4.0
+        image: quay.io/maistra/examples-bookinfo-details-v1:2.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9080
@@ -127,7 +127,7 @@ spec:
       serviceAccountName: bookinfo-ratings
       containers:
       - name: ratings
-        image: quay.io/maistra/examples-bookinfo-ratings-v1:2.4.0
+        image: quay.io/maistra/examples-bookinfo-ratings-v1:2.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9080
@@ -180,7 +180,7 @@ spec:
       serviceAccountName: bookinfo-reviews
       containers:
       - name: reviews
-        image: quay.io/maistra/examples-bookinfo-reviews-v1:2.4.0
+        image: quay.io/maistra/examples-bookinfo-reviews-v1:2.6.0
         imagePullPolicy: IfNotPresent
         env:
         - name: LOG_DIR
@@ -222,7 +222,7 @@ spec:
       serviceAccountName: bookinfo-reviews
       containers:
       - name: reviews
-        image: quay.io/maistra/examples-bookinfo-reviews-v2:2.4.0
+        image: quay.io/maistra/examples-bookinfo-reviews-v2:2.6.0
         imagePullPolicy: IfNotPresent
         env:
         - name: LOG_DIR
@@ -264,7 +264,7 @@ spec:
       serviceAccountName: bookinfo-reviews
       containers:
       - name: reviews
-        image: quay.io/maistra/examples-bookinfo-reviews-v3:2.4.0
+        image: quay.io/maistra/examples-bookinfo-reviews-v3:2.6.0
         imagePullPolicy: IfNotPresent
         env:
         - name: LOG_DIR
@@ -333,7 +333,7 @@ spec:
       serviceAccountName: bookinfo-productpage
       containers:
       - name: productpage
-        image: quay.io/maistra/examples-bookinfo-productpage-v1:2.4.0
+        image: quay.io/maistra/examples-bookinfo-productpage-v1:2.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9080
