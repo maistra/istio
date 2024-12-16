@@ -1,4 +1,4 @@
-FROM quay.io/rockylinux/rockylinux:9
+FROM quay.io/rockylinux/rockylinux:9.2
 
 WORKDIR /
 
@@ -6,9 +6,10 @@ ARG proxy_version
 ARG SIDECAR=envoy
 
 # hadolint ignore=DL3039,DL3041
-RUN dnf -y upgrade --refresh --nobest && \
-    dnf -y install iptables iproute openssl-3.0.7 openssl-devel-3.0.7 && \
+RUN dnf -y install iptables iproute openssl-3.0.7 && \
     dnf -y clean all
+
+RUN ln -s /lib64/libssl.so.3.0.7 /lib64/libssl.so && ln -s /lib64/libcrypto.so.3.0.7 /lib64/libcrypto.so
 
 # Copy Envoy bootstrap templates used by pilot-agent
 COPY envoy_bootstrap.json /var/lib/istio/envoy/envoy_bootstrap_tmpl.json

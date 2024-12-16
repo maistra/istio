@@ -1,4 +1,4 @@
-FROM quay.io/rockylinux/rockylinux:9
+FROM quay.io/rockylinux/rockylinux:9.2
 
 # Install the certs.
 COPY certs/             /var/lib/istio/
@@ -15,9 +15,10 @@ COPY sudoers /etc/sudoers
 # * hostname - used in the script istio-start.sh
 # * ps - for debugging purposes
 # hadolint ignore=DL3039,DL3041
-RUN dnf -y upgrade --refresh --nobest && \
-    dnf -y install iptables iproute sudo hostname procps openssl-3.0.7 openssl-devel-3.0.7 && \
+RUN dnf -y install iptables iproute sudo hostname procps openssl-3.0.7 && \
     dnf -y clean all
+
+RUN ln -s /lib64/libssl.so.3.0.7 /lib64/libssl.so && ln -s /lib64/libcrypto.so.3.0.7 /lib64/libcrypto.so
 
 # Install the sidecar components
 COPY istio-sidecar.rpm  /tmp/istio-sidecar.rpm
