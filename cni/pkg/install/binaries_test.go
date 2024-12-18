@@ -18,6 +18,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	file2 "istio.io/istio/pkg/file"
+	"istio.io/istio/pkg/test/util/assert"
 )
 
 func TestCopyBinaries(t *testing.T) {
@@ -97,4 +100,30 @@ func TestCopyBinaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCopyBinariesWhenTmpExist(t *testing.T) {
+	srcDir := t.TempDir()
+	os.WriteFile(filepath.Join(srcDir, "istio-cni"), []byte("content"), os.ModePerm)
+
+	targetDir := t.TempDir()
+	tmpFile1 := filepath.Join(targetDir, "v2-4-istio-cni.tmp.3816169537")
+	tmpFile2 := filepath.Join(targetDir, "v2-3-istio-cni.tmp.4977877")
+	os.WriteFile(tmpFile1, []byte("content"), os.ModePerm)
+	os.WriteFile(tmpFile2, []byte("content"), os.ModePerm)
+
+	err := copyBinaries(srcDir, []string{targetDir}, false, []string{}, "v2-4-")
+	assert.NoError(t, err)
+	// check that only the tmp file with prefix the v2-6- was removed
+	assert.Equal(t, file2.Exists(tmpFile1), false)
+	assert.Equal(t, file2.Exists(tmpFile2), true)
+
+	err = copyBinaries(srcDir, []string{targetDir}, false, []string{}, "v2-3-")
+	assert.NoError(t, err)
+	// check that also second tmp file with other prefix was removed
+	assert.Equal(t, file2.Exists(tmpFile2), false)
+
+	// check that bins are still there
+	assert.Equal(t, file2.Exists(filepath.Join(targetDir, "v2-3-istio-cni")), true)
+	assert.Equal(t, file2.Exists(filepath.Join(targetDir, "v2-4-istio-cni")), true)
 }
