@@ -191,23 +191,27 @@ func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *mode
 	// the Gateway to the queue and reconcile the state of the world.
 	parentHandler := controllers.ObjectHandler(controllers.EnqueueForParentHandler(dc.queue, gvk.KubernetesGateway))
 
-	dc.services = kclient.New[*corev1.Service](client)
+	filter := kclient.Filter{
+		LabelSelector: "maistra.io/ignore!=true",
+	}
+
+	dc.services = kclient.NewFiltered[*corev1.Service](client, filter)
 	dc.services.AddEventHandler(parentHandler)
 	dc.clients[gvr.Service] = NewUntypedWrapper(dc.services)
 
-	dc.deployments = kclient.New[*appsv1.Deployment](client)
+	dc.deployments = kclient.NewFiltered[*appsv1.Deployment](client, filter)
 	dc.deployments.AddEventHandler(parentHandler)
 	dc.clients[gvr.Deployment] = NewUntypedWrapper(dc.deployments)
 
-	dc.serviceAccounts = kclient.New[*corev1.ServiceAccount](client)
+	dc.serviceAccounts = kclient.NewFiltered[*corev1.ServiceAccount](client, filter)
 	dc.serviceAccounts.AddEventHandler(parentHandler)
 	dc.clients[gvr.ServiceAccount] = NewUntypedWrapper(dc.serviceAccounts)
 
-	dc.gateways = kclient.New[*gateway.Gateway](client)
+	dc.gateways = kclient.NewFiltered[*gateway.Gateway](client, filter)
 	dc.gateways.AddEventHandler(controllers.ObjectHandler(dc.queue.AddObject))
 
 	if !client.IsMultiTenant() {
-		dc.namespaces = kclient.New[*corev1.Namespace](client)
+		dc.namespaces = kclient.NewFiltered[*corev1.Namespace](client, filter)
 		dc.namespaces.AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
 			// TODO: make this more intelligent, checking if something we care about has changed
 			// requeue this namespace
@@ -215,7 +219,7 @@ func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *mode
 				dc.queue.AddObject(gw)
 			}
 		}))
-		dc.gatewayClasses = kclient.New[*gateway.GatewayClass](client)
+		dc.gatewayClasses = kclient.NewFiltered[*gateway.GatewayClass](client, filter)
 		dc.gatewayClasses.AddEventHandler(controllers.ObjectHandler(func(o controllers.Object) {
 			for _, g := range dc.gateways.List(metav1.NamespaceAll, klabels.Everything()) {
 				if string(g.Spec.GatewayClassName) == o.GetName() {
