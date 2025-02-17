@@ -192,7 +192,7 @@ func NewDeploymentController(client kube.Client, clusterID cluster.ID, env *mode
 	parentHandler := controllers.ObjectHandler(controllers.EnqueueForParentHandler(dc.queue, gvk.KubernetesGateway))
 
 	filter := kclient.Filter{
-		LabelSelector: "maistra.io/ignore!=true",
+		LabelSelector: "!maistra.io/ignore",
 	}
 
 	dc.services = kclient.NewFiltered[*corev1.Service](client, filter)
