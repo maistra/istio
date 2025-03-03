@@ -44,7 +44,7 @@ const (
 	auditPolicyForLogEntry = "tests/integration/telemetry/stackdriver/testdata/security_authz_audit/v1beta1-audit-authorization-policy.yaml.tmpl"
 )
 
-// TestStackdriverAuditLogging testing Authz Policy can config stackdriver with audit policy
+// TestStackdriverHTTPAuditLogging testing Authz Policy can config stackdriver with audit policy
 func TestStackdriverHTTPAuditLogging(t *testing.T) {
 	framework.NewTest(t).
 		Features("observability.telemetry.stackdriver").
