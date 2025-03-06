@@ -170,7 +170,7 @@ func WantOtelTraceRoot(namespace, clName string) (root zipkin.Span) {
 	return
 }
 
-// compareTrace recursively compares the two given spans
+// CompareTrace recursively compares the two given spans
 func CompareTrace(t framework.TestContext, got, want zipkin.Span) bool {
 	t.Helper()
 	if got.Name != want.Name || got.ServiceName != want.ServiceName {

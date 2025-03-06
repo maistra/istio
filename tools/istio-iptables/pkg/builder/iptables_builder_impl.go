@@ -43,7 +43,7 @@ type IptablesBuilder struct {
 	cfg   *config.Config
 }
 
-// NewIptablesBuilders creates a new IptablesBuilder
+// NewIptablesBuilder creates a new IptablesBuilder
 func NewIptablesBuilder(cfg *config.Config) *IptablesBuilder {
 	if cfg == nil {
 		cfg = &config.Config{}

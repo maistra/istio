@@ -70,7 +70,7 @@ func CreateServer(addr string, service *CAService) (*CAServer, error) {
 	}()
 
 	if serveErr != nil {
-		return nil, err
+		return nil, serveErr
 	}
 
 	return s, nil
