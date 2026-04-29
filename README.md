@@ -121,5 +121,5 @@ milestone cannot be considered achieved if the issue isn't resolved.
 </div>
 
 <!--
-Current full version: 2.6.15
+Current full version: 2.6.16
 -->
